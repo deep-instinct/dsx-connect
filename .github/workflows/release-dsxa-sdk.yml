@@ -44,7 +44,7 @@ jobs:
         run: python -m build
 
       - name: Upload release assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: dsxa_sdk/dist/*
           tag_name: ${{ github.event_name == 'workflow_dispatch' && (inputs.tag != '' && inputs.tag || format('dsxa-sdk-{0}', steps.version.outputs.version)) || github.ref_name }}

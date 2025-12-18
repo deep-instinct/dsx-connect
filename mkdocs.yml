@@ -3,10 +3,15 @@ site_description: Modular, scalable file scanning orchestration with pluggable c
 repo_url: https://github.com/deep-instinct/dsx-connect
 extra:
   social:
+    - icon: fontawesome/brands/github
+      name: GitHub
+      link: https://github.com/deep-instinct/dsx-connect
     - icon: fontawesome/brands/docker
-      link: https://hub.docker.com/repositories/dsxconnect?_gl=1*19x8nn4*_gcl_au*MTgwNTA2MDE3LjE3NTc0NTQzNzc.*_ga*MTgxNzEzODA0NC4xNzExNDc0OTE4*_ga_XJWPQMJYHQ*czE3NjQ5NjE1NTYkbzEwMCRnMSR0MTc2NDk2MTczNSRqMTgkbDAkaDA.
+      name: Docker Hub
+      link: https://hub.docker.com/repositories/dsxconnect
 theme:
   name: material
+  custom_dir: docs/overrides
   logo: assets/dsx-connect-icon-white.svg
   favicon: assets/dsx-connect-icon-white.svg
   features:
@@ -14,6 +19,7 @@ theme:
     - navigation.tracking
     - navigation.path
     - navigation.top
+    - header.social
     - content.code.copy
     - search.suggest
     - search.highlight
@@ -35,17 +41,12 @@ theme:
         name: Switch to light mode
 
 nav:
-  - Overview: overview.md
+  - Architecture: overview.md
   - Getting Started:
       - Overview: getting-started.md
       - Deploying the DSX-Connect Core: getting-started-core.md
       - Deploying Your First Connector: getting-started-connector.md
-  - Connectors:
-      - Index: connectors/index.md
-      - Connector Concepts: connectors/concepts.md
-      - M365 Email (Design): connectors/m365-email.md
-      - Filesystem (Overview): connectors/filesystem.md
-      - SharePoint vs OneDrive: connectors/sharepoint-vs-onedrive.md
+  - Connector Overview: connectors/concepts.md
   - Deployment:
       - Docker:
           - Best Practices: deployment/docker/intro.md
@@ -59,6 +60,7 @@ nav:
               - Salesforce: deployment/docker/salesforce.md
               - M365 Email: deployment/docker/m365-mail.md
               - OneDrive: deployment/docker/onedrive.md
+          - Deploying with SSL/TLS: deployment/docker/tls.md
       - Kubernetes:
           - Best Practices: deployment/kubernetes/getting-started.md
           - Quick Tutorial: deployment/kubernetes/getting-started-quickstart.md
@@ -85,6 +87,8 @@ nav:
       - UI Display Icons: reference/display-icons.md
       - DSXA Python SDK: reference/dsxa-sdk.md
       - Filters (Details): reference/filters.md
+      - M365 Email (Design): connectors/m365-email.md
+      - SharePoint vs OneDrive: connectors/sharepoint-vs-onedrive.md
   - Case Studies:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
   - Developer's Guide:
@@ -107,3 +111,6 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
 extra_javascript:
   - https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js
+  - assets/docker-header.js
+extra_css:
+  - assets/docker-header.css

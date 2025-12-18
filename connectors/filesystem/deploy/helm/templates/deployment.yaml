@@ -8,6 +8,16 @@
   {{- end -}}
 {{- end -}}
 
+{{- /* Guards for quarantineVolume configuration */ -}}
+{{- if .Values.quarantineVolume.enabled -}}
+  {{- if and (empty .Values.quarantineVolume.existingClaim) (empty .Values.quarantineVolume.hostPath) -}}
+    {{- fail "filesystem-connector: quarantineVolume.enabled=true requires either quarantineVolume.existingClaim or quarantineVolume.hostPath" -}}
+  {{- end -}}
+  {{- if and (not (empty .Values.quarantineVolume.existingClaim)) (not (empty .Values.quarantineVolume.hostPath)) -}}
+    {{- fail "filesystem-connector: set only one of quarantineVolume.existingClaim or quarantineVolume.hostPath" -}}
+  {{- end -}}
+{{- end -}}
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,7 +42,7 @@ spec:
         app.kubernetes.io/name: {{ include "filesystem-connector.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
-      {{- if or .Values.tls.enabled .Values.scanVolume.enabled .Values.dataVolume.enabled }}
+      {{- if or .Values.tls.enabled .Values.scanVolume.enabled .Values.quarantineVolume.enabled .Values.dataVolume.enabled }}
       volumes:
         {{- if .Values.tls.enabled }}
         - name: tls-certs
@@ -47,6 +57,18 @@ spec:
           {{- else if .Values.scanVolume.hostPath }}
           hostPath:
             path: {{ .Values.scanVolume.hostPath | quote }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        {{- end }}
+        {{- if .Values.quarantineVolume.enabled }}
+        - name: quarantine-dir
+          {{- if .Values.quarantineVolume.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.quarantineVolume.existingClaim | quote }}
+          {{- else if .Values.quarantineVolume.hostPath }}
+          hostPath:
+            path: {{ .Values.quarantineVolume.hostPath | quote }}
           {{- else }}
           emptyDir: {}
           {{- end }}
@@ -98,13 +120,15 @@ spec:
               value: "1"
             - name: DSXCONNECTOR_ASSET
               value: {{ ternary .Values.scanVolume.mountPath ((get .Values.env "DSXCONNECTOR_ASSET") | default "/app/scan_folder") .Values.scanVolume.enabled | quote }}
+            - name: DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO
+              value: {{ ternary .Values.quarantineVolume.mountPath ((get .Values.env "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO") | default "/app/quarantine") .Values.quarantineVolume.enabled | quote }}
             {{ $useTlsStr := (toString (default "" .Values.env.DSXCONNECTOR_USE_TLS)) }}
             {{ $isTls := eq (lower $useTlsStr) "true" }}
             {{ $scheme := ternary "https" "http" $isTls }}
             - name: DSXCONNECTOR_DSX_CONNECT_URL
               value: {{ (get .Values.env "DSXCONNECTOR_DSX_CONNECT_URL" | default (printf "%s://dsx-connect-api" $scheme)) | quote }}
             {{- range $key, $val := .Values.env }}
-            {{- if and (ne $key "DSXCONNECTOR_DSX_CONNECT_URL") (ne $key "PYTHONUNBUFFERED") (ne $key "DSXCONNECTOR_ASSET") }}
+            {{- if and (ne $key "DSXCONNECTOR_DSX_CONNECT_URL") (ne $key "PYTHONUNBUFFERED") (ne $key "DSXCONNECTOR_ASSET") (ne $key "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO") }}
             - name: {{ $key }}
               value: {{ $val | quote }}
             {{- end }}
@@ -129,6 +153,14 @@ spec:
               subPath: {{ .Values.scanVolume.subPath | quote }}
               {{- end }}
               readOnly: {{ .Values.scanVolume.readOnly }}
+            {{- end }}
+            {{- if .Values.quarantineVolume.enabled }}
+            - name: quarantine-dir
+              mountPath: {{ .Values.quarantineVolume.mountPath | quote }}
+              {{- if .Values.quarantineVolume.subPath }}
+              subPath: {{ .Values.quarantineVolume.subPath | quote }}
+              {{- end }}
+              readOnly: {{ .Values.quarantineVolume.readOnly }}
             {{- end }}
             {{- if .Values.dataVolume.enabled }}
             - name: data-dir

@@ -12,7 +12,7 @@ Path: `dsx-connect-<core_version>/`
 
 ## Prerequisites
 - Docker Desktop / Docker Engine with the Compose plugin.
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - A shared Docker network created once: `docker network create dsx-connect-network` (all compose files use it).
 
 ## Architecture & Components
@@ -40,7 +40,7 @@ All worker communication flows through Redis queues. Scan requests enter `scan_r
 
 ## TLS Options
 
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose specifics (dev cert generation, runtime mounts, and client trust).
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose specifics (dev cert generation, runtime mounts, and client trust).
 
 ## Component Details
 

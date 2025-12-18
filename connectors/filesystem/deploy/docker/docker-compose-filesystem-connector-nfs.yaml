@@ -1,7 +1,3 @@
-x-common-paths: &common-paths
-  #SCAN_FOLDER_PATH: &scan-folder "/path/to/local/folder"
-  QUARANTINE_FOLDER_PATH: &quarantine-folder "/path/to/local/folder/dsxconnect-quarantine"
-
 volumes:
   nfs_mount:
     driver: local
@@ -25,7 +21,7 @@ services:
       - nfs_mount:/app/scan_folder
       # Local quarantine folder on the Docker host (adjust as needed)
       - type: bind
-        source: *quarantine-folder
+        source: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/path/to/local/folder/dsxconnect-quarantine}
         target: /app/quarantine
     environment:
       PYTHONUNBUFFERED: 1
@@ -51,7 +47,7 @@ services:
       DSXCONNECTOR_ASSET: "/app/scan_folder"
       DSXCONNECTOR_FILTER: ""
       DSXCONNECTOR_ITEM_ACTION: "nothing" # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine" # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/path/to/local/folder/dsxconnect-quarantine} # host path for quarantine; bind-mounted to /app/quarantine
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector. this directory should have been created in the Dockerfile
       DSXCONNECTOR_SCAN_BY_PATH: "False"
 

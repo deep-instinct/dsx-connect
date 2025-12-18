@@ -4,7 +4,7 @@ This guide shows how to deploy the Azure Blob connector with Docker Compose for 
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - Azure Storage credentials with permissions to list/read (and optionally write/move/delete) blobs:
   - Connection string (recommended for POV) or SAS/Managed Identity as applicable
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
@@ -51,7 +51,7 @@ docker compose --env-file dsx-connect-<core_version>/azure-blob-storage-connecto
 - Provide `AZURE_STORAGE_CONNECTION_STRING` (or other supported auth env) via secrets for security.
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 ## Webhook Exposure
 If you expose connector endpoints (e.g., for HTTP callbacks) outside Docker, tunnel or publish the host port mapped to `8610` (compose default). Keep `DSXCONNECTOR_CONNECTOR_URL` pointing to the Docker-network address (e.g., `http://azure-blob-storage-connector:8610`) so dsx-connect can reach the service internally.

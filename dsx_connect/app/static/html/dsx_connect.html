@@ -2050,8 +2050,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         // Clear button
         const clearBtn = document.getElementById('scanResultsClear');
         if (clearBtn) {
-            clearBtn.onclick = () => {
+            clearBtn.onclick = async () => {
                 try {
+                    // 0) Clear stored results server-side
+                    try { await fetch(`${API_BASE}/scan/results`, { method: 'DELETE' }); } catch (e) { console.warn('clear results failed', e); }
+
                     // 1) Clear visible results
                     const body = document.getElementById('scanResultsBody');
                     if (body) {

@@ -1,5 +1,7 @@
 from pydantic import Field, HttpUrl
 
+from typing import Optional
+
 from connectors.framework.base_config import BaseConnectorConfig
 from shared.models.connector_models import ItemActionEnum
 from pathlib import Path
@@ -30,9 +32,11 @@ class FilesystemConnectorConfig(BaseConnectorConfig):
     item_action: ItemActionEnum = ItemActionEnum.MOVE
     item_action_move_metainfo: str = "dsxconnect-quarantine"
 
+    # Host path to scan; this should be the bind-mount source. The container always operates on asset_mount.
     asset: str = Field("/path/to/local/folder",
-                       title="Scan folder",
-                       description="Directory to scan for files")
+                       title="Scan folder (host path)",
+                       description="Host/NAS directory to scan (bind-mounted into the container)")
+    asset_mount: str = Field("/app/scan_folder", description="In-container path where the asset is mounted")
     filter: str = ""
     scan_by_path: bool = False
 
@@ -43,6 +47,10 @@ class FilesystemConnectorConfig(BaseConnectorConfig):
     monitor: bool = False # if true, Connector will monitor location for new or modified files.
     monitor_force_polling: bool = False  # if true, force polling (useful on SMB/CIFS where inotify is unreliable)
     monitor_poll_interval_ms: int = 1000  # polling interval when force polling is enabled
+
+    # Quarantine handling
+    quarantine_mount: str = Field("/app/quarantine", description="In-container path for quarantine/move destinations")
+    quarantine_host: Optional[str] = Field(default=None, description="Resolved host path for quarantine (derived from DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO)")
 
     # @field_validator("filter")
     # @classmethod
@@ -69,16 +77,70 @@ class ConfigManager:
     _config: FilesystemConnectorConfig = None
 
     @classmethod
+    def _normalize_config(cls, cfg: FilesystemConnectorConfig) -> FilesystemConnectorConfig:
+        """
+        Align host paths with in-container mount paths so the connector always scans asset_mount
+        while allowing DSXCONNECTOR_ASSET to be the host path (consistent with other connectors).
+        """
+        asset_host_raw = cfg.asset
+        asset_host_path = Path(asset_host_raw).expanduser()
+
+        asset_mount_raw = cfg.asset_mount or "/app/scan_folder"
+        asset_mount_path = Path(asset_mount_raw).expanduser()
+
+        # If running locally (no bind mount), fall back to the host path so scans still work in dev.
+        if asset_mount_path == Path("/app/scan_folder") and not asset_mount_path.exists() and asset_host_path.exists():
+            asset_mount_path = asset_host_path
+
+        asset_host_str = str(asset_host_path)
+        asset_mount_str = str(asset_mount_path)
+
+        cfg.asset = asset_mount_str
+        if not cfg.asset_display_name:
+            cfg.asset_display_name = asset_host_str
+
+        # Quarantine/move mapping:
+        # - Treat DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO as a host path by default (for Docker bind mounts).
+        # - Map to the in-container quarantine_mount when that path exists (container run) otherwise
+        #   fall back to the host path (local dev without binds).
+        quarantine_mount = Path(cfg.quarantine_mount or "/app/quarantine").expanduser()
+        move_meta_raw = cfg.item_action_move_metainfo
+        quarantine_host = None
+
+        if move_meta_raw:
+            move_meta_path = Path(move_meta_raw).expanduser()
+            # If the provided path is already the in-container path, leave it.
+            if move_meta_path == quarantine_mount:
+                cfg.item_action_move_metainfo = str(quarantine_mount)
+            else:
+                quarantine_host = move_meta_path
+        else:
+            # default to a quarantine folder adjacent to the asset on host
+            quarantine_host = Path(asset_host_path / "dsxconnect-quarantine")
+
+        if quarantine_host:
+            quarantine_host_str = str(quarantine_host)
+            # prefer in-container path when it exists (i.e., when running with a bind mount)
+            if quarantine_mount.exists():
+                cfg.item_action_move_metainfo = str(quarantine_mount)
+            else:
+                cfg.item_action_move_metainfo = quarantine_host_str
+            cfg.quarantine_host = quarantine_host_str
+        return cfg
+
+        return cfg
+
+    @classmethod
     def get_config(cls) -> FilesystemConnectorConfig:
         if cls._config is None:
             load_devenv(Path(__file__).with_name('.dev.env'))
-            cls._config = FilesystemConnectorConfig()
+            cls._config = cls._normalize_config(FilesystemConnectorConfig())
         return cls._config
 
     @classmethod
     def reload_config(cls) -> FilesystemConnectorConfig:
         load_devenv(Path(__file__).with_name('.dev.env'))
-        cls._config = FilesystemConnectorConfig()
+        cls._config = cls._normalize_config(FilesystemConnectorConfig())
         return cls._config
 
 

@@ -17,13 +17,14 @@ cp .sample.filesystem.env .filesystem.env
 
 Then edit `.filesystem.env` to set:
 ```dotenv
-SCAN_FOLDER_PATH=/Users/<you>/Documents/dsx-connect-test
-QUARANTINE_FOLDER_PATH=/Users/<you>/Documents/dsx-connect-test/dsxconnect-quarantine
+DSXCONNECTOR_ASSET=/Users/<you>/Documents/dsx-connect-test
+DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=/Users/<you>/Documents/dsx-connect-test/dsxconnect-quarantine
 #DSXCONNECTOR_ITEM_ACTION=move   # options: nothing, delete, tag, move, move_tag
 ```
 
-The env file sets the bind-mount paths so the connector can read and quarantine files from your host without editing YAML.
+The env file sets the bind-mount paths so the connector can read and quarantine files from your host without editing YAML (the compose file mounts `DSXCONNECTOR_ASSET` to `/app/scan_folder` and `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` to `/app/quarantine` inside the container).
 If you want to see the quarantine folder in action, uncomment and set `DSXCONNECTOR_ITEM_ACTION=move`.
+For least surprise, keep the quarantine folder outside the scan path; the connector also auto-skips the configured quarantine path to prevent re-scans.
 
 ## 3) Start the connector
 ```bash
@@ -42,11 +43,26 @@ Within a few seconds the connector registers with DSX-Connect and begins monitor
    - **Full Scan** to enumerate every file under the test folder.
    - Drop a new file into the folder and watch it appear in **Scan Results**. If item action is set to `move`, confirm quarantined files land in the quarantine path.
 
+![DSX-Connect UI with scan results](assets/ui_screenshot_fs.png)
+
+*Figure: Filesystem connector scan results view.*
+
+
+Done! You now have DSXA, DSX-Connect core, and a connector running together locally.
+
+Next, explore some core Connectors concepts 
+- [Next: Connector Overview](connectors/concepts.md)
+or, 
+- jump straight into deploying connectors via Docker [Docker Best Practices](deployment/docker/intro.md), 
+or, 
+- explore deployment using Kubernetes [Kubernetes Best Practices](deployment/kubernetes/getting-started.md).
+
+
+
+
 ## Tear down (optional)
 ```bash
 docker compose -f docker-compose-dsx-connect-all-services.yaml down
 docker compose -f docker-compose-dsxa.yaml down
 docker compose -f filesystem-connector-<version>/docker-compose-filesystem-connector.yaml down
 ```
-
-Done—you now have DSXA, DSX-Connect core, and a connector running together locally.

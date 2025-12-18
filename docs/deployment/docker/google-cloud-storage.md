@@ -14,8 +14,8 @@ events.
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
-- A GCP service account JSON secret (mounted into the container) with permissions to list/read (and optionally write/move/delete) objects — see Reference → [Google Cloud Credentials](../../../reference/google-cloud-credentials.md) for setup details.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
+- A GCP service account JSON secret (mounted into the container) with permissions to list/read (and optionally write/move/delete) objects — see Reference → [Google Cloud Credentials](../../reference/google-cloud-credentials.md) for setup details.
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
 ## Compose File
@@ -116,7 +116,7 @@ If you have dsx-connect running, navigate to the DSX-Connect UI, note the Google
   See Reference → [Google Cloud Credentials](../../reference/google-cloud-credentials.md) for the full setup commands.
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 ## Webhooks: When and How to Expose
 

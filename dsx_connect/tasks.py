@@ -188,10 +188,8 @@ def helm_release(c, repo=DEFAULT_HELM_REPO, charts_dir="dist/charts"):
 
 @task(pre=[bump, build, push])
 def release(c, helm_repo=DEFAULT_HELM_REPO):
-    """Full release: bump → build → push → helm package/push."""
+    """Full release: bump → build → push (Helm packaging/push is now a separate step)."""
     version = _read_version()
-    helm_package(c, version=version, app_version=version)
-    helm_push(c, repo=helm_repo, version=version)
     try:
         c.run(f"git tag dsx-connect-{version}", warn=True)
     except Exception:

@@ -4,7 +4,7 @@ This guide shows how to deploy the AWS S3 connector with Docker Compose for quic
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - AWS credentials (as env vars or a secret) with permissions to list/read (and optionally write/move/delete) objects
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
@@ -51,7 +51,7 @@ docker compose --env-file dsx-connect-<core_version>/aws-s3-connector-<connector
 - Use `DSXCONNECTOR_ASSET` to configure the target bucket or `bucket/prefix`.
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 ## Webhook Exposure
 If you forward events into the connector’s HTTP endpoints (e.g., using tunnels or an external load balancer), expose the host port mapped to `8600` (default in compose) and point your upstream system at that URL. `DSXCONNECTOR_CONNECTOR_URL` should remain the Docker-network URL (e.g., `http://aws-s3-connector:8600`) so dsx-connect can reach the service internally.

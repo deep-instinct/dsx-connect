@@ -1,5 +1,5 @@
 {
-  "dsx_connect": "0.3.57",
+  "dsx_connect": "0.3.59",
   "google_cloud_storage": "0.5.34",
   "onedrive": "0.1.13",
   "filesystem": "0.5.36",

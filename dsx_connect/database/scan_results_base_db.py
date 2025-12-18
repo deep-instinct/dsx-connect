@@ -39,6 +39,16 @@ class ScanResultsBaseDB(ABC):
         """Return the number of records in the database."""
         pass
 
+    # Optional helper to clear stored results. Concrete implementations should override.
+    def clear(self, job_id: str | None = None) -> None:
+        """Clear stored results. Default implementation iterates and removes all."""
+        # Fallback: repeatedly delete_oldest until empty
+        try:
+            while len(self) > 0:
+                self.delete_oldest()
+        except Exception:
+            pass
+
     def _check_retain_limit(self):
         """Check if the retain limit is exceeded and delete the oldest record if necessary."""
         if self._retain > 0 and len(self) > self._retain:

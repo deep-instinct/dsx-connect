@@ -149,3 +149,18 @@ class ScanResultsRedisDB(ScanResultsBaseDB):
         except Exception as e:
             dsx_logging.debug(f"redis llen failed: {e}")
             return 0
+
+    def clear(self, job_id: str | None = None) -> None:
+        pipe = self._r.pipeline()
+        if job_id:
+            # Best-effort: drop job-specific list; main list may still contain entries, so fall back to full clear
+            pipe.delete(f"{self._job_key_prefix}{job_id}")
+            # For simplicity and consistency with UI expectations, clear all when requested with a specific job id.
+        # Clear main list, sequence, and all per-job lists
+        pipe.delete(self._main_key, f"{self._main_key}:seq")
+        try:
+            for key in self._r.scan_iter(f"{self._job_key_prefix}*"):
+                pipe.delete(key)
+        except Exception:
+            pass
+        pipe.execute()

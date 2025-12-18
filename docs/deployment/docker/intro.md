@@ -4,7 +4,23 @@ Think of the Compose YAML as a template and `.env` files as the fill. Keep the Y
 
 ## Prerequisites
 - Docker Desktop / Docker Engine with the Compose plugin.
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
+
+## Core ideas in this guide
+- Use `.env` files to pin images. Avoid editing `docker-compose-*.yaml`.
+- Maintain one env file per environment: `.dev.env`, `.stage.env`, `.prod.env`.
+- Pin all images in the env file (core, DSXA, connectors) so you know exactly what you’re running.
+- Reuse the same env files when you move to Kubernetes (convert to a Secret).
+
+### Sample `.env`
+```bash
+# Core + DSXA images (pin releases)
+DSXCONNECT_IMAGE=dsxconnect/dsx-connect:1.2.3
+DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020
+
+# Connector image example
+ONEDRIVE_IMAGE=dsxconnect/onedrive-connector:0.1.7
+```
 
 ## Secrets and Credentials
 Connectors typically require credentials to access external file repositories, typically in the form of an access key or secret
@@ -79,58 +95,41 @@ docker compose --env-file dsx-connect-<core_version>/.core.env \
 
 For connectors, use the same pattern: mount `./certs:/app/certs:ro` into the connector service and set `DSXCONNECTOR_USE_TLS=true` plus `DSXCONNECTOR_TLS_CERTFILE`/`DSXCONNECTOR_TLS_KEYFILE`. If the connector talks to dsx-connect over HTTPS with a self-signed cert, set `DSXCONNECTOR_CA_BUNDLE=/app/certs/server.crt` (or disable verification only for local dev).
 
-## Core ideas in this guide
-- Use `.env` files to pin images. Avoid editing `docker-compose-*.yaml`.
-- Maintain one env file per environment: `.dev.env`, `.stage.env`, `.prod.env`.
-- Pin all images in the env file (core, DSXA, connectors) so you know exactly what you’re running.
-- Reuse the same env files when you move to Kubernetes (convert to a Secret).
 
-## Sample `.env`
-```bash
-# Core + DSXA images (pin releases)
-DSXCONNECT_IMAGE=dsxconnect/dsx-connect:1.2.3
-DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020
-
-# Connector image example
-ONEDRIVE_IMAGE=dsxconnect/onedrive-connector:0.1.7
-
-# Core auth (optional)
-#DSXCONNECT_ENROLLMENT_TOKEN=abc123
-
-# DSXA settings (if you run DSXA locally)
-#APPLIANCE_URL=https://<di>.customers.deepinstinctweb.com
-#TOKEN=<DSXA token>
-#SCANNER_ID=<scanner id>
-
-# OneDrive connector settings (example)
-#ONEDRIVE_TENANT_ID=...
-#ONEDRIVE_CLIENT_ID=...
-#ONEDRIVE_CLIENT_SECRET=...
-#ONEDRIVE_USER_ID=...
-```
-Compose reads `.env` automatically when it’s in the working directory; use `--env-file` to point to a specific env file (recommended in this repo’s bundle-based examples).
-
-## How to run with env files
+## Deployment Example: OneDrive Connector
 1. Download and extract the Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`), which expands to `dsx-connect-<core_version>/`.
-2. Copy the core sample env: `cp dsx-connect-<core_version>/.sample.core.env dsx-connect-<core_version>/.core.env` and edit values.
-3. Run core (example):  
+2. Copy the core sample env: `cp dsx-connect-<core_version>/.sample.core.env example.core.env`. 
+3. Run DSXA if needed:
+```bash
+docker compose --env-file example.core.env -f dsx-connect-<core_version>/docker-compose-dsxa.yaml up -d
+```
+4. Run core (example):  
    ```bash
    docker network create dsx-connect-network || true
-   docker compose --env-file dsx-connect-<core_version>/.core.env -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml up -d
+   docker compose --env-file example.core.env -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml up -d
    ```
-4. Run DSXA if needed:  
-   ```bash
-   docker compose --env-file dsx-connect-<core_version>/.core.env -f dsx-connect-<core_version>/docker-compose-dsxa.yaml up -d
+5. Copy the connector sample env: `cp dsx-connect-<core_version>/onedrive-connector-<connector_version>/.sample.onedrive.env example.onedrive.env`.
+6. Edit `example.onedrive.env` (tenant/client creds, asset, etc.)
+   ```dotenv
+    # Env for OneDrive connector. Pin the image and set Tenant, Client ID, Client Secret, User and Asset. 
+    
+    # OneDrive connector env (sample)
+    ONEDRIVE_IMAGE=dsxconnect/onedrive-connector:0.1.13
+    ONEDRIVE_TENANT_ID=
+    ONEDRIVE_CLIENT_ID=
+    ONEDRIVE_CLIENT_SECRET=
+    ONEDRIVE_USER_ID=
+    DSXCONNECTOR_ASSET=/Documents/dsx-connect
+    DSXCONNECTOR_FILTER=
+    #DSXCONNECT_ENROLLMENT_TOKEN=abc123
    ```
-5. Run a connector (example OneDrive):  
+5. Deploy the OneDrive connector:  
    ```bash
-   cp dsx-connect-<core_version>/onedrive-connector-<connector_version>/.sample.onedrive.env dsx-connect-<core_version>/onedrive-connector-<connector_version>/.env
-   # edit dsx-connect-<core_version>/onedrive-connector-<connector_version>/.env (tenant/client creds, asset, etc.)
-   docker compose --env-file dsx-connect-<core_version>/onedrive-connector-<connector_version>/.env \
+   docker compose --env-file example.onedrive.env \
      -f dsx-connect-<core_version>/onedrive-connector-<connector_version>/docker-compose-onedrive-connector.yaml up -d
    ```
 
-Swap `.dev.env` with `.stage.env` or `.prod.env` as needed; the YAML stays the same.
+
 
 ## Reuse for Kubernetes
 Create a Secret from the same env file and reference it in Helm values:

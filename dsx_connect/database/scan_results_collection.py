@@ -44,3 +44,16 @@ class ScanResultsCollection(ScanResultsBaseDB):
 
     def __len__(self):
         return len(self.collection)
+
+    def clear(self, job_id: str | None = None) -> None:
+        if job_id is None:
+            self.collection = []
+            self.next_id = 1
+            return
+        # Remove entries matching the job id
+        filtered = []
+        for model in self.collection:
+            jid = getattr(model, "scan_job_id", None) or getattr(getattr(model, "scan_request", None), "scan_job_id", None)
+            if jid != job_id:
+                filtered.append(model)
+        self.collection = filtered

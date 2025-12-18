@@ -4,7 +4,7 @@ This guide shows how to deploy the SharePoint connector with Docker Compose for 
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - SharePoint app registration credentials (tenant ID, client ID, client secret). See Reference → [Azure Credentials](../../reference/azure-credentials.md) for a step-by-step walkthrough.
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
@@ -77,7 +77,7 @@ docker compose --env-file dsx-connect-<core_version>/sharepoint-connector-<conne
 - Use `DSXCONNECTOR_ASSET` to configure the SharePoint URL scope (site/doc lib/folder).
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 ## Webhook Exposure
 If you expose SharePoint webhook callbacks or other HTTP endpoints outside Docker, tunnel or publish the host port mapped to `8640` (compose default when ports are enabled). Keep `DSXCONNECTOR_CONNECTOR_URL` pointing to the Docker-network URL (e.g., `http://sharepoint-connector:8640`) so dsx-connect can reach the container internally.

@@ -55,6 +55,37 @@ def _normalize_path(p: str | pathlib.Path) -> pathlib.Path:
         return path
 
 
+def _is_under(path: pathlib.Path, parent: pathlib.Path) -> bool:
+    """
+    True if 'path' is the same as or a descendant of 'parent'.
+    Works on older Python without Path.is_relative_to.
+    """
+    try:
+        return path == parent or path.is_relative_to(parent)  # type: ignore[attr-defined]
+    except Exception:
+        try:
+            path.relative_to(parent)
+            return True
+        except Exception:
+            return False
+
+
+def _quarantine_paths() -> list[pathlib.Path]:
+    paths: list[pathlib.Path] = []
+    for raw in [config.item_action_move_metainfo, getattr(config, "quarantine_host", None)]:
+        if raw:
+            paths.append(_normalize_path(raw))
+    # de-dup
+    uniq: list[pathlib.Path] = []
+    seen = set()
+    for p in paths:
+        key = p.as_posix()
+        if key not in seen:
+            uniq.append(p)
+            seen.add(key)
+    return uniq
+
+
 # given that this could potentially be a lengthy file iteration, make the iteration asynchronous...
 # TODO possibly should allow startup of FAstAPI to complete, and schedule full scans in the background
 async def start_monitor():
@@ -95,9 +126,7 @@ async def start_monitor():
             )
             return
 
-        ignore_paths: list[pathlib.Path] = []
-        if quarantine_path.exists():
-            ignore_paths.append(quarantine_path)
+        ignore_paths: list[pathlib.Path] = [quarantine_path]
 
         connector.filesystem_monitor = FilesystemMonitor(
             folder=watch_path,
@@ -150,10 +179,15 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
     dsx_logging.debug(
         f"Scanning files at: {config.asset}, filter='{config.filter}')"
     )
+    quarantine_paths = _quarantine_paths()
     count = 0
     async for file_path in get_filepaths_async(
             pathlib.Path(config.asset),
             config.filter):
+        p = _normalize_path(file_path)
+        if any(_is_under(p, qp) for qp in quarantine_paths):
+            dsx_logging.debug(f"Skipping {p} (quarantine path)")
+            continue
         status_response = await connector.scan_file_request(
             ScanRequestModel(location=str(file_path), metainfo=file_path.name))
         dsx_logging.debug(f'Sent scan request for {file_path}, result: {status_response}')
@@ -167,10 +201,14 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
 @connector.preview
 async def preview_provider(limit: int) -> list[str]:
     items: list[str] = []
+    quarantine_paths = _quarantine_paths()
     try:
         base = pathlib.Path(config.asset)
         i = 0
         async for file_path in get_filepaths_async(base, config.filter):
+            p = _normalize_path(file_path)
+            if any(_is_under(p, qp) for qp in quarantine_paths):
+                continue
             items.append(str(file_path))
             i += 1
             if i >= max(1, limit):

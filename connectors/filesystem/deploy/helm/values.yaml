@@ -44,7 +44,7 @@ env:
   # Defaults to http/https://dsx-connect-api based on DSXCONNECTOR_USE_TLS.
   DSXCONNECTOR_ITEM_ACTION: "nothing"         # nothing, delete, tag, move, move_tag
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
-  # `DSXCONNECTOR_ASSET` defaults to scanVolume.mountPath when scanVolume.enabled=true.
+# `DSXCONNECTOR_ASSET` defaults to scanVolume.mountPath when scanVolume.enabled=true.
   DSXCONNECTOR_ASSET: "/app/scan_folder"
   DSXCONNECTOR_FILTER: ""
   DSXCONNECTOR_SCAN_BY_PATH: "False"
@@ -52,6 +52,14 @@ env:
 
 # Optional additional secrets projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
 envSecretRefs: []
+
+quarantineVolume:
+  enabled: false
+  mountPath: "/app/quarantine"
+  existingClaim: ""
+  hostPath: ""
+  readOnly: false
+  subPath: ""
 
 auth_dsxconnect:
   enabled: false

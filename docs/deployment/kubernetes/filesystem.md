@@ -14,14 +14,17 @@ Deploy the `filesystem-connector-chart` (under `connectors/filesystem/deploy/hel
 
 1. Provision the volume and (if using PVC) bind it in the connector namespace.
 2. Decide where the volume should mount inside the pod (default `/app/scan_folder`).
-3. Confirm the namespace can reach dsx-connect’s service/ingress.
+3. Decide where quarantine moves should land (reuse the same volume or mount a second one).
+4. Confirm the namespace can reach dsx-connect’s service/ingress.
 
 ## Configuration
 
 ### Required settings
 
 - `scanVolume.*`: enable the mount and point to the PVC/hostPath plus `mountPath`.
+- `quarantineVolume.*` (optional but recommended when using `move`/`move_tag`): mount a PVC/hostPath to `/app/quarantine`.
 - `env.DSXCONNECTOR_ASSET`: automatically set to `scanVolume.mountPath`, override if needed.
+- `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`: set automatically to `quarantineVolume.mountPath` when enabled (defaults to `/app/quarantine` if not).
 - `env.DSXCONNECTOR_FILTER`: optional rsync-style include/exclude list (see [Filter reference](../../reference/filters.md)).
 - Monitoring flags: `env.DSXCONNECTOR_MONITOR`, `env.DSXCONNECTOR_MONITOR_FORCE_POLLING`, `env.DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS`.
 - Remediation: `env.DSXCONNECTOR_ITEM_ACTION`, `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`.
@@ -45,6 +48,15 @@ scanVolume:
   enabled: true
   hostPath: /Users/<you>/scan-data
   mountPath: /app/scan_folder
+```
+
+Quarantine volume (optional; good for move/move_tag):
+
+```yaml
+quarantineVolume:
+  enabled: true
+  hostPath: /Users/<you>/scan-data/dsxconnect-quarantine
+  mountPath: /app/quarantine
 ```
 
 Verify after deployment:

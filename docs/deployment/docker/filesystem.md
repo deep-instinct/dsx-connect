@@ -4,7 +4,7 @@ This guide shows how to deploy the Filesystem connector with Docker Compose for 
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - A host folder to scan (and optionally a quarantine folder), mounted into the container
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
@@ -17,17 +17,17 @@ In the extracted bundle, use `dsx-connect-<core_version>/filesystem-connector-<c
 | --- | --- |
 | `DSXCONNECTOR_DSX_CONNECT_URL` | dsx-connect base URL (e.g., `http://dsx-connect-api:8586` on the shared Docker network). |
 | `DSXCONNECTOR_CONNECTOR_URL` | Callback URL dsx-connect uses to reach the connector (defaults to the service name inside the Docker network). |
-| `DSXCONNECTOR_ASSET` | Always `/app/scan_folder` inside the container; bind your host/NAS path to this mount. |
+| `DSXCONNECTOR_ASSET` | Host/NAS path you want to scan (bind mounted to `/app/scan_folder`). |
 | `DSXCONNECTOR_FILTER` | Optional rsync-style rules evaluated relative to `/app/scan_folder`. |
 | `DSXCONNECTOR_ITEM_ACTION` | What to do on malicious verdicts (`nothing`, `delete`, `move`, `move_tag`). Use `move`/`move_tag` to relocate files into the quarantine mount. |
-| `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Target path interpreted by the connector when moving files (defaults to `/app/quarantine`). |
+| `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Host/NAS path for quarantine moves (bind mounted to `/app/quarantine`). |
 
 ### Filesystem-specific settings
 
 | Field / Env | Description |
 | --- | --- |
-| `SCAN_FOLDER_PATH` | Host or NAS path you want to scan (Compose anchor bound into `/app/scan_folder`). |
-| `QUARANTINE_FOLDER_PATH` | Host or NAS path for quarantined files (bound into `/app/quarantine`). |
+| `DSXCONNECTOR_ASSET` | Host or NAS path you want to scan (bind mounted to `/app/scan_folder`). |
+| `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Host or NAS path for quarantined files (bind mounted to `/app/quarantine`). |
 | `DSXCONNECTOR_ASSET_DISPLAY_NAME` | Overrides what the UI shows for the asset (set to the same host scan path for clarity). |
 | `DSXCONNECTOR_MONITOR` | `true` to enable inotify-based monitoring of `/app/scan_folder`. |
 | `DSXCONNECTOR_MONITOR_FORCE_POLLING` | `true` to poll instead of relying on inotify (useful for remote filesystems that don’t emit events). |
@@ -37,8 +37,8 @@ Copy the sample env file and edit it:
 cp dsx-connect-<core_version>/filesystem-connector-<connector_version>/.sample.filesystem.env \
   dsx-connect-<core_version>/filesystem-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/filesystem-connector-<connector_version>/.env:
-#   SCAN_FOLDER_PATH=/absolute/path/to/folder
-#   QUARANTINE_FOLDER_PATH=/absolute/path/to/folder/dsxconnect-quarantine
+#   DSXCONNECTOR_ASSET=/absolute/path/to/folder
+#   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=/absolute/path/to/folder/dsxconnect-quarantine
 ```
 
 Deploy:
@@ -47,10 +47,10 @@ docker compose --env-file dsx-connect-<core_version>/filesystem-connector-<conne
   -f dsx-connect-<core_version>/filesystem-connector-<connector_version>/docker-compose-filesystem-connector.yaml up -d
 ```
 
-No changes to `DSXCONNECTOR_ASSET` are required—the connector always operates on `/app/scan_folder`, which is the in-container mount of `SCAN_FOLDER_PATH`. To keep the dsx-connect UI readable, set `DSXCONNECTOR_ASSET_DISPLAY_NAME` to the same host scan path.
+No changes to the compose file are required beyond the env values—the connector always operates on `/app/scan_folder` inside the container, with `DSXCONNECTOR_ASSET` supplying the host path to bind-mount. To keep the dsx-connect UI readable, set `DSXCONNECTOR_ASSET_DISPLAY_NAME` to the same host scan path.
 
 ### Local vs Remote Mounts
-- **Local bind mounts** (default compose file): use `SCAN_FOLDER_PATH` / `QUARANTINE_FOLDER_PATH` anchors so Docker binds host directories into `/app/scan_folder` and `/app/quarantine`.
+- **Local bind mounts** (default compose file): use `DSXCONNECTOR_ASSET` / `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` so Docker binds host directories into `/app/scan_folder` and `/app/quarantine`.
 - **Remote/NAS mounts**: swap the scan volume with an NFS or SMB volume before binding to `/app/scan_folder`. The quarantine path can remain a local bind if desired, or also point to a NAS export.
 
 Example NFS compose snippet (`docker-compose-filesystem-connector-nfs.yaml`):
@@ -114,16 +114,17 @@ services:
 Make sure the Docker host’s AFS cache manager has tokens for the target path (`kinit` + `aklog`), and adjust the `/afs/...` path to match your cell. Once bound, the connector treats `/app/scan_folder` like any other volume.
 
 ## Assets and Filters
-- `DSXCONNECTOR_ASSET` points to the path **inside the container** (default `/app/scan_folder`). Mount the host directory with `volumes:` so the container sees the real files, e.g., `./samples:/app/scan_folder`.
-- For quarantine actions, mount a second host path (e.g., `./quarantine:/app/quarantine`) and set `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` if needed.
-- Filters are always relative to the container path defined in `DSXCONNECTOR_ASSET`; they do **not** reference host paths directly.
+- `DSXCONNECTOR_ASSET` is the host/NAS path; the compose file bind-mounts it to `/app/scan_folder` where the connector actually scans.
+- For quarantine actions, mount a second host path (e.g., `./quarantine:/app/quarantine`) and set `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` to that same host path (the connector maps it to `/app/quarantine` internally when the mount exists).
+- To avoid rescanning quarantined items, keep the quarantine folder outside the scanned path (or rely on the connector’s built-in skip list for the configured quarantine path).
+- Filters are evaluated relative to `/app/scan_folder` inside the container; they do **not** reference host paths directly.
 - See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for guidance on sharding and scoping.
 
 ## Webhook Exposure
 Expose or tunnel the host port mapped to `8620` when dsx-connect (or other internal services) must reach private connector routes. Keep `DSXCONNECTOR_CONNECTOR_URL` set to the Docker-network hostname (e.g., `http://filesystem-connector:8620`) so dsx-connect resolves the service internally, and forward the host port through your preferred tunnel only for inbound events that originate outside Docker.
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 ## Notes
 - Consider enabling monitor (`DSXCONNECTOR_MONITOR=true`) for real-time file change detection.

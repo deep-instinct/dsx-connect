@@ -4,7 +4,7 @@ This guide explains how to run the `m365-mail-connector` (Outlook / Exchange Onl
 
 ## Prerequisites
 - Docker installed and a network shared with the dsx-connect stack (for example, `dsx-connect-network`).
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`.
+- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - dsx-connect API running (Docker Compose or K8S); note the base URL exposed to the connector.
 - Microsoft Graph application (client credentials flow) with the required permissions (see Reference → [Azure Credentials](../../reference/azure-credentials.md) for detailed steps):
   - `Mail.Read` (or `Mail.ReadWrite` if remediation actions are enabled)
@@ -104,7 +104,7 @@ Any secure tunnel (Cloudflare Tunnel, Azure Relay, etc.) works similarly: expose
 - Remediation actions kick in as soon as `DSXCONNECTOR_ITEM_ACTION` is set to `delete`, `move`, or `move_tag`; no extra toggle is required (the legacy `DSXCONNECTOR_ENABLE_ACTIONS` variable is ignored unless explicitly set to `false` for compatibility).
 
 ## TLS Options
-See [Deploying with SSL/TLS](../tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
+See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
 
 Example override file (bundle root):
 ```yaml

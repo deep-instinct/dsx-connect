@@ -5,6 +5,7 @@
 # - Use an absolute path under /Users/... that exists on your Mac.
 # - This is for development only; prefer a PVC for production.
 # - The chart will set DSXCONNECTOR_ASSET to scanVolume.mountPath automatically.
+# - For quarantine moves, either use a subfolder under the same mountPath or enable quarantineVolume below.
 
 scanVolume:
   enabled: true
@@ -13,6 +14,11 @@ scanVolume:
   # Path inside the connector container where files will appear
   mountPath: "/app/scan_folder"
   readOnly: false
+
+quarantineVolume:
+  enabled: true
+  hostPath: "/Users/yourname/scan-data/dsxconnect-quarantine"  # CHANGE ME
+  mountPath: "/app/quarantine"
 
 # Optional: keep a small writable data dir inside the pod
 dataVolume:

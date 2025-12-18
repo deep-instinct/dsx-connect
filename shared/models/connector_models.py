@@ -34,6 +34,7 @@ class ConnectorInstanceModel(BaseModel):
     meta_info: str | None = None
     url: str = ''
     status: ConnectorStatusEnum = ConnectorStatusEnum.STARTING
+    item_action: ItemActionEnum = ItemActionEnum.NOTHING
     item_action_move_metainfo: str = ''
     asset: str = ''
     # Optional human-friendly label for asset path

@@ -131,6 +131,7 @@ class DSXConnector:
             # IMPORTANT: expose the connector under "<base>/<name>"
             url=f'{str(connector_config.connector_url).rstrip("/")}/{self.connector_id}',
             status=ConnectorStatusEnum.STARTING,
+            item_action=connector_config.item_action,
             item_action_move_metainfo=connector_config.item_action_move_metainfo,
             asset=connector_config.asset,
             asset_display_name=getattr(connector_config, 'asset_display_name', None) or None,

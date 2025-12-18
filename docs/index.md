@@ -13,8 +13,11 @@ A modular, integration‑agnostic framework for orchestrating file scanning and 
 
 ## Quick Links
 - [Overview](overview.md)
+- [Getting Started](getting-started.md)
 - [Connectors](connectors/index.md)
 - [Deployment Models](deployment/index.md)
 - [Filters Reference](reference/filters.md)
 
-## Architecture
+
+
+

@@ -29,6 +29,20 @@ async def list_scan_results(limit: int = 200, job_id: str | None = None) -> List
     return _results_database.recent(limit=limit, job_id=job_id)
 
 
+@router.delete(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.DELETE),
+    description="Clear stored scan results (optionally by job_id)."
+)
+async def clear_scan_results(job_id: str | None = None) -> dict:
+    try:
+        _results_database.clear(job_id=job_id)
+    except Exception as e:
+        dsx_logging.error(f"Failed to clear scan results: {e}")
+        raise HTTPException(status_code=500, detail="clear_failed")
+    return {"status": "success", "job_id": job_id or "all"}
+
+
 @router.get(
     route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value, "job", "{job_id}"),
     name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.LIST),

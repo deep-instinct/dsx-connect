@@ -1,6 +1,6 @@
 # DSX‑Connect Architecture
 
-DSX‑Connect is a modular integration framework that orchestrates safe, scalable file scanning and remediation while remaining completely agnostic to specific repository integrations. The core “scan brain” handles queuing, parallelism, and remediation; DSX‑Connectors adapt repositories (Filesystem, S3, GCS, SharePoint/OneDrive, GitHub, etc.) to a simple, consistent API.
+DSX‑Connect is a modular integration framework that orchestrates safe, scalable file scanning and remediation while remaining completely agnostic to specific repository integrations. The core “scan brain” handles queuing, parallelism, and remediation; DSX‑Connectors adapt repositories (Filesystem, S3, GCS, SharePoint/OneDrive, GitHub, etc.) to a simple, consistent API. It extends **Deep Instinct's** [**DSX for Applications**](https://www.deepinstinct.com/dsx/dsx-applications){: target="_blank" rel="noreferrer" } to any repository or service.
 
 ## Key Components
 

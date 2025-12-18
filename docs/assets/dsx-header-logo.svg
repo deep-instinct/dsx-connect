@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="60" viewBox="0 0 220 60" fill="none">
+  <defs>
+    <linearGradient id="dsxGradient" x1="0" y1="0" x2="220" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4CA7FF"/>
+      <stop offset="1" stop-color="#6BC4FF"/>
+    </linearGradient>
+  </defs>
+  <!-- Arrows and text -->
+  <g transform="translate(5,8) scale(.7)">
+    <!-- Bottom arrow (points right) -->
+    <path d="M 12 16.22 L 17.19 16.22 L 17.19 13 L 32 20 L 17.19 27 L 17.19 23.78 L 12 23.78 L 12 20 Z" fill="#4CA7FF" stroke="none"/>
+    <!-- Top arrow (points left) -->
+    <path d="M 0 3.22 L 5.19 3.22 L 5.19 0 L 20 7 L 5.19 14 L 5.19 10.78 L 0 10.78 L 0 7 Z" fill="#4CA7FF" stroke="none" transform="rotate(180 10 7)"/>
+    <!-- Text to the immediate right of arrows -->
+    <text x="42" y="21" font-family="'Segoe UI', Arial, sans-serif" font-size="24" fill="#4CA7FF" font-weight="200">DSX-Connect</text>
+  </g>
+</svg>

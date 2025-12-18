@@ -1,11 +1,11 @@
 .md-header__docker {
   margin-left: 0.4rem;
-  padding: 0.25rem 0.55rem;
+  padding: 0.2rem 0.35rem;
   border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--md-primary-bg-color);
-  background: var(--md-primary-fg-color);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--md-primary-fg-color);
+  background: transparent;
   text-decoration: none;
   line-height: 1.4;
   display: inline-flex;
@@ -15,4 +15,10 @@
 
 .md-header__docker:hover {
   opacity: 0.9;
+}
+
+.docker-icon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
 }

@@ -15,7 +15,7 @@ and a Connector. Each page ends with a **Next** link to keep you moving.
 ## Getting and using the Compose bundle
 
 Download the latest release bundle from the
-<a href="https://github.com/logang-di/dsx-connect/releases" target="_blank" rel="noopener noreferrer">
+<a href="https://github.com/deep-instinct/dsx-connect/releases" target="_blank" rel="noopener noreferrer">
 DSX-Connect releases page
 </a>.
 There will be several releases—grab the asset named `compose-bundle-<version>.tar.gz` (typically the newest one).

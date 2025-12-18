@@ -1,0 +1,18 @@
+.md-header__docker {
+  margin-left: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--md-primary-bg-color);
+  background: var(--md-primary-fg-color);
+  text-decoration: none;
+  line-height: 1.4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.md-header__docker:hover {
+  opacity: 0.9;
+}

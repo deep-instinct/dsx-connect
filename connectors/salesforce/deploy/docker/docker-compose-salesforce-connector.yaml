@@ -1,0 +1,43 @@
+services:
+  salesforce_connector:
+    image: ${SALESFORCE_IMAGE:-dsxconnect/salesforce-connector:latest}
+    volumes:
+      - type: volume
+        source: salesforce_connector_data
+        target: /app/data
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_CONNECTOR_URL: "http://salesforce-connector:8670"
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+      DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}"
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-dsxconnect-quarantine}"
+      DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-scan_asset}"
+      DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}"
+      DSXCONNECTOR_SF_LOGIN_URL: "${DSXCONNECTOR_SF_LOGIN_URL:-https://login.salesforce.com}"
+      DSXCONNECTOR_SF_API_VERSION: "${DSXCONNECTOR_SF_API_VERSION:-v60.0}"
+      DSXCONNECTOR_SF_CLIENT_ID: "${DSXCONNECTOR_SF_CLIENT_ID}"
+      DSXCONNECTOR_SF_CLIENT_SECRET: "${DSXCONNECTOR_SF_CLIENT_SECRET}"
+      DSXCONNECTOR_SF_USERNAME: "${DSXCONNECTOR_SF_USERNAME}"
+      DSXCONNECTOR_SF_PASSWORD: "${DSXCONNECTOR_SF_PASSWORD}"
+      DSXCONNECTOR_SF_SECURITY_TOKEN: "${DSXCONNECTOR_SF_SECURITY_TOKEN:-}"
+      DSXCONNECTOR_SF_WHERE: "${DSXCONNECTOR_SF_WHERE:-IsLatest = true}"
+      DSXCONNECTOR_SF_FIELDS: "${DSXCONNECTOR_SF_FIELDS:-Id, Title, FileExtension, ContentSize, ContentDocumentId, CreatedDate}"
+      DSXCONNECTOR_SF_ORDER_BY: "${DSXCONNECTOR_SF_ORDER_BY:-CreatedDate DESC}"
+      DSXCONNECTOR_SF_MAX_RECORDS: "${DSXCONNECTOR_SF_MAX_RECORDS:-200}"
+      #DSXCONNECT_ENROLLMENT_TOKEN: "${DSXCONNECT_ENROLLMENT_TOKEN:-}"
+    networks:
+      dsx-network:
+        aliases:
+          - salesforce-connector
+    command: ["python", "connectors/salesforce/start.py", "--workers", "1", "--port", "8670"]
+
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network
+
+volumes:
+  salesforce_connector_data:

@@ -1,0 +1,6 @@
+.venv/
+.venv3.13/
+
+docker_bundle/
+
+__pycache__/

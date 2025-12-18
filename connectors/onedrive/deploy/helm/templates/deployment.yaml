@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "onedrive-connector.fullname" . }}
+  labels:
+    {{- include "onedrive-connector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "onedrive-connector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "onedrive-connector.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ include "onedrive-connector.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: DSXCONNECTOR_AUTH__ENABLED
+              value: {{ .Values.auth_dsxconnect.enabled | quote }}
+            - name: DSXCONNECTOR_AUTH__CLOCK_SKEW_SECONDS
+              value: {{ .Values.auth_dsxconnect.clockSkewSeconds | quote }}
+            {{- if .Values.auth_dsxconnect.enrollmentSecretName }}
+            - name: DSXCONNECT_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth_dsxconnect.enrollmentSecretName | quote }}
+                  key: {{ .Values.auth_dsxconnect.enrollmentKey | quote }}
+            {{- end }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+          {{- if .Values.envSecretRefs }}
+          envFrom:
+            {{- range .Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - containerPort: 8660
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.dataVolume.mountPath }}
+          readinessProbe:
+            httpGet:
+              path: /{{ include "onedrive-connector.routeBase" . }}/readyz
+              port: 8660
+          livenessProbe:
+            httpGet:
+              path: /{{ include "onedrive-connector.routeBase" . }}/readyz
+              port: 8660
+      volumes:
+        - name: data
+          emptyDir: {}

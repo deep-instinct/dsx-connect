@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rsyslog
+description: Simple rsyslog collector for DSX scan-result JSON with optional fan-out
+type: application
+version: 0.1.0

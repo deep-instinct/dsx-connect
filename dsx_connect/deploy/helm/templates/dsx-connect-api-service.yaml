@@ -1,0 +1,31 @@
+{{- $root := . -}}
+{{- $api := default (dict) (index $root.Values "dsx-connect-api") -}}
+{{- if $api.enabled }}
+{{- $service := default (dict) $api.service -}}
+{{- $tls := default (dict) $api.tls -}}
+{{- $servicePort := default 80 $service.port -}}
+{{- $serviceType := default "ClusterIP" $service.type -}}
+{{- $tlsEnabled := default false $tls.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: dsx-connect-api
+  labels:
+    {{- include "dsx-connect-api.labels" $root | nindent 4 }}
+spec:
+  type: {{ $serviceType }}
+  ports:
+    {{- if $tlsEnabled }}
+    - port: 443
+      targetPort: 443
+      protocol: TCP
+      name: https
+    {{- else }}
+    - port: {{ $servicePort }}
+      targetPort: {{ $servicePort }}
+      protocol: TCP
+      name: http
+    {{- end }}
+  selector:
+    {{- include "dsx-connect-api.selectorLabels" $root | nindent 4 }}
+{{- end }}

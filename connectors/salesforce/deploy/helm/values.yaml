@@ -1,0 +1,75 @@
+image:
+  repository: dsxconnect/salesforce-connector
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart AppVersion.
+  tag: ""
+  # When installing from OCI (`--version=X.Y.Z`), the default image tag is that chart's appVersion.
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# HTTP route base for connector health endpoints.
+routeBase: "salesforce-connector"
+
+service:
+  type: ClusterIP
+  port: 8670
+
+tls:
+  enabled: false
+
+ingressWebhook:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+networkPolicy:
+  enabled: false
+  allowFrom: []
+
+env:
+  LOG_LEVEL: "info"
+  DSXCONNECTOR_CONNECTOR_URL: "http://salesforce-connector:8670"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_ASSET: ""         # Optional extra SOQL filter clause appended without WHERE
+  DSXCONNECTOR_FILTER: ""        # See docs/reference/dsxconnector_filter.md
+  DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
+  DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
+  # Optional friendly name shown on the dsx-connect UI card
+  # DSXCONNECTOR_DISPLAY_NAME: "Salesforce Connector"
+  DSXCONNECTOR_SF_LOGIN_URL: "https://login.salesforce.com"
+  DSXCONNECTOR_SF_API_VERSION: "v60.0"
+  DSXCONNECTOR_SF_WHERE: "IsLatest = true"
+  DSXCONNECTOR_SF_FIELDS: "Id, Title, FileExtension, ContentSize, ContentDocumentId, CreatedDate"
+  DSXCONNECTOR_SF_ORDER_BY: "CreatedDate DESC"
+  DSXCONNECTOR_SF_MAX_RECORDS: "500"
+  # Salesforce OAuth (recommend using envSecretRefs)
+  # DSXCONNECTOR_SF_CLIENT_ID: ""
+  # DSXCONNECTOR_SF_CLIENT_SECRET: ""
+  # DSXCONNECTOR_SF_USERNAME: ""
+  # DSXCONNECTOR_SF_PASSWORD: ""
+  # DSXCONNECTOR_SF_SECURITY_TOKEN: ""
+  # TLS verification overrides for Salesforce API
+  # DSXCONNECTOR_SF_VERIFY_TLS: "true"
+  # DSXCONNECTOR_SF_CA_BUNDLE: "/app/certs/salesforce-ca.pem"
+  # DSXCONNECTOR_SF_HTTP_TIMEOUT: "30"
+
+# Optional list of Secret names projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
+envSecretRefs: []
+
+auth_dsxconnect:
+  enabled: false
+  clockSkewSeconds: 60
+  enrollmentSecretName: ""
+  enrollmentKey: ENROLLMENT_TOKEN  # Secret providing DSXCONNECT_ENROLLMENT_TOKEN when dsx-connect auth is enabled
+
+# Uvicorn concurrency and pod replicas
+# 'workers' = Uvicorn worker processes per pod (in-pod parallelism)
+# 'replicaCount' = number of pods (horizontal scale/HA)
+workers: 1
+replicaCount: 1

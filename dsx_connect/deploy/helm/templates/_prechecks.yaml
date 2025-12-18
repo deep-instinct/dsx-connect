@@ -1,0 +1,9 @@
+{{- /*
+Preflight check: when the in-cluster DSXA scanner is disabled, require an explicit DSXCONNECT_SCANNER__SCAN_BINARY_URL.
+*/ -}}
+{{- $dsxa := (index .Values "dsxa-scanner") -}}
+{{- $globalEnv := (default (dict) .Values.global.env) -}}
+{{- if and (or (not $dsxa) (not $dsxa.enabled)) (empty $globalEnv.DSXCONNECT_SCANNER__SCAN_BINARY_URL) -}}
+{{- fail "dsx-connect: dsxa-scanner.enabled=false requires global.env.DSXCONNECT_SCANNER__SCAN_BINARY_URL to be set (external DSXA URL)." -}}
+{{- end -}}
+

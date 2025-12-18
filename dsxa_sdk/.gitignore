@@ -1,0 +1,8 @@
+*.pyc
+__pycache__/
+/.pytest_cache/
+/build/
+/dist/
+/dsxa_sdk.egg-info/
+/tests/assets/samples/
+.env

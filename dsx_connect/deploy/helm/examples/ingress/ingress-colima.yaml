@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dsx-connect-api
+spec:
+  # Colima enables a k3s cluster which typically ships with Traefik as the ingress controller.
+  # If you installed a different controller, adjust the class accordingly.
+  ingressClassName: traefik
+  rules:
+    # For port-forwarding Traefik locally, 127.0.0.1.nip.io is fine.
+    # If you enable Traefik as a LoadBalancer, replace the host with:
+    #   dsx-connect.<TRAEFIK_EXTERNAL_IP>.nip.io
+    # where <TRAEFIK_EXTERNAL_IP> is the External IP of svc/traefik in kube-system.
+    - host: dsx-connect.127.0.0.1.nip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dsx-connect-api
+                port:
+                  number: 8586

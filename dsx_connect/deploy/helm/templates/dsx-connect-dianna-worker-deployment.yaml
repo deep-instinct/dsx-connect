@@ -1,0 +1,159 @@
+{{- $root := . -}}
+{{- $worker := default (dict) (index $root.Values "dsx-connect-dianna-worker") -}}
+{{- if $worker.enabled }}
+{{- $image := default (dict) $worker.image -}}
+{{- $envOverrides := default (dict) $worker.env -}}
+{{- $celery := default (dict) $worker.celery -}}
+{{- $localDi := default (dict) $worker.dianna -}}
+{{- $replicas := default 1 $worker.replicaCount -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dsx-connect-dianna-worker.fullname" $root }}
+  labels:
+    {{- include "dsx-connect-dianna-worker.labels" $root | nindent 4 }}
+spec:
+  replicas: {{ $replicas }}
+  selector:
+    matchLabels:
+      {{- include "dsx-connect-dianna-worker.selectorLabels" $root | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dsx-connect-dianna-worker.selectorLabels" $root | nindent 8 }}
+    spec:
+      containers:
+        - name: dsx-connect-dianna-worker
+          image: "{{ default $image.repository (default "" $root.Values.global.image.repository) }}:{{ coalesce $image.tag $root.Values.global.image.tag $root.Chart.AppVersion }}"
+          imagePullPolicy: {{ default $image.pullPolicy (default "IfNotPresent" $root.Values.global.image.pullPolicy) }}
+          command: ["celery"]
+          {{ $globalEnv := default (dict) $root.Values.global.env }}
+          {{ $env := merge (deepCopy $globalEnv) (deepCopy $envOverrides) }}
+          {{ $queueDefault := printf "%s.%s" (default "dev" $env.DSXCONNECT_APP_ENV) "dsx_connect.analyze.dianna" }}
+          {{ $queue := default $queueDefault $celery.queue }}
+          args: [
+            "-A", "dsx_connect.taskworkers.celery_app.celery_app",
+            "worker",
+            "--loglevel=warning",
+            "-Q", "{{ $queue }}",
+            "--concurrency", "{{ default 1 $celery.concurrency }}"
+          ]
+          env:
+            {{ $scanner := default (dict) $root.Values.global.scanner }}
+            {{ $svc := default (printf "%s-dsxa-scanner" $root.Release.Name) $scanner.serviceName }}
+            {{ $scanPort := default 5000 $scanner.port }}
+            {{ $scheme := default "http" $scanner.scheme }}
+            {{- $globalDi := default (dict) $root.Values.global.dianna }}
+            {{- $di := merge (dict) $globalDi $localDi }}
+            {{- $diSecretName := default "" $di.secretName }}
+            {{- $diManagementKey := default "managementUrl" $di.managementUrlKey }}
+            {{- $diTokenKey := default "apiToken" $di.apiTokenKey }}
+            {{- $diHasSecret := ne $diSecretName "" }}
+            - name: DSXCONNECT_APP_ENV
+              value: {{ $env.DSXCONNECT_APP_ENV | default "dev" | quote }}
+            - name: DSXCONNECT_SCANNER__SCAN_BINARY_URL
+              value: {{ $env.DSXCONNECT_SCANNER__SCAN_BINARY_URL | default (printf "%s://%s:%d/scan/binary/v2" $scheme $svc $scanPort) | quote }}
+            - name: DSXCONNECT_WORKERS__BROKER
+              value: {{ $env.DSXCONNECT_WORKERS__BROKER | default "redis://redis:6379/5" | quote }}
+            - name: DSXCONNECT_WORKERS__BACKEND
+              value: {{ $env.DSXCONNECT_WORKERS__BACKEND | default "redis://redis:6379/6" | quote }}
+            - name: DSXCONNECT_REDIS_URL
+              value: {{ $env.DSXCONNECT_REDIS_URL | default "redis://redis:6379/3" | quote }}
+            - name: DSXCONNECT_RESULTS_DB
+              value: {{ $env.DSXCONNECT_RESULTS_DB | default "redis://redis:6379/3" | quote }}
+            - name: DSXCONNECT_RESULTS_DB__RETAIN
+              value: {{ $env.DSXCONNECT_RESULTS_DB__RETAIN | default "100" | quote }}
+            - name: PYTHONUNBUFFERED
+              value: {{ $env.PYTHONUNBUFFERED | default "1" | quote }}
+            - name: LOG_LEVEL
+              value: {{ $env.LOG_LEVEL | default "warning" | quote }}
+            {{- with $di }}
+            {{- if $diHasSecret }}
+            - name: DSXCONNECT_DIANNA__MANAGEMENT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $diSecretName | quote }}
+                  key: {{ $diManagementKey | quote }}
+            {{- else if .managementUrl }}
+            - name: DSXCONNECT_DIANNA__MANAGEMENT_URL
+              value: {{ .managementUrl | quote }}
+            {{- end }}
+            {{- if $diHasSecret }}
+            - name: DSXCONNECT_DIANNA__API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $diSecretName | quote }}
+                  key: {{ $diTokenKey | quote }}
+            {{- else if .apiToken }}
+            - name: DSXCONNECT_DIANNA__API_TOKEN
+              value: {{ .apiToken | quote }}
+            {{- end }}
+            {{- if hasKey . "verifyTls" }}
+            - name: DSXCONNECT_DIANNA__VERIFY_TLS
+              value: {{ .verifyTls | toString | quote }}
+            {{- end }}
+            {{- if .caBundle }}
+            - name: DSXCONNECT_DIANNA__CA_BUNDLE
+              value: {{ .caBundle | quote }}
+            {{- end }}
+            {{- if .chunkSize }}
+            - name: DSXCONNECT_DIANNA__CHUNK_SIZE
+              value: {{ .chunkSize | toString | quote }}
+            {{- end }}
+            {{- if .timeout }}
+            - name: DSXCONNECT_DIANNA__TIMEOUT
+              value: {{ .timeout | toString | quote }}
+            {{- end }}
+            {{- if hasKey . "autoOnMalicious" }}
+            - name: DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS
+              value: {{ .autoOnMalicious | toString | quote }}
+            {{- end }}
+            {{- if hasKey . "pollResultsEnabled" }}
+            - name: DSXCONNECT_DIANNA__POLL_RESULTS_ENABLED
+              value: {{ .pollResultsEnabled | toString | quote }}
+            {{- end }}
+            {{- if .pollIntervalSeconds }}
+            - name: DSXCONNECT_DIANNA__POLL_INTERVAL_SECONDS
+              value: {{ .pollIntervalSeconds | toString | quote }}
+            {{- end }}
+            {{- if .pollTimeoutSeconds }}
+            - name: DSXCONNECT_DIANNA__POLL_TIMEOUT_SECONDS
+              value: {{ .pollTimeoutSeconds | toString | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range $key, $value := $env }}
+            {{- if not (has $key (list "DSXCONNECT_APP_ENV" "DSXCONNECT_SCANNER__SCAN_BINARY_URL" "DSXCONNECT_WORKERS__BROKER" "DSXCONNECT_WORKERS__BACKEND" "DSXCONNECT_REDIS_URL" "DSXCONNECT_RESULTS_DB" "DSXCONNECT_RESULTS_DB__RETAIN" "PYTHONUNBUFFERED" "LOG_LEVEL" "DSXCONNECT_DIANNA__MANAGEMENT_URL" "DSXCONNECT_DIANNA__API_TOKEN" "DSXCONNECT_DIANNA__VERIFY_TLS" "DSXCONNECT_DIANNA__CA_BUNDLE" "DSXCONNECT_DIANNA__CHUNK_SIZE" "DSXCONNECT_DIANNA__TIMEOUT" "DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS" "DSXCONNECT_DIANNA__POLL_RESULTS_ENABLED" "DSXCONNECT_DIANNA__POLL_INTERVAL_SECONDS" "DSXCONNECT_DIANNA__POLL_TIMEOUT_SECONDS")) }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+            {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  python - <<'PY'
+                  import os, sys
+                  try:
+                      import redis
+                  except Exception:
+                      sys.exit(1)
+                  urls = [
+                      os.environ.get('DSXCONNECT_WORKERS__BROKER'),
+                      os.environ.get('DSXCONNECT_WORKERS__BACKEND'),
+                      os.environ.get('DSXCONNECT_REDIS_URL'),
+                  ]
+                  for u in [u for u in urls if u]:
+                      try:
+                          r = redis.Redis.from_url(u)
+                          r.ping()
+                      except Exception:
+                          sys.exit(1)
+                  sys.exit(0)
+                  PY
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+{{- end }}

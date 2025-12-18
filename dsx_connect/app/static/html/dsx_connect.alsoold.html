@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dsx-connect</title>
+    <link rel="icon" href="static/images/dsx-connect-icon2.png" sizes="32x32">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Avenir', sans-serif;
+            background: #f7f9fc;
+            color: #333;
+        }
+        h1, h2 {
+            font-family: 'Oxanium', sans-serif;
+            margin: 0;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .status { font-weight: bold; }
+        .status-ok { color: #deff5b; }
+        .status-fail { color: red; }
+        .gear-icon { font-size: 1.5rem; cursor: pointer; }
+        .gear-icon.white { color: white; }
+        .gear-icon.dark { color: #0A142D; }
+        .main-content { padding: 1.5rem; }
+        .config-sidebar {
+            position: fixed; right: -700px; top: 0; bottom: 0; width: 600px;
+            background: #fff; box-shadow: -2px 0 6px rgba(0,0,0,0.2);
+            padding: 1rem; transition: right 0.3s ease; z-index: 1000;
+        }
+        .config-sidebar.active { right: 0; }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1rem; margin-top: 1rem;
+        }
+        .connector-card {
+            background: #fff; padding: 1rem; border: 1px solid #ddd;
+            border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            position: relative; transition: all 0.3s ease;
+        }
+        .connector-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .connector-card h4 { margin-top: 0; }
+        .connector-card button {
+            background: #007bff; color: #fff; border: none;
+            padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;
+        }
+        .connector-card button:hover { background: #0056b3; }
+        .asset-line, .filter-line {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+            display: block;
+        }
+        .scan-note { display: block; margin-top: 0.5rem; font-size: 0.9rem; }
+        .scan-results-panel {
+            margin-top: 2rem;
+            max-height: 300px;
+            overflow: auto;
+            background: #fff;
+            padding: 0.5rem;
+            border-radius: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table.scan-results {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .scan-results td {
+            padding: 0.4rem 0.6rem;
+            white-space: nowrap;
+            vertical-align: top;
+        }
+        .verdict-icon {
+            font-size: 1.2rem;
+        }
+        .verdict-malicious { color: red; }
+        .verdict-benign { color: green; }
+        .verdict-unknown { color: darkgray; }
+        tr.clickable-row { cursor: pointer; }
+        tr.clickable-row:hover { background: #f2f2f2; }
+
+        .file-icon {
+            margin-right: 4px;
+        }
+        .icon-pdf { color: red; }
+        .icon-pe { color: black; }
+        .icon-exe {
+            color: #0078D6;
+        }
+        .icon-macho {
+            color: #333;
+        }
+        .icon-office { color: blue; }
+        .icon-zip { color: purple; }
+        .icon-generic { color: gray; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+<div class="header" style="background: #0A142D; color: white; display: flex; justify-content: space-between; align-items: center;">
+    <!-- Left side: Icon, title, and status -->
+    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <svg id="dsxIcon" xmlns="http://www.w3.org/2000/svg" style="background: transparent;" version="1.1" width="32px" height="27px" viewBox="-0.5 -0.5 32 27">
+                <g>
+                    <g><path id="arrow1" d="M 12 16.22 L 17.19 16.22 L 17.19 13 L 32 20 L 17.19 27 L 17.19 23.78 L 12 23.78 L 12 20 Z" fill="#777" stroke="#000000" stroke-width="0.1"/></g>
+                    <g><path id="arrow2" d="M 0 3.22 L 5.19 3.22 L 5.19 0 L 20 7 L 5.19 14 L 5.19 10.78 L 0 10.78 L 0 7 Z" fill="#777" stroke="#000000" stroke-width="0.1" transform="rotate(-180,10,7)"/></g>
+                </g>
+            </svg>
+            <h1 style="margin: 0; font-size: 1.5rem;">dsx-connect</h1>
+        </div>
+        <div class="status" id="statusIndicator" style="font-size: 0.9rem; color: white;">Validating DSXA connectivity...</div>
+    </div>
+
+    <!-- Right side: Link and gear -->
+    <div style="position: relative; display: flex; align-items: center; gap: 1rem; margin-left: auto;">
+        <a href="/docs" target="_blank" style="color: white; text-decoration: underline; font-size: 0.95rem;">
+            API <i class="fas fa-up-right-from-square" style="font-size: 0.75rem; margin-left: 4px;"></i>
+        </a>
+        <i class="fas fa-cog gear-icon" id="gearIcon" style="position: relative; font-size: 1.5rem; cursor: pointer; z-index: 2000;"></i>
+    </div>
+</div>
+
+<div class="main-content">
+    <h2>Connectors</h2>
+    <div id="connectorsGrid" class="grid">Loading connectors...</div>
+
+    <div style="margin-top: 2rem;"></div>
+
+    <h2>Scan Results</h2>
+    <div class="scan-results-panel">
+        <table class="scan-results" id="scanResultsTable">
+            <tbody id="scanResultsBody">
+            <tr id="noResultsRow">
+                <td colspan="3" style="text-align: center; color: #777;">No scan results</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="config-sidebar" id="configSidebar">
+    <h3>Configuration</h3>
+    <div id="configTree">Loading config...</div>
+</div>
+
+<script>
+    // ===== GLOBAL VARIABLES =====
+    const gearIcon = document.getElementById('gearIcon');
+    const configSidebar = document.getElementById('configSidebar');
+    const seenConnectors = new Set();
+    const connectorLastSeen = new Map(); // Track when we last saw each connector
+    let scanResultsSSE = null;
+    let connectorRegistrationSSE = null;
+
+    // ===== UTILITY FUNCTIONS =====
+    function renderTree(obj) {
+        let html = '<ul>';
+        for (const key in obj) {
+            const val = obj[key];
+            html += `<li><strong>${key}:</strong> ${typeof val === 'object' ? renderTree(val) : val}</li>`;
+        }
+        html += '</ul>';
+        return html;
+    }
+
+    function getFileTypeIcon(file_type) {
+        switch (file_type) {
+            case 'PDFFileType': return ['fas fa-file-pdf file-icon', 'icon-pdf'];
+            case 'PEFileType':
+            case 'PE32FileType':
+            case 'PE64FileType': return ['fab fa-windows file-icon', 'icon-exe'];
+            case 'OfficeFileType':
+            case 'OOXMLFileType': return ['fas fa-file-word file-icon', 'icon-office'];
+            case 'ZipFileType': return ['fas fa-file-archive file-icon', 'icon-zip'];
+            case 'MachoFATFileType':
+            case 'Macho32FileType':
+            case 'Macho64FileType': return ['fab fa-apple file-icon', 'icon-macho'];
+            case 'ELF32FileType':
+            case 'ELF64FileType': return ['fab fa-linux file-icon', 'icon-generic'];
+            default: return ['fas fa-file file-icon'];
+        }
+    }
+
+    function getConnectorIcon(name = '') {
+        const lower = name.toLowerCase();
+        if (lower.startsWith('google')) return '<i class="fab fa-google" style="margin-right: 6px;"></i>';
+        if (lower.startsWith('azure')) return '<i class="fab fa-microsoft" style="margin-right: 6px;"></i>';
+        if (lower.startsWith('aws')) return '<i class="fab fa-aws" style="margin-right: 6px;"></i>';
+        if (lower.startsWith('filesystem')) return '<i class="fas fa-folder" style="margin-right: 6px;"></i>';
+        return '';
+    }
+
+    // ===== NOTIFICATION SYSTEM =====
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-left: 4px solid rgba(255,255,255,0.3);
+        `;
+
+        let icon = '';
+        switch(type) {
+            case 'success':
+                notification.style.backgroundColor = '#10b981';
+                icon = '✓ ';
+                break;
+            case 'warning':
+                notification.style.backgroundColor = '#f59e0b';
+                icon = '⚠ ';
+                break;
+            case 'error':
+                notification.style.backgroundColor = '#ef4444';
+                icon = '✗ ';
+                break;
+            case 'info':
+                notification.style.backgroundColor = '#3b82f6';
+                icon = 'ℹ ';
+                break;
+            default:
+                notification.style.backgroundColor = '#6b7280';
+                icon = 'ℹ ';
+        }
+
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                <span style="margin-right: 8px;">${icon}</span>
+                <span>${message}</span>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Slide in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Slide out and remove
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => notification.remove(), 300);
+        }, 4000);
+    }
+
+    function showConnectionError(message) {
+        let indicator = document.getElementById('connection-status');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'connection-status';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: #ff4444;
+                color: white;
+                padding: 8px 12px;
+                border-radius: 4px;
+                z-index: 9999;
+                font-size: 14px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            `;
+            document.body.appendChild(indicator);
+        }
+
+        indicator.textContent = message;
+        indicator.style.display = 'block';
+
+        setTimeout(() => {
+            if (indicator) {
+                indicator.style.display = 'none';
+            }
+        }, 5000);
+    }
+
+    // ===== API FUNCTIONS =====
+    function fetchStatus() {
+        fetch('/dsx-connect/test/dsxa-connection')
+            .then(res => res.json())
+            .then(data => {
+                const el = document.getElementById('statusIndicator');
+                const arrow1 = document.getElementById('arrow1');
+                const arrow2 = document.getElementById('arrow2');
+                const isConnected = data.status?.toLowerCase() === 'success';
+
+                let message;
+                if (isConnected) {
+                    message = '<span class="status-ok">● Connected: DSX for Applications (DSX/A) Scanner</span>';
+                } else {
+                    // Truncate long error messages - just show the essential part
+                    let errorMsg = data.message || 'Connection failed';
+
+                    // Clean up common verbose error patterns
+                    if (errorMsg.includes('DSXA connection test failed')) {
+                        errorMsg = 'DSXA connection test failed';
+                    } else if (errorMsg.includes('Unable to connect to DSXA scanner')) {
+                        errorMsg = 'Unable to connect to DSXA scanner';
+                    } else if (errorMsg.includes('Failed to connect to DSXA scanner')) {
+                        errorMsg = 'Failed to connect to DSXA scanner';
+                    }
+
+                    // Generic fallback for other long messages
+                    if (errorMsg.length > 50) {
+                        errorMsg = errorMsg.substring(0, 47) + '...';
+                    }
+
+                    message = `<span class="status-fail">● Not Connected: ${errorMsg}</span>`;
+                }
+
+                el.innerHTML = message;
+
+                const color = isConnected ? '#deff5b' : '#777';
+                arrow1.setAttribute('fill', color);
+                arrow2.setAttribute('fill', color);
+            })
+            .catch(() => {
+                document.getElementById('statusIndicator').innerHTML = '<span class="status-fail">● Connection error</span>';
+            });
+    }
+
+    function fetchConfig() {
+        fetch('/dsx-connect/config')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('configTree').innerHTML = renderTree(data);
+            })
+            .catch(() => {
+                document.getElementById('configTree').textContent = 'Error loading configuration.';
+            });
+    }
+
+    function fetchConnectors() {
+        fetch('/dsx-connect/connectors')
+            .then(res => res.json())
+            .then(connectors => {
+                const container = document.getElementById('connectorsGrid');
+
+                Promise.all(connectors.map(conn =>
+                    fetch(`/dsx-connect/connectors/readyz/${conn.uuid}`)
+                        .then(async res => ({
+                            conn,
+                            ready: res.ok,
+                            statusBody: await res.json().catch(() => ({}))
+                    }))
+                    .catch(() => ({ conn, ready: false, statusBody: {} }))
+                )).then(results => {
+                    container.innerHTML = '';
+
+                    if (!results.length) {
+                        container.innerHTML = '<p>No connectors registered.</p>';
+                        return;
+                    }
+
+                    results.forEach(({ conn, ready, statusBody }, idx) => {
+                        seenConnectors.add(conn.uuid);
+                        connectorLastSeen.set(conn.uuid, Date.now());
+                        const card = renderConnectorCard(conn, /*cfg=*/statusBody, idx, ready);
+                        container.appendChild(card);
+                    });
+                });
+            })
+            .catch(() => {
+                document.getElementById('connectorsGrid').textContent = 'Error loading connectors.';
+            });
+    }
+
+    function invokeFullScan(idx, scanUrl, connectorName) {
+        // const note = document.getElementById(`scan-note-${idx}`);
+        // note.textContent = '…starting scan…';
+
+        showNotification(`Starting full scan for ${connectorName}...`, 'info');
+
+        fetch(scanUrl, { method: 'POST' })
+            .then(res => res.json())
+            .then(json => {
+                // note.textContent = `✅ ${json.message}`;
+
+                // Show success or error notification based on response
+                if (json.status === 'success') {
+                    showNotification(`Full scan initiated for ${connectorName}`, 'success');
+                } else {
+                    showNotification(`Scan failed for ${connectorName}: ${json.message}`, 'error');
+                }
+            })
+            .catch(err => {
+                // note.textContent = `❌ ${err.message}`;
+                showNotification(`Scan error for ${connectorName}: ${err.message}`, 'error');
+            });
+    }
+
+
+    // ===== CONNECTOR MANAGEMENT =====
+    function renderConnectorCard(conn, cfg = {}, idx = 0, isReady = false) {
+        const scanUrl = `/dsx-connect/connectors/full_scan/${encodeURIComponent(conn.uuid)}`;
+        const card = document.createElement('div');
+        card.classList.add('connector-card');
+        card.dataset.connectorUuid = conn.uuid;
+
+        const lastSeenTime = new Date().toLocaleTimeString();
+        const dotColor = isReady ? '#10b981' : '#f59e0b';
+        const dotTitle = isReady ? 'Ready' : 'Not ready';
+
+        card.innerHTML = `
+            <h4>
+                ${conn.name}
+                <span class="connector-status" style="
+                    display: inline-block;
+                    width: 8px;
+                    height: 8px;
+                    background: ${dotColor};
+                    border-radius: 50%;
+                    margin-left: 8px;
+                    animation: pulse 2s infinite;
+                " title="${dotTitle}"></span>
+            </h4>
+            <div class="connector-uuid" style="font-size: 0.8rem; color: #666; margin-bottom: 0.5rem;">
+                UUID: ${conn.uuid.substring(0, 8)}... • Connected: ${lastSeenTime}
+            </div>
+            ${cfg && (cfg.asset || cfg.filter) ? `
+                <div class="asset-line" title="${cfg.asset || ''}">Asset: ${cfg.asset || 'n/a'}</div>
+                <div class="filter-line" title="${cfg.filter || ''}">Filter: ${cfg.filter || 'n/a'}</div>
+            ` : ''}
+            <button onclick="invokeFullScan(${idx}, '${scanUrl}', '${conn.name.replace(/'/g, "\\'")}')">Full Scan</button>
+            <span class="scan-note" id="scan-note-${idx}"></span>
+        `;
+        return card;
+    }
+
+    function handleConnectorUnregister(uuid, reason = 'unknown') {
+        console.log(`Handling connector removal for UUID: ${uuid}, reason: ${reason}`);
+
+        const container = document.getElementById('connectorsGrid');
+        const connectorCards = container.querySelectorAll('.connector-card');
+
+        let connectorName = 'Unknown';
+        let removed = false;
+
+        connectorCards.forEach(card => {
+            if (card.dataset.connectorUuid === uuid) {
+                const nameElement = card.querySelector('h4');
+                if (nameElement) {
+                    connectorName = nameElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+
+                card.remove();
+                removed = true;
+                console.log(`Removed connector card for ${connectorName} (${uuid})`);
+            }
+        });
+
+        if (removed) {
+            seenConnectors.delete(uuid);
+            connectorLastSeen.delete(uuid);
+
+            const messages = {
+                'disconnected': `${connectorName} disconnected`,
+                'timeout': `${connectorName} timed out`,
+                'unknown': `${connectorName} removed`
+            };
+
+            showNotification(messages[reason] || messages['unknown'], 'warning');
+        }
+
+        if (container.children.length === 0) {
+            container.innerHTML = '<p>No connectors registered.</p>';
+        }
+    }
+
+    async function handleNewConnector(newConnector) {
+        const container = document.getElementById('connectorsGrid');
+
+        if (container.textContent.includes("No connectors registered")) {
+            container.innerHTML = '';
+        }
+
+        let config = {};
+        try {
+            const res = await fetch(`/dsx-connect/connectors/config/${newConnector.uuid}`);
+            if (res.ok) {
+                config = await res.json();
+            }
+        } catch (e) {
+            console.warn('Error fetching config for new connector', e);
+        }
+
+        const idx = container.children.length;
+        const card = renderConnectorCard(newConnector, config, idx);
+        container.prepend(card);
+
+        showNotification(`${newConnector.name} connected`, 'success');
+    }
+
+    // ===== SCAN RESULTS =====
+    function renderScanResult(data) {
+        const tableBody = document.getElementById('scanResultsBody');
+        const noResultsRow = document.getElementById('noResultsRow');
+        if (noResultsRow) noResultsRow.remove();
+
+        const verdict = data.verdict;
+        let verdictClass = 'verdict-unknown';
+        let verdictIcon = 'fa-exclamation-triangle';
+
+        if (verdict?.verdict) {
+            const v = verdict.verdict.toLowerCase();
+            const reason = verdict.verdict_details?.reason?.toLowerCase();
+
+            if (v === 'not scanned' && reason === 'encrypted file') {
+                verdictIcon = 'fa-lock';
+            } else if (v === 'malicious') {
+                verdictClass = 'verdict-malicious';
+                verdictIcon = 'fa-virus';
+            } else if (v === 'benign') {
+                verdictClass = 'verdict-benign';
+                verdictIcon = 'fa-check-circle';
+            }
+        }
+
+        const fileType = data.verdict?.file_info?.file_type || '';
+        const [fileIconClass, colorClass] = getFileTypeIcon(fileType);
+        const uniqueId = `expand-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+        const row = document.createElement('tr');
+        row.classList.add('clickable-row');
+        row.addEventListener('click', () => toggleDetail(uniqueId));
+        row.innerHTML = `
+            <td>
+                <i class="fas ${verdictIcon} verdict-icon ${verdictClass}"></i>
+                <i class="${fileIconClass} ${colorClass}" style="margin-left: 6px;"></i>
+            </td>
+            <td>
+                <span style="display: inline-flex; align-items: center; max-width: 50ch; overflow: hidden; text-overflow: ellipsis;" title="${data.scan_request?.metainfo}">
+                    ${getConnectorIcon(data.scan_request?.connector?.name)}
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${data.scan_request?.metainfo}
+                    </span>
+                </span>
+            </td>
+            <td>${data.item_action?.message || '-'}</td>
+        `;
+
+        const detailRow = document.createElement('tr');
+        detailRow.id = uniqueId;
+        detailRow.style.display = 'none';
+        detailRow.innerHTML = `
+            <td colspan="3" style="
+                background: linear-gradient(to right, #eaeaea 4px, #f9f9f9 4px);
+                font-family: monospace;
+                font-size: 0.85rem;
+                padding: 0.75rem 1rem;
+                border-left: 2px solid #ccc;
+                border-radius: 0 0 4px 4px;
+                border-top: 1px solid #eee;
+            ">
+                <pre style="margin: 0; white-space: pre-wrap; color: #444;">${JSON.stringify(data.verdict, null, 2)}</pre>
+            </td>
+        `;
+
+        tableBody.prepend(detailRow);
+        tableBody.prepend(row);
+    }
+
+    function toggleDetail(id) {
+        const row = document.getElementById(id);
+        if (row) {
+            row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        }
+    }
+
+    // ===== SSE MANAGEMENT =====
+    class SSEManager {
+        constructor(url, onMessage, onError, maxRetries = 5) {
+            this.url = url;
+            this.onMessage = onMessage;
+            this.onError = onError;
+            this.maxRetries = maxRetries;
+            this.retryCount = 0;
+            this.eventSource = null;
+            this.reconnectDelay = 1000;
+            this.isManuallyClosing = false;
+
+            this.connect();
+        }
+
+        connect() {
+            if (this.eventSource) {
+                this.close();
+            }
+
+            console.log(`Connecting to SSE: ${this.url} (attempt ${this.retryCount + 1})`);
+
+            this.eventSource = new EventSource(this.url);
+
+            this.eventSource.onopen = (event) => {
+                console.log(`SSE connection opened: ${this.url}`);
+                this.retryCount = 0;
+                this.reconnectDelay = 1000;
+            };
+
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'heartbeat') {
+                        console.log(`Heartbeat received from ${this.url}`);
+                        return;
+                    }
+
+                    if (data.type === 'connected') {
+                        console.log(`Connection confirmed: ${data.message}`);
+                        return;
+                    }
+
+                    if (data.type === 'error') {
+                        console.error(`Server error on ${this.url}:`, data.message);
+                        this.handleError();
+                        return;
+                    }
+
+                    this.onMessage(event);
+
+                } catch (e) {
+                    console.error(`Error parsing SSE message from ${this.url}:`, e, event.data);
+                }
+            };
+
+            this.eventSource.onerror = (event) => {
+                console.error(`SSE error for ${this.url}:`, event);
+
+                if (this.isManuallyClosing) {
+                    return;
+                }
+
+                this.handleError();
+            };
+        }
+
+        handleError() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+
+            if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+
+                console.log(`Reconnecting to ${this.url} in ${this.reconnectDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+
+                setTimeout(() => {
+                    if (!this.isManuallyClosing) {
+                        this.connect();
+                    }
+                }, this.reconnectDelay);
+
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2 + Math.random() * 1000, 30000);
+            } else {
+                console.error(`Failed to connect to ${this.url} after ${this.maxRetries} attempts`);
+                if (this.onError) {
+                    this.onError(`Max retries (${this.maxRetries}) exceeded for ${this.url}`);
+                }
+            }
+        }
+
+        close() {
+            this.isManuallyClosing = true;
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+        }
+
+        isConnected() {
+            return this.eventSource && this.eventSource.readyState === EventSource.OPEN;
+        }
+    }
+
+    function initializeSSEConnections() {
+        if (scanResultsSSE) scanResultsSSE.close();
+        if (connectorRegistrationSSE) connectorRegistrationSSE.close();
+
+        scanResultsSSE = new SSEManager(
+            '/dsx-connect/notifications/scan-result',
+            (event) => {
+                const message = JSON.parse(event.data);
+                console.log('Received scan result:', message);
+                renderScanResult(message);
+            },
+            (error) => {
+                console.error('Scan results SSE failed:', error);
+                showConnectionError('Scan results stream disconnected');
+            }
+        );
+
+        connectorRegistrationSSE = new SSEManager(
+            '/dsx-connect/notifications/connector-registered',
+            async (event) => {
+                const message = JSON.parse(event.data);
+                console.log('Received connector event:', message);
+
+                if (message.type === 'unregistered') {
+                    handleConnectorUnregister(message.uuid, 'disconnected');
+                    return;
+                }
+
+                if (message.uuid) {
+                    connectorLastSeen.set(message.uuid, Date.now());
+
+                    if (!seenConnectors.has(message.uuid)) {
+                        seenConnectors.add(message.uuid);
+                        await handleNewConnector(message);
+                    }
+                }
+            },
+            (error) => {
+                console.error('Connector registration SSE failed:', error);
+                showConnectionError('Connector registration stream disconnected');
+            }
+        );
+    }
+
+    // ===== HEARTBEAT MONITORING =====
+    setInterval(() => {
+        const now = Date.now();
+        const staleThreshold = 90000; // 90 seconds
+
+        const container = document.getElementById('connectorsGrid');
+        const connectorCards = container.querySelectorAll('.connector-card');
+
+        connectorCards.forEach(card => {
+            const uuid = card.dataset.connectorUuid;
+            if (uuid) {
+                const lastSeen = connectorLastSeen.get(uuid);
+
+                if (!lastSeen || (now - lastSeen) > staleThreshold) {
+                    console.log('Removing stale connector (heartbeat timeout):', uuid);
+                    handleConnectorUnregister(uuid, 'timeout');
+                } else {
+                    // Update visual indicator
+                    const statusIndicator = card.querySelector('.connector-status');
+                    if (statusIndicator) {
+                        statusIndicator.style.animation = 'none';
+                        setTimeout(() => {
+                            statusIndicator.style.animation = 'pulse 2s infinite';
+                        }, 100);
+                    }
+                }
+            }
+        });
+    }, 60000); // Check every 60 seconds
+
+    // ===== EVENT LISTENERS =====
+    gearIcon.addEventListener('click', () => {
+        configSidebar.classList.toggle('active');
+        gearIcon.classList.toggle('white');
+        gearIcon.classList.toggle('dark');
+    });
+
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('configSidebar');
+        const gear = document.getElementById('gearIcon');
+
+        if (
+            sidebar.classList.contains('active') &&
+            !sidebar.contains(event.target) &&
+            !gear.contains(event.target)
+        ) {
+            sidebar.classList.remove('active');
+            gear.classList.remove('dark');
+            gear.classList.add('white');
+        }
+    });
+
+    // ===== INITIALIZATION =====
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchStatus();
+        fetchConfig();
+        fetchConnectors();
+        initializeSSEConnections();
+
+        // Health check for SSE connections
+        setInterval(() => {
+            if (scanResultsSSE && scanResultsSSE.isConnected() &&
+                connectorRegistrationSSE && connectorRegistrationSSE.isConnected()) {
+                // Both connections are healthy
+            } else {
+                console.warn('One or more SSE connections are not healthy, attempting to reconnect...');
+                initializeSSEConnections();
+            }
+        }, 60000); // Check every minute
+    });
+
+    // Handle page visibility changes
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            if (!scanResultsSSE || !scanResultsSSE.isConnected() ||
+                !connectorRegistrationSSE || !connectorRegistrationSSE.isConnected()) {
+                console.log('Page visible and connections down, reconnecting...');
+                initializeSSEConnections();
+            }
+        }
+    });
+
+    // Clean up connections when page unloads
+    window.addEventListener('beforeunload', () => {
+        if (scanResultsSSE) scanResultsSSE.close();
+        if (connectorRegistrationSSE) connectorRegistrationSSE.close();
+    });
+</script>
+</body>
+</html>

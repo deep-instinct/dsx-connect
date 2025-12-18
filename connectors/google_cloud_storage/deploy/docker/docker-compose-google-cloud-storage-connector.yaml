@@ -1,0 +1,60 @@
+services:
+  google_cloud_storage_connector:
+    image: ${GCS_IMAGE:-dsxconnect/google-cloud-storage-connector:latest}
+    # Uncomment if you want to use docker compose to build the image
+    #build:
+    #  context: .
+    #  dockerfile: docker/Dockerfile
+    ports:
+      - "8630:8630"
+    volumes:
+      - type: volume
+        source: google_cloud_storage_connector_data
+        target: /app/data
+      # Mount a Google service account JSON and point GOOGLE_APPLICATION_CREDENTIALS to it
+      - type: bind
+        source: ./gcp-sa.json
+        target: /app/creds/gcp-sa.json
+        read_only: true
+        bind:
+          selinux: z
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      DSXCONNECTOR_CONNECTOR_URL: http://google-cloud-storage-connector:8630 # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: http://dsx-connect-api:8586 # note, this works if running on the same internal network on Docker as the dsx_connect_core...
+      DSXCONNECTOR_ITEM_ACTION: nothing # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: dsxconnect-quarantine # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+        # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
+      DSXCONNECTOR_ASSET: "" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_FILTER: ""  # rsync-like include/exclude patterns; leave empty to scan all
+      DSXCONNECTOR_MONITOR: "false"
+      GCS_PUBSUB_PROJECT_ID: ""
+      GCS_PUBSUB_SUBSCRIPTION: ""
+
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+        # These definitions are for simple docker compose deployments. Proper production
+        # deployments should use deployment mechanisms such as helm charts/k8s and secret managers.
+      GOOGLE_APPLICATION_CREDENTIALS: /app/creds/gcp-sa.json
+      GOOGLE_CLOUD_PROJECT: your-project-id
+
+        # This is definition is for docker compose deployments for dev, demos, POVs, and testing. Proper production
+        # deployments should use deployment mechanisms (helm charts/k8s) where API Keys can be defined as secrets
+      # API key removed (use JWT/HMAC)
+    networks:
+      dsx-network:
+        aliases:
+          - google-cloud-storage-connector  # this is how dsx-connect will communicate with this on the network
+    command:
+      ["python", "connectors/google_cloud_storage/start.py", "--workers", "1"]
+
+# The following assumes an already created docker network like this:
+# docker network create dsx-connect-network --driver bridge
+networks:
+    dsx-network:
+      external: true
+      name: dsx-connect-network  # change this to an existing docker network
+
+volumes:
+  google_cloud_storage_connector_data:

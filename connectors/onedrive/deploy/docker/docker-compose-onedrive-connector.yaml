@@ -1,0 +1,52 @@
+services:
+  onedrive_connector:
+    image: ${ONEDRIVE_IMAGE:-dsxconnect/onedrive-connector:latest}
+    ports:
+      - "8660:8660"
+    volumes:
+      - type: volume
+        source: onedrive_connector_data
+        target: /app/data
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: "debug"
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      # TLS for connector server
+      # DSXCONNECTOR_USE_TLS: "false"
+      # DSXCONNECTOR_TLS_CERTFILE: "/app/certs/server.crt"
+      # DSXCONNECTOR_TLS_KEYFILE: "/app/certs/server.key"
+      # Outbound TLS verification to dsx-connect
+      # DSXCONNECTOR_VERIFY_TLS: "true"
+      # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+      DSXCONNECTOR_CONNECTOR_URL: "http://onedrive-connector:8660" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # same network as dsx-connect API
+      DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}" # (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-dsxconnect-quarantine}" # target for move/move_tag
+      DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-/Documents/dsx-connect}" # drive-relative path to scan
+      DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}" # optional filters
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_DISPLAY_NAME: "${DSXCONNECTOR_DISPLAY_NAME:-}" # optional friendly name shown in UI
+      DSXCONNECTOR_DISPLAY_ICON: "${DSXCONNECTOR_DISPLAY_ICON:-}" # optional data URI / emoji / raw SVG for UI card
+
+      # OneDrive auth / target
+      DSXCONNECTOR_ONEDRIVE_TENANT_ID: "${ONEDRIVE_TENANT_ID}"
+      DSXCONNECTOR_ONEDRIVE_CLIENT_ID: "${ONEDRIVE_CLIENT_ID}"
+      DSXCONNECTOR_ONEDRIVE_CLIENT_SECRET: "${ONEDRIVE_CLIENT_SECRET}"
+      DSXCONNECTOR_ONEDRIVE_USER_ID: "${ONEDRIVE_USER_ID}"
+      DSXCONNECTOR_ONEDRIVE_WEBHOOK_ENABLED: "${ONEDRIVE_WEBHOOK_ENABLED:-false}"
+      DSXCONNECTOR_ONEDRIVE_WEBHOOK_URL: "${ONEDRIVE_WEBHOOK_URL:-}"
+      DSXCONNECTOR_ONEDRIVE_WEBHOOK_CLIENT_STATE: "${ONEDRIVE_WEBHOOK_CLIENT_STATE:-}"
+    networks:
+      dsx-network:
+        aliases:
+          - onedrive-connector
+    command:
+      [ "python", "connectors/onedrive/start.py", "--workers", "1" ]
+
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network
+
+volumes:
+  onedrive_connector_data:

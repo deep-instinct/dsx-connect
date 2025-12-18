@@ -1,0 +1,23 @@
+**/dist/
+__pycache__/#.envs
+*.dev.env
+.dev.env
+__pycache__/
+*.pyc
+
+# DSXA SDK test assets
+dsxa_sdk/tests/assets/samples/
+
+# macOS junk
+.DS_Store
+
+# PyCharm / IntelliJ
+.idea/
+/devreporeleaseplan.md
+/docker_bundle/
+/docsreview.md
+
+# Dev TLS certs (generated locally)
+shared/deploy/certs/*.crt
+shared/deploy/certs/*.key
+/.codex/

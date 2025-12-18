@@ -1,0 +1,55 @@
+name: Build docker bundle tarball
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach assets to (e.g., dsx-bundle-0.1.0). Leave blank to auto-use dsx-connect-<core version>."
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade pip invoke
+
+      - name: Build bundle (invoke bundle)
+        run: python -m invoke bundle
+
+      - name: Read dsx-connect core version
+        id: corever
+        run: |
+          ver=$(python - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("dsx_connect/version.py").read_text()
+          m = re.search(r"DSX_CONNECT_VERSION\s*=\s*'([^']+)'", text)
+          print(m.group(1) if m else "latest")
+          PY
+          )
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker_bundle
+          path: docker_bundle/*.tar.gz
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ inputs.tag != '' && inputs.tag || format('compose-bundle-{0}', steps.corever.outputs.version) }}
+          files: docker_bundle/*.tar.gz
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

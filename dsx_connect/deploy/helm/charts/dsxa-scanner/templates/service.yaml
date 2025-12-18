@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dsxa-scanner.fullname" . }}
+  labels:
+    {{- include "dsxa-scanner.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: {{ include "dsxa-scanner.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+

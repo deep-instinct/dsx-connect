@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "rsyslog.fullname" . }}-config
+  labels:
+    {{- include "rsyslog.labels" . | nindent 4 }}
+data:
+  rsyslog.conf: |
+    module(load="imtcp")
+    input(type="imtcp" port="{{ .Values.service.tcpPort }}")
+    {{- if .Values.service.enableUDP }}
+    module(load="imudp")
+    input(type="imudp" port="{{ .Values.service.udpPort }}")
+    {{- end }}
+
+    # Parse JSON; pass-through
+    template(name="DSXJson" type="list") {
+      property(name="msg")
+      constant(value="\n")
+    }
+    template(name="JsonOnly" type="string" string="%$!json%\n")
+
+    {{- if .Values.config.writeToStdout }}
+    if ($msg contains '"verdict"') then {
+      # Extract the JSON payload and strip any syslog headers/framing
+      set $!json = re_extract($msg, "\\{.*\\}", 0, 0, "");
+      action(type="omfile" file="/dev/stdout" template="JsonOnly")
+    }
+    {{- end }}
+
+    {{- if .Values.config.writeToFile }}
+    if ($msg contains '"verdict"') then {
+      set $!json = re_extract($msg, "\\{.*\\}", 0, 0, "");
+      action(type="omfile" file="{{ .Values.config.filePath }}" template="JsonOnly")
+    }
+    {{- end }}
+
+    {{- if .Values.config.hec.enabled }}
+    module(load="omhttp")
+    template(name="DSXHecEvent" type="list") {
+      constant(value="{\"event\": ") property(name="msg") constant(value="}\n")
+    }
+    action(type="omhttp"
+           server="{{ .Values.config.hec.host }}"
+           port="{{ .Values.config.hec.port }}"
+           usehttps="{{ .Values.config.hec.usehttps }}"
+           restpath="{{ .Values.config.hec.restpath }}"
+           headers=["Authorization: Splunk {{ .Values.config.hec.token }}",
+                    "Content-Type: application/json"]
+           template="DSXHecEvent")
+    {{- end }}
+
+    {{- if .Values.config.forward.enabled }}
+    {{- if .Values.config.forward.tls }}
+    module(load="gtls")
+    action(type="omfwd"
+           protocol="tcp"
+           target="{{ .Values.config.forward.target }}"
+           port="{{ .Values.config.forward.port }}"
+           StreamDriver="gtls"
+           StreamDriverMode="1"
+           StreamDriverAuthMode="x509/name"
+           StreamDriverPermittedPeers="{{ .Values.config.forward.permittedPeer }}")
+    {{- else }}
+    action(type="omfwd"
+           protocol="tcp"
+           target="{{ .Values.config.forward.target }}"
+           port="{{ .Values.config.forward.port }}")
+    {{- end }}
+    {{- end }}
+
+    # Failsafe: ensure at least one action exists to satisfy rsyslog validation
+    {{- if and (not .Values.config.writeToStdout) (not .Values.config.writeToFile) (not .Values.config.hec.enabled) (not .Values.config.forward.enabled) }}
+    set $!json = re_extract($msg, "\\{.*\\}", 0, 0, "");
+    action(type="omfile" file="/dev/stdout" template="JsonOnly")
+    {{- end }}

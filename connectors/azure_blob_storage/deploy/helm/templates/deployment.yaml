@@ -1,0 +1,128 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "azure-blob-storage-connector.fullname" . }}
+  labels:
+    helm.sh/chart: {{ include "azure-blob-storage-connector.chart" . }}
+    app.kubernetes.io/name: {{ include "azure-blob-storage-connector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- if .Chart.AppVersion }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "azure-blob-storage-connector.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "azure-blob-storage-connector.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if or .Values.tls.enabled .Values.dataVolume.enabled }}
+      volumes:
+        {{- if .Values.tls.enabled }}
+        - name: tls-certs
+          secret:
+            secretName: {{ printf "%s-tls" (include "azure-blob-storage-connector.fullname" .) | quote }}
+        {{- end }}
+        {{- if .Values.dataVolume.enabled }}
+        - name: data-dir
+          emptyDir: {}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- $workers := (default 1 .Values.workers) }}
+          command:
+            - "python"
+            - "connectors/azure_blob_storage/start.py"
+            - "--workers"
+            - "{{ $workers }}"
+          args:
+            - "--port"
+            - "{{- if .Values.tls.enabled -}}443{{- else -}}{{ .Values.service.port }}{{- end -}}"
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.tls.enabled }}
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: DSXCONNECTOR_USE_TLS
+              value: {{ .Values.tls.enabled | quote }}
+            {{- if .Values.auth_dsxconnect.enrollmentSecretName }}
+            - name: DSXCONNECT_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth_dsxconnect.enrollmentSecretName | quote }}
+                  key: {{ .Values.auth_dsxconnect.enrollmentKey | quote }}
+            {{- end }}
+            - name: DSXCONNECTOR_AUTH__ENABLED
+              value: {{ .Values.auth_dsxconnect.enabled | quote }}
+            - name: DSXCONNECTOR_AUTH__CLOCK_SKEW_SECONDS
+              value: {{ .Values.auth_dsxconnect.clockSkewSeconds | quote }}
+            - name: DSXCONNECTOR_CONNECTOR_URL
+              value: "{{- if .Values.tls.enabled }}https://{{ else }}http://{{ end }}{{ include "azure-blob-storage-connector.fullname" . }}:{{- if .Values.tls.enabled }}443{{ else }}{{ .Values.service.port }}{{ end }}"
+            # Hardcoded internal defaults (not user-facing)
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            {{ $useTlsStr := (toString (default "" .Values.env.DSXCONNECTOR_USE_TLS)) }}
+            {{ $isTls := eq (lower $useTlsStr) "true" }}
+            {{ $scheme := ternary "https" "http" $isTls }}
+            - name: DSXCONNECTOR_DSX_CONNECT_URL
+              value: {{ (get .Values.env "DSXCONNECTOR_DSX_CONNECT_URL" | default (printf "%s://dsx-connect-api" $scheme)) | quote }}
+            {{- range $key, $val := .Values.env }}
+            {{- if and (ne $key "DSXCONNECTOR_DSX_CONNECT_URL") (ne $key "PYTHONUNBUFFERED") }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+            {{- end }}
+            - name: AZURE_STORAGE_CONNECTION_STRING
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name | quote }}
+                  key: AZURE_STORAGE_CONNECTION_STRING
+          {{- if .Values.envSecretRefs }}
+          envFrom:
+            {{- range .Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /{{ include "azure-blob-storage-connector.routeBase" . }}/readyz
+              port: {{- if .Values.tls.enabled }} https {{ else }} http {{ end }}
+              scheme: {{- if .Values.tls.enabled }} HTTPS {{ else }} HTTP {{ end }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /{{ include "azure-blob-storage-connector.routeBase" . }}/healthz
+              port: {{- if .Values.tls.enabled }} https {{ else }} http {{ end }}
+              scheme: {{- if .Values.tls.enabled }} HTTPS {{ else }} HTTP {{ end }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            {{- if .Values.tls.enabled }}
+            - name: tls-certs
+              mountPath: "/app/certs"
+              readOnly: true
+            {{- end }}
+            {{- if .Values.dataVolume.enabled }}
+            - name: data-dir
+              mountPath: {{ .Values.dataVolume.mountPath | quote }}
+            {{- end }}

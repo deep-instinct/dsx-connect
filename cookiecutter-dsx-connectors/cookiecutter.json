@@ -1,0 +1,25 @@
+{
+    "full_name": "Logan Gilbert",
+    "email": "logang@deepinstinct.com",
+    "__github_username": "loganbrazen",
+    "repository": "Filesystem",
+    "project_name": "{{ cookiecutter.repository }} Connector",
+    "project_slug": "{{ cookiecutter.repository.lower().replace(' ', '_') }}",
+    "__release_name": "{{ cookiecutter.project_name.lower().replace('_', '-').replace(' ', '-') }}",
+    "__package_config_class_name": "{{ ''.join(cookiecutter.project_name).replace(' ', '') }}Config",
+    "project_short_description": "{{ cookiecutter.project_name }} <-*-> DSX-Connect integration.",
+    "version": "0.1.0",
+    "connector_port": "8591",
+    "docker_repo":  "dsxconnect",
+    "__helm_chart_version": "0.1.0",
+    "__base_connector_url": "http://127.0.0.1:{{ cookiecutter.connector_port }}",
+    "__dsx_connect_url": "http://127.0.0.1:8586",
+
+    "command_line_interface": ["No command-line interface", "Typer", "Argparse"],
+    "create_author_file": "n",
+    "open_source_license": "GNU General Public License v3",
+    "__use_pytest" : "n",
+    "__add_pyup_badge": "n",
+    "__use_pypi_deployment_with_travis" : "n",
+    "__gh_slug": "{{ cookiecutter.__github_username }}/{{ cookiecutter.project_slug }}"
+}

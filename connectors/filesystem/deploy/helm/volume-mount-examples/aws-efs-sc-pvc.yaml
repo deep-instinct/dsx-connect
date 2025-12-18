@@ -1,0 +1,28 @@
+# aws-efs-sc-pvc.yaml
+# Dynamic provisioning with AWS EFS CSI. Requires the EFS CSI driver and an existing EFS filesystem.
+# Docs: https://github.com/kubernetes-sigs/aws-efs-csi-driver
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap          # access point provisioning
+  fileSystemId: fs-XXXXXXXX         # REQUIRED: your EFS filesystem ID
+  directoryPerms: "750"
+  basePath: "/dsx-connect"
+mountOptions:
+  - tls
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-scan-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 1Gi   # not enforced by EFS, but required by the PVC schema
+

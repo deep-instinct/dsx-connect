@@ -1,0 +1,68 @@
+image:
+  repository: dsxconnect/aws-s3-connector
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart AppVersion.
+  tag: ""
+  # When installing from OCI (`--version=X.Y.Z`), the default image tag is that chart's appVersion.
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+tls:
+  enabled: false
+
+ingressWebhook:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+networkPolicy:
+  enabled: false
+  allowFrom: []
+
+env:
+  LOG_LEVEL: "debug"
+  # Optional friendly display name shown in the dsx-connect UI card
+  # DSXCONNECTOR_DISPLAY_NAME: "AWS S3 Connector"
+  DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
+  DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
+  # Outbound TLS verification to dsx-connect
+  # DSXCONNECTOR_VERIFY_TLS: "true"
+  # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+  # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
+  # Defaults to http/https://dsx-connect-api based on DSXCONNECTOR_USE_TLS.
+  DSXCONNECTOR_ITEM_ACTION: "nothing"         # nothing, delete, tag, move, move_tag
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_ASSET: ""                      # bucket name
+  DSXCONNECTOR_FILTER: ""                     # optional prefixes, etc.
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+
+# Optional additional secrets projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
+envSecretRefs: []
+
+auth_dsconnect:
+  enabled: false
+  clockSkewSeconds: 60
+  enrollmentSecretName: ""
+  enrollmentKey: ENROLLMENT_TOKEN  # Secret providing DSXCONNECT_ENROLLMENT_TOKEN when dsx-connect auth is enabled
+
+secrets:
+  # Name of the Secret containing AWS credentials
+  name: aws-credentials
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"
+
+# Uvicorn concurrency and pod replicas
+# 'workers' = Uvicorn worker processes per pod (in-pod parallelism)
+# 'replicaCount' = number of pods (horizontal scale/HA)
+workers: 1
+replicaCount: 1  # Does not parallelize Full Scan enumeration; replicas still serve concurrent read_file via Service LB.

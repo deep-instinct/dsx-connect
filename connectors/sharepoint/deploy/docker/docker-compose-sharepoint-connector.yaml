@@ -1,0 +1,62 @@
+services:
+  sharepoint_connector: # if deploying two of more of this service within a single docker, this name must be unique for each instance
+    image: ${SHAREPOINT_IMAGE:-dsxconnect/sharepoint-connector:latest}
+    # Uncomment if you want to use docker compose to build the image
+    #build:
+    #  context: .
+    #  dockerfile: docker/Dockerfile
+
+    # ports: # uncomment this if you need to expose this service on an external port
+    #  - "8640:8640"
+    volumes:
+      - type: volume
+        source: sharepoint_connector_data
+        target: /app/data
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: "debug"
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      # TLS for connector server
+      # DSXCONNECTOR_USE_TLS: "false"
+      # DSXCONNECTOR_TLS_CERTFILE: "/app/certs/server.crt"
+      # DSXCONNECTOR_TLS_KEYFILE: "/app/certs/server.key"
+      # Outbound TLS verification to dsx-connect
+      # DSXCONNECTOR_VERIFY_TLS: "true"
+      # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+      DSXCONNECTOR_CONNECTOR_URL: "http://sharepoint-connector:8640" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_api...
+      DSXCONNECTOR_ITEM_ACTION: "nothing" # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine" # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+        # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
+      DSXCONNECTOR_ASSET: "scan_asset" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_FILTER: "" # define filters on the asset, such as sub folders, prefixes, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+
+      # This is definition is for docker compose deployments for dev, demos, POVs, and testing. Proper production
+      # deployments should use deployment mechanisms (helm charts/k8s) where API Keys can be defined as secrets
+
+      # SharePoint auth and target
+      DSXCONNECTOR_SP_TENANT_ID: "${SP_TENANT_ID}"
+      DSXCONNECTOR_SP_CLIENT_ID: "${SP_CLIENT_ID}"
+      DSXCONNECTOR_SP_CLIENT_SECRET: "${SP_CLIENT_SECRET}"
+
+      # TLS toggles for Graph
+      DSXCONNECTOR_SP_VERIFY_TLS: "${SP_VERIFY_TLS:-true}"
+      DSXCONNECTOR_SP_CA_BUNDLE: "${SP_CA_BUNDLE:-}"
+
+    networks:
+      dsx-network:
+        aliases:
+          - sharepoint-connector  # this is how dsx-connect will communicate with this on the network. if deploying two of more of this service within a single docker, this name must be unique for each instance
+    command:
+      ["python", "connectors/sharepoint/start.py", "--workers", "1", "--port", "8640"]
+
+# The following assumes an already created docker network like this:
+# docker network create dsx-connect-network --driver bridge
+networks:
+    dsx-network:
+      external: true
+      name: dsx-connect-network  # change this to an existing docker network
+
+volumes:
+  sharepoint_connector_data:

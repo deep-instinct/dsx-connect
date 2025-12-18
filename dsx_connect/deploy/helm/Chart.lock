@@ -1,0 +1,12 @@
+dependencies:
+- name: redis
+  repository: file://charts/redis
+  version: 0.1.0
+- name: rsyslog
+  repository: file://charts/rsyslog
+  version: 0.1.0
+- name: dsxa-scanner
+  repository: file://charts/dsxa-scanner
+  version: 0.1.0
+digest: sha256:c77d3dd93544f06d30b15e4816de2d96715435c2516c955863ca91ae59fed69a
+generated: "2025-12-09T14:47:46.031252-06:00"

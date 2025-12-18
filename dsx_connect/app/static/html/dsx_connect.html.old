@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>dsx-connect</title>
+    <link rel="icon" href="static/images/dsx-connect-icon2.png" sizes="48x48" />
+    <style>
+        /* Optional: Some basic styling for the tree */
+        ul { list-style-type: none; padding-left: 20px; }
+        li { margin: 4px 0; }
+        .status-ok { color: green; }
+        .status-fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>dsx-connect</h1>
+
+    <h2>Status</h2>
+    <div id="statusIndicator">Loading status...</div>
+
+    <h2>Current Configuration</h2>
+    <div id="configTree">Loading configuration...</div>
+
+    <h2>API Docs</h2>
+    <ul>
+        <li><a href="/docs">API Documentation</a></li>
+    </ul>
+
+    <h2>Registered Connectors</h2>
+    <div id="connectorsList">Loading connectors…</div>
+
+    <script>
+        // call your dsx‑connect “list connectors” endpoint
+
+        function fetchConnectors() {
+            fetch('/dsx-connect/connectors')
+                .then(r => r.json())
+                .then(connectors => {
+                    if (!connectors.length) {
+                        return document.getElementById('connectorsList')
+                            .innerHTML = '<p>No connectors registered.</p>';
+                    }
+                    let html = '<ul>';
+                    connectors.forEach((conn, idx) => {
+                        const encodedUuid = encodeURIComponent(conn.uuid);
+                        // build the new invoke‑fullscan path:
+                        const scanPath = `/dsx-connect/connectors/full_scan/${encodedUuid}`;
+                        html += `
+            <li>
+                        <strong>${conn.name}</strong>
+                        <small>UUID: ${conn.uuid}</small>
+                        (<a href="${scanPath}" target="_blank">${scanPath}</a>)
+                        <button onclick="invokeFullScan(${idx}, '${scanPath}')">
+                            Full Scan
+                        </button>
+              <span class="scan-notification" id="scan-note-${idx}"></span>
+            </li>
+          `;
+                    });
+                    html += '</ul>';
+                    document.getElementById('connectorsList').innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Error loading connectors', err);
+                    document.getElementById('connectorsList')
+                        .textContent = 'Error loading connectors.';
+                });
+        }
+
+        // POST to the connector’s full_scan endpoint
+        function invokeFullScan(idx, scanUrl) {
+            const note = document.getElementById(`scan-note-${idx}`);
+            note.textContent = '…starting scan…';
+            fetch(scanUrl, { method: 'POST' })
+                .then(res => {
+                    if (!res.ok) throw new Error(res.statusText);
+                    return res.json();
+                })
+                .then(json => {
+                    note.textContent = `✅ ${json.message}`;
+                })
+                .catch(err => {
+                    note.textContent = `❌ ${err.message}`;
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchStatus();
+            fetchConfig();
+            fetchConnectors();
+        });
+    </script>
+
+
+    <script>
+        // Recursively builds an HTML tree from a JSON object.
+        function renderTree(obj) {
+            let html = '<ul>';
+            for (const key in obj) {
+                if (obj.hasOwnProperty(key)) {
+                    const value = obj[key];
+                    if (typeof value === 'object' && value !== null) {
+                        html += `<li><strong>${key}:</strong> ${renderTree(value)}</li>`;
+                    } else {
+                        html += `<li><strong>${key}:</strong> ${value}</li>`;
+                    }
+                }
+            }
+            html += '</ul>';
+            return html;
+        }
+
+        // Fetch the configuration from /config
+        function fetchConfig() {
+            fetch('/dsx-connect/config')
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('configTree').innerHTML = renderTree(data);
+                    })
+                    .catch(error => {
+                        console.error('Error fetching configuration:', error);
+                        document.getElementById('configTree').textContent = 'Error loading configuration.';
+                    });
+        }
+
+        // Fetch the status from /test/dsxa-connection and update the status indicator.
+        function fetchStatus() {
+            fetch('/dsx-connect/test/dsxa-connection')
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data)
+                        const statusIndicator = document.getElementById('statusIndicator');
+                        // Check if the response indicates success.
+
+                        if (data.status && data.status.toLowerCase() === 'success') {
+                            statusIndicator.innerHTML = '<span class="status-ok">● Go: ' + data.message + '</span>';
+                        } else {
+                            statusIndicator.innerHTML = '<span class="status-fail">● Not Connected: ' + data.message + '</span>';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching status:', error);
+                        document.getElementById('statusIndicator').innerHTML = '<span class="status-fail">● Error connecting</span>';
+                    });
+        }
+
+        // When the page loads, fetch both status and configuration.
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchStatus();
+            fetchConfig();
+        });
+    </script>
+</body>
+</html>

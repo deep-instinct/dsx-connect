@@ -1,0 +1,114 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "salesforce-connector.fullname" . }}
+  labels:
+    {{- include "salesforce-connector.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "salesforce-connector.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "salesforce-connector.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.imagePullSecrets }}
+        - name: {{ .name | default . | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.tls.enabled }}
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: {{ printf "%s-tls" (include "salesforce-connector.fullname" .) | quote }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - "python"
+            - "connectors/salesforce/start.py"
+            - "--workers"
+            - "{{ .Values.workers | default 1 }}"
+          args:
+            - "--port"
+            - "{{- if .Values.tls.enabled -}}443{{- else -}}{{ .Values.service.port }}{{- end -}}"
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.tls.enabled }}
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            {{- $defaultUseTls := printf "%t" .Values.tls.enabled }}
+            {{- $dsxUseTls := (get .Values.env "DSXCONNECTOR_USE_TLS") | default $defaultUseTls }}
+            - name: DSXCONNECTOR_USE_TLS
+              value: {{ $dsxUseTls | quote }}
+            {{- if .Values.auth_dsxconnect.enrollmentSecretName }}
+            - name: DSXCONNECT_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth_dsxconnect.enrollmentSecretName | quote }}
+                  key: {{ .Values.auth_dsxconnect.enrollmentKey | quote }}
+            {{- end }}
+            - name: DSXCONNECTOR_AUTH__ENABLED
+              value: {{ .Values.auth_dsxconnect.enabled | quote }}
+            - name: DSXCONNECTOR_AUTH__CLOCK_SKEW_SECONDS
+              value: {{ .Values.auth_dsxconnect.clockSkewSeconds | quote }}
+            {{- $connectorScheme := ternary "https" "http" .Values.tls.enabled }}
+            {{- $connectorPort := ternary 443 .Values.service.port .Values.tls.enabled }}
+            {{- $defaultConnectorURL := printf "%s://%s:%d" $connectorScheme (include "salesforce-connector.fullname" .) $connectorPort }}
+            {{- $connectorURL := (get .Values.env "DSXCONNECTOR_CONNECTOR_URL") | default $defaultConnectorURL }}
+            - name: DSXCONNECTOR_CONNECTOR_URL
+              value: {{ $connectorURL | quote }}
+            {{- $isTls := eq (lower (toString $dsxUseTls)) "true" }}
+            {{- $dsxScheme := ternary "https" "http" $isTls }}
+            - name: DSXCONNECTOR_DSX_CONNECT_URL
+              value: {{ (get .Values.env "DSXCONNECTOR_DSX_CONNECT_URL" | default (printf "%s://dsx-connect-api" $dsxScheme)) | quote }}
+            {{- range $key, $val := .Values.env }}
+            {{- if not (has $key (list "DSXCONNECTOR_DSX_CONNECT_URL" "DSXCONNECTOR_CONNECTOR_URL" "DSXCONNECTOR_USE_TLS" "PYTHONUNBUFFERED")) }}
+            - name: {{ $key }}
+              value: {{ $val | quote }}
+            {{- end }}
+            {{- end }}
+          {{- if .Values.envSecretRefs }}
+          envFrom:
+            {{- range .Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /{{ include "salesforce-connector.routeBase" . }}/readyz
+              port: {{- if .Values.tls.enabled }} https {{ else }} http {{ end }}
+              scheme: {{- if .Values.tls.enabled }} HTTPS {{ else }} HTTP {{ end }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /{{ include "salesforce-connector.routeBase" . }}/healthz
+              port: {{- if .Values.tls.enabled }} https {{ else }} http {{ end }}
+              scheme: {{- if .Values.tls.enabled }} HTTPS {{ else }} HTTP {{ end }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- if .Values.tls.enabled }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: "/app/certs"
+              readOnly: true
+          {{- end }}

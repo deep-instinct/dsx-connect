@@ -1,0 +1,25 @@
+# Example: hostPath mount on macOS with Colima (single-node)
+#
+# Notes
+# - hostPath refers to the Colima VM's filesystem. Colima (Lima) exposes your macOS home under /Users by default.
+# - Use an absolute path under /Users/... that exists on your Mac.
+# - This is for development only; prefer a PVC for production.
+# - The chart will set DSXCONNECTOR_ASSET to scanVolume.mountPath automatically.
+
+scanVolume:
+  enabled: true
+  # Path on the Colima VM (macOS path under /Users is mounted by default)
+  hostPath: "/Users/yourname/scan-data"   # CHANGE ME to a real path on your Mac
+  # Path inside the connector container where files will appear
+  mountPath: "/app/scan_folder"
+  readOnly: false
+
+# Optional: keep a small writable data dir inside the pod
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"
+
+# Example helm install (adjust release name, version, and path):
+#   helm install fs oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
+#     --version <chart-version> \
+#     -f connectors/filesystem/deploy/helm/volume-mount-examples/hostpath-macos-colima.yaml

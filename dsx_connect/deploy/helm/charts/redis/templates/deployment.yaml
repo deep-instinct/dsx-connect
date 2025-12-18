@@ -1,0 +1,45 @@
+{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "redis.fullname" . }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "redis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "redis.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: {{ .Values.command | toYaml | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          {{- $interval := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.interval | default 10)) "" | int }}
+          {{- $timeout := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.timeout | default 1)) "" | int }}
+          {{- $retries := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.retries | default 3)) "" | int }}
+          {{- $startPeriod := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.startPeriod | default 0)) "" | int }}
+          livenessProbe:
+            exec:
+              command: {{ .Values.healthcheck.test | toYaml | nindent 18 }}
+            initialDelaySeconds: {{ $startPeriod }}
+            periodSeconds: {{ $interval }}
+            timeoutSeconds: {{ $timeout }}
+            successThreshold: 1
+            failureThreshold: {{ $retries }}
+          readinessProbe:
+            exec:
+              command: {{ .Values.healthcheck.test | toYaml | nindent 18 }}
+            initialDelaySeconds: {{ $startPeriod }}
+            periodSeconds: {{ $interval }}
+            timeoutSeconds: {{ $timeout }}
+            successThreshold: 1
+            failureThreshold: {{ $retries }}
+{{- end }}

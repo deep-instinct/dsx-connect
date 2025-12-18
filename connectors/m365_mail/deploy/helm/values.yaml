@@ -1,0 +1,76 @@
+image:
+  repository: dsxconnect/m365-mail-connector
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart AppVersion.
+  tag: ""
+  # When installing from OCI (`--version=X.Y.Z`), the default image tag is that chart's appVersion.
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# HTTP route base for the connector health + ready endpoints.
+routeBase: "m365-mail-connector"
+
+service:
+  type: ClusterIP
+  port: 80
+
+tls:
+  enabled: false
+
+ingressWebhook:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+networkPolicy:
+  enabled: false
+  allowFrom: []
+
+webhook:
+  publicUrl: ""  # Override DSXCONNECTOR_WEBHOOK_URL (defaults to DSXCONNECTOR_CONNECTOR_URL)
+
+env:
+  LOG_LEVEL: "debug"
+  DSXCONNECTOR_ASSET: ""
+  DSXCONNECTOR_FILTER: ""  # See docs/reference/dsxconnector_filter.md
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+  DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
+  DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
+  # Override to point at a public dsx-connect URL if different from the in-cluster Service.
+  # DSXCONNECTOR_DSX_CONNECT_URL: "https://dsx-connect-api.example.com"
+  # Override if the connector is externally reachable via a different host/port.
+  # DSXCONNECTOR_CONNECTOR_URL: "https://m365-mail-connector.example.com"
+  # Optional actions/policy
+  # DSXCONNECTOR_ITEM_ACTION: "move"
+  # DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  # DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS: "600"
+  # DSXCONNECTOR_ACTION_MOVE_FOLDER: "Quarantine"
+  # DSXCONNECTOR_SUBJECT_TAG_PREFIX: "[Malicious] "
+  # DSXCONNECTOR_BANNER_HTML: "<div>Attachment removed by security policy.</div>"
+  # Microsoft Graph auth (recommended via envSecretRefs)
+  # M365_TENANT_ID: ""
+  # M365_CLIENT_ID: ""
+  # M365_CLIENT_SECRET: ""
+  # M365_MAILBOX_UPNS: ""
+  # M365_CLIENT_STATE: ""
+  # Optional public webhook base URL (defaults to DSXCONNECTOR_CONNECTOR_URL)
+  # DSXCONNECTOR_WEBHOOK_URL: "https://mail-connector.example.com"
+
+# Optional list of Secret names projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
+envSecretRefs: []
+
+auth_dsxconnect:
+  enabled: false
+  clockSkewSeconds: 60
+  enrollmentSecretName: ""
+  enrollmentKey: ENROLLMENT_TOKEN  # Secret providing DSXCONNECT_ENROLLMENT_TOKEN when dsx-connect auth is enabled
+
+# Uvicorn concurrency and pod replicas
+# 'workers' = Uvicorn worker processes per pod (in-pod parallelism)
+# 'replicaCount' = number of pods (horizontal scale/HA)
+workers: 1
+replicaCount: 1

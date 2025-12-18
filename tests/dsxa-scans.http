@@ -1,0 +1,14 @@
+# curl -X POST -H "Content-Type: application/octet-stream" --data-binary "@<file_name>" http://127.0.0.1/scan/binary/v2
+POST http://localhost:5000/scan/binary/v2
+Content-Type: application/octet-stream
+
+< samples/template_pdf
+
+###
+
+POST http://localhost:5000/scan/binary/v2
+Content-Type: application/octet-stream
+
+< ../dsxa_sdk/tests/assets/samples/BUPA_Resume_pdf
+
+###

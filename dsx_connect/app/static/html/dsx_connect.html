@@ -1,0 +1,2119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dsx-connect</title>
+    <link rel="icon" href="static/images/dsx-connect-icon2.png" sizes="32x32">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Fira+Code&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: 'Fira Code', 'Courier New', monospace;
+
+            /* Light Theme */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7f9fc;
+            --bg-header: #0A142D;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-inverted: #ffffff;
+            --border-color: #e5e7eb;
+            --accent-color: #3b82f6;
+            --accent-hover: #2563eb;
+            --status-ok: #deff5b;
+            --card-status-ok: #10b981;
+            --status-fail: #ef4444;
+            --card-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            --card-shadow-hover: 0 4px 8px rgba(0,0,0,0.08);
+            --verdict-malicious: #ef4444;
+            --verdict-benign: #10b981;
+            --verdict-unknown: #6b7280;
+            --modal-bg: rgba(0, 0, 0, 0.5);
+            --modal-content-bg: #ffffff;
+        }
+
+        html[data-theme="dark"] {
+            --bg-primary: #1f2937;
+            --bg-secondary: #111827;
+            --bg-header: #0d1117;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-inverted: #ffffff;
+            --border-color: #374151;
+            --accent-color: #60a5fa;
+            --accent-hover: #3b82f6;
+            --status-ok: #deff5b;
+            --card-status-ok: #34d399;
+            --status-fail: #f87171;
+            --card-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            --card-shadow-hover: 0 4px 8px rgba(0,0,0,0.3);
+            --verdict-malicious: #f87171;
+            --verdict-benign: #34d399;
+            --verdict-unknown: #9ca3af;
+            --modal-bg: rgba(0, 0, 0, 0.7);
+            --modal-content-bg: #1f2937;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--font-sans);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
+            transition: background 0.2s, color 0.2s;
+        }
+        h1, h2, h3, h4 {
+            font-family: var(--font-sans);
+            margin: 0;
+            font-weight: 500;
+        }
+        h2 {
+            font-size: 1.2rem;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-header);
+            color: var(--text-inverted);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            border-bottom: 1px solid var(--border-color);
+        }
+        .status {
+            font-weight: normal;
+            font-size: 0.8rem;
+            padding-left: calc(28px + 0.75rem);
+            color: var(--text-secondary);
+        }
+        .status-ok { color: var(--status-ok); }
+        .status-fail { color: var(--status-fail); }
+        .gear-icon, #themeToggle, #statsIcon {
+            font-size: 1.25rem;
+            cursor: pointer;
+            color: var(--text-inverted);
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .gear-icon:hover, #themeToggle:hover, #statsIcon:hover {
+            opacity: 1;
+        }
+        .app-version {
+            font-size: 0.75rem; /* smaller font */
+            color: var(--text-inverted);
+            opacity: 0.6; /* lower opacity */
+            padding: 0 4px; /* tighter padding */
+            border: none; /* no border */
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .main-content { padding: 1.5rem; }
+        .config-sidebar {
+            position: fixed; right: -450px; top: 0; bottom: 0; width: 400px;
+            background: var(--bg-primary);
+            box-shadow: -2px 0 6px rgba(0,0,0,0.2);
+            padding: 1rem; transition: right 0.3s ease; z-index: 1000;
+            border-left: 1px solid var(--border-color);
+        }
+        .config-sidebar.active { right: 0; }
+        .config-modal {
+            display: none; position: fixed; z-index: 2000;
+            left: 0; top: 0; width: 100%; height: 100%;
+            background-color: var(--modal-bg);
+            backdrop-filter: blur(2px);
+        }
+        .config-modal-content {
+            background-color: var(--modal-content-bg);
+            margin: 5% auto; padding: 0; border-radius: 8px;
+            width: 80%; max-width: 800px; max-height: 80vh;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex; flex-direction: column;
+            border: 1px solid var(--border-color);
+        }
+        .config-modal-header {
+            padding: 0.75rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .config-modal-header h3 { margin: 0; font-size: 1.1rem; }
+        .config-modal-close {
+            font-size: 1.5rem; font-weight: bold; cursor: pointer;
+            color: var(--text-secondary); transition: color 0.2s;
+        }
+        .config-modal-close:hover { color: var(--text-primary); }
+        .config-modal-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
+        .config-tree {
+            font-family: var(--font-mono); font-size: 0.8rem;
+            background: var(--bg-secondary); padding: 1rem;
+            border-radius: 4px; white-space: pre-wrap; overflow-x: auto;
+        }
+        .config-tree ul { list-style: none; padding-left: 1rem; margin: 0.25rem 0; }
+        .config-tree li { margin: 0.25rem 0; }
+        .config-tree strong { color: var(--accent-color); }
+        .config-error {
+            color: var(--status-fail); font-style: italic; padding: 1rem;
+            text-align: center; background: var(--bg-secondary);
+            border-radius: 4px; border: 1px solid var(--status-fail);
+        }
+        .grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem; margin-top: 1rem;
+        }
+        .connector-card {
+            background: var(--bg-primary); padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px; box-shadow: var(--card-shadow);
+            position: relative; transition: all 0.2s ease;
+        }
+        .connector-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--card-shadow-hover);
+        }
+        .connector-card h4 { margin-top: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem;}
+        .connector-card button {
+            background: var(--accent-color); color: var(--text-inverted); border: none;
+            padding: 0.4rem 0.8rem; border-radius: 4px; cursor: pointer;
+            font-size: 0.8rem; transition: background-color 0.2s;
+        }
+        .connector-card button:hover { background: var(--accent-hover); }
+        /* Make copy buttons demure inside connector cards */
+        .connector-card button.job-id-copy {
+            background: transparent;
+            color: var(--text-secondary);
+            padding: 0;
+            border: none;
+            opacity: 0.6;
+        }
+        .connector-card button.job-id-copy:hover {
+            background: transparent;
+            opacity: 0.9;
+        }
+        .asset-line, .filter-line {
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            max-width: 100%; display: block; font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+        .scan-note { display: block; margin-top: 0.5rem; font-size: 0.8rem; }
+        .scan-results-panel {
+            margin-top: 1rem; max-height: 350px; overflow: auto;
+            background: var(--bg-primary); padding: 0.5rem;
+            border-radius: 6px; border: 1px solid var(--border-color);
+        }
+        table.scan-results { width: 100%; border-collapse: collapse; }
+        .scan-results td {
+            padding: 0.3rem 0.6rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+            vertical-align: middle; font-size: 0.85rem;
+        }
+        tr:last-child td { border-bottom: none; }
+        .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; border: 1px solid transparent; }
+        .pill-base { background: #eef2ff; color: #3730a3; border-color: #c7d2fe; }
+        html[data-theme="dark"] .pill-base { background: #312e81; color: #e0e7ff; border-color: #4f46e5; }
+        .kv { color: var(--text-secondary); font-weight: 500; }
+        .verdict-icon { font-size: 1rem; }
+        .verdict-malicious { color: var(--verdict-malicious); }
+        .verdict-benign { color: var(--verdict-benign); }
+        .verdict-unknown { color: var(--verdict-unknown); }
+        tr.clickable-row { cursor: pointer; transition: background-color 0.2s; }
+        tr.clickable-row:hover { background: var(--bg-secondary); }
+        .file-icon { margin-right: 4px; }
+        .icon-pdf { color: #f43f5e; }
+        .icon-exe { color: #3b82f6; }
+        .icon-macho { color: #4b5563; }
+        .icon-office { color: #0ea5e9; }
+        .icon-zip { color: #8b5cf6; }
+        .icon-generic { color: #6b7280; }
+        .connector-icon { width: 1em; height: 1em; margin-right: 6px; vertical-align: -0.1em; display: inline-block; overflow: visible; }
+        .connector-icon.fa, .connector-icon.fab { font-size: 1em; line-height: 1; }
+        .connector-card .connector-icon { width: 1.5em; height: 1.5em; margin-right: 8px; vertical-align: -0.2em; }
+        .connector-card .connector-icon.fa,
+        .connector-card .connector-icon.fab { font-size: 1.5em; }
+        @keyframes pulse {
+            0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; }
+        }
+        .detail-row-content {
+            background: var(--bg-secondary);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            padding: 0.75rem 1rem;
+        }
+        .detail-row-content strong { color: var(--accent-color); }
+        .detail-row-content pre { margin: 0; white-space: pre-wrap; color: var(--text-secondary); }
+        .job-id-pill {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            background: transparent;
+            border: none;
+            padding: 0;
+            margin-left: 0.5rem;
+            white-space: nowrap;
+        }
+        .job-id-copy {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            margin-left: 0.25rem;
+            opacity: 0.7;
+            border: none;
+            background: transparent;
+        }
+        .job-id-copy:hover { opacity: 1; }
+    </style>
+</head>
+<body>
+<div class="header">
+    <!-- Left side: Icon, title, and status -->
+    <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <svg id="dsxIcon" xmlns="http://www.w3.org/2000/svg" style="background: transparent;" version="1.1" width="28px" height="24px" viewBox="-0.5 -0.5 32 27">
+                <g>
+                    <g><path id="arrow1" d="M 12 16.22 L 17.19 16.22 L 17.19 13 L 32 20 L 17.19 27 L 17.19 23.78 L 12 23.78 L 12 20 Z" fill="#777" stroke="none"/></g>
+                    <g><path id="arrow2" d="M 0 3.22 L 5.19 3.22 L 5.19 0 L 20 7 L 5.19 14 L 5.19 10.78 L 0 10.78 L 0 7 Z" fill="#777" stroke="none" transform="rotate(-180,10,7)"/></g>
+                </g>
+            </svg>
+            <h1 style="font-size: 1.25rem; font-weight: 500; display: flex; align-items: baseline; gap: 0.5rem;">
+                dsx-connect
+                <span id="appVersion" class="app-version" title="Application version" style="display:none"></span>
+            </h1>
+        </div>
+        <div class="status" id="statusIndicator">Validating DSXA connectivity...</div>
+    </div>
+
+    <!-- Right side: API link, stats toggle, and settings gear -->
+    <div style="position: relative; display: flex; align-items: center; gap: 1.25rem; margin-left: auto;">
+        <a href="/docs" target="_blank" style="color: var(--text-inverted); text-decoration: none; font-size: 0.85rem; opacity: 0.8; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+            API <i class="fas fa-up-right-from-square" style="font-size: 0.7rem; margin-left: 3px;"></i>
+        </a>
+        <i class="fas fa-chart-line" id="statsIcon" title="Scan Stats"></i>
+        <i class="fas fa-moon" id="themeToggle" title="Toggle Theme"></i>
+        <i class="fas fa-cog gear-icon" id="gearIcon" title="Settings"></i>
+    </div>
+</div>
+
+<div class="main-content">
+    <h2>Connectors</h2>
+    <div id="connectorsGrid" class="grid">Loading connectors...</div>
+
+    <div style="margin-top: 1.5rem;"></div>
+
+    <h2>Scan Results <span style="font-weight: normal; color: var(--text-secondary); font-size: 0.9rem;">(most recent 1000)</span></h2>
+    <div style="margin: 0.4rem 0 0.5rem 0; display:flex; align-items:center; gap:0.5rem;">
+        <label for="jobFilter" style="font-size:0.85rem; color: var(--text-secondary);">Filter by job:</label>
+        <select id="jobFilter" style="font-size:0.85rem; padding: 2px 6px;">
+            <option value="">All</option>
+        </select>
+        <button id="jobFilterOpenApi" style="font-size:0.85rem; padding: 2px 8px;" disabled title="Open results API for selected job">Open API</button>
+        <button id="scanResultsClear" style="font-size:0.85rem; padding: 2px 8px;" title="Clear visible results and reset filter">Clear</button>
+    </div>
+    <div id="scanResultsNotice" style="display:none; margin: 0.25rem 0 0.5rem 0; color: var(--text-secondary); font-size: 0.85rem;"></div>
+    <div class="scan-results-panel">
+        <table class="scan-results" id="scanResultsTable">
+            <tbody id="scanResultsBody">
+            <tr id="noResultsRow">
+                <td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 1rem; border: none;">No scan results</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<div class="config-sidebar" id="configSidebar">
+    <h3>Configuration</h3>
+    <div id="configTree">Loading config...</div>
+</div>
+
+<!-- Config Modal -->
+<div id="configModal" class="config-modal">
+    <div class="config-modal-content">
+        <div class="config-modal-header">
+            <h3 id="configModalTitle">Connector Configuration</h3>
+            <span class="config-modal-close">&times;</span>
+        </div>
+        <div class="config-modal-body">
+            <div id="configModalContent">Loading configuration...</div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Modal -->
+<div id="statsModal" class="config-modal">
+    <div class="config-modal-content">
+        <div class="config-modal-header">
+            <h3 id="statsModalTitle">Scan Statistics</h3>
+            <span class="config-modal-close" id="statsModalClose">&times;</span>
+        </div>
+        <div class="config-modal-body">
+            <div id="statsModalContent">Loading scan statistics...</div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // ---- API base: service-slug FIRST (matches APIRouter(prefix=route_path(API_PREFIX_V1))) ----
+    // Server prefix is now: /dsx-connect/api/v1
+    const API_BASE = '/dsx-connect/api/v1';
+    const api = (p) => `${API_BASE}/${p}`;
+
+    // Route helpers (avoid fragile string concat everywhere)
+        const r = {
+            sse: {
+                scanResult:          () => api('subscribe/scan-result'),
+                connectorRegistered: () => api('subscribe/connector-registered'),
+                jobSummary:          (jobId, interval=5) => api(`subscribe/job-summary/${encodeURIComponent(jobId)}?interval=${encodeURIComponent(interval)}`),
+            },
+            connectors: {
+                list:       () => api('connectors/list'),
+                readyz:     (uuid) => api(`connectors/readyz/${encodeURIComponent(uuid)}`),
+                config:     (uuid) => api(`connectors/config/${encodeURIComponent(uuid)}`),
+                fullscan:   (uuid) => api(`connectors/full_scan/${encodeURIComponent(uuid)}`),
+                repocheck:  (uuid) => api(`connectors/repo_check/${encodeURIComponent(uuid)}`),
+                unregister: (uuid) => api(`connectors/unregister/${encodeURIComponent(uuid)}`),
+                register:   () => api('connectors/register'),
+            },
+            scan: {
+                request: () => api('scan/request'),
+                status:  (id) => api(`scan/request/${encodeURIComponent(id)}`),
+                stats:   () => api('scan/stats'),
+                jobs: {
+                    status: (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}`),
+                    pause:  (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}/pause`),
+                    resume: (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}/resume`),
+                    cancel: (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}/cancel`),
+                },
+            },
+            meta: {
+                info: () => api('meta'),
+            },
+    };
+
+    // ===== GLOBAL VARIABLES =====
+    const gearIcon = document.getElementById('gearIcon');
+    const themeToggle = document.getElementById('themeToggle');
+    const statsIcon = document.getElementById('statsIcon');
+    const statsModal = document.getElementById('statsModal');
+    const statsModalClose = document.getElementById('statsModalClose');
+    const statsModalContent = document.getElementById('statsModalContent');
+    const configSidebar = document.getElementById('configSidebar');
+    const seenConnectors = new Set();
+    const connectorLastSeen = new Map(); // Track when we last saw each connector
+    let scanResultsSSE = null;
+    let connectorRegistrationSSE = null;
+    const MAX_RESULTS = 1000; // cap rows for performance
+    const seenJobIds = new Set();
+    let currentJobFilter = localStorage.getItem('jobFilter') || '';
+    let jobFocusJobId = '';
+    let jobMeta = {};
+    try { jobMeta = JSON.parse(localStorage.getItem('jobMeta') || '{}'); } catch { jobMeta = {}; }
+    // Note: No polling-based summary; progress updates come via scan-result SSE.
+
+    // ===== THEME MANAGEMENT =====
+    function setTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
+        const isDark = theme === 'dark';
+        themeToggle.classList.toggle('fa-sun', isDark);
+        themeToggle.classList.toggle('fa-moon', !isDark);
+        themeToggle.title = `Switch to ${isDark ? 'light' : 'dark'} mode`;
+        fetchStatus(); // Re-run to update colors
+    }
+
+    // UUID-based action button updater
+    function updateActionButtonsByUuid(connectorUuid, state, jobId = null) {
+        const actions = document.getElementById(`actions-${connectorUuid}`);
+        if (!actions) return;
+        if (state === 'running') {
+            try { const card = document.querySelector(`.connector-card[data-connector-uuid='${connectorUuid}']`); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
+            actions.innerHTML = `
+                <button id="btn-pause-${connectorUuid}">Pause</button>
+                <button id="btn-cancel-${connectorUuid}" style="background:#ef4444;">Cancel</button>
+            `;
+            const pill = document.createElement('span');
+            pill.className = 'job-id-pill';
+            pill.id = `job-pill-${connectorUuid}`;
+            actions.appendChild(pill);
+            const copy = document.createElement('button');
+            copy.className = 'job-id-copy';
+            copy.id = `job-copy-${connectorUuid}`;
+            copy.title = 'Copy job id';
+            copy.innerHTML = '<i class="far fa-copy"></i>';
+            actions.appendChild(copy);
+            setJobIdPillByUuid(connectorUuid, jobId);
+            document.getElementById(`btn-pause-${connectorUuid}`).onclick = async () => {
+                if (!jobId) return;
+                try { await fetch(r.scan.jobs.pause(jobId), { method: 'POST' }); } catch {}
+            };
+            document.getElementById(`btn-cancel-${connectorUuid}`).onclick = async () => {
+                if (!jobId) return;
+                try { await fetch(r.scan.jobs.cancel(jobId), { method: 'POST' }); } catch {}
+            };
+        } else if (state === 'paused') {
+            try { const card = document.querySelector(`.connector-card[data-connector-uuid='${connectorUuid}']`); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
+            actions.innerHTML = `
+                <button id="btn-resume-${connectorUuid}">Resume</button>
+                <button id="btn-cancel-${connectorUuid}" style="background:#ef4444;">Cancel</button>
+            `;
+            const pill = document.createElement('span');
+            pill.className = 'job-id-pill';
+            pill.id = `job-pill-${connectorUuid}`;
+            actions.appendChild(pill);
+            const copy = document.createElement('button');
+            copy.className = 'job-id-copy';
+            copy.id = `job-copy-${connectorUuid}`;
+            copy.title = 'Copy job id';
+            copy.innerHTML = '<i class="far fa-copy"></i>';
+            actions.appendChild(copy);
+            setJobIdPillByUuid(connectorUuid, jobId);
+            document.getElementById(`btn-resume-${connectorUuid}`).onclick = async () => {
+                if (!jobId) return;
+                try { await fetch(r.scan.jobs.resume(jobId), { method: 'POST' }); } catch {}
+            };
+            document.getElementById(`btn-cancel-${connectorUuid}`).onclick = async () => {
+                if (!jobId) return;
+                try { await fetch(r.scan.jobs.cancel(jobId), { method: 'POST' }); } catch {}
+            };
+        } else if (state === 'done') {
+            const scanUrl = actions.dataset.scanUrl;
+            const connectorNameEsc = actions.dataset.connectorName;
+            const cu = actions.dataset.connectorUuid;
+            actions.innerHTML = `
+                <button onclick="invokeFullScanByUuid('${cu}', '${scanUrl}', '${connectorNameEsc}')">Full Scan</button>
+            `;
+            const pill = document.getElementById(`job-pill-${connectorUuid}`);
+            if (pill) { pill.style.display = 'none'; pill.textContent=''; pill.title=''; }
+            const copy = document.getElementById(`job-copy-${connectorUuid}`);
+            if (copy) { copy.style.display = 'none'; copy.title=''; copy.onclick = null; }
+        }
+    }
+    themeToggle.addEventListener('click', () => {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        setTheme(currentTheme === 'light' ? 'dark' : 'light');
+    });
+
+    // ===== ABOUT FOOTER =====
+    async function loadMetaFooter() {
+        const el = document.getElementById('aboutFooter');
+        try {
+            const res = await fetch(r.meta.info());
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const m = await res.json();
+            const v = m && m.version ? String(m.version).trim() : 'unknown';
+            const ts = m && m.build_timestamp ? m.build_timestamp : '';
+            const when = ts ? new Date(ts).toISOString().replace('T', ' ').replace('Z', 'Z') : '';
+            if (el) {
+                el.textContent = `dsx-connect v${v}${when ? ' • built ' + when : ''}`;
+            }
+            const hv = document.getElementById('appVersion');
+            if (hv) {
+                const isValid = v && v !== 'unknown' && v !== '0.0.0';
+                if (isValid) {
+                    hv.textContent = `v${v}`;
+                    hv.title = when ? `Build: ${when}` : 'Application version';
+                    hv.style.display = 'inline-block';
+                } else {
+                    hv.textContent = '';
+                    hv.style.display = 'none';
+                }
+            }
+        } catch (e) {
+            // Fallback to /version (plain text) if /meta not available
+            try {
+                const res2 = await fetch(api('version'));
+                if (res2.ok) {
+                    const text = await res2.text();
+                    const v = (text || '').trim();
+                    const hv = document.getElementById('appVersion');
+                    if (hv && v && v !== '0.0.0') {
+                        hv.textContent = `v${v}`;
+                        hv.title = 'Application version';
+                        hv.style.display = 'inline-block';
+                        return;
+                    }
+                }
+            } catch {}
+            if (el) el.textContent = 'dsx-connect — version unavailable';
+            const hv = document.getElementById('appVersion');
+            if (hv) { hv.textContent = ''; hv.style.display = 'none'; }
+        }
+    }
+
+
+    // ===== UTILITY FUNCTIONS =====
+    function renderTree(obj) {
+        let html = '<ul>';
+        for (const key in obj) {
+            const val = obj[key];
+            html += `<li><strong>${key}:</strong> ${typeof val === 'object' ? renderTree(val) : val}</li>`;
+        }
+        html += '</ul>';
+        return html;
+    }
+
+    function getFileTypeIcon(file_type) {
+        switch (file_type) {
+            case 'PDFFileType': return ['fas fa-file-pdf file-icon', 'icon-pdf'];
+            case 'PEFileType':
+            case 'PE32FileType':
+            case 'PE64FileType': return ['fab fa-windows file-icon', 'icon-exe'];
+            case 'OfficeFileType':
+            case 'OOXMLFileType': return ['fas fa-file-word file-icon', 'icon-office'];
+            case 'ZipFileType': return ['fas fa-file-archive file-icon', 'icon-zip'];
+            case 'MachoFATFileType':
+            case 'Macho32FileType':
+            case 'Macho64FileType': return ['fab fa-apple file-icon', 'icon-macho'];
+            case 'ELF32FileType':
+            case 'ELF64FileType': return ['fab fa-linux file-icon', 'icon-generic'];
+            default: return ['fas fa-file file-icon'];
+        }
+    }
+
+    function getConnectorIcon(name = '') {
+        const lower = name.toLowerCase();
+        // A future improvement could be for connectors to advertise their own icon and color.
+        if (lower.startsWith('google')) return '<i class="fab fa-google connector-icon" aria-label="Google Cloud" style="color: #4285F4;"></i>';
+        // Azure icon (per user-provided SVG)
+        if (lower.startsWith('azure')) return `
+            <svg class="connector-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="#035bda" fill-rule="evenodd" role="img" aria-label="Azure">
+              <path d="M19.867 7.282l-4.733 9.533 8.333 9.66L8 28.23l24 .25zm-.934-3.762L8.067 12.613 0 26.223l6.867-.7z"/>
+            </svg>`;
+        if (lower.startsWith('aws')) return '<i class="fab fa-aws connector-icon" aria-label="Amazon Web Services" style="color: #FF9900;"></i>';
+        // SharePoint icon (teal overlapping nodes)
+        if (lower.includes('sharepoint')) return `
+            <svg class="connector-icon" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" role="img" aria-label="SharePoint">
+                <circle cx="9" cy="12" r="6" fill="#037D6C"></circle>
+                <circle cx="16" cy="8" r="5" fill="#0F9D90" opacity="0.9"></circle>
+                <circle cx="17" cy="16" r="5" fill="#0AA1A7" opacity="0.85"></circle>
+            </svg>`;
+        if (lower.startsWith('filesystem')) return '<i class="fas fa-folder connector-icon" aria-label="Filesystem" style="color: #DAA520;"></i>';
+        return '';
+    }
+
+    function renderConnectorIcon(name = '', custom = '') {
+        const v = (custom || '').trim();
+        // Hard cap payload size to avoid perf/memory abuse
+        if (v && v.length > 8192) {
+            return getConnectorIcon(name);
+        }
+        if (v) {
+            // Prefer data URIs directly
+            if (v.startsWith('data:image')) {
+                return `<img class="connector-icon" alt="Connector Icon" referrerpolicy="no-referrer" crossorigin="anonymous" src="${v}">`;
+            }
+            // If raw SVG markup, encode to a safe data URI to avoid injecting markup
+            if (v.startsWith('<svg')) {
+                const encoded = encodeURIComponent(v).replace(/'/g, '%27').replace(/\"/g, '%22');
+                return `<img class=\"connector-icon\" alt=\"Connector Icon\" referrerpolicy=\"no-referrer\" crossorigin=\"anonymous\" src=\"data:image/svg+xml;utf8,${encoded}\">`;
+            }
+            // Otherwise treat as a short label/emoji
+            if (v.length <= 8) {
+                return `<span class="connector-icon" aria-hidden="true" style="font-size: 1.1rem">${v}</span>`;
+            }
+        }
+        return getConnectorIcon(name);
+    }
+
+    // ===== NOTIFICATION SYSTEM =====
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 10000;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            max-width: 300px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-left: 4px solid rgba(255,255,255,0.3);
+        `;
+
+        let icon = '';
+        switch(type) {
+            case 'success':
+                notification.style.backgroundColor = '#10b981';
+                icon = '✓ ';
+                break;
+            case 'warning':
+                notification.style.backgroundColor = '#f59e0b';
+                icon = '⚠ ';
+                break;
+            case 'error':
+                notification.style.backgroundColor = '#ef4444';
+                icon = '✗ ';
+                break;
+            case 'info':
+                notification.style.backgroundColor = '#3b82f6';
+                icon = 'ℹ ';
+                break;
+            default:
+                notification.style.backgroundColor = '#6b7280';
+                icon = 'ℹ ';
+        }
+
+        notification.innerHTML = `
+            <div style="display: flex; align-items: center;">
+                <span style="margin-right: 8px;">${icon}</span>
+                <span>${message}</span>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        // Slide in
+        setTimeout(() => {
+            notification.style.opacity = '1';
+            notification.style.transform = 'translateX(0)';
+        }, 100);
+
+        // Slide out and remove
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transform = 'translateX(100%)';
+            setTimeout(() => notification.remove(), 300);
+        }, 4000);
+    }
+
+    function showConnectionError(message) {
+        let indicator = document.getElementById('connection-status');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'connection-status';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: #ff4444;
+                color: white;
+                padding: 8px 12px;
+                border-radius: 4px;
+                z-index: 9999;
+                font-size: 14px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            `;
+            document.body.appendChild(indicator);
+        }
+
+        indicator.textContent = message;
+        indicator.style.display = 'block';
+
+        setTimeout(() => {
+            if (indicator) {
+                indicator.style.display = 'none';
+            }
+        }, 5000);
+    }
+
+    // ===== API FUNCTIONS =====
+    function fetchStatus() {
+        fetch(api('test/dsxa-connection'))
+            .then(res => res.json())
+            .then(data => {
+                const el = document.getElementById('statusIndicator');
+                const arrow1 = document.getElementById('arrow1');
+                const arrow2 = document.getElementById('arrow2');
+                const isConnected = data.status?.toLowerCase() === 'success';
+
+                let message;
+                if (isConnected) {
+                    message = '<span class="status-ok">● Connected: DSX for Applications (DSX/A) Scanner</span>';
+                } else {
+                    // Truncate long error messages - just show the essential part
+                    let errorMsg = data.message || 'Connection failed';
+
+                    // Clean up common verbose error patterns
+                    if (errorMsg.includes('DSXA connection test failed')) {
+                        errorMsg = 'DSXA connection test failed';
+                    } else if (errorMsg.includes('Unable to connect to DSXA scanner')) {
+                        errorMsg = 'Unable to connect to DSXA scanner';
+                    } else if (errorMsg.includes('Failed to connect to DSXA scanner')) {
+                        errorMsg = 'Failed to connect to DSXA scanner';
+                    }
+
+                    // Generic fallback for other long messages
+                    if (errorMsg.length > 50) {
+                        errorMsg = errorMsg.substring(0, 47) + '...';
+                    }
+
+                    message = `<span class="status-fail">● Not Connected: ${errorMsg}</span>`;
+                }
+
+                el.innerHTML = message;
+
+                const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+                const okColor = getComputedStyle(document.documentElement).getPropertyValue('--status-ok').trim();
+                const finalColor = isConnected ? okColor : '#777';
+                arrow1.setAttribute('fill', finalColor);
+                arrow2.setAttribute('fill', finalColor);
+            })
+            .catch(() => {
+                document.getElementById('statusIndicator').innerHTML = '<span class="status-fail">● Connection error</span>';
+            });
+    }
+
+    // Small helper utilities
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+    // fetch, but never throw on non-2xx; return Response or null on network error
+    async function fetchSafe(url, opts = {}) {
+        try {
+            return await fetch(url, opts);
+        } catch (e) {
+            return null;
+        }
+    }
+    async function fetchWithRetry(url, opts = {}, maxAttempts = 5, delayMs = 300) {
+        let lastErr;
+        for (let i = 0; i < maxAttempts; i++) {
+            try {
+                const res = await fetch(url, opts);
+                if (res.ok) return res;
+                lastErr = new Error(`HTTP ${res.status}`);
+            } catch (e) {
+                lastErr = e;
+            }
+            await sleep(delayMs);
+            delayMs = Math.min(Math.floor(delayMs * 1.6), 2000);
+        }
+        throw lastErr;
+    }
+
+    function fetchConfig() {
+        fetch(api('config'))
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('configTree').innerHTML = renderConfigTree(data);
+            })
+            .catch(() => {
+                document.getElementById('configTree').textContent = 'Error loading configuration.';
+            });
+    }
+
+    // Format: "<bytes> (<GB> GB)"
+    function bytesWithGBStr(v) {
+        if (v == null || typeof v !== 'number' || v < 0) return '';
+        const gb = v / (1024 * 1024 * 1024);
+        return `${v.toLocaleString()} (${gb.toFixed(2)} GB)`;
+    }
+    // Format: "<bytes> (<MB> MB)"
+    function bytesWithMBStr(v) {
+        if (v == null || typeof v !== 'number' || v < 0) return '';
+        const mb = v / (1024 * 1024);
+        return `${v.toLocaleString()} (${mb.toFixed(2)} MB)`;
+    }
+    // Format times on one line: "<µs> µs (<ms> ms, <s> s)"
+    function formatTimeAllUnits(us) {
+        if (us == null || typeof us !== 'number' || us < 0) return '';
+        const ms = us / 1000;
+        const s  = ms / 1000;
+        const usStr = us.toLocaleString();
+        return `${usStr} µs (${ms.toFixed(2)} ms, ${s.toFixed(3)} s)`;
+    }
+
+    async function fetchScanStats() {
+        try {
+            const res = await fetch(r.scan.stats());
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (e) {
+            throw e;
+        }
+    }
+
+    function renderStats(stats) {
+        if (!stats || typeof stats !== 'object') {
+            return '<p>No statistics available.</p>';
+        }
+
+        const rows = [
+            ['Files Scanned (total)', stats.files_scanned],
+            ['\u2514\u2500 Benign', stats.benign_count],
+            ['\u2514\u2500 Malicious', stats.malicious_count],
+            ['\u2514\u2500 Unknown', stats.unknown_count],
+            ['\u2514\u2500 Unsupported', stats.unsupported_count],
+            ['\u2514\u2500 Not Scanned', stats.not_scanned_count],
+            ['<span style="margin-left: 16px;">\u2514\u2500 Encrypted</span>', stats.encrypted_count],
+            ['Total Scan Time', formatTimeAllUnits(stats.total_scan_time_in_microseconds)],
+            ['Total Bytes Scanned', bytesWithGBStr(stats.total_file_size)],
+            ['Average File Size (bytes)', bytesWithMBStr(stats.avg_file_size)],
+            ['Average Scan Time', formatTimeAllUnits(stats.avg_scan_time_in_microseconds)],
+            ['Median File Size (bytes)', bytesWithMBStr(stats.median_file_size_in_bytes)],
+            ['Median Scan Time', formatTimeAllUnits(stats.median_scan_time_in_microseconds)],
+            ['Longest Scan File', stats.longest_scan_time_file],
+            ['Longest Scan File Size (bytes)', bytesWithGBStr(stats.longest_scan_time_file_size_in_bytes)],
+            ['Longest Scan Time', formatTimeAllUnits(stats.longest_scan_time_in_microseconds)],
+        ];
+
+        const table = `
+            <table style="width:100%; border-collapse: collapse; font-size: 0.9rem;">
+                <tbody>
+                    ${rows.map(([k,v]) => `
+                        <tr>
+                            <td style="padding: 6px 8px; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); width: 45%;">${k}</td>
+                            <td style="padding: 6px 8px; border-bottom: 1px solid var(--border-color); color: var(--text-primary);">${v ?? ''}</td>
+                        </tr>`).join('')}
+                </tbody>
+            </table>
+        `;
+        return table;
+    }
+
+    async function fetchConnectors() {
+        try {
+            const listRes = await fetch(r.connectors.list());
+            if (!listRes.ok) throw new Error(`list ${listRes.status}`);
+            const connectors = await listRes.json();
+
+            const results = await Promise.all((connectors || []).map(async (conn) => {
+                const rz = await fetchSafe(r.connectors.readyz(conn.uuid));
+                const ready = !!(rz && rz.ok);
+                let body = {};
+                try { body = rz ? await rz.json().catch(() => ({})) : {}; } catch {}
+                let cfg = {};
+                try { const c = await fetchSafe(r.connectors.config(conn.uuid)); cfg = c ? await c.json() : {}; } catch {}
+                return { conn, ready, statusBody: { ...body, ...cfg } };
+            }));
+
+            const container = document.getElementById('connectorsGrid');
+            container.innerHTML = '';
+            if (!results.length) {
+                container.innerHTML = '<p style="color: var(--text-secondary);">No connectors registered.</p>';
+                return;
+            }
+            results.forEach(({ conn, ready, statusBody }, idx) => {
+                const card = renderConnectorCard(conn, /* cfg */ statusBody, idx, ready);
+                container.appendChild(card);
+            });
+        } catch (e) {
+            document.getElementById('connectorsGrid').textContent = 'Error loading connectors.';
+        }
+    }
+
+function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
+        showNotification(`Starting full scan for ${connectorName}...`, 'info');
+
+        fetch(scanUrl, { method: 'POST' })
+            .then(async (res) => {
+                let jobId = res.headers.get('X-Job-Id');
+                let json;
+                try { json = await res.json(); } catch { json = {}; }
+                if (!jobId && json && typeof json.description === 'string') {
+                    const m = json.description.match(/job_id=([0-9a-fA-F\-]{8,})/);
+                    if (m) jobId = m[1];
+                }
+                if (json.status === 'success') {
+                    const extra = json.description ? ` (${json.description})` : '';
+                    showNotification(`Full scan initiated for ${connectorName}${extra}`, 'success');
+                    if (jobId) {
+                        rememberActiveJob(jobId, connectorUuid);
+                        const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+                        if (noteEl) noteEl.textContent = `Job ${jobId.substring(0,8)}… started`;
+                        // Clear any persisted last-scan note for this connector until this run completes
+                        try {
+                            const raw = localStorage.getItem('lastScansByConnector') || '{}';
+                            const obj = JSON.parse(raw);
+                            if (obj[connectorUuid]) { delete obj[connectorUuid]; localStorage.setItem('lastScansByConnector', JSON.stringify(obj)); }
+                        } catch {}
+                        updateActionButtonsByUuid(connectorUuid, 'running', jobId);
+                    }
+                } else {
+                    showNotification(`Scan failed for ${connectorName}: ${json.message}`, 'error');
+                }
+            })
+            .catch(err => {
+                showNotification(`Scan error for ${connectorName}: ${err.message}`, 'error');
+            });
+    }
+
+function invokeSampleScanByUuid(connectorUuid, scanUrl, connectorName, n = 5) {
+        const limit = Number(n) || 5;
+        showNotification(`Starting sample scan (limit=${limit}) for ${connectorName}...`, 'info');
+        fetch(`${scanUrl}?limit=${limit}`, { method: 'POST' })
+            .then(async (res) => {
+                let jobId = res.headers.get('X-Job-Id');
+                let json;
+                try { json = await res.json(); } catch { json = {}; }
+                if (!jobId && json && typeof json.description === 'string') {
+                    const m = json.description.match(/job_id=([0-9a-fA-F\-]{8,})/);
+                    if (m) jobId = m[1];
+                }
+                if (json.status === 'success') {
+                    const extra = json.description ? ` (${json.description})` : '';
+                    showNotification(`Sample scan queued for ${connectorName}${extra}`, 'success');
+                    if (jobId) {
+                        rememberActiveJob(jobId, connectorUuid);
+                        const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+                        if (noteEl) noteEl.textContent = `Job ${jobId.substring(0,8)}… started`;
+                        updateActionButtonsByUuid(connectorUuid, 'running', jobId);
+                    }
+                } else {
+                    showNotification(`Sample scan failed for ${connectorName}: ${json.message}`, 'error');
+                }
+            })
+            .catch(err => {
+                showNotification(`Sample scan error for ${connectorName}: ${err.message}`, 'error');
+            });
+    }
+
+    // No startJobSummarySSE: progress comes via scan-result SSE only.
+
+    // removed idx-based updater (use updateActionButtonsByUuid)
+
+function addCompletionBadgeByUuid(connectorUuid, status) {
+    const card = document.querySelector(`.connector-card[data-connector-uuid='${connectorUuid}']`);
+        if (!card) return;
+        let badge = card.querySelector('.job-complete-badge');
+        if (!badge) {
+            badge = document.createElement('span');
+            badge.className = 'job-complete-badge pill pill-base';
+            badge.style.marginLeft = '8px';
+            const header = card.querySelector('h4');
+            if (header) header.appendChild(badge);
+        }
+        badge.textContent = status === 'cancelled' ? 'Cancelled' : 'Completed';
+    }
+
+    function setJobIdPillByUuid(connectorUuid, jobId) {
+    const pill = document.getElementById(`job-pill-${connectorUuid}`);
+    const copy = document.getElementById(`job-copy-${connectorUuid}`);
+        if (!pill) return;
+        const shortId = jobId ? jobId.substring(0,8) + '…' : '';
+        if (jobId) {
+            pill.textContent = `job ${shortId}`;
+            pill.title = jobId;
+            pill.style.display = 'inline';
+            if (copy) {
+                copy.style.display = 'inline';
+                copy.onclick = async () => {
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(jobId);
+                        } else {
+                            // Fallback for insecure contexts: temp textarea copy
+                            const ta = document.createElement('textarea');
+                            ta.value = jobId; document.body.appendChild(ta); ta.select();
+                            document.execCommand('copy'); document.body.removeChild(ta);
+                        }
+                        showNotification('Job id copied', 'info');
+                    } catch (e) {
+                        showNotification('Copy failed', 'error');
+                    }
+                };
+            }
+        } else {
+            pill.textContent = '';
+            pill.title = '';
+            pill.style.display = 'none';
+            if (copy) { copy.style.display = 'none'; copy.onclick = null; }
+        }
+    }
+
+    // removed idx-based setJobIdPill (use setJobIdPillByUuid)
+
+    // Persisted last-scan note per connector
+    function setLastScanNote(connectorUuid, { jobId, processed, durationSecs }) {
+        try {
+            const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+            if (noteEl) {
+                const durStr = (function fmtDur(s) {
+                    if (s == null || isNaN(s)) return '';
+                    s = Math.max(0, Number(s));
+                    const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600);
+                    const m = Math.floor((s % 3600) / 60); const sec = Math.floor(s % 60);
+                    return d > 0 ? `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+                                 : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+                })(durationSecs);
+                const copyId = `lastscan-copy-${connectorUuid}`;
+                noteEl.innerHTML = `Last scan (${processed}${durStr ? ` / ${durStr}` : ''}):
+                    <code title="${jobId}" style="font-family: var(--font-mono);">${jobId.substring(0,8)}…</code>
+                    <button id="${copyId}" class="job-id-copy" title="Copy job id"><i class=\"far fa-copy\"></i></button>`;
+                setTimeout(() => {
+                    const btn = document.getElementById(copyId);
+                    if (btn) {
+                        btn.onclick = async () => {
+                            try {
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    await navigator.clipboard.writeText(jobId);
+                                } else {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = jobId; document.body.appendChild(ta); ta.select();
+                                    document.execCommand('copy'); document.body.removeChild(ta);
+                                }
+                                showNotification('Job id copied', 'info');
+                            } catch (e) { showNotification('Copy failed', 'error'); }
+                        };
+                    }
+                }, 0);
+            }
+            const raw = localStorage.getItem('lastScansByConnector') || '{}';
+            const obj = JSON.parse(raw);
+            obj[connectorUuid] = { jobId, processed, durationSecs };
+            localStorage.setItem('lastScansByConnector', JSON.stringify(obj));
+        } catch {}
+    }
+    function loadLastScanNotes() {
+        try {
+            const raw = localStorage.getItem('lastScansByConnector') || '{}';
+            const obj = JSON.parse(raw);
+            Object.entries(obj).forEach(([uuid, info]) => {
+                setLastScanNote(uuid, info || {});
+            });
+        } catch {}
+    }
+
+    // Results filter UI helpers
+    function setResultsNotice(msg = '') {
+        const el = document.getElementById('scanResultsNotice');
+        if (!el) return;
+        if (msg && msg.trim()) {
+            el.textContent = msg;
+            el.style.display = '';
+        } else {
+            el.textContent = '';
+            el.style.display = 'none';
+        }
+    }
+    function ensureJobInFilter(jobId, connectorName) {
+        if (!jobId) return;
+        // Remember connector name (if provided), persist
+        if (connectorName && (!jobMeta[jobId] || !jobMeta[jobId].connectorName)) {
+            jobMeta[jobId] = { ...(jobMeta[jobId] || {}), connectorName };
+            try { localStorage.setItem('jobMeta', JSON.stringify(jobMeta)); } catch {}
+        }
+        const sel = document.getElementById('jobFilter');
+        if (!sel) return;
+        let opt = [...sel.options].find(o => o.value === jobId);
+        const label = jobMeta[jobId] && jobMeta[jobId].connectorName ? `${jobId} (${jobMeta[jobId].connectorName})` : jobId;
+        if (!opt) {
+            opt = document.createElement('option');
+            opt.value = jobId; opt.title = jobId; opt.textContent = label;
+            sel.appendChild(opt);
+        } else {
+            // Update label if improved metadata
+            if (opt.textContent !== label) opt.textContent = label;
+        }
+        if (!seenJobIds.has(jobId)) seenJobIds.add(jobId);
+        if (currentJobFilter) sel.value = currentJobFilter;
+    }
+    function updateOpenApiButtonState() {
+        const btn = document.getElementById('jobFilterOpenApi');
+        const sel = document.getElementById('jobFilter');
+        if (!btn || !sel) return;
+        const jid = sel.value || '';
+        btn.disabled = !jid;
+        btn.onclick = () => {
+            if (!jid) return;
+            const url = `${API_BASE}/scan/results?limit=${MAX_RESULTS}&job_id=${encodeURIComponent(jid)}`;
+            window.open(url, '_blank', 'noopener');
+        };
+    }
+
+    async function applyResultsFilter() {
+        const sel = document.getElementById('jobFilter');
+        if (!sel) return;
+        currentJobFilter = sel.value || '';
+        localStorage.setItem('jobFilter', currentJobFilter);
+        updateOpenApiButtonState();
+        // If a specific job is selected and it differs from current focus, load full results for that job
+        if (currentJobFilter && currentJobFilter !== jobFocusJobId) {
+            jobFocusJobId = currentJobFilter;
+            try {
+                const res = await fetch(`${API_BASE}/scan/results?limit=${MAX_RESULTS}&job_id=${encodeURIComponent(jobFocusJobId)}`);
+                if (res.ok) {
+                    const items = await res.json();
+                    // Clear table and render all items for the job (no trimming while focused)
+                    const body = document.getElementById('scanResultsBody');
+                    body.innerHTML = '';
+                    if (!items || !items.length) {
+                        const tr = document.createElement('tr');
+                        tr.id = 'noResultsRow';
+                        tr.innerHTML = `<td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 1rem; border: none;">No scan results</td>`;
+                        body.appendChild(tr);
+                        // Check if results may have been pruned
+                        try {
+                            const js = await fetch(r.scan.jobs.status(jobFocusJobId));
+                            if (js && js.ok) {
+                                const jd = await js.json();
+                                const proc = Number(jd.processed_count || 0);
+                                if (proc > 0) {
+                                    setResultsNotice('No results returned for this job. Results may have been pruned by retention. For full history, use your syslog/SIEM collectors.');
+                                } else {
+                                    setResultsNotice('');
+                                }
+                            } else {
+                                setResultsNotice('');
+                            }
+                        } catch { setResultsNotice(''); }
+                    } else {
+                        setResultsNotice('');
+                        items.forEach(it => renderScanResult(it));
+                    }
+                }
+            } catch {}
+        } else if (!currentJobFilter) {
+            // Leaving focus mode
+            jobFocusJobId = '';
+        }
+        const body = document.getElementById('scanResultsBody');
+        const rows = body ? [...body.querySelectorAll('tr[data-result-row]')] : [];
+        rows.forEach(tr => {
+            const jid = tr.dataset.jobId || '';
+            tr.style.display = (!currentJobFilter || jid === currentJobFilter) ? '' : 'none';
+            const detail = document.getElementById(tr.dataset.detailId || '');
+            if (detail) detail.style.display = (!currentJobFilter || jid === currentJobFilter) ? (detail.style.display || 'none') : 'none';
+        });
+    }
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'jobFilter') applyResultsFilter();
+    });
+    function rememberActiveJob(jobId, connectorUuid) {
+        try {
+            const raw = localStorage.getItem('activeJobs');
+            const obj = raw ? JSON.parse(raw) : {};
+            obj[jobId] = { connectorUuid };
+            localStorage.setItem('activeJobs', JSON.stringify(obj));
+        } catch {}
+        try {
+            const actions = document.getElementById(`actions-${connectorUuid}`);
+            if (actions) actions.dataset.jobId = jobId;
+            setJobIdPillByUuid(connectorUuid, jobId);
+        } catch {}
+    }
+    function forgetActiveJob(jobId) {
+        try {
+            const raw = localStorage.getItem('activeJobs');
+            const obj = raw ? JSON.parse(raw) : {};
+            if (obj[jobId]) { delete obj[jobId]; localStorage.setItem('activeJobs', JSON.stringify(obj)); }
+        } catch {}
+        try {
+            const pills = document.querySelectorAll('.job-id-pill');
+            pills.forEach(p => {
+                if ((p.title || '') === jobId) {
+                    p.style.display = 'none';
+                    p.textContent = '';
+                    p.title = '';
+                }
+            });
+        } catch {}
+    }
+    async function rehydrateActiveJobs() {
+        try {
+            const raw = localStorage.getItem('activeJobs');
+            const obj = raw ? JSON.parse(raw) : {};
+            const entries = Object.entries(obj);
+            for (const [jobId, val] of entries) {
+                const uuid = val?.connectorUuid;
+                if (!uuid) continue;
+                const card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === uuid);
+                if (!card) continue;
+                // One-shot verify status from API to clear stale state
+                try {
+                    const res = await fetch(r.scan.jobs.status(jobId));
+                    if (!res.ok) throw new Error(String(res.status));
+                    const data = await res.json();
+                    const status = (data.status || '').toLowerCase();
+                    const toInt = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+                    const enqTotal = ('enqueued_total' in data) ? toInt(data.enqueued_total, -1) : -1;
+                    const enqCount = ('enqueued_count' in data) ? toInt(data.enqueued_count, -1) : -1;
+                    const expected = ('expected_total' in data) ? toInt(data.expected_total, -1) : -1;
+                    const total = enqTotal > 0 ? enqTotal : (expected > 0 ? expected : (enqCount > 0 ? enqCount : -1));
+                    const proc = toInt(data.processed_count, 0);
+                    const finishedAt = toInt(data.finished_at, 0);
+                    const lastUpdate = toInt(data.last_update, 0);
+                    const nowSec = Math.floor(Date.now() / 1000);
+                    const enqueueDone = String(data.enqueue_done || '') === '1';
+
+                    const isComplete = (
+                        status === 'completed' || status === 'cancelled' ||
+                        (finishedAt > 0) ||
+                        (total > 0 && proc >= total) ||
+                        (enqueueDone && ((enqTotal > 0 && proc >= enqTotal) || (expected > 0 && proc >= expected)))
+                    );
+
+                    const isStale = lastUpdate && (nowSec - lastUpdate) > 120; // 2 minutes inactivity
+
+                    if (isComplete || isStale) {
+                        // Mark UI done and persist a last-scan note so it remains visible until next scan
+                        updateActionButtonsByUuid(uuid, 'done', jobId);
+                        setLastScanNote(uuid, { jobId, processed: proc, durationSecs: (toInt(data.duration_secs, null)) });
+                        forgetActiveJob(jobId);
+                        continue;
+                    }
+                    // Running/paused: set buttons accordingly
+                    if (status === 'paused') {
+                        updateActionButtonsByUuid(uuid, 'paused', jobId);
+                    } else {
+                        updateActionButtonsByUuid(uuid, 'running', jobId);
+                    }
+                    setJobIdPillByUuid(uuid, jobId);
+                } catch {
+                    // If job not found or API error, revert to Full Scan (no badge on rehydrate)
+                    updateActionButtonsByUuid(uuid, 'done', jobId);
+                    forgetActiveJob(jobId);
+                }
+            }
+        } catch {}
+    }
+
+
+    // ===== CONNECTOR MANAGEMENT =====
+    function renderConnectorCard(conn, cfg = {}, idx = 0, isReady = false) {
+        const scanUrl   = r.connectors.fullscan(conn.uuid);
+        const readyzUrl = r.connectors.readyz(conn.uuid);
+        const configUrl = r.connectors.config(conn.uuid);
+
+        const card = document.createElement('div');
+        card.classList.add('connector-card');
+        card.dataset.connectorUuid = conn.uuid;
+        card.dataset.index = String(idx);
+
+        const dotColor = isReady ? 'var(--card-status-ok)' : '#f59e0b';
+        const dotTitle = isReady ? 'Ready' : 'Not ready';
+
+        const displayName = (cfg && cfg.display_name) ? cfg.display_name : conn.name;
+        card.innerHTML = `
+            <h4>
+                ${renderConnectorIcon(conn.name, (cfg && cfg.display_icon) ? cfg.display_icon : '')}
+                <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${displayName}">${displayName}</span>
+                <div style="margin-left: auto; display: flex; align-items: center; gap: 0.75rem;">
+                    <span class="connector-status" style="
+                        display: inline-block;
+                        width: 8px;
+                        height: 8px;
+                        background: ${dotColor};
+                        border-radius: 50%;
+                        animation: pulse 2s infinite;
+                    " title="${dotTitle}"></span>
+                    <i class="fas fa-cog"
+                       style="font-size: 0.9rem; cursor: pointer; color: var(--text-secondary); opacity: 0.7; transition: opacity 0.2s;"
+                       title="View configuration"
+                       onclick="showConnectorConfig('${conn.uuid}', '${(displayName || '').replace(/'/g, "\'")}')"
+                       onmouseover="this.style.opacity='1'"
+                       onmouseout="this.style.opacity='0.7'">
+                    </i>
+                </div>
+            </h4>
+            <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem; display:flex; align-items:center; gap:4px;">
+                <span>UUID: ${conn.uuid}</span>
+                <button class="job-id-copy" title="Copy connector UUID"
+                        onclick="(async () => { try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText('${conn.uuid}'); } else { const ta=document.createElement('textarea'); ta.value='${conn.uuid}'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);} showNotification('Connector UUID copied','info'); } catch(e) { showNotification('Copy failed','error'); } })()">
+                    <i class="far fa-copy"></i>
+                </button>
+            </div>
+            ${cfg && (cfg.asset_display_name || cfg.asset || cfg.filter || cfg.resolved_asset_base) ? `
+                <div class="asset-line" title="${cfg.asset || cfg.resolved_asset_base || cfg.asset_display_name || ''}"><span class="kv">Asset:</span> ${cfg.asset_display_name || cfg.resolved_asset_base || cfg.asset || 'n/a'}</div>
+                <div class="filter-line" title="${cfg.filter || ''}"><span class="kv">Filter:</span> ${cfg.filter || 'n/a'}</div>
+            ` : ''}
+            <div id="actions-${conn.uuid}" data-scan-url="${scanUrl}" data-connector-name="${conn.name.replace(/'/g, "\'")}" data-connector-uuid="${conn.uuid}" style="display:flex; gap: 0.5rem; align-items: baseline; margin-top: 0.75rem; flex-wrap: wrap;">
+                <button onclick="invokeFullScanByUuid('${conn.uuid}', '${scanUrl}', '${conn.name.replace(/'/g, "\'")}')">Full Scan</button>
+                <span class="job-id-pill" id="job-pill-${conn.uuid}" style="display:none"></span>
+            </div>
+            <span class="scan-note" id="scan-note-${conn.uuid}"></span>
+        `;
+        return card;
+    }
+
+    // ===== STATS MODAL TOGGLE =====
+    async function openStatsModal() {
+        statsModal.style.display = 'block';
+        statsModalContent.innerHTML = 'Loading scan statistics...';
+        try {
+            const stats = await fetchScanStats();
+            statsModalContent.innerHTML = renderStats(stats);
+        } catch (e) {
+            statsModalContent.innerHTML = `<div class="config-error">Failed to load stats: ${e?.message || e}</div>`;
+        }
+    }
+
+    function closeStatsModal() {
+        statsModal.style.display = 'none';
+    }
+
+    statsIcon.addEventListener('click', openStatsModal);
+    statsModalClose.addEventListener('click', closeStatsModal);
+    window.addEventListener('click', (event) => {
+        if (event.target === statsModal) {
+            closeStatsModal();
+        }
+    });
+
+    async function updateConnectorCard(message) {
+        // message has: type, uuid, name, url
+        const uuid = message.uuid;
+        const container = document.getElementById('connectorsGrid');
+        const cards = container.querySelectorAll('.connector-card');
+        let target = null;
+        cards.forEach(card => { if (card.dataset.connectorUuid === uuid) target = card; });
+        // Build a minimal conn object
+        const conn = { uuid: uuid, name: message.name || 'connector', url: message.url || '' };
+        // Brief delay to let the connector finish standing up its API
+        await sleep(200);
+        // Fetch readiness + config with retries to avoid race right after registration
+        let ready = false, cfg = {};
+        try { const rz = await fetchSafe(r.connectors.readyz(uuid)); ready = !!(rz && rz.ok); } catch {}
+        try { const c = await fetchSafe(r.connectors.config(uuid)); cfg = c ? await c.json() : {}; } catch {}
+        // Preserve the existing index if the card already exists; else append at the end
+        const idx = target ? Number(target.dataset.index) : container.children.length;
+        const newCard = renderConnectorCard(conn, cfg, idx, ready);
+        if (target) {
+            container.replaceChild(newCard, target);
+        } else {
+            if (container.textContent.includes('No connectors registered')) {
+                container.innerHTML = '';
+            }
+            container.appendChild(newCard);
+        }
+        // Re-apply any persisted last-scan note for this connector (card was re-rendered)
+        try {
+            const raw = localStorage.getItem('lastScansByConnector') || '{}';
+            const obj = JSON.parse(raw);
+            const info = obj[uuid];
+            if (info && info.jobId) {
+                setLastScanNote(uuid, info);
+            }
+        } catch {}
+        // If still not ready or config missing, schedule one background refresh
+        if (!ready || !(cfg && (cfg.asset || cfg.filter || cfg.resolved_asset_base))) {
+            setTimeout(async () => {
+                try {
+                    const rz = await fetchSafe(r.connectors.readyz(uuid));
+                    const c = await fetchSafe(r.connectors.config(uuid));
+                    const freshCfg = c ? await c.json() : {};
+                    const refreshed = renderConnectorCard(conn, freshCfg, idx, !!(rz && rz.ok));
+                    const cardsNow = container.querySelectorAll('.connector-card');
+                    let targetNow = null;
+                    cardsNow.forEach(card => { if (card.dataset.connectorUuid === uuid) targetNow = card; });
+                    if (targetNow) {
+                        container.replaceChild(refreshed, targetNow);
+                        // Re-apply persisted last-scan note after refresh
+                        try {
+                            const raw = localStorage.getItem('lastScansByConnector') || '{}';
+                            const obj = JSON.parse(raw);
+                            const info = obj[uuid];
+                            if (info && info.jobId) {
+                                setLastScanNote(uuid, info);
+                            }
+                        } catch {}
+                    }
+                } catch {}
+            }, 1200);
+        }
+    }
+
+    function handleConnectorUnregister(uuid, reason = 'unknown') {
+        console.log(`Handling connector removal for UUID: ${uuid}, reason: ${reason}`);
+
+        const container = document.getElementById('connectorsGrid');
+        const connectorCards = container.querySelectorAll('.connector-card');
+
+        let connectorName = 'Unknown';
+        let removed = false;
+
+        connectorCards.forEach(card => {
+            if (card.dataset.connectorUuid === uuid) {
+                const nameElement = card.querySelector('h4');
+                if (nameElement) {
+                    connectorName = nameElement.textContent.trim().replace(/\s+/g, ' ');
+                }
+
+                card.remove();
+                removed = true;
+                console.log(`Removed connector card for ${connectorName} (${uuid})`);
+            }
+        });
+
+        if (removed) {
+            seenConnectors.delete(uuid);
+            connectorLastSeen.delete(uuid);
+
+            const messages = {
+                'disconnected': `${connectorName} disconnected`,
+                'timeout': `${connectorName} timed out`,
+                'unknown': `${connectorName} removed`
+            };
+
+            showNotification(messages[reason] || messages['unknown'], 'warning');
+        }
+
+        if (container.children.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary);">No connectors registered.</p>';
+        }
+    }
+
+    async function handleNewConnector(newConnector) {
+        const container = document.getElementById('connectorsGrid');
+
+        if (container.textContent.includes("No connectors registered")) {
+            container.innerHTML = '';
+        }
+
+        let config = {};
+        try {
+            const res = await fetch(r.connectors.config(newConnector.uuid));
+            if (res.ok) {
+                config = await res.json();
+            }
+        } catch (e) {
+            console.warn('Error fetching config for new connector', e);
+        }
+
+        const idx = container.children.length;
+        const card = renderConnectorCard(newConnector, config, idx);
+        container.appendChild(card);
+
+        showNotification(`${newConnector.name} connected`, 'success');
+    }
+
+    // ===== SCAN RESULTS =====
+    function renderScanResult(data) {
+        if (!data || typeof data !== 'object') return;
+        // Unwrap nested { type: 'scan_result', scan_result: {...} }
+        const rec = (data.scan_result && typeof data.scan_result === 'object') ? data.scan_result : data;
+        if (!rec || (rec.verdict == null && rec.scan_request == null)) return;
+        const tableBody = document.getElementById('scanResultsBody');
+        const noResultsRow = document.getElementById('noResultsRow');
+        if (noResultsRow) noResultsRow.remove();
+
+        const jobId = rec.scan_job_id || (rec.scan_request && rec.scan_request.scan_job_id) || '';
+        const connectorName = rec?.scan_request?.connector?.name || '';
+        ensureJobInFilter(jobId, connectorName);
+
+        const verdict = rec.verdict;
+        let verdictClass = 'verdict-unknown';
+        let verdictIcon = 'fa-exclamation-triangle';
+
+        if (verdict?.verdict) {
+            const v = verdict.verdict.toLowerCase();
+            const reason = verdict.verdict_details?.reason?.toLowerCase();
+
+            if (v === 'not scanned' && reason === 'encrypted file') {
+                verdictIcon = 'fa-lock';
+            } else if (v === 'malicious') {
+                verdictClass = 'verdict-malicious';
+                verdictIcon = 'fa-virus';
+            } else if (v === 'benign') {
+                verdictClass = 'verdict-benign';
+                verdictIcon = 'fa-check-circle';
+            }
+        }
+
+        const fileType = rec.verdict?.file_info?.file_type || '';
+        const [fileIconClass, colorClass] = getFileTypeIcon(fileType);
+        const uniqueId = `expand-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+
+        const row = document.createElement('tr');
+        row.dataset.resultRow = '1';
+        row.dataset.jobId = jobId;
+        row.classList.add('clickable-row');
+        row.addEventListener('click', () => toggleDetail(uniqueId));
+        row.innerHTML = `
+            <td>
+                <i class="fas ${verdictIcon} verdict-icon ${verdictClass}"></i>
+                <i class="${fileIconClass} ${colorClass}" style="margin-left: 6px;"></i>
+            </td>
+            <td>
+                <span style="display: inline-flex; align-items: center; max-width: 50ch; overflow: hidden; text-overflow: ellipsis;" title="${rec.scan_request?.metainfo}">
+                    ${getConnectorIcon(rec.scan_request?.connector?.name)}
+                    <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                        ${rec.scan_request?.metainfo}
+                    </span>
+                </span>
+            </td>
+            <td>${rec.item_action?.message || '-'}</td>
+        `;
+
+        const detailRow = document.createElement('tr');
+        detailRow.id = uniqueId;
+        detailRow.style.display = 'none';
+        row.dataset.detailId = uniqueId;
+        detailRow.dataset.jobId = jobId;
+        const canAnalyze = (verdict?.verdict || '').toLowerCase() === 'malicious' && rec.scan_request?.connector?.uuid && rec.scan_request?.location;
+        const analyzeBtn = canAnalyze ? `<button id="btn-di-${uniqueId}" class="btn btn-small" style="margin: 6px 0;" title="Analyze with DIANNA">Analyze with DIANNA</button>` : '';
+        detailRow.innerHTML = `
+            <td colspan="3" class="detail-row-content">
+                <div style="margin-bottom: 6px; display:flex; justify-content: space-between; align-items: center; gap: 12px;">
+                    <div>
+                        <strong>Path:</strong>
+                        <span style="white-space: pre-wrap;">${rec.scan_request?.metainfo || '-'}</span>
+                    </div>
+                    ${analyzeBtn}
+                </div>
+                <pre>${JSON.stringify(rec.verdict, null, 2)}</pre>
+            </td>
+        `;
+        if (canAnalyze) {
+            const connectorUuid = String(rec.scan_request.connector.uuid);
+            const location = String(rec.scan_request.location || rec.scan_request.metainfo || '');
+            const metainfo = String(rec.scan_request.metainfo || location);
+            setTimeout(() => {
+                const btn = document.getElementById(`btn-di-${uniqueId}`);
+                if (btn) {
+                    btn.addEventListener('click', async (ev) => {
+                        ev.stopPropagation();
+                        try {
+                            const url = `${API_BASE}/dianna/analyze/${encodeURIComponent(connectorUuid)}`;
+                            const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location, metainfo }) });
+                            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                            const data = await res.json().catch(() => ({}));
+                            showNotification('DIANNA analysis requested', 'success');
+                            console.log('DIANNA task accepted', data);
+                        } catch (e) {
+                            console.error('DIANNA request failed', e);
+                            showNotification('Failed to request DIANNA analysis', 'error');
+                        }
+                    });
+                }
+            }, 0);
+        }
+
+        tableBody.prepend(detailRow);
+        tableBody.prepend(row);
+
+        // Apply filter visibility
+        if (currentJobFilter && jobId && jobId !== currentJobFilter) {
+            row.style.display = 'none';
+        }
+
+        // Trim to MAX_RESULTS regardless of focus
+        try {
+            const kept = [...tableBody.querySelectorAll('tr[data-result-row]')];
+            if (kept.length > MAX_RESULTS) {
+                const extra = kept.length - MAX_RESULTS;
+                const victims = kept.slice(-extra);
+                victims.forEach(v => {
+                    const did = v.dataset.detailId; const drow = did ? document.getElementById(did) : null;
+                    if (drow && drow.parentNode) drow.parentNode.removeChild(drow);
+                    if (v.parentNode) v.parentNode.removeChild(v);
+                });
+            }
+        } catch {}
+    }
+
+    function toggleDetail(id) {
+        const row = document.getElementById(id);
+        if (row) {
+            row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+        }
+    }
+
+    // ===== SSE MANAGEMENT =====
+    class SSEManager {
+        constructor(url, onMessage, onError, maxRetries = 5) {
+            this.url = url;
+            this.onMessage = onMessage;
+            this.onError = onError;
+            this.maxRetries = maxRetries;
+            this.retryCount = 0;
+            this.eventSource = null;
+            this.reconnectDelay = 1000;
+            this.isManuallyClosing = false;
+
+            this.connect();
+        }
+
+        connect() {
+            if (this.eventSource) {
+                this.close();
+            }
+
+            console.log(`Connecting to SSE: ${this.url} (attempt ${this.retryCount + 1})`);
+
+            this.eventSource = new EventSource(this.url);
+
+            this.eventSource.onopen = (event) => {
+                console.log(`SSE connection opened: ${this.url}`);
+                this.retryCount = 0;
+                this.reconnectDelay = 1000;
+            };
+
+            this.eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'heartbeat') {
+                        console.log(`Heartbeat received from ${this.url}`);
+                        return;
+                    }
+
+                    if (data.type === 'connected') {
+                        console.log(`Connection confirmed: ${data.message}`);
+                        return;
+                    }
+
+                    if (data.type === 'error') {
+                        console.error(`Server error on ${this.url}:`, data.message);
+                        this.handleError();
+                        return;
+                    }
+
+                    this.onMessage(event);
+
+                } catch (e) {
+                    console.error(`Error parsing SSE message from ${this.url}:`, e, event.data);
+                }
+            };
+
+            this.eventSource.onerror = (event) => {
+                console.error(`SSE error for ${this.url}:`, event);
+
+                if (this.isManuallyClosing) {
+                    return;
+                }
+
+                this.handleError();
+            };
+        }
+
+        handleError() {
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+
+            if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+
+                console.log(`Reconnecting to ${this.url} in ${this.reconnectDelay}ms (attempt ${this.retryCount}/${this.maxRetries})`);
+
+                setTimeout(() => {
+                    if (!this.isManuallyClosing) {
+                        this.connect();
+                    }
+                }, this.reconnectDelay);
+
+                this.reconnectDelay = Math.min(this.reconnectDelay * 2 + Math.random() * 1000, 30000);
+            } else {
+                console.error(`Failed to connect to ${this.url} after ${this.maxRetries} attempts`);
+                if (this.onError) {
+                    this.onError(`Max retries (${this.maxRetries}) exceeded for ${this.url}`);
+                }
+            }
+        }
+
+        close() {
+            this.isManuallyClosing = true;
+            if (this.eventSource) {
+                this.eventSource.close();
+                this.eventSource = null;
+            }
+        }
+
+        isConnected() {
+            return this.eventSource && this.eventSource.readyState === EventSource.OPEN;
+        }
+    }
+    function initializeSSEConnections() {
+        if (scanResultsSSE) scanResultsSSE.close();
+        if (connectorRegistrationSSE) connectorRegistrationSSE.close();
+
+        const safeParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+        const isNoise = (m) => !m || m.type === 'connected' || m.type === 'heartbeat';
+
+        // Scan results stream
+        scanResultsSSE = new SSEManager(
+            api('subscribe/scan-result'),
+            (event) => {
+                const message = safeParse(event.data);
+                if (isNoise(message)) return;
+                if (!message || typeof message !== 'object') return;
+                // Handle DIANNA analysis notifications (lightweight toast)
+                if (message.type === 'dianna_enqueued') {
+                    const loc = message.location || '(unknown file)';
+                    showNotification(`DIANNA analysis requested: ${loc}`, 'success');
+                    return;
+                }
+                if (message.type === 'dianna_analysis') {
+                    const loc = message.location || '(unknown file)';
+                    const st = String(message.status || '').toUpperCase();
+                    if (st === 'QUEUED') {
+                        showNotification(`DIANNA analysis queued: ${loc}`, 'info');
+                        return;
+                    }
+                    if (st === 'SUCCESS') {
+                        const mal = (message.is_malicious === true) || (message.analysis && message.analysis.isFileMalicious === true);
+                        const tag = mal ? 'warning' : 'success';
+                        const verdictLabel = mal ? 'Malicious' : 'Ready';
+                        showNotification(`DIANNA analysis ${verdictLabel}: ${loc}`, tag);
+                        return;
+                    }
+                    if (st === 'FAILED' || st === 'ERROR') {
+                        const reason = message.error ? String(message.error) : '';
+                        const suffix = reason ? ` (${reason})` : '';
+                        showNotification(`DIANNA analysis failed: ${loc}${suffix}`, 'error');
+                        return;
+                    }
+                    if (st === 'CANCELLED') {
+                        showNotification(`DIANNA analysis cancelled: ${loc}`, 'warning');
+                        return;
+                    }
+                    // Fallback for older worker payloads
+                    showNotification(`DIANNA analysis updated: ${loc}`, 'info');
+                    return;
+                }
+                // Unwrap nested scan_result payloads for rendering
+                const rec = (message && message.scan_result) ? message.scan_result : message;
+                console.log('Received scan result:', rec);
+                renderScanResult(rec);
+                // Update any job progress UI from this event (no polling)
+                try {
+                    const job = message && message.job ? message.job : (rec && rec.scan_request && rec.scan_request.scan_job_id ? { job_id: rec.scan_request.scan_job_id } : null);
+                    if (job && job.job_id) {
+                        const mappingRaw = localStorage.getItem('activeJobs');
+                        const mapping = mappingRaw ? JSON.parse(mappingRaw) : {};
+                        const cv = mapping[job.job_id] && mapping[job.job_id].connectorUuid;
+                        let card = null;
+                        if (cv) {
+                            card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === cv);
+                        }
+                        if (!card && rec && rec.scan_request && rec.scan_request.connector && rec.scan_request.connector.uuid) {
+                            card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === rec.scan_request.connector.uuid);
+                        }
+                        if (card) {
+                            const connectorUuid = String(card.dataset.connectorUuid);
+                            const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+                            const fmtDur = (s) => {
+                                if (s == null || isNaN(s)) return '';
+                                s = Math.max(0, Number(s));
+                                const d = Math.floor(s / 86400); const h = Math.floor((s % 86400) / 3600);
+                                const m = Math.floor((s % 3600) / 60); const sec = Math.floor(s % 60);
+                                return d > 0 ? `${d}d ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+                                             : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+                            };
+                            if (noteEl) {
+                                const proc = Number(job.processed_count || 0);
+                                const totalPref = (job.total != null && job.total >= 0)
+                                                  ? Number(job.total)
+                                                  : ((job.enqueued_total != null && Number(job.enqueued_total) >= 0)
+                                                     ? Number(job.enqueued_total)
+                                                     : ((job.enqueued_count != null && Number(job.enqueued_count) >= 0)
+                                                        ? Number(job.enqueued_count)
+                                                        : null));
+                                const total = (totalPref != null) ? totalPref : '?';
+                                const eta = job.time_remaining || (job.eta_secs != null ? `${job.eta_secs}s` : '');
+                                const dur = (job.duration_secs != null) ? fmtDur(job.duration_secs) : '';
+                                const parts = [
+                                    `Processed ${proc}${total !== '?' ? ` / ${total}` : ''}`,
+                                    eta ? `ETA ${eta}` : null,
+                                    dur ? `Duration ${dur}` : null,
+                                ].filter(Boolean);
+                                noteEl.textContent = parts.join(' • ');
+                            }
+                            const status = (job.status || '').toLowerCase();
+                            if (status === 'paused') {
+                                updateActionButtonsByUuid(connectorUuid, 'paused', job.job_id);
+                            } else if (status === 'completed' || status === 'cancelled') {
+                                updateActionButtonsByUuid(connectorUuid, 'done', job.job_id);
+                                const proc = Number(job.processed_count || 0);
+                                const durS = (job.duration_secs != null) ? Number(job.duration_secs) : null;
+                                setLastScanNote(connectorUuid, { jobId: job.job_id, processed: proc, durationSecs: durS });
+                                forgetActiveJob(job.job_id);
+                            } else if (status) {
+                                // Fallback: if we can infer completion from counts, flip UI immediately
+                                const totalKnown = (job.total != null && job.total >= 0) || (job.enqueued_total != null && Number(job.enqueued_total) >= 0) || (job.enqueued_count != null && Number(job.enqueued_count) >= 0);
+                                const proc = Number(job.processed_count || 0);
+                                const tot = (job.total != null && job.total >= 0) ? Number(job.total)
+                                            : ((job.enqueued_total != null && Number(job.enqueued_total) >= 0) ? Number(job.enqueued_total)
+                                               : ((job.enqueued_count != null && Number(job.enqueued_count) >= 0) ? Number(job.enqueued_count) : null));
+                                if (tot != null && proc >= tot) {
+                                    updateActionButtonsByUuid(connectorUuid, 'done', job.job_id);
+                                    const durS = (job.duration_secs != null) ? Number(job.duration_secs) : null;
+                                    setLastScanNote(connectorUuid, { jobId: job.job_id, processed: proc, durationSecs: durS });
+                                    forgetActiveJob(job.job_id);
+                                } else {
+                                    updateActionButtonsByUuid(connectorUuid, 'running', job.job_id);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) { console.warn('Progress update failed', e); }
+            },
+            (error) => {
+                console.error('Scan results SSE failed:', error);
+                showConnectionError('Scan results stream disconnected');
+            }
+        );
+
+        // Connector registration/unregistration stream
+        connectorRegistrationSSE = new SSEManager(
+            api('subscribe/connector-registered'),
+            async (event) => {
+                const message = safeParse(event.data);
+                if (isNoise(message)) return;
+                console.log('Received connector event:', message);
+
+                if (message.type === 'unregistered') {
+                    handleConnectorUnregister(message.uuid, 'disconnected');
+                    return;
+                }
+
+                if (message.type === 'registered' || message.type === 'refreshed') {
+                    if (!seenConnectors.has(message.uuid)) {
+                        seenConnectors.add(message.uuid);
+                    }
+                    await updateConnectorCard(message);
+                }
+            },
+            (error) => {
+                console.error('Connector registration SSE failed:', error);
+                showConnectionError('Connector registration stream disconnected');
+            }
+        );
+    }
+
+    // ===== EVENT LISTENERS =====
+    gearIcon.addEventListener('click', () => {
+        configSidebar.classList.toggle('active');
+    });
+
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('configSidebar');
+        const gear = document.getElementById('gearIcon');
+
+        if (
+            sidebar.classList.contains('active') &&
+            !sidebar.contains(event.target) &&
+            !gear.contains(event.target)
+        ) {
+            sidebar.classList.remove('active');
+        }
+    });
+
+    // Kick off meta load early (version badge)
+    loadMetaFooter();
+
+    async function showConnectorConfig(uuid, connectorName) {
+        const modal = document.getElementById('configModal');
+        const title = document.getElementById('configModalTitle');
+        const content = document.getElementById('configModalContent');
+
+        // Set title and show modal
+        title.textContent = `Configuration: ${connectorName}`;
+        content.innerHTML = 'Loading configuration...';
+        modal.style.display = 'block';
+
+        try {
+            const response = await fetch(r.connectors.config(uuid));
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const config = await response.json();
+
+            // Build config tree + preview actions
+            const cfgTree = `<div class="config-tree">${renderConfigTree(config)}</div>`;
+            const actions = `
+                <div style="margin-top: 12px; display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
+                  <button id="btn-sample-scan" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Sample Scan 5</button>
+                  <button id="btn-preview" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Show Preview 5</button>
+                </div>
+                <div id="previewList" style="margin-top: 8px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
+            `;
+            content.innerHTML = cfgTree + actions;
+
+            // Wire buttons
+            const scanUrl = r.connectors.fullscan(uuid);
+            document.getElementById('btn-sample-scan').addEventListener('click', () => invokeSampleScanByUuid(uuid, scanUrl, connectorName, 5));
+            document.getElementById('btn-preview').addEventListener('click', async () => {
+                const target = document.getElementById('previewList');
+                target.textContent = 'Loading preview...';
+                try {
+                    const res = await fetch(r.connectors.repocheck(uuid) + '?preview=5');
+                    const data = await res.json();
+                    const list = Array.isArray(data.preview) ? data.preview : [];
+                    if (!list.length) {
+                        target.textContent = 'No preview items (check asset/filter).';
+                    } else {
+                        target.innerHTML = list.map(i => `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${i}</div>`).join('');
+                    }
+                } catch (e) {
+                    target.textContent = 'Failed to load preview';
+                }
+            });
+
+        } catch (error) {
+            console.error('Error fetching connector config:', error);
+            content.innerHTML = `<div class="config-error">Failed to load configuration: ${error.message}</div>`;
+        }
+    }
+
+    // Render configuration as a tree
+    function renderConfigTree(obj, depth = 0) {
+        if (typeof obj !== 'object' || obj === null) {
+            return `<span style="color: #059669;">${JSON.stringify(obj)}</span>`;
+        }
+
+        let html = '<ul>';
+        for (const [key, value] of Object.entries(obj)) {
+            const isObject = typeof value === 'object' && value !== null;
+            html += `<li>`;
+            html += `<strong>${key}:</strong> `;
+
+            if (isObject) {
+                html += renderConfigTree(value, depth + 1);
+            } else {
+                let valueColor = 'var(--text-primary)';
+                if (typeof value === 'number') valueColor = '#f87171';
+                if (typeof value === 'boolean') valueColor = '#818cf8';
+                if (value === null) valueColor = 'var(--text-secondary)';
+
+                html += `<span style="color: ${valueColor};">${JSON.stringify(value)}</span>`;
+            }
+            html += `</li>`;
+        }
+        html += '</ul>';
+        return html;
+    }
+
+    // Modal event handlers
+    function initializeModals() {
+        const modals = document.querySelectorAll('.config-modal');
+        modals.forEach(modal => {
+            const closeBtn = modal.querySelector('.config-modal-close');
+            closeBtn.addEventListener('click', () => {
+                modal.style.display = 'none';
+            });
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                modals.forEach(modal => {
+                    if (modal.style.display === 'block') {
+                        modal.style.display = 'none';
+                    }
+                });
+            }
+        });
+    }
+
+
+    // ===== INITIALIZATION =====
+    async function prefillResultsOnLoad() {
+        try {
+            const url = currentJobFilter
+                ? `${API_BASE}/scan/results?limit=${MAX_RESULTS}&job_id=${encodeURIComponent(currentJobFilter)}`
+                : `${API_BASE}/scan/results?limit=${MAX_RESULTS}`;
+            const res = await fetch(url);
+            if (res && res.ok) {
+                const items = await res.json();
+                const body = document.getElementById('scanResultsBody');
+                if (body) {
+                    body.innerHTML = '';
+                    if (items && items.length) {
+                        items.forEach(it => renderScanResult(it));
+                        setResultsNotice('');
+                    } else {
+                        const tr = document.createElement('tr');
+                        tr.id = 'noResultsRow';
+                        tr.innerHTML = `<td colspan=\"3\" style=\"text-align: center; color: var(--text-secondary); padding: 1rem; border: none;\">No scan results</td>`;
+                        body.appendChild(tr);
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        setTheme(savedTheme);
+
+        initializeModals();
+        fetchConfig();
+        fetchConnectors();
+        initializeSSEConnections();
+        const sel = document.getElementById('jobFilter');
+        if (sel) {
+            sel.value = currentJobFilter;
+            if (currentJobFilter) applyResultsFilter();
+        }
+        loadLastScanNotes();
+        updateOpenApiButtonState();
+        // Prefill results so refresh doesn't show an empty table
+        prefillResultsOnLoad();
+        // Clear button
+        const clearBtn = document.getElementById('scanResultsClear');
+        if (clearBtn) {
+            clearBtn.onclick = () => {
+                try {
+                    // 1) Clear visible results
+                    const body = document.getElementById('scanResultsBody');
+                    if (body) {
+                        body.innerHTML = '';
+                        const tr = document.createElement('tr');
+                        tr.id = 'noResultsRow';
+                        tr.innerHTML = `<td colspan=\"3\" style=\"text-align: center; color: var(--text-secondary); padding: 1rem; border: none;\">No scan results</td>`;
+                        body.appendChild(tr);
+                    }
+                    setResultsNotice('');
+
+                    // 2) Reset job filter state and options (keep only "All")
+                    const sel = document.getElementById('jobFilter');
+                    if (sel) {
+                        // Remove all options after the first
+                        while (sel.options.length > 1) sel.remove(1);
+                        sel.selectedIndex = 0;
+                    }
+                    seenJobIds.clear();
+                    jobMeta = {};
+                    currentJobFilter = '';
+                    jobFocusJobId = '';
+                    try { localStorage.removeItem('jobMeta'); } catch {}
+                    try { localStorage.removeItem('jobFilter'); } catch {}
+                    updateOpenApiButtonState();
+                } catch {}
+            };
+        }
+        // Reconnect any active job summary streams after cards render
+        setTimeout(rehydrateActiveJobs, 800);
+
+        // Health check for SSE connections
+        setInterval(() => {
+            if (scanResultsSSE && scanResultsSSE.isConnected() &&
+                connectorRegistrationSSE && connectorRegistrationSSE.isConnected()) {
+                // Both connections are healthy
+            } else {
+                console.warn('One or more SSE connections are not healthy, attempting to reconnect...');
+                initializeSSEConnections();
+            }
+        }, 60000); // Check every minute
+    });
+
+    // Handle page visibility changes
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            fetchStatus(); // Refresh status when tab is re-focused
+            if (!scanResultsSSE || !scanResultsSSE.isConnected() ||
+                !connectorRegistrationSSE || !connectorRegistrationSSE.isConnected()) {
+                console.log('Page visible and connections down, reconnecting...');
+                initializeSSEConnections();
+            }
+        }
+    });
+
+    // Clean up connections when page unloads
+    window.addEventListener('beforeunload', () => {
+        if (scanResultsSSE) scanResultsSSE.close();
+        if (connectorRegistrationSSE) connectorRegistrationSSE.close();
+        try { jobSummarySSEByJob.forEach(s => s && s.close && s.close()); } catch {}
+        jobSummarySSEByJob.clear();
+    });
+</script>
+</body>
+</html>

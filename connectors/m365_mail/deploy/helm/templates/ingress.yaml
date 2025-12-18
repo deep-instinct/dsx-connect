@@ -1,0 +1,37 @@
+{{- if .Values.ingressWebhook.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "m365-mail-connector.fullname" . }}
+  {{- with .Values.ingressWebhook.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingressWebhook.className }}
+  ingressClassName: {{ .Values.ingressWebhook.className }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingressWebhook.hosts }}
+    - host: {{ . | quote }}
+      http:
+        paths:
+          - path: /m365-mail-connector/webhook/event
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "m365-mail-connector.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- end }}
+  {{- if .Values.ingressWebhook.tls }}
+  tls:
+    {{- range .Values.ingressWebhook.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName | quote }}
+    {{- end }}
+  {{- end }}
+{{- end }}

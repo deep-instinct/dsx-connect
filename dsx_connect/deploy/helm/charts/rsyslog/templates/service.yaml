@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rsyslog.fullname" . }}
+  labels:
+    {{- include "rsyslog.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: tcp-syslog
+      port: {{ .Values.service.tcpPort }}
+      targetPort: tcp-syslog
+      protocol: TCP
+    {{- if .Values.service.enableUDP }}
+    - name: udp-syslog
+      port: {{ .Values.service.udpPort }}
+      targetPort: udp-syslog
+      protocol: UDP
+    {{- end }}
+  selector:
+    app.kubernetes.io/name: {{ include "rsyslog.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+

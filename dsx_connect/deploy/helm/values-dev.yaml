@@ -1,0 +1,134 @@
+# -----------------------------------------------------------------------------
+# DSX‑Connect Helm values (developer defaults)
+# - In‑cluster DSXA enabled for convenience (dsxa-scanner.enabled=true)
+# - global.env.DSXCONNECT_SCANNER__SCAN_BINARY_URL usually left commented
+# - API/workers LOG_LEVEL set to 'debug'
+# - Override image tag at install time: --set-string global.image.tag=<version>
+# -----------------------------------------------------------------------------
+# Global settings used by all dsx-connect components
+global:
+  # Minimal, common env most users need to touch. Everything else is set in templates with sane defaults.
+  env:
+    # For in-cluster DSXA (dsxa-scanner.enabled=true), keep this empty so templates compute the service URL.
+    DSXCONNECT_SCANNER__SCAN_BINARY_URL: ""
+
+  # Optional shared image defaults (components fall back to these when set)
+  image:
+    repository: dsxconnect/dsx-connect
+    tag: ""
+    pullPolicy: IfNotPresent
+    # Note: When installing from an OCI chart with --version=X.Y.Z, the default image tag will be that chart's appVersion.
+
+  # Optional scanner service hints used when the dsxa-scanner dependency is enabled
+  scanner:
+  # serviceName: "dsxa-scanner"   # optional: explicit K8s service name (defaults to <release>-dsxa-scanner)
+  # port: 5000                     # optional: override port (defaults to 5000)
+  # scheme: http                   # optional: http|https (defaults to http)
+
+# typical deployments would have dsxa-scanners in their own cluster and namespace, but for if all that's needed
+# is a single dsxa-scanner pod that only supports scan/binary/v2 (file size <= 2GB), then enable here.
+dsxa-scanner:
+  enabled: true
+  env:
+    # Override these with your own DSXA appliance settings before enabling in any environment.
+    APPLIANCE_URL: "https://your-dsxa-appliance.deepinstinctweb.com"
+    TOKEN: "REPLACE_WITH_APPLIANCE_TOKEN"
+    SCANNER_ID: "0"
+    FLAVOR: "rest,config"
+    NO_SSL: "true"
+
+dsx-connect-api:
+  enabled: true
+  service:
+    port: 80
+  tls:
+    enabled: false
+    secretName: ""
+  env:
+    LOG_LEVEL: debug
+  auth:
+    enabled: false
+    # Development override only; production should use the Secret flow (see examples/secrets/auth-enrollment-secret.yaml).
+    enrollment:
+      key: ENROLLMENT_TOKEN
+
+dsx-connect-scan-request-worker:
+  enabled: true
+  replicaCount: 1
+  env:
+    LOG_LEVEL: debug
+  celery:
+    # queue: "dev.dsx_connect.scans.request"
+    concurrency: 1
+
+dsx-connect-verdict-action-worker:
+  enabled: true
+  replicaCount: 1
+  env:
+    LOG_LEVEL: debug
+  celery:
+    # queue: "dev.dsx_connect.scans.verdict"
+    concurrency: 1
+
+dsx-connect-results-worker:
+  enabled: true
+  replicaCount: 1
+  env:
+    LOG_LEVEL: debug
+    DSX_WORKER_ROLE: results
+    DSXCONNECT_SYSLOG__TRANSPORT: tcp
+  celery:
+    # queue: "dev.dsx_connect.scans.result"
+    concurrency: 1
+
+dsx-connect-notification-worker:
+  enabled: true
+  replicaCount: 1
+  # image:
+  env:
+    LOG_LEVEL: debug
+  celery:
+    # queue: "dev.dsx_connect.scans.result.notify"
+    concurrency: 1
+
+dsx-connect-dianna-worker:
+  enabled: true
+  replicaCount: 1
+  env:
+    LOG_LEVEL: debug
+  celery:
+    # queue: "dev.dsx_connect.analyze.dianna"
+    concurrency: 1
+  dianna:
+    # Optionally set these inline, or supply a Secret (see examples/secrets/di-api-secret.yaml) and reference it via global.dianna.secretName.
+    # managementUrl: "https://di.example.com"
+    # apiToken: "<token>"
+    # verifyTls: true
+    # caBundle: ""
+    # chunkSize: 4194304
+    # timeout: 60
+    # autoOnMalicious: false
+    # pollResultsEnabled: true
+    # pollIntervalSeconds: 5
+    # pollTimeoutSeconds: 900
+    # Override other DIANNA tuning (verifyTls, chunkSize, poll settings, etc.) here if needed.
+
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: "7-alpine"
+  # For additional tuning (custom command args, health checks, resources), adjust charts/redis/values.yaml.
+
+rsyslog:
+  enabled: true
+
+ingress:
+  enabled: false
+  host: "dsx-connect.127.0.0.1.nip.io"
+  ingressClassName: ""
+  # For TLS, the secret must be created separately (e.g., kubectl create secret tls my-ingress-tls --cert=... --key=...)
+  # and its name should be specified in the dsx-connect-api.tls.secretName if it's the same secret.
+  # If you have a separate secret for Ingress, specify it here:
+  # tlsSecretName: ""

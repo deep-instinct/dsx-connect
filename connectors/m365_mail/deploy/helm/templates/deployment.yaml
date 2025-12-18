@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "m365-mail-connector.fullname" . }}
+  labels:
+    helm.sh/chart: {{ include "m365-mail-connector.chart" . }}
+    app.kubernetes.io/name: {{ include "m365-mail-connector.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    {{- if .Chart.AppVersion }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+    {{- end }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "m365-mail-connector.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "m365-mail-connector.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if .Values.tls.enabled }}
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: {{ printf "%s-tls" (include "m365-mail-connector.fullname" .) | quote }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python","-m","connectors.m365_mail.start"]
+          args: ["--host","0.0.0.0","--port","{{ .Values.service.port }}","--workers","{{ .Values.workers }}"]
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.tls.enabled }}
+            - name: https
+              containerPort: 443
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: PYTHONUNBUFFERED
+              value: "1"
+            - name: DSXCONNECTOR_AUTH__ENABLED
+              value: {{ .Values.auth_dsxconnect.enabled | quote }}
+            {{- if .Values.webhook.publicUrl }}
+            - name: DSXCONNECTOR_WEBHOOK_URL
+              value: {{ .Values.webhook.publicUrl | quote }}
+            {{- end }}
+            - name: LOG_LEVEL
+              value: {{ .Values.env.LOG_LEVEL | default "debug" | quote }}
+            {{- if .Values.auth_dsxconnect.enrollmentSecretName }}
+            - name: DSXCONNECT_ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.auth_dsxconnect.enrollmentSecretName | quote }}
+                  key: {{ .Values.auth_dsxconnect.enrollmentKey | quote }}
+            {{- end }}
+            {{- range $k, $v := .Values.env }}
+            {{- if not (has $k (list "LOG_LEVEL")) }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+            {{- end }}
+            - name: DSXCONNECTOR_AUTH__CLOCK_SKEW_SECONDS
+              value: {{ .Values.auth_dsxconnect.clockSkewSeconds | quote }}
+          {{- if .Values.envSecretRefs }}
+          envFrom:
+            {{- range .Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.tls.enabled }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: "/app/certs"
+              readOnly: true
+          {{- end }}

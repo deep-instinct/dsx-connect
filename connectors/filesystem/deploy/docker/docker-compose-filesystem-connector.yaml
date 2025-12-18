@@ -1,0 +1,67 @@
+services:
+  filesystem_connector:
+    image: ${FILESYSTEM_IMAGE:-dsxconnect/filesystem-connector:latest}
+    # Uncomment if you want to use docker compose to build the image
+    #build:
+    #  context: .
+    #  dockerfile: docker/Dockerfile
+    ports:
+      - "8620:8620"
+    volumes:
+      - type: bind
+        source: ${SCAN_FOLDER_PATH:?set in env} # directory to be scanned and monitored
+        target: /app/scan_folder
+      - type: bind
+        source: ${QUARANTINE_FOLDER_PATH:?set in env} # directory where files will be moved
+        target: /app/quarantine
+      - type: volume
+        source: filesystem_connector_data
+        target: /app/data
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      # Enable realtime monitoring of the asset path for new/modified files
+      # Set to "true" to watch and enqueue on changes (default: false)
+      DSXCONNECTOR_MONITOR: "true"
+      # For SMB/CIFS or remote mounts where inotify doesn't fire,
+      # force polling to detect changes reliably (default: false)
+      DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
+      # Polling interval in milliseconds (effective when force polling is enabled)
+      DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+
+
+      # TLS for connector server
+      # DSXCONNECTOR_USE_TLS: "false"
+      # DSXCONNECTOR_TLS_CERTFILE: "/app/certs/server.crt"
+      # DSXCONNECTOR_TLS_KEYFILE: "/app/certs/server.key"
+      # Outbound TLS verification to dsx-connect
+      # DSXCONNECTOR_VERIFY_TLS: "true"
+      # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+      DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector:8620" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
+      DSXCONNECTOR_ASSET: "/app/scan_folder"
+      DSXCONNECTOR_FILTER: ""
+      DSXCONNECTOR_ITEM_ACTION: ${DSXCONNECTOR_ITEM_ACTION:-"nothing"} # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-"/app/quarantine"} # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+        # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector. this directory should have been created in the Dockerfile
+      DSXCONNECTOR_SCAN_BY_PATH: "False"
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+
+      DSXCONNECTOR_ASSET_DISPLAY_NAME: ${SCAN_FOLDER_PATH:?set in env}
+    networks:
+      dsx-network:
+        aliases:
+          - filesystem-connector  # this is how dsx-connect will communicate with this on the network
+    command:
+      [ "python", "connectors/filesystem/start.py", "--workers", "1" ]
+
+# The following assumes an already created docker network like this:
+# docker network create dsx-connect-network --driver bridge
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network  # change this to an existing docker network
+
+volumes:
+  filesystem_connector_data:

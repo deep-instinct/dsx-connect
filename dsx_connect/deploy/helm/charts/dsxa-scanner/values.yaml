@@ -1,0 +1,17 @@
+image:
+  repository: dsxconnect/dpa-rocky9
+  tag: "4.1.1.2020"
+  pullPolicy: IfNotPresent
+
+service:
+  port: 5000
+
+env:
+  # Replace with your DSXA Appliance URL (https://....)
+  APPLIANCE_URL: "https://your-dsxa-appliance.example.com"
+  # Replace with the DSXA API token provisioned for this scanner instance
+  TOKEN: "REPLACE_WITH_DSX_API_TOKEN"
+  # Replace with the numeric scanner ID configured in DSXA
+  SCANNER_ID: "0"
+  FLAVOR: "rest,config"
+  NO_SSL: "true"

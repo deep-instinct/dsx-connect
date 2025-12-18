@@ -1,0 +1,171 @@
+{{- $root := . -}}
+{{- $api := default (dict) (index $root.Values "dsx-connect-api") -}}
+{{- if $api.enabled }}
+{{- $image := default (dict) $api.image -}}
+{{- $service := default (dict) $api.service -}}
+{{- $tls := default (dict) $api.tls -}}
+{{- $auth := default (dict) $api.auth -}}
+{{- $enrollmentCfg := default (dict) (index $auth "enrollment") -}}
+{{- $enrollmentKey := default "ENROLLMENT_TOKEN" (index $enrollmentCfg "key") -}}
+{{- $envOverrides := default (dict) $api.env -}}
+{{- $servicePort := default 80 $service.port -}}
+{{- $serviceType := default "ClusterIP" $service.type -}}
+{{- $tlsEnabled := default false $tls.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dsx-connect-api.fullname" $root }}
+  labels:
+    {{- include "dsx-connect-api.labels" $root | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "dsx-connect-api.selectorLabels" $root | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dsx-connect-api.selectorLabels" $root | nindent 8 }}
+    spec:
+      {{- if $tlsEnabled }}
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: {{ printf "%s-tls" (include "dsx-connect-api.fullname" $root) }}
+      {{- end }}
+      containers:
+        - name: dsx-connect-api
+          image: "{{ default $image.repository (default "" $root.Values.global.image.repository) }}:{{ coalesce $image.tag $root.Values.global.image.tag $root.Chart.AppVersion }}"
+          imagePullPolicy: {{ default $image.pullPolicy (default "IfNotPresent" $root.Values.global.image.pullPolicy) }}
+          command: ["uvicorn"]
+          args: [
+            "dsx_connect.app.dsx_connect_api:app",
+            "--host", "0.0.0.0",
+            "--port", "{{ $servicePort }}"
+            {{- if $tlsEnabled }},
+            "--ssl-keyfile", "/app/certs/tls.key",
+            "--ssl-certfile", "/app/certs/tls.crt"
+            {{- end }}
+          ]
+          ports:
+            - containerPort: {{ $servicePort }}
+              name: http
+            {{- if $tlsEnabled }}
+            - containerPort: 443
+              name: https
+            {{- end }}
+          env:
+            {{ $globalEnv := default (dict) $root.Values.global.env }}
+            {{ $env := merge (deepCopy $globalEnv) (deepCopy $envOverrides) }}
+            {{ $scanner := default (dict) $root.Values.global.scanner }}
+            {{ $svc := default (printf "%s-dsxa-scanner" $root.Release.Name) $scanner.serviceName }}
+            {{ $scanPort := default 5000 $scanner.port }}
+            {{ $scheme := default "http" $scanner.scheme }}
+            {{- $di := default (dict) $root.Values.global.dianna }}
+            {{- $diSecretName := default "" $di.secretName }}
+            {{- $diManagementKey := default "managementUrl" $di.managementUrlKey }}
+            {{- $diTokenKey := default "apiToken" $di.apiTokenKey }}
+            {{- $diHasSecret := ne $diSecretName "" }}
+            - name: DSXCONNECT_APP_ENV
+              value: {{ $env.DSXCONNECT_APP_ENV | default "dev" | quote }}
+            - name: DSXCONNECT_SCANNER__SCAN_BINARY_URL
+              value: {{ $env.DSXCONNECT_SCANNER__SCAN_BINARY_URL | default (printf "%s://%s:%d/scan/binary/v2" $scheme $svc $scanPort) | quote }}
+            - name: DSXCONNECT_WORKERS__BROKER
+              value: {{ $env.DSXCONNECT_WORKERS__BROKER | default "redis://redis:6379/5" | quote }}
+            - name: DSXCONNECT_WORKERS__BACKEND
+              value: {{ $env.DSXCONNECT_WORKERS__BACKEND | default "redis://redis:6379/6" | quote }}
+            - name: DSXCONNECT_REDIS_URL
+              value: {{ $env.DSXCONNECT_REDIS_URL | default "redis://redis:6379/3" | quote }}
+            - name: DSXCONNECT_RESULTS_DB
+              value: {{ $env.DSXCONNECT_RESULTS_DB | default "redis://redis:6379/3" | quote }}
+            - name: DSXCONNECT_RESULTS_DB__RETAIN
+              value: {{ $env.DSXCONNECT_RESULTS_DB__RETAIN | default "100" | quote }}
+            - name: PYTHONUNBUFFERED
+              value: {{ $env.PYTHONUNBUFFERED | default "1" | quote }}
+            - name: LOG_LEVEL
+              value: {{ $env.LOG_LEVEL | default "info" | quote }}
+            {{- if (default false $auth.enabled) }}
+            - name: DSXCONNECT_AUTH__ENABLED
+              value: "true"
+            - name: DSXCONNECT_AUTH__ENROLLMENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ printf "%s-auth-enrollment" (include "dsx-connect-api.fullname" $root) | quote }}
+                  key: {{ $enrollmentKey | quote }}
+            {{- end }}
+            {{- with $di }}
+            {{- if $diHasSecret }}
+            - name: DSXCONNECT_DIANNA__MANAGEMENT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $diSecretName | quote }}
+                  key: {{ $diManagementKey | quote }}
+            {{- else if .managementUrl }}
+            - name: DSXCONNECT_DIANNA__MANAGEMENT_URL
+              value: {{ .managementUrl | quote }}
+            {{- end }}
+            {{- if $diHasSecret }}
+            - name: DSXCONNECT_DIANNA__API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $diSecretName | quote }}
+                  key: {{ $diTokenKey | quote }}
+            {{- else if .apiToken }}
+            - name: DSXCONNECT_DIANNA__API_TOKEN
+              value: {{ .apiToken | quote }}
+            {{- end }}
+            {{- if hasKey . "verifyTls" }}
+            - name: DSXCONNECT_DIANNA__VERIFY_TLS
+              value: {{ .verifyTls | toString | quote }}
+            {{- end }}
+            {{- if .caBundle }}
+            - name: DSXCONNECT_DIANNA__CA_BUNDLE
+              value: {{ .caBundle | quote }}
+            {{- end }}
+            {{- if .chunkSize }}
+            - name: DSXCONNECT_DIANNA__CHUNK_SIZE
+              value: {{ .chunkSize | toString | quote }}
+            {{- end }}
+            {{- if .timeout }}
+            - name: DSXCONNECT_DIANNA__TIMEOUT
+              value: {{ .timeout | toString | quote }}
+            {{- end }}
+            {{- if hasKey . "autoOnMalicious" }}
+            - name: DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS
+              value: {{ .autoOnMalicious | toString | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range $key, $value := $env }}
+            {{- if not (has $key (list "DSXCONNECT_APP_ENV" "DSXCONNECT_SCANNER__SCAN_BINARY_URL" "DSXCONNECT_WORKERS__BROKER" "DSXCONNECT_WORKERS__BACKEND" "DSXCONNECT_REDIS_URL" "DSXCONNECT_RESULTS_DB" "DSXCONNECT_RESULTS_DB__RETAIN" "PYTHONUNBUFFERED" "LOG_LEVEL")) }}
+            - name: {{ $key }}
+              value: "{{ $value }}"
+            {{- end }}
+            {{- end }}
+          {{- if $tlsEnabled }}
+          volumeMounts:
+            - name: tls-certs
+              mountPath: "/app/certs"
+              readOnly: true
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /dsx-connect/api/v1/healthz
+              port: {{ $servicePort }}
+              scheme: {{ if $tlsEnabled }}HTTPS{{ else }}HTTP{{ end }}
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /dsx-connect/api/v1/readyz
+              port: {{ $servicePort }}
+              scheme: {{ if $tlsEnabled }}HTTPS{{ else }}HTTP{{ end }}
+            initialDelaySeconds: 40
+            periodSeconds: 30
+            timeoutSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+      terminationGracePeriodSeconds: 30
+{{- end }}

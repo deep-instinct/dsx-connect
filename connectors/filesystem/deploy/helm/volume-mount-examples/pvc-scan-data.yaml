@@ -1,0 +1,14 @@
+# pvc-scan-data.yaml
+# Simple RWO PVC example. Adjust storageClassName/size to your cluster.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: my-shared-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: standard
+

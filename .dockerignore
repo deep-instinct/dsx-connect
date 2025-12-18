@@ -1,0 +1,28 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info
+.eggs/
+.env
+*.env
+a.env
+*.dev.env
+.dev.env
+.env.*
+.DS_Store
+.git
+.gitignore
+.idea
+.vscode
+dist/
+build/
+*.zip
+site/
+# Core build artifacts
+dsx_connect/dist/
+dsx_connect/deploy/helm/charts/*.tgz
+
+# Large artifacts
+**/data/connector_uuid.txt

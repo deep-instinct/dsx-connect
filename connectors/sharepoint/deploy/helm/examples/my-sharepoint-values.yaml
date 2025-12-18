@@ -1,0 +1,25 @@
+# Example values override for SharePoint connector
+
+image:
+  # Set to your released connector image tag
+  tag: "0.2.66"
+
+env:
+  # REQUIRED: the library or folder to scan
+  DSXCONNECTOR_ASSET: "https://contoso.sharepoint.com/sites/Example/Shared%20Documents"
+  # Optional filter rules
+  DSXCONNECTOR_FILTER: ""
+  # Uncomment to verify outbound TLS to dsx-connect
+  # DSXCONNECTOR_VERIFY_TLS: "true"
+  # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+
+# Secret with SP app credentials (create separately)
+secrets:
+  name: sharepoint-credentials
+
+# Enable HTTPS termination in the connector (optional)
+# tls:
+#   enabled: true
+#   secretName: my-connector-tls
+#   mountPath: /app/certs
+

@@ -1,0 +1,55 @@
+version: "3.9"
+services:
+  m365_mail_connector:
+    image: ${M365_IMAGE:-dsxconnect/m365-mail-connector:latest}
+    command: ["python","-m","connectors.m365_mail.start","--host","0.0.0.0","--port","8650","--workers","1"]
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+
+      # TLS for connector server
+      # DSXCONNECTOR_USE_TLS: "false"
+      # DSXCONNECTOR_TLS_CERTFILE: "/app/certs/server.crt"
+      # DSXCONNECTOR_TLS_KEYFILE: "/app/certs/server.key"
+      # Outbound TLS verification to dsx-connect
+      # DSXCONNECTOR_VERIFY_TLS: "true"
+      # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+
+      # Core connector URLs (internal docker networking)
+      DSXCONNECTOR_CONNECTOR_URL: "http://m365-mail-connector:8650"
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+
+      # Mailbox scope + remediation defaults
+      DSXCONNECTOR_ASSET: ""
+      DSXCONNECTOR_FILTER: ""
+      DSXCONNECTOR_ITEM_ACTION: "nothing"
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+
+      # Graph auth (set via env exports or docker compose overrides)
+      # M365_TENANT_ID: ""
+      # M365_CLIENT_ID: ""
+      # M365_CLIENT_SECRET: ""
+      # M365_MAILBOX_UPNS: ""
+      # M365_CLIENT_STATE: ""
+      # DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS: "600"
+    volumes:
+      - type: volume
+        source: m365_mail_connector_data
+        target: /app/data
+    ports:
+      - "8650:8650"
+    restart: unless-stopped
+    networks:
+      dsx-network:
+        aliases:
+          - m365-mail-connector
+
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network
+
+volumes:
+  m365_mail_connector_data:

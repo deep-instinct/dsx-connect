@@ -1,0 +1,38 @@
+services:
+  azure_blob_storage_connector:
+    image: ${AZURE_BLOB_IMAGE:-dsxconnect/azure-blob-storage-connector:latest}
+    volumes:
+      - type: volume
+        source: azure_blob_storage_connector_data
+        target: /app/data
+    ports:
+      - "8610:8610"
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-my-container}"
+      DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}"
+      DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}"
+      DSXCONNECTOR_MONITOR: "${DSXCONNECTOR_MONITOR:-false}"
+      # Auth: prefer connection string; leave unset if using account/key
+      AZURE_STORAGE_CONNECTION_STRING: "${AZURE_STORAGE_CONNECTION_STRING:-}"
+      AZURE_STORAGE_ACCOUNT: "${AZURE_STORAGE_ACCOUNT:-}"
+      AZURE_STORAGE_KEY: "${AZURE_STORAGE_KEY:-}"
+      DSXCONNECTOR_CONNECTOR_URL: "http://azure-blob-storage-connector:8610"
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+    networks:
+      dsx-network:
+        aliases:
+          - azure-blob-storage-connector
+    command:
+      ["python", "connectors/azure_blob_storage/start.py", "--workers", "1"]
+
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network
+
+volumes:
+  azure_blob_storage_connector_data:

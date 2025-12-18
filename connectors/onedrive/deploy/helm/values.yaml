@@ -1,0 +1,60 @@
+image:
+  repository: dsxconnect/onedrive-connector
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 80
+
+tls:
+  enabled: false
+
+ingressWebhook:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts: []
+  tls: []
+
+networkPolicy:
+  enabled: false
+  allowFrom: []
+
+env:
+  LOG_LEVEL: "info"
+  DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
+  DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_ASSET: ""
+  DSXCONNECTOR_FILTER: ""
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+  DSXCONNECTOR_ONEDRIVE_TENANT_ID: ""
+  DSXCONNECTOR_ONEDRIVE_CLIENT_ID: ""
+  DSXCONNECTOR_ONEDRIVE_CLIENT_SECRET: ""
+  DSXCONNECTOR_ONEDRIVE_USER_ID: ""
+  DSXCONNECTOR_ONEDRIVE_WEBHOOK_ENABLED: "false"
+  DSXCONNECTOR_ONEDRIVE_WEBHOOK_CHANGE_TYPES: "updated"
+  DSXCONNECTOR_ONEDRIVE_WEBHOOK_URL: ""
+  DSXCONNECTOR_ONEDRIVE_WEBHOOK_CLIENT_STATE: ""
+
+# Optional list of Secret names projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
+envSecretRefs: []
+
+auth_dsxconnect:
+  enabled: false
+  clockSkewSeconds: 60
+  enrollmentSecretName: ""
+  enrollmentKey: ENROLLMENT_TOKEN
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"
+
+workers: 1
+replicaCount: 1

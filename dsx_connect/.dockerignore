@@ -1,0 +1,34 @@
+# Bytecode / caches
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Env / secrets
+.env
+.dev.env
+.env.*
+
+# Editor / VCS
+.DS_Store
+.git
+.gitignore
+.idea
+.vscode
+
+# Build artifacts / docs
+dist/
+build/
+site/
+*.zip
+docs/
+diagrams/
+
+# Deployment assets (not needed in image)
+deploy/
+
+# Helm packaged deps
+deploy/helm/charts/*.tgz
+
+# Data / runtime files
+data/

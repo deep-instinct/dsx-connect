@@ -1,0 +1,62 @@
+services:
+  aws_s3_connector:
+    image: ${AWS_S3_IMAGE:-dsxconnect/aws-s3-connector:latest}
+    # Uncomment if you want to use docker compose to build the image
+    #build:
+    #  context: .
+    #  dockerfile: docker/Dockerfile
+    ports:
+      - "8600:8600"
+    volumes:
+      - type: volume
+        source: aws_s3_connector_data
+        target: /app/data
+    environment:
+      PYTHONUNBUFFERED: 1
+      LOG_LEVEL: debug
+      DSXCONNECTOR_AUTH__ENABLED: "false"
+      # TLS for connector server
+      # DSXCONNECTOR_USE_TLS: "false"
+      # DSXCONNECTOR_TLS_CERTFILE: "/app/certs/server.crt"
+      # DSXCONNECTOR_TLS_KEYFILE: "/app/certs/server.key"
+      # Outbound TLS verification to dsx-connect
+      # DSXCONNECTOR_VERIFY_TLS: "true"
+      # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+      DSXCONNECTOR_CONNECTOR_URL: "http://aws-s3-connector:8600" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
+      DSXCONNECTOR_ITEM_ACTION: "nothing" # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine" # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+        # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
+      DSXCONNECTOR_ASSET: "" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_FILTER: ""  # define filters on the asset, such as sub folders, prefixes, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_DATA_DIR: "/app/data"
+
+      # These definitions are for simple docker compose deployments. Proper production
+      # deployments should use deployment mechanisms such as helm charts/k8s and secret managers.
+      AWS_ACCESS_KEY_ID: "your-access-key-id"
+      AWS_SECRET_ACCESS_KEY: "your-secret-access-key"
+
+    healthcheck:
+        test: [ "CMD-SHELL", "curl -fsS http://localhost:8600/readyz || exit 1" ]
+        interval: 10s
+        timeout: 3s
+        retries: 5
+        start_period: 15s
+    restart: always
+
+    networks:
+      dsx-network:
+        aliases:
+          - aws-s3-connector  # this is how dsx-connect will communicate with this on the network
+    command:
+      ["python", "connectors/aws_s3/start.py", "--workers", "1"]
+
+# The following assumes an already created docker network like this:
+# docker network create dsx-connect-network --driver bridge
+networks:
+    dsx-network:
+      external: true
+      name: dsx-connect-network  # change this to an existing docker network
+
+volumes:
+  aws_s3_connector_data:

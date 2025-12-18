@@ -1,0 +1,186 @@
+x-common-env: &common-env
+  DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://dsxa_scanner:5000/scan/binary/v2"
+  DSXCONNECT_WORKERS__BROKER: "redis://redis:6379/5"
+  DSXCONNECT_WORKERS__BACKEND: "redis://redis:6379/6"
+  DSXCONNECT_REDIS_URL: "redis://redis:6379/3"
+  DSXCONNECT_SKIP_DEVENV: "true"
+  # Syslog defaults (collector provided below)
+  DSXCONNECT_SYSLOG__SYSLOG_SERVER_URL: "syslog"
+  DSXCONNECT_SYSLOG__SYSLOG_SERVER_PORT: "514"
+  DSXCONNECT_SYSLOG__TRANSPORT: "tcp"
+  # Results/stats DB config (Redis by default)
+  DSXCONNECT_RESULTS_DB: "redis://redis:6379/3"
+  DSXCONNECT_RESULTS_DB__RETAIN: 100
+  PYTHONUNBUFFERED: 1
+  DSXCONNECT_AUTH__ENABLED: "false"
+
+x-core-image: &core-image ${DSXCONNECT_IMAGE:-dsxconnect/dsx-connect:latest}
+
+services:
+  dsx_connect_api:
+    image: *core-image
+    #build:
+    #  context: .
+    #  dockerfile: Dockerfile
+    ports:
+      - "8586:8586"
+    environment:
+      <<: *common-env
+      # TLS for API (enable and provide cert/key paths inside the container)
+      # DSXCONNECT_USE_TLS: "false"
+      # DSXCONNECT_TLS_CERTFILE: "/app/certs/dev.localhost.crt"
+      # DSXCONNECT_TLS_KEYFILE: "/app/certs/dev.localhost.key"
+      # using common-env setting for SCAN_BINARY_URL if commented out
+#      DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://dsxa_scanner:5000/scan/binary/v2"
+      LOG_LEVEL: debug
+    depends_on:
+      redis:
+        condition: service_healthy  # Wait for Redis to be healthy
+    networks:
+      dsx-network:
+        aliases:
+          - dsx-connect-api
+    # Updated uvicorn command with SSE-friendly settings
+    command: ["python", "dsx_connect/dsx-connect-api-start.py"]
+    # Health check for the API service (liveness + readiness)
+    healthcheck:
+      test: >
+        CMD python -c "import os,sys,urllib.request,ssl; \
+        base='https://localhost:8586' if os.environ.get('DSXCONNECT_USE_TLS','false').lower() in ('1','true','yes') else 'http://localhost:8586'; \
+        ctx=ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE; \
+        urllib.request.urlopen(base + '/dsx-connect/api/v1/test/connection', context=ctx); \
+        urllib.request.urlopen(base + '/dsx-connect/api/v1/test/dsxa-connection', context=ctx)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    # Graceful shutdown for SSE connections
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  dsx_connect_scan_request_worker:
+    image: *core-image
+    environment:
+      <<: *common-env
+      # using common-env setting for SCAN_BINARY_URL if commented out
+      #      DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://dsxa_scanner:5000/scan/binary/v2"
+      LOG_LEVEL: debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dsx-network
+    command: >
+      celery -A dsx_connect.taskworkers.celery_app.celery_app worker
+      --loglevel=warning
+      -Q dev.dsx_connect.scans.request
+      --concurrency=1
+    restart: unless-stopped
+
+
+  dsx_connect_verdict_action_worker:
+    image: *core-image
+    environment:
+      <<: *common-env
+      LOG_LEVEL: debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dsx-network
+    command: >
+      celery -A dsx_connect.taskworkers.celery_app.celery_app worker
+      --loglevel=warning
+      -Q dev.dsx_connect.scans.verdict
+      --concurrency=1
+    restart: unless-stopped
+
+  dsx_connect_results_worker:
+    image: *core-image
+    environment:
+      <<: *common-env
+      LOG_LEVEL: debug
+      DSX_WORKER_ROLE: "results"
+      DSXCONNECT_FRONTEND__URL: "http://dsx-connect-api:8586"
+    depends_on:
+      redis:
+        condition: service_healthy
+      # No hard dependency on a collector: start even if no profile is enabled
+    networks:
+      - dsx-network
+    command: >
+      celery -A dsx_connect.taskworkers.celery_app.celery_app worker
+      --loglevel=warning
+      -Q dev.dsx_connect.scans.result
+      --concurrency=1
+    restart: unless-stopped
+
+  dsx_connect_notification_worker:
+    image: *core-image
+    environment:
+      <<: *common-env
+      LOG_LEVEL: debug
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dsx-network
+    command: >
+      celery -A dsx_connect.taskworkers.celery_app.celery_app worker
+      --loglevel=warning
+      -Q dev.dsx_connect.scans.result.notify
+      --concurrency=1
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine  # Use newer version
+    networks:
+      - dsx-network
+    # Redis configuration optimized for pubsub and SSE
+    command: >
+      redis-server 
+      --notify-keyspace-events Ex 
+      --maxmemory-policy allkeys-lru 
+      --timeout 0 
+      --tcp-keepalive 300
+      --appendonly no
+    # Health check for Redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  rsyslog:
+    image: rsyslog/rsyslog
+    networks:
+      dsx-network:
+        aliases: ["syslog", "rsyslog"]
+    restart: unless-stopped
+    user: "0:0"
+    cap_add: ["NET_BIND_SERVICE"]
+    entrypoint: ["/bin/sh","-lc"]
+    command:
+      - |
+        cat > /etc/rsyslog.conf << 'EOF'
+        module(load="imuxsock")
+        module(load="imtcp")
+        module(load="imudp")
+        input(type="imtcp" port="514")
+        input(type="imudp" port="514")
+        template(name="rawMsg" type="string" string="%msg%\n")
+        # Write all messages to container stdout for docker compose logs
+        *.* action(type="omfile" file="/dev/stdout" template="rawMsg")
+        EOF
+        exec rsyslogd -n -f /etc/rsyslog.conf
+
+networks:
+  dsx-network:
+    external: true
+    name: dsx-connect-network
+
+# Uncomment if using Redis persistence
+# volumes:
+#   redis-data:

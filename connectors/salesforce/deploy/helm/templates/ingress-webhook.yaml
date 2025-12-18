@@ -1,0 +1,44 @@
+
+{{- if .Values.ingressWebhook.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "salesforce-connector.fullname" . }}-webhook
+  labels:
+    {{- include "salesforce-connector.labels" . | nindent 4 }}
+  {{- with .Values.ingressWebhook.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingressWebhook.className }}
+  ingressClassName: {{ .Values.ingressWebhook.className }}
+  {{- end }}
+  rules:
+    {{- range $host := .Values.ingressWebhook.hosts | default (list) }}
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: /{{ include "salesforce-connector.routeBase" $ }}{{ printf "/webhook_event" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "connector.fullname" $ }}
+                port:
+                  number: {{ $.Values.service.port }}
+    {{- else }}
+    - http:
+        paths:
+          - path: /{{ include "salesforce-connector.routeBase" . }}{{ printf "/webhook_event" }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "connector.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+    {{- end }}
+  {{- if .Values.ingressWebhook.tls }}
+  tls:
+    {{- toYaml .Values.ingressWebhook.tls | nindent 4 }}
+  {{- end }}
+{{- end }}

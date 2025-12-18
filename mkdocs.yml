@@ -82,7 +82,6 @@ nav:
   - Reference:
       - Azure Credentials: reference/azure-credentials.md
       - Google Cloud Credentials: reference/google-cloud-credentials.md
-      - Assets & Filters: reference/assets-and-filters.md
       - Advanced Kubernetes Network Security: reference/advanced-kubernetes-network-security.md
       - UI Display Icons: reference/display-icons.md
       - DSXA Python SDK: reference/dsxa-sdk.md
@@ -94,6 +93,10 @@ nav:
   - Developer's Guide:
       - Operations:
           - Connector State KV: operations/kv-state.md
+  - Resources:
+      - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
+      - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
+      - GitHub: https://github.com/deep-instinct/dsx-connect
 
 plugins:
   - search

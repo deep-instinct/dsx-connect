@@ -55,8 +55,9 @@ However, the DSX-Connect core gives you those pieces for free:
 
 As you add new connectors, they inherit the same resilience and scale; each connector just focuses on integrating with its repository.
 
-## Asset
+## Assets and Filters
 
+### Asset
 `DSXCONNECTOR_ASSET` defines the root location that the connector owns. Full scans start here, and “on-access” feeds (webhooks, monitors) scope themselves to the same root. The exact meaning depends on the backend:
 
 | Connector family | Typical value                                                                           | Notes                                                                          |
@@ -69,11 +70,55 @@ As you add new connectors, they inherit the same resilience and scale; each conn
 
 > Always set the asset to a stable, exact root—no wildcards. If you need multiple roots, deploy multiple connectors.
 
-## Filter
+Asset is the exact scan root. Providers can often narrow list operations to `name_starts_with` that root/prefix, which keeps enumeration fast (listing is usually the slowest, most serial part of a full scan). Filters (below) are applied inside the connector after the provider lists everything under the asset—most backends do not support server-side include/exclude.
 
-`DSXCONNECTOR_FILTER` narrows the asset. For storage connectors this usually means subdirectories or prefixes (`logs/2025/*`). SharePoint/OneDrive filters can target libraries or change types. The semantics are connector-specific, but the intent is identical: scope work under the asset without changing the root. See [Reference → Assets & Filters](../reference/assets-and-filters.md) for examples.
+### Filter
 
-## Item action policy
+`DSXCONNECTOR_FILTER` narrows the asset with rsync‑like include/exclude rules evaluated under the asset root.
+See [Filters (Details)](../reference/filters.md) fo rmor information on filter rules. 
+
+For connectors this usually means filtering on subdirectories or prefixes (e.g. `logs/2025/*`). The semantics are 
+of how a filter works per a given connector is connector-specific, but the intent is identical: scope the files
+to be scanned under the asset without changing the root.
+
+Most repositories (S3, Blob, GCS, filesystem, SharePoint) only support narrowing via “prefix/scope” 
+(asset); there is no native include/exclude filtering on list APIs, so the connector must walk every object under the 
+asset during a full_scan. For example, Azure Blob only exposes container/optional-prefix list APIs — it cannot answer 
+“list only PDFs or skip tmp/”. 
+
+As such, when a connector enumerates through ASSET, filtering is applied in the connector (i.e., the connector retrieves the 
+meta information on every file under ASSET and filters there).  It does not reduce 
+the number files/objects that a Connector's `full_scan` has to process, just the list of files sent as scan requests 
+to be scanned.
+
+### Asset vs Filter:
+  - **Asset**: exact scan root; pushes coarse scoping to the provider (fastest listing).
+  - **Filter**: wildcard include/exclude under the asset; evaluated locally after listing.
+- Common equivalences:
+  - `asset=my-bucket`, `filter=prefix1/**`  ≈  `asset=my-bucket/prefix1`, `filter=""`
+  - `asset=my-bucket`, `filter=sub1`       ≈  `asset=my-bucket/sub1`, `filter=""`
+  - `asset=my-bucket`, `filter=sub1/*`     ≈  `asset=my-bucket/sub1`, `filter="*"`
+
+### Guidance:
+- Prefer **asset** for coarse boundaries (folders/prefixes/libraries) so listing stays narrow.
+- Use **filter** for light include/exclude tuning under that root. Remember the connector still walks everything under the asset and filters client-side.
+- Complex filters (e.g., `-tmp`) can force broad listings; whenever possible, push the boundary into the asset and keep filters simple.
+
+#### Sharding & Deployment Strategies
+Use multiple assets or include‑only filters to split a large repository into smaller partitions that can be scanned in parallel by multiple connector instances.
+
+- **Asset‑based sharding** (preferred for coarse partitions):
+    - S3: `my-bucket/A`, `my-bucket/B`, … (alphabetic)
+    - S3: `my-bucket/2025-01`, `my-bucket/2025-02`, … (time)
+    - Filesystem: `/app/scan_folder/shard1`, `/app/scan_folder/shard2`
+    - SharePoint: distinct doc libraries/folders
+- **Filter‑based sharding** (include‑only filters):
+    - Asset at container/bucket root, with partitions via include‑only filters (e.g., `prefix1/sub1/**`, `prefix1/sub2/**`)
+
+> Compose POV: run multiple connector containers, each with a distinct asset partition or include‑only filter. In private K8S, deploy multiple releases with different values.
+
+
+## Item Action
 
 `DSXCONNECTOR_ITEM_ACTION` tells the connector what to do when dsx-connect marks an object malicious:
 
@@ -98,3 +143,16 @@ A good deployment checklist:
 For the precise shape of each field (SharePoint site URL vs. filesystem path, etc.), jump to the connector-specific page under **Connectors → Connector Deployments**.
 
 > Filters: Use the centralized rsync‑like filter rules in Reference → [Filters](../reference/filters.md).
+
+## Sharding & Deployment Strategies
+
+Split large repositories so multiple connector instances can scan in parallel:
+
+- **Asset-based sharding** (preferred):
+  - S3/GCS/Blob: `bucket/A`, `bucket/B`… or time-based prefixes (`bucket/2025-01`).
+  - Filesystem: `/app/scan_folder/shard1`, `/app/scan_folder/shard2`.
+  - SharePoint/OneDrive: separate libraries/folders.
+- **Filter-based sharding** (include-only filters) when assets must stay at the same root:
+  - Asset at container/bucket root; filters like `prefix1/**`, `prefix2/**` per connector.
+
+Run multiple connectors (Compose services or Helm releases), each with its own asset or include-only filter, to increase throughput.

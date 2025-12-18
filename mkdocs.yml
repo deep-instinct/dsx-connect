@@ -1,6 +1,6 @@
 site_name: DSX-Connect
 site_description: Modular, scalable file scanning orchestration with pluggable connectors
-repo_url: https://github.com/logang-di/dsx-connect
+repo_url: https://github.com/deep-instinct/dsx-connect
 extra:
   social:
     - icon: fontawesome/brands/docker

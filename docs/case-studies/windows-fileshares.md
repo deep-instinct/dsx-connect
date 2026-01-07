@@ -2,7 +2,9 @@
 
 A customer inherits dozens of Windows desktops and wants to scan each filesystem without installing anything on the desktops. They run Docker/Compose today and can also use Kubernetes later. This guide shows how to mount Windows SMB shares on a Linux host and point one filesystem connector at each mount.
 
-## Recommended Pattern (host-managed mounts)
+## Recommended Pattern (host-managed mounts for Docker/Compose)
+
+Use this pattern for Docker/Compose: mount the SMB share on the host and bind it into each filesystem connector. For Kubernetes, prefer an SMB/CIFS CSI driver with a StorageClass/PV/PVC to present the share to the pod (see “Kubernetes Angle” below).
 
 - On each Windows desktop, create a share (e.g., `\\DESKTOP1\share`, `\\DESKTOP2\share`).
 - On a Linux host that can reach those shares, mount them under distinct paths (for example, `/mnt/DESKTOP1/share`, `/mnt/DESKTOP2/share`, …). Use systemd or fstab to keep mounts healthy across reboots.
@@ -16,7 +18,7 @@ flowchart LR
     Wn["\\\\DESKTOPN\\share"]
   end
 
-  subgraph LinuxHost["Linux Host (runs Docker/K8s, mounts shares)"]
+  subgraph LinuxHost["Linux Host (runs Docker, mounts shares)"]
     M1["/mnt/DESKTOP1/share"]
     M2["/mnt/DESKTOP2/share"]
     Mn["/mnt/DESKTOPN/share"]
@@ -81,34 +83,131 @@ DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS=1000
 #FILESYSTEM_IMAGE=dsxconnect/filesystem-connector:0.5.36
 ```
 
-Then deploy with the latest filesystem connector compose file from the bundle (adjust the path if your bundle version differs):
+Then deploy with the latest filesystem connector compose file from the bundle (adjust the path to your versions):
 
 ```bash
 docker compose \
   --env-file .filesystem.env \
-  -f docker_bundle/dsx-connect-0.3.59/filesystem-connector-0.5.36/docker-compose-filesystem-connector.yaml \
+  -f docker_bundle/dsx-connect-<version>/filesystem-connector-<version>/docker-compose-filesystem-connector.yaml \
   up -d
 ```
 
 Note: polling is required for SMB/CIFS shares because inotify events are not emitted from the remote filesystem.
 
-Repeat with separate services (and ports) per share. Host-managed mounts keep permissions predictable and reconnect more reliably than Docker-managed SMB volumes.
+### Strategies for scanning multiple shares
+1. Scan one share with one deployed connector. When complete, bring down the connector, change the configuration to point to a new mount (e.g., `/mnt/DESKTOP2/share`), deploy connector, and scan. This is the lowest operational overhead but is sequential.
+2. Run one connector per share (as in the diagram above). Each service needs its own DNS name on the Docker network, its own host port, and its own scan/quarantine paths, so copy the filesystem connector service block and edit names/ports/paths per share. This requires
+editing the compose file.  
+
+Example with two connectors on one host:
+
+```yaml
+services:
+  filesystem_connector_desktop1:
+    image: ${FILESYSTEM_IMAGE:-dsxconnect/filesystem-connector:latest}
+    ports: [ "8620:8620" ]
+    volumes:
+      - type: bind
+        source: /mnt/DESKTOP1/share
+        target: /app/scan_folder
+      - type: bind
+        source: /var/lib/dsxconnect/quarantine-DESKTOP1
+        target: /app/quarantine
+    environment:
+      DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector-desktop1:8620"
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+      DSXCONNECTOR_ASSET: "/app/scan_folder"
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+      DSXCONNECTOR_MONITOR: "true"
+      DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
+      DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+    networks:
+      dsx-network:
+        aliases: [ filesystem-connector-desktop1 ]
+
+  filesystem_connector_desktop2:
+    image: ${FILESYSTEM_IMAGE:-dsxconnect/filesystem-connector:latest}
+    ports: [ "8621:8620" ]
+    volumes:
+      - type: bind
+        source: /mnt/DESKTOP2/share
+        target: /app/scan_folder
+      - type: bind
+        source: /var/lib/dsxconnect/quarantine-DESKTOP2
+        target: /app/quarantine
+    environment:
+      DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector-desktop2:8620"
+      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+      DSXCONNECTOR_ASSET: "/app/scan_folder"
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+      DSXCONNECTOR_MONITOR: "true"
+      DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
+      DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+    networks:
+      dsx-network:
+        aliases: [ filesystem-connector-desktop2 ]
+```
+
+Notes:
+
+- The service name is the DNS name on the Docker network; keep `DSXCONNECTOR_CONNECTOR_URL` aligned with the service/alias.
+- Host ports (`8620`, `8621`, …) must be unique per connector.
+- Managing many connectors this way can get cumbersome; Kubernetes scales this pattern with per-release values instead of many compose edits.
+
 
 ### Why host-managed mounts?
+
+Yes, Compose can mount CIFS via the local driver, but it is best for low-volume or non-critical shares. You still need polling, and reconnect/permission edge cases are more common. For most production scenarios, prefer host-managed mounts plus bind mounts into the connector.
 
 - SMB/CIFS does not propagate inotify; polling is required either way.
 - Host mounts reconnect more reliably after network hiccups; Docker-managed CIFS often fails silently.
 - Permissions and UID/GID mappings are easier to control on the host than inside the container namespace.
 - Startup is less brittle: the container is not blocked by a slow SMB mount; the host handles retries.
 
-## Can Docker mount CIFS directly?
-
-Yes, Compose can mount CIFS via the local driver, but it is best for low-volume or non-critical shares. You still need polling, and reconnect/permission edge cases are more common. For most production scenarios, prefer host-managed mounts plus bind mounts into the connector.
-
 ## Kubernetes Angle
 
+```mermaid
+flowchart LR
+  subgraph WindowsHosts["Windows Desktops (SMB shares)"]
+    W1["\\\\DESKTOP1\\share"]
+    W2["\\\\DESKTOP2\\share"]
+    Wn["\\\\DESKTOPN\\share"]
+  end
+
+  subgraph K8s["Kubernetes cluster"]
+    subgraph CSI["SMB/CIFS CSI driver"]
+      PV1["PV: DESKTOP1 share"]
+      PV2["PV: DESKTOP2 share"]
+      PVC1["PVC desktop1"]
+      PVC2["PVC desktop2"]
+      PV1 --> PVC1
+      PV2 --> PVC2
+    end
+
+    subgraph Connectors["Filesystem connector pods"]
+      C1["fs-connector-desktop1\nmount: PVC desktop1 -> /app/scan_folder"]
+      C2["fs-connector-desktop2\nmount: PVC desktop2 -> /app/scan_folder"]
+    end
+
+    subgraph DSX["dsx-connect core svc"]
+      API[API]
+      Workers["Scan/Verdict Workers"]
+    end
+  end
+
+  W1 --> PV1
+  W2 --> PV2
+  Wn -.-> PV2
+  PVC1 --> C1
+  PVC2 --> C2
+  C1 <--> API
+  C2 <--> API
+  Workers --> C1
+  Workers --> C2
+```
+
 - Deploying multiple filesystem connectors with different assets is simpler: deploy another Helm release (or use a template) per share and set `DSXCONNECTOR_ASSET` to the mounted path.
-- Kubernetes can manage persistent volumes and mounts more robustly than Docker’s local driver. Use an SMB/CIFS CSI driver or node-level mounts, then mount into the pod.
+- Prefer an SMB/CIFS CSI driver with StorageClass + PV + PVC to present shares to pods. If CSI is unavailable, a node-level mount (e.g., DaemonSet) is a fallback.
 - The same polling guidance applies for SMB: enable polling when inotify is unavailable.
 
 ## Steps to Roll Out

@@ -99,8 +99,16 @@ async def start_monitor():
 
             def file_modified_callback(self, file_path: pathlib.Path):
                 dsx_logging.debug(f'Sending scan request for {file_path}')
+                size_hint = None
+                try:
+                    size_hint = file_path.stat().st_size
+                except Exception:
+                    pass
                 run_async(
-                    connector.webhook_handler(ScanRequestModel(location=str(file_path), metainfo=file_path.name)))
+                    connector.webhook_handler(
+                        ScanRequestModel(location=str(file_path), metainfo=file_path.name, size_in_bytes=size_hint)
+                    )
+                )
 
         # Determine quarantine path relative to asset if a relative path is supplied
         raw_quarantine = config.item_action_move_metainfo or ""
@@ -188,8 +196,13 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         if any(_is_under(p, qp) for qp in quarantine_paths):
             dsx_logging.debug(f"Skipping {p} (quarantine path)")
             continue
+        size_hint = None
+        try:
+            size_hint = p.stat().st_size
+        except Exception:
+            pass
         status_response = await connector.scan_file_request(
-            ScanRequestModel(location=str(file_path), metainfo=file_path.name))
+            ScanRequestModel(location=str(file_path), metainfo=file_path.name, size_in_bytes=size_hint))
         dsx_logging.debug(f'Sent scan request for {file_path}, result: {status_response}')
         count += 1
         if limit and count >= limit:
@@ -238,7 +251,12 @@ async def webhook_handler(event: dict | ScanRequestModel) -> StatusResponse:
                     description="Missing 'location' (or 'path'/'file_path') in event payload",
                 )
             metainfo = event.get("metainfo") or pathlib.Path(str(location)).name
-            req = ScanRequestModel(location=str(location), metainfo=str(metainfo))
+            size_hint = None
+            try:
+                size_hint = pathlib.Path(str(location)).stat().st_size
+            except Exception:
+                pass
+            req = ScanRequestModel(location=str(location), metainfo=str(metainfo), size_in_bytes=size_hint)
 
         dsx_logging.info(f"Received filesystem event for {req.location}")
         response = await connector.scan_file_request(req)
@@ -347,6 +365,14 @@ async def read_file_handler(scan_request_info: ScanRequestModel) -> StreamingRes
     if not file_path.is_file():
         return StatusResponse(status=StatusResponseEnum.ERROR,
                               message=f"File {file_path} not found")
+
+    # Provide file size hint to downstream (if not already set)
+    try:
+        if not getattr(scan_request_info, "size_in_bytes", None):
+            size = file_path.stat().st_size
+            scan_request_info.size_in_bytes = size
+    except Exception:
+        pass
 
     # Read the file content
     try:

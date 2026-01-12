@@ -134,9 +134,14 @@ def scan_binary(
     custom_metadata: Optional[str] = typer.Option(None, "--metadata"),
     password: Optional[str] = typer.Option(None, "--password", help="Password for encrypted file"),
     base64_header: bool = typer.Option(False, "--base64-header", help="Send via binary endpoint with X-Content-Type: base64"),
+    timeout: Optional[float] = typer.Option(
+        None, "--timeout", envvar="DSXA_TIMEOUT", help="Request timeout seconds (defaults to client setting)"
+    ),
 ):
     """Submit a file in binary mode."""
     client = get_client(ctx)
+    if timeout is not None:
+        client._client.timeout = timeout  # type: ignore[attr-defined]
     with file.open("rb") as fh:
         resp = client.scan_binary(fh.read(), custom_metadata=custom_metadata, password=password, base64_header=base64_header)
     print_scan_response(resp)
@@ -166,9 +171,14 @@ def scan_file(
     mode: ScanMode = typer.Option(ScanMode.BINARY, "--mode", case_sensitive=False),
     custom_metadata: Optional[str] = typer.Option(None, "--metadata"),
     password: Optional[str] = typer.Option(None, "--password"),
+    timeout: Optional[float] = typer.Option(
+        None, "--timeout", envvar="DSXA_TIMEOUT", help="Request timeout seconds (defaults to client setting)"
+    ),
 ):
     """Convenience command (auto base64 encoding when mode=base64)."""
     client = get_client(ctx)
+    if timeout is not None:
+        client._client.timeout = timeout  # type: ignore[attr-defined]
     resp = client.scan_file(str(file), mode=mode, custom_metadata=custom_metadata, password=password)
     print_scan_response(resp)
     client.close()

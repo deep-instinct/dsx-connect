@@ -1,19 +1,26 @@
 # … existing imports …
 import io
 import unicodedata
+import random
+import sys
+from pathlib import Path
 
 import httpx
 from celery import states
 from fastapi.encoders import jsonable_encoder
 from pydantic import ValidationError
 
+from dsx_connect.dsxa_sdk_import import ensure_sdk_on_path
+
+ensure_sdk_on_path()
+
+from dsxa_sdk import DSXAClient
+from dsxa_sdk.exceptions import DSXAError, AuthenticationError, BadRequestError, ServerError
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryDecision, RetryGroups
 from dsx_connect.config import get_config
 from dsx_connect.taskworkers.dlq_store import enqueue_scan_request_dlq_sync, make_scan_request_dlq_item
 
 from dsx_connect.connectors.client import get_connector_client
-from dsx_connect.dsxa_client.dsxa_client import DSXAClientError, DSXAServiceError, DSXATimeoutError, \
-    DSXAConnectionError, DSXAScanRequest, DSXAClient
 from shared.models.connector_models import ScanRequestModel
 from dsx_connect.taskworkers.celery_app import celery_app
 from dsx_connect.taskworkers.errors import MalformedScanRequest, DsxaClientError, DsxaServerError, DsxaTimeoutError, \
@@ -22,6 +29,12 @@ from dsx_connect.taskworkers.names import Tasks, Queues
 import redis  # lightweight sync client for quick job-state checks
 from shared.dsx_logging import dsx_logging
 from shared.routes import ConnectorAPI
+from dsx_connect.dsxa_client.verdict_models import (
+    DPAVerdictModel2,
+    DPAVerdictEnum,
+    DPAVerdictDetailsModel,
+    DPAVerdictFileInfoModel,
+)
 
 class ScanRequestWorker(BaseWorker):
     """
@@ -40,11 +53,13 @@ class ScanRequestWorker(BaseWorker):
         except ValidationError as e:
             raise MalformedScanRequest(f"Invalid scan request: {e}") from e
 
+        dsx_logging.info(f"[scan_request:{self.request.id}] for {scan_request.metainfo} started")
+
         # 1a. Respect job pause/cancel (best-effort): quick sync Redis check
+        cfg = get_config()
         job_id = getattr(scan_request, "scan_job_id", None)
         if job_id:
             try:
-                cfg = get_config()
                 r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
                 key = f"dsxconnect:job:{job_id}"
                 paused, cancelled = r.hmget(key, "paused", "cancel")
@@ -78,28 +93,57 @@ class ScanRequestWorker(BaseWorker):
                     raise self.retry(countdown=5)
                 return "PAUSED"
 
+        # 1b. Preflight skip for oversized files (based on provided size hint, if any)
+        size_hint = getattr(scan_request, "size_in_bytes", None)
+        max_file_size = getattr(cfg.scanner, "max_file_size_bytes", None)
+        if max_file_size and size_hint is not None and size_hint > max_file_size:
+            dsx_logging.warning(
+                f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
+                f"Skipping {scan_request.location} (hint size {size_hint} bytes exceeds limit {max_file_size})"
+            )
+            self._emit_not_scanned_verdict(scan_request_dict, scan_request, size_hint, reason="File Size Too Large")
+            return "SKIPPED_FILE_TOO_LARGE"
+
+        slot_acquired = False
         # 2. Read file from connector
-        file_bytes = self.read_file_from_connector(scan_request)
-        dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read {len(file_bytes)} bytes")
+        try:
+            slot_acquired = self._acquire_scanner_slot(cfg, scan_request_dict, scan_request_task_id)
+            if not slot_acquired:
+                return "BACKPRESSURE"
 
-        # 3. Scan with DSXA
-        dpa_verdict = self.scan_with_dsxa(file_bytes, scan_request, self.context.task_id)
-        dsx_logging.debug(
-            f"[scan_request:{self.context.task_id}] Verdict: {getattr(dpa_verdict, 'verdict', None)}"
-        )
+            file_bytes = self.read_file_from_connector(scan_request)
+            actual_size = len(file_bytes)
+            dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read {actual_size} bytes")
 
-        # 4. Enqueue verdict task
-        verdict_payload = dpa_verdict.model_dump() if hasattr(dpa_verdict, "model_dump") else dpa_verdict
-        async_result = celery_app.send_task(
-            Tasks.VERDICT,
-            args=[scan_request_dict, verdict_payload],
-            kwargs={"scan_request_task_id": self.request.id},
-            queue=Queues.VERDICT,
-        )
-        dsx_logging.info(
-            f"[scan_request:{self.context.task_id}] Success -> verdict task {async_result.id}"
-        )
-        return "SUCCESS"
+            if max_file_size and actual_size > max_file_size:
+                dsx_logging.warning(
+                    f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
+                    f"Skipping {scan_request.location} (actual size {actual_size} bytes exceeds limit {max_file_size})"
+                )
+                self._emit_not_scanned_verdict(scan_request_dict, scan_request, actual_size, reason="File Size Too Large")
+                return "SKIPPED_FILE_TOO_LARGE"
+
+            # 3. Scan with DSXA
+            dpa_verdict = self.scan_with_dsxa(file_bytes, scan_request, self.context.task_id)
+            dsx_logging.debug(
+                f"[scan_request:{self.context.task_id}] Verdict: {getattr(dpa_verdict, 'verdict', None)}"
+            )
+
+            # 4. Enqueue verdict task
+            verdict_payload = dpa_verdict.model_dump() if hasattr(dpa_verdict, "model_dump") else dpa_verdict
+            async_result = celery_app.send_task(
+                Tasks.VERDICT,
+                args=[scan_request_dict, verdict_payload],
+                kwargs={"scan_request_task_id": self.request.id},
+                queue=Queues.VERDICT,
+            )
+            dsx_logging.info(
+                f"[scan_request:{self.context.task_id}] Success -> verdict task {async_result.id}"
+            )
+            return "SUCCESS"
+        finally:
+            if slot_acquired:
+                self._release_scanner_slot(cfg)
 
 
     def read_file_from_connector(self, scan_request: ScanRequestModel) -> bytes:
@@ -128,41 +172,94 @@ class ScanRequestWorker(BaseWorker):
 
 
     def scan_with_dsxa(self, file_bytes: bytes, scan_request: ScanRequestModel, task_id: str = None):
-        """Scan file with DSXA. Maps exceptions to task-appropriate errors."""
+        """Scan file with DSXA via dsxa_sdk."""
         config = get_config()
-        dsxa_client = DSXAClient(scan_binary_url=config.scanner.scan_binary_url)
+        metadata_info = self._build_metadata(scan_request, task_id)
 
-        # Prepare metadata
-        safe_meta = unicodedata.normalize("NFKD", scan_request.metainfo).encode("ascii", "ignore").decode("ascii")
-        metadata_info = f"file-tag:{safe_meta}"
-        if task_id:
-            metadata_info += f",task-id:{task_id}"
+        client = DSXAClient(
+            base_url=config.scanner.base_url,
+            auth_token=getattr(config.scanner, "auth_token", None),
+            timeout=getattr(config.scanner, "timeout_seconds", 30.0),
+            verify_tls=getattr(config.scanner, "verify_tls", True),
+        )
 
         try:
-            dpa_verdict = dsxa_client.scan_binary(
-                scan_request=DSXAScanRequest(
-                    binary_data=io.BytesIO(file_bytes),
-                    metadata_info=metadata_info
-                )
+            resp = client.scan_binary(
+                file_bytes,
+                custom_metadata=metadata_info,
             )
+            dpa_verdict = self._convert_verdict(resp)
 
             # Handle special "initializing" case
             reason = getattr(dpa_verdict.verdict_details, "reason", "") or ""
-            if dpa_verdict.verdict.value == "Not Scanned" and "initializing" in reason:
+            if dpa_verdict.verdict == DPAVerdictEnum.NOT_SCANNED and "initializing" in reason:
                 raise DsxaServerError("DSXA scanner is initializing")
 
             return dpa_verdict
 
-        except DSXAConnectionError as e:
-            raise DsxaTimeoutError(f"DSXA connection failed: {e}") from e
-        except DSXATimeoutError as e:
-            raise DsxaTimeoutError(f"DSXA timeout: {e}") from e
-        except DSXAServiceError as e:
-            if any(code in str(e) for code in ["HTTP 429", "HTTP 500", "HTTP 502", "HTTP 503", "HTTP 504"]):
+        except DSXAError as e:
+            # Map SDK errors to our taxonomy
+            if isinstance(e, AuthenticationError):
+                raise DsxaClientError(f"DSXA auth error: {e}") from e
+            if isinstance(e, BadRequestError):
+                raise DsxaClientError(f"DSXA bad request: {e}") from e
+            if isinstance(e, ServerError):
                 raise DsxaServerError(f"DSXA server error: {e}") from e
-            raise DsxaClientError(f"DSXA client error: {e}") from e
-        except DSXAClientError as e:
-            raise DsxaClientError(f"DSXA client error: {e}") from e
+            if "timeout" in str(e).lower():
+                raise DsxaTimeoutError(f"DSXA timeout: {e}") from e
+            raise DsxaServerError(f"DSXA error: {e}") from e
+        except httpx.TimeoutException as e:
+            raise DsxaTimeoutError(f"DSXA timeout: {e}") from e
+        except httpx.HTTPError as e:
+            raise DsxaServerError(f"DSXA connection error: {e}") from e
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+    def _build_metadata(self, scan_request: ScanRequestModel, task_id: str | None) -> str:
+        safe_meta = unicodedata.normalize("NFKD", scan_request.metainfo).encode("ascii", "ignore").decode("ascii")
+        metadata_info = f"file-tag:{safe_meta}"
+        if task_id:
+            metadata_info += f",task-id:{task_id}"
+        return metadata_info
+
+    def _convert_verdict(self, resp):
+        # Map dsxa_sdk ScanResponse to DPAVerdictModel2 (legacy)
+        verdict_map = {
+            "benign": DPAVerdictEnum.BENIGN,
+            "malicious": DPAVerdictEnum.MALICIOUS,
+            "not scanned": DPAVerdictEnum.NOT_SCANNED,
+            "scanning": DPAVerdictEnum.NOT_SCANNED,
+            "non compliant": DPAVerdictEnum.NON_COMPLIANT,
+            "unknown": DPAVerdictEnum.UNKNOWN,
+        }
+        raw_verdict = getattr(resp, "verdict", None)
+        verdict_str = raw_verdict.value if hasattr(raw_verdict, "value") else str(raw_verdict or "")
+        verdict_val = verdict_map.get(verdict_str.lower(), DPAVerdictEnum.UNKNOWN)
+
+        details = DPAVerdictDetailsModel(
+            event_description=getattr(resp.verdict_details, "event_description", None) or "",
+            reason=getattr(resp.verdict_details, "reason", None),
+        )
+
+        file_info = None
+        if resp.file_info:
+            file_info = DPAVerdictFileInfoModel(
+                file_type=getattr(resp.file_info, "file_type", None) or "",
+                file_size_in_bytes=getattr(resp.file_info, "file_size_in_bytes", None) or 0,
+                file_hash=getattr(resp.file_info, "file_hash", None),
+                additional_office_data=None,
+            )
+
+        return DPAVerdictModel2(
+            scan_guid=getattr(resp, "scan_guid", None),
+            verdict=verdict_val,
+            verdict_details=details,
+            file_info=file_info,
+            scan_duration_in_microseconds=getattr(resp, "scan_duration_in_microseconds", None) or -1,
+        )
 
     def _enqueue_dlq(
             self,
@@ -189,6 +286,87 @@ class ScanRequestWorker(BaseWorker):
             upstream_task_id=upstream_task_id,
         )
         enqueue_scan_request_dlq_sync(item)
+
+    def _acquire_scanner_slot(self, cfg, scan_request_dict: dict, scan_request_task_id: str | None) -> bool:
+        """Simple backpressure: cap concurrent/pending scans to protect DSXA."""
+        max_inflight = getattr(cfg.scanner, "max_inflight", 0) or 0
+        if max_inflight <= 0:
+            return True
+
+        try:
+            r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
+            key = "dsxconnect:scanner:inflight"
+            inflight = r.incr(key)
+            r.expire(key, 600)
+            if inflight > max_inflight:
+                # Release and reschedule lightly
+                r.decr(key)
+                delay = 3 + random.randint(0, 3)
+                async_result = celery_app.send_task(
+                    Tasks.REQUEST,
+                    args=[scan_request_dict],
+                    kwargs={"scan_request_task_id": scan_request_task_id or getattr(self.request, "id", None)},
+                    queue=Queues.REQUEST,
+                    countdown=delay,
+                )
+                dsx_logging.warning(
+                    f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
+                    f"Scanner at capacity ({inflight-1}/{max_inflight}); rescheduled as {async_result.id} in {delay}s"
+                )
+                return False
+            return True
+        except redis.RedisError as e:
+            dsx_logging.warning(
+                f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
+                f"Backpressure check skipped (Redis error): {e}"
+            )
+            return True
+
+    def _release_scanner_slot(self, cfg) -> None:
+        max_inflight = getattr(cfg.scanner, "max_inflight", 0) or 0
+        if max_inflight <= 0:
+            return
+        try:
+            r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
+            r.decr("dsxconnect:scanner:inflight")
+        except redis.RedisError:
+            # Best-effort; if Redis is unavailable, counters may drift until service restarts
+            pass
+
+    def _emit_not_scanned_verdict(self, scan_request_dict: dict, scan_request: ScanRequestModel, size: int, reason: str):
+        """Emit a synthetic Not Scanned verdict so downstream logging/UI can act on oversized files."""
+        details = DPAVerdictDetailsModel(
+            event_description="File not scanned",
+            reason=reason,
+        )
+        file_info = DPAVerdictFileInfoModel(
+            file_type="Unknown",
+            file_size_in_bytes=size,
+            file_hash="",
+            additional_office_data=None,
+        )
+        # DSXA returns GUID-like strings without dashes; mimic that for consistency
+        from uuid import uuid4
+        synthetic_guid = uuid4().hex
+
+        verdict = DPAVerdictModel2(
+            scan_guid=synthetic_guid,
+            verdict=DPAVerdictEnum.NON_COMPLIANT,
+            verdict_details=details,
+            file_info=file_info,
+            scan_duration_in_microseconds=0,
+        )
+        verdict_payload = verdict.model_dump()
+        async_result = celery_app.send_task(
+            Tasks.VERDICT,
+            args=[scan_request_dict, verdict_payload],
+            kwargs={"scan_request_task_id": getattr(self.request, "id", None)},
+            queue=Queues.VERDICT,
+        )
+        dsx_logging.info(
+            f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
+            f"Emitted Not Scanned verdict for oversized file (size={size}); verdict task {async_result.id}"
+        )
 
 # Register the class-based task with Celery
 celery_app.register_task(ScanRequestWorker())

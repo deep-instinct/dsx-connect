@@ -59,7 +59,7 @@ class ScanStatsWorker:
                 stats.unknown_count += 1
             elif v == DPAVerdictEnum.UNSUPPORTED:
                 stats.unsupported_count += 1
-            elif v == DPAVerdictEnum.NOT_SCANNED:
+            elif v in {DPAVerdictEnum.NOT_SCANNED, DPAVerdictEnum.NON_COMPLIANT}:
                 stats.not_scanned_count += 1
                 try:
                     reason = (

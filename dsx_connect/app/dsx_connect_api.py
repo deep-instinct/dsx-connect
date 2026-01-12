@@ -246,13 +246,40 @@ def get_meta():
 def get_version():
     return version.DSX_CONNECT_VERSION
 
-@api.get(route_path(DSXConnectAPI.DSXA_CONNECTION_TEST.value),
-         name=route_name(DSXConnectAPI.DSXA_CONNECTION_TEST, action=Action.DSXA_CONNECTION),
-         description="Test connection to dsxa scanner.",
-         status_code=status.HTTP_200_OK)
-async def get_dsxa_test_connection():
-    dsxa_client = DSXAClient(get_config().scanner.scan_binary_url)
-    return await dsxa_client.test_connection_async()
+@api.get(
+    route_path(DSXConnectAPI.DSXA_CONNECTION_TEST.value),
+    name=route_name(DSXConnectAPI.DSXA_CONNECTION_TEST, action=Action.DSXA_CONNECTION),
+    description="Test connection to dsxa scanner.",
+    status_code=status.HTTP_200_OK,
+)
+def get_dsxa_test_connection():
+    """
+    Lightweight connectivity test: attempts a minimal scan request.
+    """
+    from dsx_connect.dsxa_sdk_import import ensure_sdk_on_path
+
+    ensure_sdk_on_path()
+    from dsxa_sdk import DSXAClient
+    from dsxa_sdk.exceptions import DSXAError
+    from shared.models.status_responses import StatusResponse, StatusResponseEnum
+
+    cfg = get_config()
+    client = DSXAClient(
+        base_url=cfg.scanner.base_url,
+        auth_token=getattr(cfg.scanner, "auth_token", None),
+        timeout=getattr(cfg.scanner, "timeout_seconds", 30.0),
+        verify_tls=getattr(cfg.scanner, "verify_tls", True),
+    )
+    try:
+        client.scan_binary(b"dsx-connect healthcheck", custom_metadata="healthcheck")
+        return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Connected to DSXA")
+    except DSXAError as e:
+        return StatusResponse(status=StatusResponseEnum.ERROR, message=str(e))
+    finally:
+        try:
+            client.close()
+        except Exception:
+            pass
 
 
 @api.get(

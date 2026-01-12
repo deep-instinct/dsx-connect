@@ -51,7 +51,41 @@ class DatabaseConfig(BaseSettings):
 
 class ScannerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__")
-    scan_binary_url: str = "http://0.0.0.0:5000/scan/binary/v2"
+    # Base URL for DSXA (without path). Example: http://0.0.0.0:5000
+    base_url: str = Field(
+        default="http://0.0.0.0:5000",
+        validation_alias=AliasChoices("DSXCONNECT_SCANNER__BASE_URL", "SCANNER_BASE_URL"),
+    )
+    # Backwards compatibility: full scan_binary_url; if provided, base_url is derived when not explicitly set.
+    scan_binary_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DSXCONNECT_SCANNER__SCAN_BINARY_URL", "SCAN_BINARY_URL"),
+    )
+    # Optional bearer token for DSXA
+    auth_token: str | None = None
+    verify_tls: bool = True
+    timeout_seconds: float = 600.0
+    # Upper bound of concurrent/pending scans we allow before applying backpressure
+    max_inflight: int = 2048
+    # Maximum file size accepted by DSXA (/scan/binary/v2). Files larger than this are skipped.
+    max_file_size_bytes: int = 2 * 1024 * 1024 * 1024
+
+    @model_validator(mode="after")
+    def _derive_base_url(self):
+        """
+        Allow legacy scan_binary_url to populate base_url if base_url was not explicitly set.
+        Strips a trailing /scan/binary* path when present.
+        """
+        try:
+            if self.scan_binary_url and (self.base_url == "http://0.0.0.0:5000" or not self.base_url):
+                url = str(self.scan_binary_url).rstrip("/")
+                marker = "/scan/binary"
+                if marker in url:
+                    url = url.split(marker, 1)[0]
+                self.base_url = url
+        except Exception:
+            pass
+        return self
 
 
 class SyslogConfig(BaseSettings):

@@ -96,8 +96,12 @@ Note: polling is required for SMB/CIFS shares because inotify events are not emi
 
 ### Strategies for scanning multiple shares
 1. Scan one share with one deployed connector. When complete, bring down the connector, change the configuration to point to a new mount (e.g., `/mnt/DESKTOP2/share`), deploy connector, and scan. This is the lowest operational overhead but is sequential.
-2. Run one connector per share (as in the diagram above). Each service needs its own DNS name on the Docker network, its own host port, and its own scan/quarantine paths, so copy the filesystem connector service block and edit names/ports/paths per share. This requires
-editing the compose file.  
+2. Run one connector per share (as in the diagram above). Each service needs its own DNS name on the Docker network, its own host port, and its own scan/quarantine paths, so copy the filesystem connector service block and edit names/ports/paths per share. You can also segment by filter: one connector per share *and* `DSXCONNECTOR_FILTER` to target subtrees/file types if you need separate policies per share subset. This requires editing the compose file.  
+
+Operational pattern (baseline + new files):
+- Run a full scan on the existing contents of the share.
+- Keep monitoring enabled; new files dropped into the share are detected and scanned.
+- Repeat as needed (e.g., bulk copy, full scan again, then continue monitoring for deltas).
 
 Example with two connectors on one host:
 

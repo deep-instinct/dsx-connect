@@ -50,6 +50,8 @@ class ScanRequestModel(BaseModel):
     location: str
     metainfo: str
     connector_url: str = None
+    # Optional known file size in bytes (provided by connectors to enable preflight checks)
+    size_in_bytes: int | None = Field(default=None, ge=0)
     # Logical job identifier to associate related scan requests.
     # For connector full scans, all enqueued items share a job id.
     # For single events (e.g., webhook), a unique job id represents a job of one.

@@ -14,6 +14,7 @@ class DPAVerdictEnum(str, Enum):
     BENIGN = 'Benign'
     MALICIOUS = 'Malicious'
     UNSUPPORTED = 'Unsupported File Type'
+    NON_COMPLIANT = 'Non Compliant'
     NOT_SCANNED = 'Not Scanned'
 
 
@@ -70,4 +71,3 @@ class DPAVerdictModel2(BaseModel):
     verdict_details: DPAVerdictDetailsModel | None = None
     file_info: DPAVerdictFileInfoModel | None = None
     scan_duration_in_microseconds: int = -1
-

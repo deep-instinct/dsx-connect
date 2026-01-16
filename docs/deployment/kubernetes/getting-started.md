@@ -8,6 +8,7 @@ Use this page as the single checklist before diving into the connector-specific 
 - Cluster admin rights to create namespaces, Secrets, and ServiceAccounts
 - Access to the dsx-connect Helm charts hosted in Docker Hub’s OCI registry: [https://hub.docker.com/r/dsxconnect](https://hub.docker.com/r/dsxconnect)
 - Connector-specific credentials (for example: AWS IAM keys, Azure AD app secrets, GCP service-account JSON; see Reference pages for each provider)
+- For environment settings and worker retry policies, see [Deployment Advanced Settings](../advanced.md).
 
 ## Kubernetes Secrets and Credentials
 Prefer Kubernetes-native secret handling over `.env` files or committing credentials to `values.yaml`.
@@ -49,7 +50,7 @@ The `inv release-all` pipeline publishes every chart to Docker Hub under the `ds
 2. **Deploy dsx-connect core:** Follow [dsx-connect (Helm)](dsx-connect.md) to install the API, workers, Redis, and syslog stack. Verify `/readyz` and watch the UI before layering connectors.
 3. **Deploy connectors:** Pick the connector guide under this section (Filesystem, AWS S3, Azure Blob, Google Cloud Storage, SharePoint, OneDrive, etc.). Each page documents the required values, secrets, and network exposure.
 4. **Ingress & auth:** Configure your cluster ingress controller (NGINX, ALB, etc.) and, where required, expose only the connector webhook path. Front the dsx-connect UI/API with your organization’s SSO or oauth2-proxy.
-5. **Monitoring & rotation:** Enable Prometheus/Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](../deployment/authentication.md).
+5. **Monitoring & rotation:** Enable Prometheus/Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](../authentication.md).
 
 
 This keeps sensitive data in Secrets and simplifies upgrades (`helm upgrade -f values-prod.yaml`).

@@ -29,12 +29,15 @@ class DiannaAnalysisWorker(BaseWorker):
         # Validate minimal scan request using existing model
         scan_req = ScanRequestModel.model_validate(scan_request_dict)
 
-        # Fetch file bytes from connector
-        file_bytes = self._read_file_from_connector(scan_req)
-        sha256 = hashlib.sha256(file_bytes).hexdigest()
+        cfg = get_config().dianna
+        chunk_size = int(cfg.chunk_size)
+        file_stream, total_size = self._read_file_stream_from_connector(scan_req, chunk_size)
+        if total_size is None:
+            file_bytes = self._read_file_from_connector(scan_req)
+            total_size = len(file_bytes)
+            file_stream = (file_bytes[i:i + chunk_size] for i in range(0, total_size, chunk_size))
 
         # Upload to DIANNA
-        cfg = get_config().dianna
         url = cfg.management_url.rstrip('/') + '/api/v1/dianna/analyzeFile'
         headers = {"Authorization": f"{cfg.api_token}"} if cfg.api_token else {}
         timeout = httpx.Timeout(cfg.timeout)
@@ -45,15 +48,15 @@ class DiannaAnalysisWorker(BaseWorker):
         analysis_result: Optional[Dict[str, Any]] = None
         try:
             with httpx.Client(timeout=timeout, verify=(cfg.ca_bundle or cfg.verify_tls)) as client:
-                total_size = len(file_bytes)
-                chunk_size = int(cfg.chunk_size)
-                total_chunks = (total_size + chunk_size - 1) // chunk_size
-                for idx in range(total_chunks):
-                    start = idx * chunk_size
-                    chunk = file_bytes[start:start + chunk_size]
+                hasher = hashlib.sha256()
+                offset = 0
+                for chunk in file_stream:
+                    if not chunk:
+                        continue
+                    hasher.update(chunk)
                     payload = {
-                        'start_byte': start,
-                        'end_byte': start + len(chunk) - 1,
+                        'start_byte': offset,
+                        'end_byte': offset + len(chunk) - 1,
                         'total_bytes': total_size,
                         'upload_id': upload_id,
                         'file_name': scan_req.metainfo or scan_req.location,
@@ -65,6 +68,8 @@ class DiannaAnalysisWorker(BaseWorker):
                     r.raise_for_status()
                     resp_json = r.json() if r.content else {}
                     upload_id = (resp_json or {}).get('upload_id') or upload_id
+                    offset += len(chunk)
+                sha256 = hasher.hexdigest()
 
                 # Initial notify: upload completed, analysis queued
                 try:
@@ -241,6 +246,41 @@ class DiannaAnalysisWorker(BaseWorker):
             f"[dianna:{self.context.task_id}] analysis queued for {scan_req.location} (sha256={sha256[:12]}...)"
         )
         return upload_id or "OK"
+
+    def _read_file_stream_from_connector(self, scan_request: ScanRequestModel, chunk_size: int):
+        try:
+            with get_connector_client(scan_request.connector_url) as client:
+                response = client.post(
+                    ConnectorAPI.READ_FILE,
+                    json_body=jsonable_encoder(scan_request),
+                )
+            response.raise_for_status()
+            try:
+                content_length = response.headers.get("content-length")
+                size = int(content_length) if content_length else None
+            except Exception:
+                size = None
+            if size is None:
+                size = getattr(scan_request, "size_in_bytes", None)
+
+            def iter_chunks():
+                try:
+                    for chunk in response.iter_bytes(chunk_size=chunk_size):
+                        if chunk:
+                            yield chunk
+                finally:
+                    response.close()
+
+            return iter_chunks(), size
+        except httpx.ConnectError as e:
+            raise ConnectorConnectionError(f"Connector connection failed: {e}") from e
+        except httpx.HTTPStatusError as e:
+            code = e.response.status_code
+            if 500 <= code < 600:
+                raise ConnectorServerError(f"Connector server error {code}") from e
+            elif 400 <= code < 500:
+                raise ConnectorClientError(f"Connector client error {code}") from e
+            raise ConnectorConnectionError(f"Connector HTTP error {code}") from e
 
     def _read_file_from_connector(self, scan_request: ScanRequestModel) -> bytes:
         try:

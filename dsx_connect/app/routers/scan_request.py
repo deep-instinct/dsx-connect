@@ -17,6 +17,7 @@ from shared.models.connector_models import ScanRequestModel
 from dsx_connect.taskworkers.celery_app import celery_app
 from dsx_connect.taskworkers.names import Tasks, Queues
 from shared.models.status_responses import StatusResponse, StatusResponseEnum
+from dsx_connect.messaging.state_keys import job_key, job_keys
 
 
 class ScanRequestStatus(BaseModel):
@@ -57,8 +58,8 @@ async def post_scan_request(
         try:
             r = getattr(request.app.state, "redis", None)
             if r is not None:
-                job_key = f"dsxconnect:job:{scan_request_info.scan_job_id}"
-                flags = await r.hmget(job_key, "paused", "cancel")
+                key = job_key(scan_request_info.scan_job_id)
+                flags = await r.hmget(key, "paused", "cancel")
                 if flags and (flags[0] == "1" or flags[1] == "1"):
                     response.status_code = 409
                     return StatusResponse(status=StatusResponseEnum.ERROR,
@@ -81,7 +82,7 @@ async def post_scan_request(
             r = getattr(request.app.state, "redis", None)
             if r is not None:
                 job_id = scan_request_info.scan_job_id
-                key = f"dsxconnect:job:{job_id}"
+                key = job_key(job_id)
                 now = str(int(time.time()))
                 await r.hsetnx(key, "job_id", job_id)
                 await r.hsetnx(key, "status", "running")
@@ -95,7 +96,7 @@ async def post_scan_request(
                     pass
                 await r.hincrby(key, "enqueued_count", 1)
                 try:
-                    await r.rpush(f"{key}:tasks", task_id)
+                    await r.rpush(job_keys(job_id), task_id)
                 except Exception:
                     pass
                 mapping = {"last_update": now}

@@ -55,7 +55,7 @@ docker compose --env-file dsx-connect-<core_version>/m365-mail-connector-<connec
 - Use multiple connector instances when sharding large estates (per mailbox or per folder). Each instance should receive a distinct asset and mailbox list.
 - Apply `DSXCONNECTOR_FILTER` when you want to include/exclude attachment names (e.g., `**/*.zip`, `-tmp/`). Filters are evaluated relative to the asset’s mailbox/folder path.
 
-See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for sharding patterns.
+See Reference → [Assets & Filters](../../reference/assets.md) for sharding patterns.
 
 ## Webhook Exposure
 Microsoft Graph must reach `https://<public-host>/m365-mail-connector/webhook/event`.

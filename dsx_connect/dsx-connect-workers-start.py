@@ -1,3 +1,4 @@
+import os
 from dsx_connect.config import get_config
 from shared.dsx_logging import dsx_logging
 from dsx_connect.taskworkers.names import Queues
@@ -36,15 +37,15 @@ if __name__ == "__main__":
     print(f"  - {Queues.NOTIFICATION}")
     print(f"  - {Queues.ANALYZE}")
 
-    # Configure and run the Celery worker
-    dsx_logging.info("Starting Celery worker for debugging...")
+    pool = os.getenv("DSXCONNECT_WORKER_POOL", "solo")
+    concurrency = int(os.getenv("DSXCONNECT_WORKER_CONCURRENCY",
+                                os.getenv("DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY", "1")))
 
-    # Configure and run the Celery worker
-    dsx_logging.info("Starting Celery worker for debugging...")
+    dsx_logging.info(f"Starting Celery worker (pool={pool}, concurrency={concurrency})...")
     celery_app.worker_main([
         "worker",
         "--loglevel=warning",
-        "--pool=solo",  # <== allows for running in debugging mode.
+        f"--pool={pool}",
         f"--queues={Queues.REQUEST},{Queues.VERDICT},{Queues.RESULT},{Queues.NOTIFICATION},{Queues.ANALYZE}",  #,{config.celery_app.encrypted_file_queue}
-        "--concurrency=1"
+        f"--concurrency={concurrency}"
     ])

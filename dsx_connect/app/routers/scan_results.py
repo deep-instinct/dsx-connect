@@ -9,6 +9,7 @@ from dsx_connect.database.database_factory import database_scan_stats_factory, d
 from redis.asyncio import Redis
 from fastapi import Depends
 from shared.dsx_logging import dsx_logging
+from dsx_connect.messaging.state_keys import job_key, job_key_pattern, job_keys
 
 router = APIRouter(prefix=route_path(API_PREFIX_V1))
 
@@ -81,7 +82,7 @@ async def get_job_status(job_id: str, request: Request) -> dict:
     r = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     data = await r.hgetall(key)
     if not data:
         raise HTTPException(status_code=404, detail="job_not_found")
@@ -141,7 +142,7 @@ async def get_job_status_raw(job_id: str, request: Request) -> dict:
     r: Redis | None = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     data = await r.hgetall(key)
     ttl = await r.ttl(key)
     return {"key": key, "ttl": ttl, "data": data}
@@ -165,7 +166,7 @@ async def mark_job_enqueue_done(job_id: str, request: Request, payload: dict | N
     r = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     now = str(int(__import__('time').time()))
     mapping = {"enqueue_done": "1", "enqueue_finished_at": now, "last_update": now}
     try:
@@ -193,7 +194,7 @@ async def pause_job(job_id: str, request: Request) -> dict:
     r = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     await r.hset(key, mapping={"paused": "1", "status": "paused", "last_update": str(int(__import__('time').time()))})
     await r.expire(key, 7 * 24 * 3600)
     # Proactively publish a job-status frame so UI reflects "paused" immediately
@@ -247,7 +248,7 @@ async def resume_job(job_id: str, request: Request) -> dict:
     r = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     await r.hdel(key, "paused")
     await r.hset(key, mapping={"status": "running", "last_update": str(int(__import__('time').time()))})
     await r.expire(key, 7 * 24 * 3600)
@@ -263,11 +264,11 @@ async def cancel_job(job_id: str, request: Request) -> dict:
     r = getattr(request.app.state, "redis", None)
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
-    key = f"dsxconnect:job:{job_id}"
+    key = job_key(job_id)
     # Revoke tasks (best-effort)
     try:
         from dsx_connect.taskworkers.celery_app import celery_app
-        tasks = await r.lrange(f"{key}:tasks", 0, -1)
+        tasks = await r.lrange(job_keys(job_id), 0, -1)
         for tid in tasks or []:
             try:
                 celery_app.control.revoke(tid, terminate=False)
@@ -291,7 +292,7 @@ async def list_jobs(request: Request) -> list[dict]:
     if r is None:
         raise HTTPException(status_code=503, detail="job_store_unavailable")
     out: list[dict] = []
-    async for key in r.scan_iter(match="dsxconnect:job:*", count=100):
+    async for key in r.scan_iter(match=job_key_pattern(), count=100):
         try:
             data = await r.hgetall(key)
             if not data:

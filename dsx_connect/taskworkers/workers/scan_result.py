@@ -21,6 +21,7 @@ from shared.models.connector_models import ScanRequestModel, ItemActionModel
 from dsx_connect.models.scan_result import ScanResultModel, ScanResultStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import ItemActionStatusResponse
+from dsx_connect.messaging.state_keys import job_key
 
 
 # Optional extras (DB, stats, notifications) are best-effort and should NOT trigger retries.
@@ -127,7 +128,7 @@ class ScanResultWorker(BaseWorker):
             cfg = get_config()
             job_id = getattr(scan_result, "scan_job_id", None) or getattr(getattr(scan_result, "scan_request", None), "scan_job_id", None)
             if job_id:
-                key = f"dsxconnect:job:{job_id}"
+                key = job_key(job_id)
                 r = getattr(self.__class__, "_redis", None)
                 if r is None:
                     self.__class__._redis = _redis.from_url(str(cfg.redis_url), decode_responses=True)
@@ -162,7 +163,7 @@ class ScanResultWorker(BaseWorker):
             if job_id:
                 r = getattr(self.__class__, "_redis", None)
                 if r is not None:
-                    data = r.hgetall(f"dsxconnect:job:{job_id}") or {}
+                    data = r.hgetall(job_key(job_id)) or {}
                     try:
                         enq_total = int(data.get("enqueued_total", -1)) if data.get("enqueued_total") is not None else -1
                         expected = int(data.get("expected_total", -1)) if data.get("expected_total") is not None else -1
@@ -170,7 +171,7 @@ class ScanResultWorker(BaseWorker):
                         processed = int(data.get("processed_count", 0))
                         if total > 0 and processed >= total and not data.get("finished_at"):
                             now = str(int(time.time()))
-                            r.hset(f"dsxconnect:job:{job_id}", mapping={"status": "completed", "finished_at": now, "last_update": now})
+                            r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
                             try:
                                 dsx_logging.info(f"job.complete job={job_id} processed={processed} total={total} finished_at={now}")
                             except Exception:
@@ -179,7 +180,7 @@ class ScanResultWorker(BaseWorker):
                             # Older behavior: if enqueue_done is set and processed matches enqueued_total, mark done
                             if enq_total > 0 and processed >= enq_total and not data.get("finished_at"):
                                 now = str(int(time.time()))
-                                r.hset(f"dsxconnect:job:{job_id}", mapping={"status": "completed", "finished_at": now, "last_update": now})
+                                r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
                                 try:
                                     dsx_logging.info(f"job.complete job={job_id} processed={processed} enqueued_total={enq_total} finished_at={now}")
                                 except Exception:
@@ -192,7 +193,7 @@ class ScanResultWorker(BaseWorker):
                                 enq_count = -1
                             if enq_count >= 0 and processed >= enq_count and not data.get("finished_at"):
                                 now = str(int(time.time()))
-                                r.hset(f"dsxconnect:job:{job_id}", mapping={"status": "completed", "finished_at": now, "last_update": now})
+                                r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
                                 try:
                                     dsx_logging.info(f"job.complete job={job_id} processed={processed} enqueued_count={enq_count} finished_at={now}")
                                 except Exception:

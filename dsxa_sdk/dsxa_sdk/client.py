@@ -6,7 +6,7 @@ import time
 from enum import Enum
 from pathlib import Path
 import warnings
-from typing import Any, Dict, Optional, Union
+from typing import Any, AsyncIterable, Dict, Iterable, Optional, Union
 
 import httpx
 
@@ -133,7 +133,10 @@ class DSXAClient(_BaseDSXAClient):
         base64_header: bool = False,
     ) -> ScanResponse:
         """
-        Scan a file in binary mode (optionally flagged as base64 via header).
+        Scan a file in binary mode using an in-memory payload.
+
+        Use this when you already have the full bytes in memory. For large files,
+        prefer `scan_binary_stream()` to avoid buffering the entire file in the client.
         """
         headers = self._build_headers(
             protected_entity=protected_entity,
@@ -146,6 +149,35 @@ class DSXAClient(_BaseDSXAClient):
             "/scan/binary/v2",
             headers=headers,
             content=bytes(data),
+        )
+        return ScanResponse.model_validate(response)
+
+    def scan_binary_stream(
+        self,
+        data: Iterable[bytes],
+        *,
+        protected_entity: Optional[int] = None,
+        custom_metadata: Optional[str] = None,
+        password: Optional[str] = None,
+        base64_header: bool = False,
+    ) -> ScanResponse:
+        """
+        Stream a binary payload to the scanner without materializing the full body in memory.
+
+        The iterable should yield `bytes` chunks. httpx will send the request with
+        chunked transfer encoding. Use this to reduce peak memory usage in the caller.
+        """
+        headers = self._build_headers(
+            protected_entity=protected_entity,
+            custom_metadata=custom_metadata,
+            password=password,
+            base64_flag=base64_header,
+        )
+        response = self._request(
+            "POST",
+            "/scan/binary/v2",
+            headers=headers,
+            content=data,
         )
         return ScanResponse.model_validate(response)
 
@@ -275,7 +307,7 @@ class DSXAClient(_BaseDSXAClient):
         path: str,
         *,
         headers: Optional[Dict[str, str]] = None,
-        content: Optional[bytes] = None,
+        content: Optional[Any] = None,
         json: Optional[Any] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
@@ -355,6 +387,12 @@ class AsyncDSXAClient(_BaseDSXAClient):
         password: Optional[str] = None,
         base64_header: bool = False,
     ) -> ScanResponse:
+        """
+        Scan a file in binary mode using an in-memory payload.
+
+        For large files, prefer `scan_binary_stream()` to avoid buffering the
+        entire file in the async client.
+        """
         headers = self._build_headers(
             protected_entity=protected_entity,
             custom_metadata=custom_metadata,
@@ -366,6 +404,35 @@ class AsyncDSXAClient(_BaseDSXAClient):
             "/scan/binary/v2",
             headers=headers,
             content=bytes(data),
+        )
+        return ScanResponse.model_validate(response)
+
+    async def scan_binary_stream(
+        self,
+        data: AsyncIterable[bytes],
+        *,
+        protected_entity: Optional[int] = None,
+        custom_metadata: Optional[str] = None,
+        password: Optional[str] = None,
+        base64_header: bool = False,
+    ) -> ScanResponse:
+        """
+        Stream a binary payload to the scanner without materializing the full body in memory.
+
+        The async iterable should yield `bytes` chunks. httpx will send the request
+        with chunked transfer encoding.
+        """
+        headers = self._build_headers(
+            protected_entity=protected_entity,
+            custom_metadata=custom_metadata,
+            password=password,
+            base64_flag=base64_header,
+        )
+        response = await self._request(
+            "POST",
+            "/scan/binary/v2",
+            headers=headers,
+            content=data,
         )
         return ScanResponse.model_validate(response)
 
@@ -481,7 +548,7 @@ class AsyncDSXAClient(_BaseDSXAClient):
         path: str,
         *,
         headers: Optional[Dict[str, str]] = None,
-        content: Optional[bytes] = None,
+        content: Optional[Any] = None,
         json: Optional[Any] = None,
     ) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"

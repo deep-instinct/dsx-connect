@@ -71,7 +71,7 @@ docker compose --env-file dsx-connect-<core_version>/sharepoint-connector-<conne
 ## Assets and Filters
 - `DSXCONNECTOR_ASSET` should be set to your SharePoint scope (site/doc lib/folder). Navigate to the exact folder in SharePoint Online, grab the full URL (e.g., `https://contoso.sharepoint.com/sites/Site/Shared%20Documents/dsx-connect/scantest`), and paste it here.
 - Filters are evaluated relative to that scope (children).
-- See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for sharding/partition guidance.
+- See Reference → [Assets & Filters](../../reference/assets.md) for sharding/partition guidance.
 
 ## Notes
 - Use `DSXCONNECTOR_ASSET` to configure the SharePoint URL scope (site/doc lib/folder).

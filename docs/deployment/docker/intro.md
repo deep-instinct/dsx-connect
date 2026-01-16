@@ -11,6 +11,7 @@ Think of the Compose YAML as a template and `.env` files as the fill. Keep the Y
 - Maintain one env file per environment: `.dev.env`, `.stage.env`, `.prod.env`.
 - Pin all images in the env file (core, DSXA, connectors) so you know exactly what you’re running.
 - Reuse the same env files when you move to Kubernetes (convert to a Secret).
+- For environment settings and worker retry policies, see [Deployment Advanced Settings](../advanced.md).
 
 ### Sample `.env`
 ```bash

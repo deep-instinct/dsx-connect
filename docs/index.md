@@ -29,4 +29,5 @@ Whether you’re protecting cloud buckets, enterprise SaaS data, or on-prem file
 - [Getting Started](getting-started.md)
 - [Connectors](connectors/index.md)
 - [Deployment Models](deployment/index.md)
+- [Deployment Advanced Settings](deployment/advanced.md)
 - [Filters Reference](reference/filters.md)

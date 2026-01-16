@@ -35,6 +35,8 @@ from dsx_connect.dsxa_client.verdict_models import (
     DPAVerdictDetailsModel,
     DPAVerdictFileInfoModel,
 )
+from dsx_connect.messaging.state_keys import job_key, scanner_inflight_key
+from dsx_connect.messaging.state_scripts import get_acquire_scanner_script
 
 class ScanRequestWorker(BaseWorker):
     """
@@ -61,7 +63,7 @@ class ScanRequestWorker(BaseWorker):
         if job_id:
             try:
                 r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
-                key = f"dsxconnect:job:{job_id}"
+                key = job_key(job_id)
                 paused, cancelled = r.hmget(key, "paused", "cancel")
             except redis.RedisError:
                 paused = cancelled = None
@@ -111,20 +113,28 @@ class ScanRequestWorker(BaseWorker):
             if not slot_acquired:
                 return "BACKPRESSURE"
 
-            file_bytes = self.read_file_from_connector(scan_request)
-            actual_size = len(file_bytes)
-            dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read {actual_size} bytes")
+            file_stream, stream_size = self.read_file_stream_from_connector(scan_request)
+            if stream_size is not None:
+                dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read stream ({stream_size} bytes)")
+            else:
+                dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read stream (size unknown)")
 
-            if max_file_size and actual_size > max_file_size:
+            if max_file_size and stream_size is not None and stream_size > max_file_size:
                 dsx_logging.warning(
                     f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
-                    f"Skipping {scan_request.location} (actual size {actual_size} bytes exceeds limit {max_file_size})"
+                    f"Skipping {scan_request.location} (actual size {stream_size} bytes exceeds limit {max_file_size})"
                 )
-                self._emit_not_scanned_verdict(scan_request_dict, scan_request, actual_size, reason="File Size Too Large")
+                size_for_verdict = stream_size if stream_size is not None else (size_hint or 0)
+                self._emit_not_scanned_verdict(
+                    scan_request_dict,
+                    scan_request,
+                    size_for_verdict,
+                    reason="File Size Too Large",
+                )
                 return "SKIPPED_FILE_TOO_LARGE"
 
             # 3. Scan with DSXA
-            dpa_verdict = self.scan_with_dsxa(file_bytes, scan_request, self.context.task_id)
+            dpa_verdict = self.scan_with_dsxa_stream(file_stream, scan_request, self.context.task_id)
             dsx_logging.debug(
                 f"[scan_request:{self.context.task_id}] Verdict: {getattr(dpa_verdict, 'verdict', None)}"
             )
@@ -146,8 +156,8 @@ class ScanRequestWorker(BaseWorker):
                 self._release_scanner_slot(cfg)
 
 
-    def read_file_from_connector(self, scan_request: ScanRequestModel) -> bytes:
-        """Read file bytes from connector. Maps exceptions to task-appropriate errors."""
+    def read_file_stream_from_connector(self, scan_request: ScanRequestModel):
+        """Read file bytes as a stream from connector. Maps exceptions to task-appropriate errors."""
         target = scan_request.connector or scan_request.connector_url
         try:
             with get_connector_client(target) as client:
@@ -156,7 +166,23 @@ class ScanRequestWorker(BaseWorker):
                     json_body=jsonable_encoder(scan_request),
                 )
             response.raise_for_status()
-            return response.content
+            try:
+                content_length = response.headers.get("content-length")
+                size = int(content_length) if content_length else None
+            except Exception:
+                size = None
+            if size is None:
+                size = getattr(scan_request, "size_in_bytes", None)
+
+            def iter_chunks():
+                try:
+                    for chunk in response.iter_bytes():
+                        if chunk:
+                            yield chunk
+                finally:
+                    response.close()
+
+            return iter_chunks(), size
 
         except httpx.ConnectError as e:
             if "Name does not resolve" in str(e) or "Connection refused" in str(e):
@@ -171,8 +197,8 @@ class ScanRequestWorker(BaseWorker):
             raise ConnectorConnectionError(f"Connector HTTP error {e.response.status_code}") from e
 
 
-    def scan_with_dsxa(self, file_bytes: bytes, scan_request: ScanRequestModel, task_id: str = None):
-        """Scan file with DSXA via dsxa_sdk."""
+    def scan_with_dsxa_stream(self, file_stream, scan_request: ScanRequestModel, task_id: str = None):
+        """Scan file with DSXA via dsxa_sdk using a streaming payload."""
         config = get_config()
         metadata_info = self._build_metadata(scan_request, task_id)
 
@@ -184,8 +210,8 @@ class ScanRequestWorker(BaseWorker):
         )
 
         try:
-            resp = client.scan_binary(
-                file_bytes,
+            resp = client.scan_binary_stream(
+                file_stream,
                 custom_metadata=metadata_info,
             )
             dpa_verdict = self._convert_verdict(resp)
@@ -295,12 +321,18 @@ class ScanRequestWorker(BaseWorker):
 
         try:
             r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
-            key = "dsxconnect:scanner:inflight"
-            inflight = r.incr(key)
-            r.expire(key, 600)
-            if inflight > max_inflight:
-                # Release and reschedule lightly
-                r.decr(key)
+            key = scanner_inflight_key()
+            ttl_seconds = 600
+            script = get_acquire_scanner_script(r)
+            result = script(keys=[key], args=[max_inflight, ttl_seconds])
+            acquired = False
+            inflight = None
+            if isinstance(result, (list, tuple)) and len(result) >= 2:
+                acquired = bool(result[0])
+                inflight = int(result[1])
+            else:
+                acquired = bool(result)
+            if not acquired:
                 delay = 3 + random.randint(0, 3)
                 async_result = celery_app.send_task(
                     Tasks.REQUEST,
@@ -309,9 +341,11 @@ class ScanRequestWorker(BaseWorker):
                     queue=Queues.REQUEST,
                     countdown=delay,
                 )
+                inflight_desc = f"{inflight}" if inflight is not None else "unknown"
                 dsx_logging.warning(
                     f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
-                    f"Scanner at capacity ({inflight-1}/{max_inflight}); rescheduled as {async_result.id} in {delay}s"
+                    f"Scanner at capacity ({inflight_desc}/{max_inflight}); "
+                    f"rescheduled as {async_result.id} in {delay}s"
                 )
                 return False
             return True
@@ -328,7 +362,7 @@ class ScanRequestWorker(BaseWorker):
             return
         try:
             r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
-            r.decr("dsxconnect:scanner:inflight")
+            r.decr(scanner_inflight_key())
         except redis.RedisError:
             # Best-effort; if Redis is unavailable, counters may drift until service restarts
             pass

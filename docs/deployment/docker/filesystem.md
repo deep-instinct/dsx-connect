@@ -118,7 +118,7 @@ Make sure the Docker host’s AFS cache manager has tokens for the target path (
 - For quarantine actions, mount a second host path (e.g., `./quarantine:/app/quarantine`) and set `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` to that same host path (the connector maps it to `/app/quarantine` internally when the mount exists).
 - To avoid rescanning quarantined items, keep the quarantine folder outside the scanned path (or rely on the connector’s built-in skip list for the configured quarantine path).
 - Filters are evaluated relative to `/app/scan_folder` inside the container; they do **not** reference host paths directly.
-- See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for guidance on sharding and scoping.
+- See Reference → [Assets & Filters](../../reference/assets.md) for guidance on sharding and scoping.
 
 ## Webhook Exposure
 Expose or tunnel the host port mapped to `8620` when dsx-connect (or other internal services) must reach private connector routes. Keep `DSXCONNECTOR_CONNECTOR_URL` set to the Docker-network hostname (e.g., `http://filesystem-connector:8620`) so dsx-connect resolves the service internally, and forward the host port through your preferred tunnel only for inbound events that originate outside Docker.

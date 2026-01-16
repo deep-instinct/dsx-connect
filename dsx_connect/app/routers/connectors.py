@@ -33,6 +33,7 @@ from dsx_connect.app.auth_jwt import (
 from dsx_connect.app.auth_tokens import issue_access_token_opaque
 from dsx_connect.app.hmac_provision import ensure_hmac_for_connector, get_hmac_for_connector
 from dsx_connect.app.auth_hmac_inbound import require_dsx_hmac_inbound
+from dsx_connect.messaging.state_keys import job_key
 
 # Make sure prefix starts with "/"
 router = APIRouter(prefix=route_path(API_PREFIX_V1))
@@ -354,7 +355,7 @@ async def trigger_fullscan(
                     est = est_resp.json() if est_resp.status_code == 200 else None
                 r = getattr(request.app.state, "redis", None)
                 if r is not None:
-                    key = f"dsxconnect:job:{params['job_id']}"
+                    key = job_key(params["job_id"])
                     if isinstance(est, dict) and est.get('confidence') == 'exact' and isinstance(est.get('count'), int):
                         await r.hset(key, mapping={'expected_total': str(est['count']), 'status': 'running'})
                     await r.expire(key, 7 * 24 * 3600)

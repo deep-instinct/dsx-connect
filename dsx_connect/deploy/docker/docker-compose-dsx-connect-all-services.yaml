@@ -74,7 +74,7 @@ services:
       celery -A dsx_connect.taskworkers.celery_app.celery_app worker
       --loglevel=warning
       -Q dev.dsx_connect.scans.request
-      --concurrency=1
+      --concurrency=${DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY:-1}
     restart: unless-stopped
 
 
@@ -92,7 +92,7 @@ services:
       celery -A dsx_connect.taskworkers.celery_app.celery_app worker
       --loglevel=warning
       -Q dev.dsx_connect.scans.verdict
-      --concurrency=1
+      --concurrency=${DSXCONNECT_VERDICT_ACTION_WORKER_CONCURRENCY:-1}
     restart: unless-stopped
 
   dsx_connect_results_worker:
@@ -112,7 +112,7 @@ services:
       celery -A dsx_connect.taskworkers.celery_app.celery_app worker
       --loglevel=warning
       -Q dev.dsx_connect.scans.result
-      --concurrency=1
+      --concurrency=${DSXCONNECT_RESULTS_WORKER_CONCURRENCY:-1}
     restart: unless-stopped
 
   dsx_connect_notification_worker:
@@ -129,7 +129,7 @@ services:
       celery -A dsx_connect.taskworkers.celery_app.celery_app worker
       --loglevel=warning
       -Q dev.dsx_connect.scans.result.notify
-      --concurrency=1
+      --concurrency=${DSXCONNECT_NOTIFICATION_WORKER_CONCURRENCY:-1}
     restart: unless-stopped
 
   redis:

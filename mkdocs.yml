@@ -41,13 +41,21 @@ theme:
         name: Switch to light mode
 
 nav:
+  - Home: index.md
   - Architecture: overview.md
   - Getting Started:
       - Overview: getting-started.md
       - Deploying the DSX-Connect Core: getting-started-core.md
       - Deploying Your First Connector: getting-started-connector.md
-  - Connector Overview: connectors/concepts.md
+  - Connectors:
+      - Overview: connectors/index.md
+      - Concepts: connectors/concepts.md
+      - Filesystem (Overview): connectors/filesystem.md
+      - Google Cloud Storage: connectors/google-cloud-storage.md
+      - M365 Email (Design): connectors/m365-email.md
+      - SharePoint vs OneDrive: connectors/sharepoint-vs-onedrive.md
   - Deployment:
+      - Overview: deployment/index.md
       - Docker:
           - Best Practices: deployment/docker/intro.md
           - DSX-Connect Core Deployment: deployment/docker/dsx-connect.md
@@ -72,22 +80,23 @@ nav:
               - Google Cloud Storage: deployment/kubernetes/google-cloud-storage.md
               - SharePoint: deployment/kubernetes/sharepoint.md
               - Salesforce: deployment/kubernetes/salesforce.md
-              - M365 Mail: deployment/helm/m365-mail.md
+              - M365 Mail: deployment/kubernetes/m365-mail.md
               - OneDrive: deployment/kubernetes/onedrive.md
           - Using DSX-Connect Authentication: deployment/authentication.md
           - Deploying with SSL/TLS: deployment/tls.md
           - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md
           - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
+          - Kubernetes Guides (Per Connector): deployment/k8s-guides.md
           - Log Collectors: deployment/log-collectors.md
+      - Advanced Settings: deployment/advanced.md
   - Reference:
+      - Assets: reference/assets.md
       - Azure Credentials: reference/azure-credentials.md
       - Google Cloud Credentials: reference/google-cloud-credentials.md
       - Advanced Kubernetes Network Security: reference/advanced-kubernetes-network-security.md
       - UI Display Icons: reference/display-icons.md
       - DSXA Python SDK: reference/dsxa-sdk.md
       - Filters (Details): reference/filters.md
-      - M365 Email (Design): connectors/m365-email.md
-      - SharePoint vs OneDrive: connectors/sharepoint-vs-onedrive.md
   - Case Studies:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
   - Developer's Guide:

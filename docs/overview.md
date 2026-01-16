@@ -214,6 +214,8 @@ sequenceDiagram
 
 Both models use the same container images and configuration patterns, easing promotion from test to prod.
 
+See [Deployment Advanced Settings](deployment/advanced.md) for environment options and worker retry policies.
+
 ## Fault Tolerance & High Availability
 
 - **Retries & DLQ:** Intelligent retries per failure type (connector/DSXA/timeouts/rate limits). DLQ preserves failed tasks for reprocessing.

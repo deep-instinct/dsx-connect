@@ -74,14 +74,30 @@ class AzureBlobClient:
         #     dsx_logging.error("AzureBlobClient must be initialized with an AZURE_STORAGE_CONNECTION_STRING")
         #     raise ValueError("Missing Azure Storage connection string.")
 
-        self.service_client = load_blob_service_client()
-        # self.service_client = BlobServiceClient.from_connection_string(connection_string)
-        dsx_logging.info("Initialized AzureBlobClient with given connection string")
+        self.service_client = None
+        self.init_error = None
+        try:
+            self.service_client = load_blob_service_client()
+            # self.service_client = BlobServiceClient.from_connection_string(connection_string)
+            dsx_logging.info("Initialized AzureBlobClient with given connection string")
+        except Exception as exc:
+            self.init_error = str(exc)
+            dsx_logging.error(f"AzureBlobClient initialization failed: {exc}")
+
+    def is_configured(self) -> bool:
+        return self.service_client is not None
+
+    def _require_client(self) -> None:
+        if self.service_client is None:
+            msg = self.init_error or "Azure Blob client not configured"
+            raise RuntimeError(msg)
 
     def containers(self) -> list:
+        self._require_client()
         return [container.name for container in self.service_client.list_containers()]
 
     def key_exists(self, container: str, blob_name: str) -> bool:
+        self._require_client()
         try:
             blob_client = self.service_client.get_blob_client(container=container, blob=blob_name)
             return blob_client.exists()
@@ -90,6 +106,7 @@ class AzureBlobClient:
             raise
 
     def delete_blob(self, container: str, blob_name: str) -> bool:
+        self._require_client()
         try:
             blob_client = self.service_client.get_blob_client(container=container, blob=blob_name)
             blob_client.delete_blob()
@@ -105,6 +122,7 @@ class AzureBlobClient:
                     reraise=True,
                     before_sleep=tenacity.before_sleep_log(dsx_logging, logging.WARN))
     def get_blob(self, container: str, blob_name: str) -> io.BytesIO:
+        self._require_client()
         blob_client = self.service_client.get_blob_client(
             container=container, blob=blob_name
         )
@@ -135,6 +153,7 @@ class AzureBlobClient:
         prefixes from the filter (no excludes and only bare path includes), and
         always applies relpath_matches_filter client-side for correctness.
         """
+        self._require_client()
         try:
             container_client = self.service_client.get_container_client(container)
 
@@ -238,6 +257,7 @@ class AzureBlobClient:
 
     def move_blob(self, src_container: str, src_blob: str, dest_container: str, dest_blob: str) -> bool:
         try:
+            self._require_client()
             src_client = self.service_client.get_blob_client(container=src_container, blob=src_blob)
             dest_client = self.service_client.get_blob_client(container=dest_container, blob=dest_blob)
 
@@ -249,6 +269,7 @@ class AzureBlobClient:
             return False
 
     def upload_bytes(self, content: io.BytesIO, container: str, blob_name: str):
+        self._require_client()
         blob_client = self.service_client.get_blob_client(container=container, blob=blob_name)
         blob_client.upload_blob(content.getvalue(), overwrite=True)
 
@@ -280,6 +301,7 @@ class AzureBlobClient:
 
     def tag_blob(self, container: str, blob_name: str, tags: dict = None) -> bool:
         try:
+            self._require_client()
             blob_client = self.service_client.get_blob_client(container=container, blob=blob_name)
             blob_client.set_blob_metadata(metadata=tags or {"scanned": "true"})
             return True
@@ -289,6 +311,7 @@ class AzureBlobClient:
 
     def test_connection(self, container: str) -> bool:
         try:
+            self._require_client()
             return self.service_client.get_container_client(container).exists()
         except Exception as e:
             dsx_logging.error(f"Error testing Azure Blob container connection: {e}")

@@ -126,6 +126,24 @@ def get_client(ctx: typer.Context) -> DSXAClient:
         verify_tls=cfg.verify_tls,
     )
 
+def iter_file_chunks(fh, chunk_size: int = 1024 * 1024):
+    while True:
+        chunk = fh.read(chunk_size)
+        if not chunk:
+            break
+        yield chunk
+
+async def async_file_chunks(path: pathlib.Path, chunk_size: int = 1024 * 1024):
+    fh = path.open("rb")
+    try:
+        while True:
+            chunk = await asyncio.to_thread(fh.read, chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        fh.close()
+
 
 @app.command("scan-binary")
 def scan_binary(
@@ -143,7 +161,12 @@ def scan_binary(
     if timeout is not None:
         client._client.timeout = timeout  # type: ignore[attr-defined]
     with file.open("rb") as fh:
-        resp = client.scan_binary(fh.read(), custom_metadata=custom_metadata, password=password, base64_header=base64_header)
+        resp = client.scan_binary_stream(
+            iter_file_chunks(fh),
+            custom_metadata=custom_metadata,
+            password=password,
+            base64_header=base64_header,
+        )
     print_scan_response(resp)
     client.close()
 
@@ -179,7 +202,16 @@ def scan_file(
     client = get_client(ctx)
     if timeout is not None:
         client._client.timeout = timeout  # type: ignore[attr-defined]
-    resp = client.scan_file(str(file), mode=mode, custom_metadata=custom_metadata, password=password)
+    if mode == ScanMode.BINARY:
+        with file.open("rb") as fh:
+            resp = client.scan_binary_stream(
+                iter_file_chunks(fh),
+                custom_metadata=custom_metadata,
+                password=password,
+                base64_header=False,
+            )
+    else:
+        resp = client.scan_file(str(file), mode=mode, custom_metadata=custom_metadata, password=password)
     print_scan_response(resp)
     client.close()
 
@@ -318,9 +350,8 @@ async def _scan_paths(
         nonlocal success, failures
         async with sem:
             try:
-                data = await asyncio.to_thread(path.read_bytes)
-                resp = await client.scan_binary(
-                    data,
+                resp = await client.scan_binary_stream(
+                    async_file_chunks(path),
                     custom_metadata=custom_metadata,
                     password=password,
                     base64_header=(mode == ScanMode.BASE64),

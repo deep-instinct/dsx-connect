@@ -45,7 +45,7 @@ docker compose --env-file dsx-connect-<core_version>/aws-s3-connector-<connector
 ## Assets and Filters
 - `DSXCONNECTOR_ASSET` should be set to your bucket (e.g., `my-bucket`) or `bucket/prefix` to scope listings.
 - If a prefix is provided, listings start at that sub‑root and filters are evaluated relative to it.
-- See Reference → [Assets & Filters](../../reference/assets-and-filters.md) to understand sharding and partitioning patterns.
+- See Reference → [Assets & Filters](../../reference/assets.md) to understand sharding and partitioning patterns.
 
 ## Notes
 - Use `DSXCONNECTOR_ASSET` to configure the target bucket or `bucket/prefix`.

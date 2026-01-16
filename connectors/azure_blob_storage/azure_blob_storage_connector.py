@@ -1,5 +1,5 @@
 import asyncio
-from starlette.responses import StreamingResponse
+from starlette.responses import StreamingResponse, JSONResponse
 
 from connectors.azure_blob_storage.azure_blob_storage_client import AzureBlobClient
 from connectors.framework.dsx_connector import DSXConnector
@@ -51,6 +51,10 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     # await abs_client.init()
     dsx_logging.info(f"{base.name} version: {CONNECTOR_VERSION}.")
     dsx_logging.info(f"{base.name} configuration: {config}.")
+    if not abs_client.is_configured():
+        dsx_logging.error(
+            f"{base.name} missing Azure credentials; connector will start but cannot read/list blobs."
+        )
     dsx_logging.info(f"{base.name} startup completed.")
 
     prefix_disp = f"/{config.asset_prefix_root}" if getattr(config, 'asset_prefix_root', '') else ""
@@ -106,6 +110,15 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         SimpleResponse: A response indicating success if the full scan is initiated, or an error if the
             functionality is not supported. (For connectors without full scan support, return an error response.)
     """
+    if not abs_client.is_configured():
+        return JSONResponse(
+            StatusResponse(
+                status=StatusResponseEnum.ERROR,
+                message="Azure credentials not configured",
+                description="Set AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME/KEY",
+            ).model_dump(),
+            status_code=503,
+        )
     # Enumerate all keys in the container (optionally optimized later) and apply rsync-like filter
     def _rel(k: str) -> str:
         bp = (config.asset_prefix_root or "").strip("/")
@@ -241,6 +254,15 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
     """
     # Implement file read (if applicable)
     try:
+        if not abs_client.is_configured():
+            return JSONResponse(
+                StatusResponse(
+                    status=StatusResponseEnum.ERROR,
+                    message="Azure credentials not configured",
+                    description="Set AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME/KEY",
+                ).model_dump(),
+                status_code=503,
+            )
         file_stream = abs_client.get_blob(config.asset_container, scan_event_queue_info.location)
         return StreamingResponse(stream_blob(file_stream), media_type="application/octet-stream")
     except Exception as e:
@@ -257,6 +279,15 @@ async def repo_check_handler() -> StatusResponse:
     Returns:
         bool: True if the repository connectivity OK, False otherwise.
     """
+    if not abs_client.is_configured():
+        return JSONResponse(
+            StatusResponse(
+                status=StatusResponseEnum.ERROR,
+                message="Azure credentials not configured",
+                description="Set AZURE_STORAGE_CONNECTION_STRING or AZURE_STORAGE_ACCOUNT_NAME/KEY",
+            ).model_dump(),
+            status_code=503,
+        )
     if abs_client.test_connection(config.asset_container):
         return StatusResponse(status=StatusResponseEnum.SUCCESS,
                               message=f"Connection to {config.asset_container} successful.")
@@ -266,6 +297,8 @@ async def repo_check_handler() -> StatusResponse:
 @connector.preview
 async def preview_provider(limit: int) -> list[str]:
     items: list[str] = []
+    if not abs_client.is_configured():
+        return items
     try:
         def _rel(k: str) -> str:
             bp = (config.asset_prefix_root or "").strip("/")

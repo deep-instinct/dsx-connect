@@ -84,6 +84,57 @@ async def main():
 asyncio.run(main())
 ```
 
+## Streaming uploads
+
+For large files, stream bytes instead of buffering the full payload in memory:
+
+```python
+def file_chunks(path: str, chunk_size: int = 1024 * 1024):
+    with open(path, "rb") as fh:
+        while True:
+            chunk = fh.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+client.scan_binary_stream(file_chunks("sample.docx"), custom_metadata="App123")
+```
+
+Note: streaming uses HTTP chunked transfer encoding. Ensure your DSXA deployment accepts chunked uploads (standard gunicorn setups do).
+
+### Streaming patterns
+
+**File-like object (sync):**
+
+```python
+def file_like_chunks(fh, chunk_size: int = 1024 * 1024):
+    while True:
+        chunk = fh.read(chunk_size)
+        if not chunk:
+            break
+        yield chunk
+
+with open("sample.docx", "rb") as fh:
+    client.scan_binary_stream(file_like_chunks(fh))
+```
+
+**Async streaming (async client):**
+
+```python
+import aiofiles
+
+async def async_file_chunks(path: str, chunk_size: int = 1024 * 1024):
+    async with aiofiles.open(path, "rb") as fh:
+        while True:
+            chunk = await fh.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
+async with AsyncDSXAClient(base_url="https://scanner.example.com") as client:
+    resp = await client.scan_binary_stream(async_file_chunks("sample.docx"))
+```
+
 ## CLI
 
 Install the package (e.g., `pip install -e .`) and use the Typer-based CLI for ad-hoc scans:

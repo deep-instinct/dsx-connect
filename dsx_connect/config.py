@@ -160,18 +160,18 @@ class CeleryTaskConfig(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__")
     broker: AnyUrl = "redis://redis:6379/5"
     backend: AnyUrl = "redis://redis:6379/6"
-    scan_request_max_retries: int = 2
+    scan_request_max_retries: int = 1
     dlq_expire_after_days: int = 7
-    connector_retry_backoff_base: int = 60
-    dsxa_retry_backoff_base: int = 2
-    server_error_retry_backoff_base: int = 30
+    connector_retry_backoff_base: int = 5
+    dsxa_retry_backoff_base: int = 3
+    server_error_retry_backoff_base: int = 5
     retry_connector_connection_errors: bool = True
     retry_connector_server_errors: bool = True
-    retry_connector_client_errors: bool = False
+    retry_connector_client_errors: bool = True
     retry_dsxa_connection_errors: bool = True
     retry_dsxa_timeout_errors: bool = True
     retry_dsxa_server_errors: bool = True
-    retry_dsxa_client_errors: bool = False
+    retry_dsxa_client_errors: bool = True
     retry_queue_dispatch_errors: bool = False
 
 

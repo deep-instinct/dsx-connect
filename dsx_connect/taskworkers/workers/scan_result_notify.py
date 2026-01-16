@@ -10,6 +10,7 @@ from dsx_connect.taskworkers.names import Tasks
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryGroups
 from shared.dsx_logging import dsx_logging
 from dsx_connect.config import get_config
+from dsx_connect.messaging.state_keys import job_key
 
 class ScanResultNotificationWorker(BaseWorker):
     name = Tasks.NOTIFICATION
@@ -28,7 +29,7 @@ class ScanResultNotificationWorker(BaseWorker):
                 job_id = (scan_result_dict.get("scan_job_id")
                           or (scan_result_dict.get("scan_request") or {}).get("scan_job_id"))
                 if job_id:
-                    key = f"dsxconnect:job:{job_id}"
+                    key = job_key(job_id)
                     r = getattr(self.__class__, "_redis", None)
                     if r is None:
                         r = _redis.from_url(str(get_config().redis_url), decode_responses=True)

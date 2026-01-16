@@ -20,6 +20,7 @@ from dsx_connect.connectors.registry import ConnectorsRegistry
 from dsx_connect.messaging.bus import Bus
 from dsx_connect.messaging.channels import Channel
 from dsx_connect.messaging.notifiers import Notifiers
+from dsx_connect.messaging.state_keys import job_key
 
 
 from shared.routes import (
@@ -421,7 +422,7 @@ async def notifications_job_summary(
                     yield 'data: {"type":"heartbeat","status":"redis_unavailable"}\n\n'
                     await asyncio.sleep(period)
                     continue
-                key = f"dsxconnect:job:{job_id}"
+                key = job_key(job_id)
                 data = await r.hgetall(key)
                 if not data:
                     # Send sentinel once and slow down

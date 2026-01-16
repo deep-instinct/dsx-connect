@@ -45,7 +45,7 @@ docker compose --env-file dsx-connect-<core_version>/azure-blob-storage-connecto
 ## Assets and Filters
 - `DSXCONNECTOR_ASSET` should be set to your container (e.g., `my-container`) or `container/prefix` to scope listings.
 - If a prefix is provided, listings start at that sub‑root and filters are evaluated relative to it.
-- See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for sharding/partition guidance.
+- See Reference → [Assets & Filters](../../reference/assets.md) for sharding/partition guidance.
 
 ## Notes
 - Provide `AZURE_STORAGE_CONNECTION_STRING` (or other supported auth env) via secrets for security.

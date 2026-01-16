@@ -52,7 +52,7 @@ that receives bucket events, which was create as part of the service account set
 
 ### Mount your service‑account JSON.
 
-Create a google service account and download the JSON: [Google Cloud Credentials](../../../reference/google-cloud-credentials.md).  Place the JSON next to the compose file (or use an absolute path), or anywhere that the deployed docker container can access on the host system.
+Create a google service account and download the JSON: [Google Cloud Credentials](../../reference/google-cloud-credentials.md).  Place the JSON next to the compose file (or use an absolute path), or anywhere that the deployed docker container can access on the host system.
 The default mount path is `/app/creds/gcp-sa.json` to a file named `gcp-sa.json` in the same directory. The easiet deployment with no changes needed is to
 name the JSON file `gcp-sa.json` and place it in the same directory as the compose file.:
 ```yaml
@@ -102,7 +102,7 @@ If you have dsx-connect running, navigate to the DSX-Connect UI, note the Google
 ## Assets and Filters
 - `DSXCONNECTOR_ASSET` should be set to your bucket (e.g., `my-bucket`) or `bucket/prefix` to scope listings.
 - If a prefix is provided, listings start at that sub‑root and filters are evaluated relative to it.
-- See Reference → [Assets & Filters](../../reference/assets-and-filters.md) for sharding/partition guidance.
+- See Reference → [Assets & Filters](../../reference/assets.md) for sharding/partition guidance.
 
 ## Monitoring
 - Use `DSXCONNECTOR_ASSET` to set the bucket (and optional prefix) to monitor.

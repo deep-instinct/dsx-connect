@@ -1,5 +1,6 @@
 x-common-env: &common-env
   DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://dsxa_scanner:5000/scan/binary/v2"
+  DSXCONNECT_SCANNER__AUTH_TOKEN: ${DSXCONNECT_SCANNER__AUTH_TOKEN:-}
   DSXCONNECT_WORKERS__BROKER: "redis://redis:6379/5"
   DSXCONNECT_WORKERS__BACKEND: "redis://redis:6379/6"
   DSXCONNECT_REDIS_URL: "redis://redis:6379/3"
@@ -100,7 +101,6 @@ services:
     environment:
       <<: *common-env
       LOG_LEVEL: debug
-      DSX_WORKER_ROLE: "results"
       DSXCONNECT_FRONTEND__URL: "http://dsx-connect-api:8586"
     depends_on:
       redis:

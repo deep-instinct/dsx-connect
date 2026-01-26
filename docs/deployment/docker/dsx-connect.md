@@ -7,7 +7,7 @@ This guide walks through running the full dsx-connect platform (API + workers + 
 Path: `dsx-connect-<core_version>/`
 
 - `docker-compose-dsx-connect-all-services.yaml` — API, Redis, Celery workers, optional rsyslog profile, SSE dependencies.
-- `docker-compose-dsxa.yaml` — optional DSXA scanner for local malware verdicts.
+- `docker-compose-dsxa.yaml` — optional DSXA scanner for local malware verdicts (supports `AUTH_TOKEN` if enabled).
 - `.sample.core.env` — sample env file to pin image tags and set optional auth/DSXA settings.
 
 ## Prerequisites
@@ -81,7 +81,7 @@ Worker commands follow `celery -A dsx_connect.celery_app.celery_app worker --log
   ```bash
   cp dsx-connect-<core_version>/.sample.core.env dsx-connect-<core_version>/.core.env
   # edit dsx-connect-<core_version>/.core.env to set DSXCONNECT_IMAGE=dsxconnect/dsx-connect:<release-tag>
-  # and optional DSXA/auth settings (APPLIANCE_URL/TOKEN/SCANNER_ID, DSXA_IMAGE, HOST_PORT, etc.)
+  # and optional DSXA/auth settings (APPLIANCE_URL/TOKEN/SCANNER_ID/AUTH_TOKEN, DSXA_IMAGE, HOST_PORT, etc.)
   ```
 - Use `--env-file` to point Compose at your `.core.env`; `docker-compose-dsx-connect-all-services.yaml` uses `DSXCONNECT_IMAGE` for the core image.
 

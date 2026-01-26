@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 from rich import print_json
 
 from .client import DSXAClient, AsyncDSXAClient, ScanMode
+from .exceptions import AuthenticationError
 from .models import ScanResponse
 from . import config_store
 
@@ -55,8 +56,9 @@ def main(
     auth_token: Optional[str] = typer.Option(
         None,
         "--token",
+        "--auth-token",
         envvar="DSXA_AUTH_TOKEN",
-        help="Auth token (Bearer). Optional when DSXA accepts anonymous requests. "
+        help="Auth token (AUTH or AUTH_TOKEN header). Optional when DSXA accepts anonymous requests. "
         "Set via flag/env or store in a context.",
     ),
     protected_entity: Optional[int] = typer.Option(
@@ -126,6 +128,21 @@ def get_client(ctx: typer.Context) -> DSXAClient:
         verify_tls=cfg.verify_tls,
     )
 
+
+def print_auth_hint(exc: Exception) -> None:
+    typer.echo("Authentication failed (401/403).", err=True)
+    typer.echo(
+        "If DSXA auth is enabled, set AUTH_TOKEN on the scanner and pass the same token to the CLI.",
+        err=True,
+    )
+    typer.echo("CLI options: --auth-token <token> or DSXA_AUTH_TOKEN=<token>.", err=True)
+    typer.echo(
+        "Update a saved context with: dsxa context add --name <context> (overwrites),",
+        err=True,
+    )
+    typer.echo(f"or edit {config_store.CONFIG_PATH} and set auth_token.", err=True)
+    typer.echo(f"Details: {exc}", err=True)
+
 def iter_file_chunks(fh, chunk_size: int = 1024 * 1024):
     while True:
         chunk = fh.read(chunk_size)
@@ -161,12 +178,16 @@ def scan_binary(
     if timeout is not None:
         client._client.timeout = timeout  # type: ignore[attr-defined]
     with file.open("rb") as fh:
-        resp = client.scan_binary_stream(
-            iter_file_chunks(fh),
-            custom_metadata=custom_metadata,
-            password=password,
-            base64_header=base64_header,
-        )
+        try:
+            resp = client.scan_binary_stream(
+                iter_file_chunks(fh),
+                custom_metadata=custom_metadata,
+                password=password,
+                base64_header=base64_header,
+            )
+        except AuthenticationError as exc:
+            print_auth_hint(exc)
+            raise typer.Exit(code=1) from exc
     print_scan_response(resp)
     client.close()
 
@@ -182,7 +203,11 @@ def scan_base64(
     client = get_client(ctx)
     with file.open("rb") as fh:
         encoded = base64.b64encode(fh.read())
-    resp = client.scan_base64(encoded, custom_metadata=custom_metadata, password=password)
+    try:
+        resp = client.scan_base64(encoded, custom_metadata=custom_metadata, password=password)
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
     print_scan_response(resp)
     client.close()
 
@@ -202,16 +227,20 @@ def scan_file(
     client = get_client(ctx)
     if timeout is not None:
         client._client.timeout = timeout  # type: ignore[attr-defined]
-    if mode == ScanMode.BINARY:
-        with file.open("rb") as fh:
-            resp = client.scan_binary_stream(
-                iter_file_chunks(fh),
-                custom_metadata=custom_metadata,
-                password=password,
-                base64_header=False,
-            )
-    else:
-        resp = client.scan_file(str(file), mode=mode, custom_metadata=custom_metadata, password=password)
+    try:
+        if mode == ScanMode.BINARY:
+            with file.open("rb") as fh:
+                resp = client.scan_binary_stream(
+                    iter_file_chunks(fh),
+                    custom_metadata=custom_metadata,
+                    password=password,
+                    base64_header=False,
+                )
+        else:
+            resp = client.scan_file(str(file), mode=mode, custom_metadata=custom_metadata, password=password)
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
     print_scan_response(resp)
     client.close()
 
@@ -224,7 +253,11 @@ def scan_hash(
 ):
     """Submit a hash for reputation scanning."""
     client = get_client(ctx)
-    resp = client.scan_hash(hash_value, custom_metadata=custom_metadata)
+    try:
+        resp = client.scan_hash(hash_value, custom_metadata=custom_metadata)
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
     print_scan_response(resp)
     client.close()
 
@@ -241,11 +274,15 @@ def scan_by_path(
 ):
     """Initiate scan-by-path and optionally poll until verdict ready."""
     client = get_client(ctx)
-    submit = client.scan_by_path(stream_path, custom_metadata=custom_metadata, password=password)
-    typer.echo(f"Submitted scan_guid={submit.scan_guid}, verdict={submit.verdict}")
-    if poll:
-        verdict = client.poll_scan_by_path(submit.scan_guid, interval_seconds=interval, timeout_seconds=timeout)
-        print_scan_response(verdict)
+    try:
+        submit = client.scan_by_path(stream_path, custom_metadata=custom_metadata, password=password)
+        typer.echo(f"Submitted scan_guid={submit.scan_guid}, verdict={submit.verdict}")
+        if poll:
+            verdict = client.poll_scan_by_path(submit.scan_guid, interval_seconds=interval, timeout_seconds=timeout)
+            print_scan_response(verdict)
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
     client.close()
 
 
@@ -259,10 +296,14 @@ def result_by_path(
 ):
     """Fetch the latest verdict for a scan-by-path submission."""
     client = get_client(ctx)
-    if poll:
-        resp = client.poll_scan_by_path(scan_guid, interval_seconds=interval, timeout_seconds=timeout)
-    else:
-        resp = client.get_scan_by_path_result(scan_guid)
+    try:
+        if poll:
+            resp = client.poll_scan_by_path(scan_guid, interval_seconds=interval, timeout_seconds=timeout)
+        else:
+            resp = client.get_scan_by_path_result(scan_guid)
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
     print_scan_response(resp)
     client.close()
 
@@ -284,16 +325,20 @@ def scan_files(
     if not files:
         typer.echo("No files specified", err=True)
         raise typer.Exit(code=1)
-    asyncio.run(
-        _scan_paths(
-            ctx,
-            files,
-            mode=mode,
-            custom_metadata=custom_metadata,
-            password=password,
-            concurrency=concurrency,
+    try:
+        asyncio.run(
+            _scan_paths(
+                ctx,
+                files,
+                mode=mode,
+                custom_metadata=custom_metadata,
+                password=password,
+                concurrency=concurrency,
+            )
         )
-    )
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("scan-folder")
@@ -319,16 +364,20 @@ def scan_folder(
     if not files:
         typer.echo("No files matched the provided pattern", err=True)
         raise typer.Exit(code=1)
-    asyncio.run(
-        _scan_paths(
-            ctx,
-            files,
-            mode=mode,
-            custom_metadata=custom_metadata,
-            password=password,
-            concurrency=concurrency,
+    try:
+        asyncio.run(
+            _scan_paths(
+                ctx,
+                files,
+                mode=mode,
+                custom_metadata=custom_metadata,
+                password=password,
+                concurrency=concurrency,
+            )
         )
-    )
+    except AuthenticationError as exc:
+        print_auth_hint(exc)
+        raise typer.Exit(code=1) from exc
 
 
 async def _scan_paths(
@@ -346,8 +395,10 @@ async def _scan_paths(
     success = 0
     failures = 0
 
+    auth_hint_shown = False
+
     async def process(path: pathlib.Path):
-        nonlocal success, failures
+        nonlocal success, failures, auth_hint_shown
         async with sem:
             try:
                 resp = await client.scan_binary_stream(
@@ -358,6 +409,11 @@ async def _scan_paths(
                 )
                 typer.echo(f"{path}: {resp.verdict.value} (scan_guid={resp.scan_guid})")
                 success += 1
+            except AuthenticationError as exc:
+                if not auth_hint_shown:
+                    auth_hint_shown = True
+                    print_auth_hint(exc)
+                raise
             except Exception as exc:  # pragma: no cover - CLI helper
                 failures += 1
                 typer.echo(f"{path}: ERROR {exc}", err=True)
@@ -397,6 +453,27 @@ def context_set(name: str = typer.Argument(..., help="Context name to activate")
     typer.echo(f"Current context set to '{name}'.")
 
 
+@context_app.command("show")
+def context_show(
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Context name to show"),
+):
+    """Show full configuration for a context."""
+    cfg = config_store.load_config()
+    ctx_name = name or cfg.get("current")
+    if not ctx_name:
+        typer.echo("No context specified and no current context set.", err=True)
+        raise typer.Exit(code=1)
+    profile = config_store.get_context(cfg, ctx_name)
+    if not profile:
+        typer.echo(f"Context '{ctx_name}' not found.", err=True)
+        raise typer.Exit(code=1)
+    output = {
+        "name": ctx_name,
+        "current": ctx_name == cfg.get("current"),
+        **profile,
+    }
+    print_json(data=output)
+
 @context_app.command("add")
 def context_add(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Name for the new context"),
@@ -426,6 +503,44 @@ def context_add(
 
     config_store.save_config(cfg)
     typer.echo(f"Context '{ctx_name}' saved to {config_store.CONFIG_PATH}.")
+
+
+@context_app.command("edit")
+def context_edit(
+    name: Optional[str] = typer.Option(None, "--name", "-n", help="Context name to edit"),
+):
+    """Interactively edit an existing context."""
+    cfg = config_store.load_config()
+    ctx_name = name or cfg.get("current")
+    if not ctx_name:
+        typer.echo("No context specified and no current context set.", err=True)
+        raise typer.Exit(code=1)
+    profile = config_store.get_context(cfg, ctx_name)
+    if not profile:
+        typer.echo(f"Context '{ctx_name}' not found.", err=True)
+        raise typer.Exit(code=1)
+
+    base_url = typer.prompt("Base URL (e.g., https://scanner:443)", default=profile.get("base_url", ""))
+    auth_token = typer.prompt(
+        "Auth token (leave blank if not required)",
+        default=profile.get("auth_token") or "",
+        hide_input=True,
+    )
+    protected_entity = typer.prompt(
+        "Protected entity (integer, blank for 1)",
+        default=str(profile.get("protected_entity", 1)),
+    )
+    verify_tls = typer.confirm("Verify TLS certificates?", default=profile.get("verify_tls", True))
+
+    profile = {
+        "base_url": base_url.rstrip("/"),
+        "auth_token": auth_token if auth_token else None,
+        "protected_entity": int(protected_entity) if str(protected_entity).strip() else 1,
+        "verify_tls": verify_tls,
+    }
+    config_store.set_context(cfg, ctx_name, profile)
+    config_store.save_config(cfg)
+    typer.echo(f"Context '{ctx_name}' updated in {config_store.CONFIG_PATH}.")
 
 
 def print_scan_response(resp: ScanResponse):

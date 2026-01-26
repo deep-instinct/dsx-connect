@@ -22,7 +22,7 @@ services:
 
       # Mailbox scope + remediation defaults
       DSXCONNECTOR_ASSET: ""
-      DSXCONNECTOR_FILTER: ""
+      DSXCONNECTOR_FILTER: 
       DSXCONNECTOR_ITEM_ACTION: "nothing"
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
       DSXCONNECTOR_DATA_DIR: "/app/data"

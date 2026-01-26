@@ -45,7 +45,7 @@ services:
       DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector:8620" # see aliases below
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
       DSXCONNECTOR_ASSET: "/app/scan_folder"
-      DSXCONNECTOR_FILTER: ""
+      DSXCONNECTOR_FILTER: 
       DSXCONNECTOR_ITEM_ACTION: "nothing" # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/path/to/local/folder/dsxconnect-quarantine} # host path for quarantine; bind-mounted to /app/quarantine
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector. this directory should have been created in the Dockerfile

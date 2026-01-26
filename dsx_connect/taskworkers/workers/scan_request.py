@@ -246,7 +246,18 @@ class ScanRequestWorker(BaseWorker):
 
     def _build_metadata(self, scan_request: ScanRequestModel, task_id: str | None) -> str:
         safe_meta = unicodedata.normalize("NFKD", scan_request.metainfo).encode("ascii", "ignore").decode("ascii")
-        metadata_info = f"file-tag:{safe_meta}"
+        file_path = str(scan_request.location or "")
+        connector_name = None
+        try:
+            connector_name = getattr(getattr(scan_request, "connector", None), "name", None)
+        except Exception:
+            connector_name = None
+        if not connector_name:
+            connector_name = getattr(scan_request, "connector_name", None)
+        if connector_name:
+            metadata_info = f"file-loc:{file_path},file-meta:{safe_meta},dsx-connect:{connector_name}"
+        else:
+            metadata_info = f"file-loc:{file_path},file-meta:{safe_meta}"
         if task_id:
             metadata_info += f",task-id:{task_id}"
         return metadata_info
@@ -268,6 +279,7 @@ class ScanRequestWorker(BaseWorker):
         details = DPAVerdictDetailsModel(
             event_description=getattr(resp.verdict_details, "event_description", None) or "",
             reason=getattr(resp.verdict_details, "reason", None),
+            threat_type=getattr(resp.verdict_details, "threat_type", None),
         )
 
         file_info = None
@@ -276,6 +288,7 @@ class ScanRequestWorker(BaseWorker):
                 file_type=getattr(resp.file_info, "file_type", None) or "",
                 file_size_in_bytes=getattr(resp.file_info, "file_size_in_bytes", None) or 0,
                 file_hash=getattr(resp.file_info, "file_hash", None),
+                container_hash=getattr(resp.file_info, "container_hash", None),
                 additional_office_data=None,
             )
 
@@ -284,7 +297,12 @@ class ScanRequestWorker(BaseWorker):
             verdict=verdict_val,
             verdict_details=details,
             file_info=file_info,
+            protected_entity=getattr(resp, "protected_entity", None),
             scan_duration_in_microseconds=getattr(resp, "scan_duration_in_microseconds", None) or -1,
+            container_files_scanned=getattr(resp, "container_files_scanned", None),
+            container_files_scanned_size=getattr(resp, "container_files_scanned_size", None),
+            x_custom_metadata=getattr(resp, "x_custom_metadata", None),
+            last_update_time=getattr(resp, "last_update_time", None),
         )
 
     def _enqueue_dlq(

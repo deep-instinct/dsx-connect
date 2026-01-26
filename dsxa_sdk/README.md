@@ -44,6 +44,8 @@ client = DSXAClient(
     default_protected_entity=3,
     timeout=30,
 )
+#
+# Note: auth_token is sent as both AUTH and AUTH_TOKEN headers for compatibility.
 
 # Binary scan (auto Content-Type + optional headers)
 with open("sample.docx", "rb") as fh:

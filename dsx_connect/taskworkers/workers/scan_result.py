@@ -317,11 +317,6 @@ celery_app.register_task(ScanResultWorker())
 @worker_process_init.connect
 def _init_syslog_for_worker(**kwargs):
     try:
-        # Initialize syslog only in the results worker process
-        import os
-        role = (os.getenv("DSX_WORKER_ROLE", "") or "").strip().lower()
-        if role not in ("results", "scan_result", "scan-result"):
-            return
         from dsx_connect.config import get_config
         from shared.log_chain import init_syslog_handler
         cfg = get_config()

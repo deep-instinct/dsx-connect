@@ -11,6 +11,8 @@ global:
   env:
     # For in-cluster DSXA (dsxa-scanner.enabled=true), keep this empty so templates compute the service URL.
     DSXCONNECT_SCANNER__SCAN_BINARY_URL: ""
+    # Optional: auth token for DSXA (sent as AUTH/AUTH_TOKEN headers by dsxa_sdk)
+    DSXCONNECT_SCANNER__AUTH_TOKEN: ""
 
   # Optional shared image defaults (components fall back to these when set)
   image:
@@ -36,6 +38,7 @@ dsxa-scanner:
     SCANNER_ID: "0"
     FLAVOR: "rest,config"
     NO_SSL: "true"
+    AUTH_TOKEN: ""
 
 dsx-connect-api:
   enabled: true
@@ -75,7 +78,6 @@ dsx-connect-results-worker:
   replicaCount: 1
   env:
     LOG_LEVEL: debug
-    DSX_WORKER_ROLE: results
     DSXCONNECT_SYSLOG__TRANSPORT: tcp
   celery:
     # queue: "dev.dsx_connect.scans.result"

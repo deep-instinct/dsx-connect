@@ -50,6 +50,8 @@ def test_scan_binary_sends_headers(client, transport):
     assert call["url"].endswith("/scan/binary/v2")
     assert headers["protected_entity"] == "3"
     assert headers["x-custom-metadata"] == "App123"
+    assert headers["auth_token"] == "token"
+    assert headers["auth"] == "token"
 
 
 def test_scan_file_base64(client, transport, tmp_path):
@@ -78,7 +80,7 @@ def test_scan_binary_without_token(monkeypatch, transport):
     assert resp.scan_guid == "guid-123"
     call = transport.calls[-1]
     headers = {k.lower(): v for k, v in call["headers"].items()}
-    assert "authorization" not in headers
+    assert "auth_token" not in headers
     client.close()
 
 

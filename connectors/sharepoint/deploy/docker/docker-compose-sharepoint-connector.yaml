@@ -29,7 +29,7 @@ services:
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine" # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
       DSXCONNECTOR_ASSET: "scan_asset" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
-      DSXCONNECTOR_FILTER: "" # define filters on the asset, such as sub folders, prefixes, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_FILTER:  # define filters on the asset, such as sub folders, prefixes, etc.... To be interpreted by the Connector
       DSXCONNECTOR_DATA_DIR: "/app/data"
 
       # This is definition is for docker compose deployments for dev, demos, POVs, and testing. Proper production

@@ -12,7 +12,7 @@ From the extracted bundle directory, reuse the same env file you’ll use for co
 ```bash
 cp .sample.core.env .core.env   # if you haven’t already
 # edit .core.env to set APPLIANCE_URL, TOKEN, SCANNER_ID
-# optionally set DSXA_IMAGE, FLAVOR, NO_SSL, HOST_PORT
+# optionally set DSXA_IMAGE, FLAVOR, NO_SSL, HOST_PORT, AUTH_TOKEN
 ```
 
 Example `.core.env` (core settings first, DSXA settings below):
@@ -29,6 +29,7 @@ DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020
 FLAVOR=rest,config
 NO_SSL=true
 HOST_PORT=15000
+AUTH_TOKEN=    # optional (leave blank if DSXA auth is disabled)
 ```
 Note: please see the DSX for Applications Deployment Guide for more details on how to obtain the `APPLIANCE_URL` and `TOKEN`, and 
 a complete list of available DSXA scanner settings.

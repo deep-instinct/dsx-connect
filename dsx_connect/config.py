@@ -50,7 +50,7 @@ class DatabaseConfig(BaseSettings):
 
 
 class ScannerConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_nested_delimiter="__")
+    model_config = SettingsConfigDict(env_nested_delimiter="__", populate_by_name=True)
     # Base URL for DSXA (without path). Example: http://0.0.0.0:5000
     base_url: str = Field(
         default="http://0.0.0.0:5000",
@@ -62,7 +62,15 @@ class ScannerConfig(BaseSettings):
         validation_alias=AliasChoices("DSXCONNECT_SCANNER__SCAN_BINARY_URL", "SCAN_BINARY_URL"),
     )
     # Optional bearer token for DSXA
-    auth_token: str | None = None
+    auth_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "AUTH_TOKEN",
+            "auth_token",
+            "DSXCONNECT_SCANNER__AUTH_TOKEN",
+            "SCANNER_AUTH_TOKEN",
+        ),
+    )
     verify_tls: bool = True
     timeout_seconds: float = 600.0
     # Upper bound of concurrent/pending scans we allow before applying backpressure

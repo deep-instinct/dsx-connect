@@ -9,10 +9,10 @@ services:
       - "8620:8620"
     volumes:
       - type: bind
-        source: ${DSXCONNECTOR_ASSET:?set DSXCONNECTOR_ASSET (host scan path)} # host path to be scanned and monitored
+        source: ${DSXCONNECTOR_ASSET:-/tmp/dsxconnect-scan} # host path to be scanned and monitored
         target: /app/scan_folder
       - type: bind
-        source: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:?set DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO (host quarantine path)} # host path where files will be moved
+        source: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/tmp/dsxconnect-quarantine} # host path where files will be moved
         target: /app/quarantine
       - type: volume
         source: filesystem_connector_data
@@ -40,15 +40,15 @@ services:
       # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
       DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector:8620" # see aliases below
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
-      DSXCONNECTOR_ASSET: ${DSXCONNECTOR_ASSET:?set DSXCONNECTOR_ASSET (host scan path)}
-      DSXCONNECTOR_FILTER: ${DSXCONNECTOR_FILTER:-""}
-      DSXCONNECTOR_ITEM_ACTION: ${DSXCONNECTOR_ITEM_ACTION:-"nothing"} # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:?set DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO (host quarantine path)} # if item action is move or move_tag, specify where to move (host path; bind-mounted to /app/quarantine).
+      DSXCONNECTOR_ASSET: ${DSXCONNECTOR_ASSET:-/tmp/dsxconnect-scan}
+      DSXCONNECTOR_FILTER: ${DSXCONNECTOR_FILTER:-}
+      DSXCONNECTOR_ITEM_ACTION: ${DSXCONNECTOR_ITEM_ACTION:-nothing} # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/tmp/dsxconnect-quarantine} # if item action is move or move_tag, specify where to move (host path; bind-mounted to /app/quarantine).
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector. this directory should have been created in the Dockerfile
       DSXCONNECTOR_SCAN_BY_PATH: "False"
       DSXCONNECTOR_DATA_DIR: "/app/data"
 
-      DSXCONNECTOR_ASSET_DISPLAY_NAME: ${DSXCONNECTOR_ASSET:-"/app/scan_folder"}
+      DSXCONNECTOR_ASSET_DISPLAY_NAME: ${DSXCONNECTOR_ASSET:-/tmp/dsxconnect-scan}
     networks:
       dsx-network:
         aliases:

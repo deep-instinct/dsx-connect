@@ -59,6 +59,8 @@ global:
 # is a single dsxa-scanner pod that only supports scan/binary/v2 (file size <= 2GB), then enable here.
 dsxa-scanner:
   enabled: true
+  # env:
+  #   AUTH_TOKEN: ""  # optional (leave blank if DSXA auth is disabled)
 ```
 
 ## Deployment Methods
@@ -534,7 +536,7 @@ When enabled, API and workers default to:
 `DSXCONNECT_SCANNER__SCAN_BINARY_URL = http://<release>-dsxa-scanner:5000/scan/binary/v2`
 You can still override this env if you’re pointing at an external DSXA.
 
-> **Remember:** the inline DSXA scanner needs real credentials. Override `dsxa-scanner.env.APPLIANCE_URL`, `dsxa-scanner.env.TOKEN`, and `dsxa-scanner.env.SCANNER_ID` (ideally via Secrets) before enabling it anywhere beyond local testing.
+> **Remember:** the inline DSXA scanner needs real credentials. Override `dsxa-scanner.env.APPLIANCE_URL`, `dsxa-scanner.env.TOKEN`, and `dsxa-scanner.env.SCANNER_ID` (and `dsxa-scanner.env.AUTH_TOKEN` if you enable DSXA auth) before enabling it anywhere beyond local testing.
 
 ## Image Version Overrides
 

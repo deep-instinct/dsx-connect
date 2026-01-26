@@ -177,8 +177,8 @@ class DSXAClient:
             )
         elif status_code == 401:
             return DSXAServiceError(
-                f"Authentication failed with DSXA scanner (HTTP 401 Unauthorized). "
-                f"Please check API credentials. "
+                f"Incorrect or missing DSXA scanner authorization token (HTTP 401 Unauthorized). "
+                f"Verify AUTH_TOKEN on the scanner and DSXCONNECT_SCANNER__AUTH_TOKEN in dsx-connect. "
                 f"URL: {self._scan_binary_url}"
             )
         elif status_code == 403:

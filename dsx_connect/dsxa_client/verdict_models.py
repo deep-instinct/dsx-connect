@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 # these models are in here instead of the models module so that the dpa client can be used completely
@@ -44,12 +44,14 @@ class DPAVerdictModel(BaseModel):
 class DPAVerdictDetailsModel(BaseModel):
     event_description: str
     reason: str | None = None
+    threat_type: str | None = None
 
 
 class DPAVerdictFileInfoModel(BaseModel):
     file_type: str
     file_size_in_bytes: int
     file_hash: str | None = None
+    container_hash: str | None = None
     additional_office_data: DPAOfficeDataModel | None = None
 
 
@@ -66,8 +68,14 @@ class DPAVerdictFileInfoModel(BaseModel):
 #       {'vba': 0, 'swf': 0, 'load_external_object': 0, 'dde': 0, 'xl4_macros': 0, 'activex': 0, 'ole': 0}},
 # 'scan_duration_in_microseconds': 10404}]
 class DPAVerdictModel2(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
     scan_guid: str | None = None
     verdict: DPAVerdictEnum | None = None
     verdict_details: DPAVerdictDetailsModel | None = None
     file_info: DPAVerdictFileInfoModel | None = None
+    protected_entity: int | None = None
     scan_duration_in_microseconds: int = -1
+    container_files_scanned: int | None = None
+    container_files_scanned_size: int | None = None
+    x_custom_metadata: str | None = Field(None, alias="X-Custom-Metadata")
+    last_update_time: str | None = None

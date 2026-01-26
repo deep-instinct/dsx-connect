@@ -1,13 +1,14 @@
 # Launches dsxa using the same docker network as used by dsx-connect components
 services:
   dsxa_scanner:
-    image: ${DSXA_IMAGE:-dsxconnect/dpa-rocky9:4.1.1.2020}    # or `build:` if you need to build it
+    image: ${DSXA_IMAGE:-dsxconnect/dpa-rocky9:4.2.0.2176}    # or `build:` if you need to build it
     environment:
       APPLIANCE_URL: ${APPLIANCE_URL}
       TOKEN: ${TOKEN}
       SCANNER_ID: ${SCANNER_ID}
       FLAVOR: ${FLAVOR:-rest,config}
       NO_SSL: ${NO_SSL:-true}
+      AUTH_TOKEN: ${AUTH_TOKEN:-}
     ports:
       - "${HOST_PORT:-15000}:5000"
     networks:

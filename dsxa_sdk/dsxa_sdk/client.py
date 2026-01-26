@@ -313,7 +313,8 @@ class DSXAClient(_BaseDSXAClient):
         url = f"{self.base_url}{path}"
         merged_headers: Dict[str, str] = {}
         if self._auth_token:
-            merged_headers["Authorization"] = f"Bearer {self._auth_token}"
+            merged_headers["AUTH_TOKEN"] = self._auth_token
+            merged_headers["AUTH"] = self._auth_token
         if headers:
             merged_headers.update(headers)
         try:
@@ -554,7 +555,8 @@ class AsyncDSXAClient(_BaseDSXAClient):
         url = f"{self.base_url}{path}"
         merged_headers: Dict[str, str] = {}
         if self._auth_token:
-            merged_headers["Authorization"] = f"Bearer {self._auth_token}"
+            merged_headers["AUTH_TOKEN"] = self._auth_token
+            merged_headers["AUTH"] = self._auth_token
         if headers:
             merged_headers.update(headers)
         try:

@@ -28,7 +28,7 @@ services:
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: dsxconnect-quarantine # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
       DSXCONNECTOR_ASSET: "" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
-      DSXCONNECTOR_FILTER: ""  # rsync-like include/exclude patterns; leave empty to scan all
+      DSXCONNECTOR_FILTER:   # rsync-like include/exclude patterns; leave empty to scan all
       DSXCONNECTOR_MONITOR: "false"
       GCS_PUBSUB_PROJECT_ID: ""
       GCS_PUBSUB_SUBSCRIPTION: ""

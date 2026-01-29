@@ -15,26 +15,36 @@ The Filesystem connector performs a full scan over a directory and can monitor f
 The following diagram illustrates a simplified workflow of DSX-Connect, deployed with Scan Request and Verdict workers, and a Filesystem Connector.  First,
 a quick overview of connector APIs relevant to this example:
 
-- `full_scan`: enumerate items and enqueue scan requests (streaming enumeration recommended)
+- `full_scan`: enumerate repository items and enqueue scan requests
 - `read_file`: retrieve file content (binary stream)
 - `item_action`: perform remediation (delete/move/tag)
 
 
-![Filesystem Connector Example](../assets/filesystem-connector-example.png)
+![Filesystem Connector Example](../assets/dsx-connect-dataflow.svg)
 *Figure 1: Filesystem Connector workflow*
 
-In this example, the Filesystem Connector is deployed to scan and monitor the folder: ~/Documents, with a quarantine folder set to:
- ~/Documents/quarantine.  Step-by-step:
+In this example, the Filesystem Connector is deployed with:
 
-1. DSX-Connect triggers a `full_scan` on the connector then...
-2. the connector enumerates through the file names/paths (i.e., the equivalent of an `ls` or `dir`) in ~/Documents and for each file path...
-3. sends Scan Requests to DSX-Connect which queues each request.  Scan Requests are a lightweight object that contains the file path and metadata, and who (which connector) is making the request
+* ASSET = ~/Documents <= (the root directory to start scans)
+* ITEM_ACTION_METADATA = ~/Documents/quarantine <= (directory for quarantined files)
+
+> note: more discussion on ASSET and ITEM_ACTION_METADATA in the next section 
+
+Step-by-step:
+
+1. Full scan requested (either via DSX-Connect API request or DSX-Connect UI) on the connector then...
+2. the connector enumerates through the file names/paths at ASSET (the root directory assigned to this connector), applies FILTERS and for each matching file...
+3. sends Scan Requests to DSX-Connect which queues each request.  Scan Requests are a lightweight object that contains the file path and metadata, and the address of the connector making the request
 4. DSX‑Connect Scan Request Worker dequeues a Scan Request and...
 5. Requests the file from the connector (`read_file`), the connector reads the file, sends to back to the worker and...
-6. the Scan Request Worker scans the file with DSXA and places the DSXA verdict in the Verdict Queue.
-7. Verdict Worker dequeues a verdict and then, on a malicious verdict,...
-8. calls on the connector's `item_action` to take action the connector (delete/move/tag the file). In this case, the Filesystem Connector moves the file to ~/Documents/quarantine.
+6. the Scan Request Worker scans the file with DSXA and 
+7. queues the DSXA verdict in the Verdict Action Queue.
+8. Verdict Action Worker dequeues a verdict and then, depending on the verdict...
+9. calls on the connector's `item_action` to take action the connector (delete/move/tag the file). In this case, the Filesystem Connector moves the file to ~/Documents/quarantine.  Queues the scan verdict and item action results.
+10. Dequeues scan result and sends scan statistics and results to an internal database (accessible via DSX-Connect API and Console) and rsyslog. RSyslog captures all scan results (regardless of verdict).  RSyslog can be configured to forward events to external log collectors or SIEMs.
 
+> Note the DSXA Scanner sends malicious verdicts to the DSX Console.  The DSX console should always be considered the definitive source of malicious events
+ 
 Benefits of decoupling: resiliency (queue persistence), scale (parallel workers), and isolation (enumeration doesn’t block scanning).
 
 ### Why this architecture works

@@ -1,4 +1,4 @@
-name: Build and attach dsxa-sdk release artifacts
+name: dsxa-sdk - Build and attach release artifacts
 
 on:
   release:

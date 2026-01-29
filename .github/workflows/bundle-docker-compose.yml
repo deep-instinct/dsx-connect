@@ -1,4 +1,4 @@
-name: Build docker bundle tarball
+name: Docker compose - bundle
 
 on:
   workflow_dispatch:

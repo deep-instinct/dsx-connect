@@ -69,6 +69,46 @@ Notes:
 - Any value marked as `(base)` comes from the `DSXCONNECT_WORKERS__*` settings.
 - All other retry flags inherit from base unless explicitly overridden above.
 
+## Throughput and scan stats
+
+Throughput depends on connector IO, DSXA scan time, worker concurrency, and network conditions.
+To help you measure real performance in your environment, DSX-Connect tracks per-job metrics in Redis and exposes them via the job status API:
+
+```
+GET /dsx-connect/api/v1/scan/jobs/{job_id}
+```
+
+Key fields (per job):
+
+- `started_at`: first time the job began enqueueing items (seconds since epoch).
+- `first_scan_started_at` / `last_scan_started_at`: when workers actually began processing items.
+- `first_completed_at` / `last_completed_at`: when results started/finished.
+- `finished_at`: job completion timestamp (when processed >= total).
+- `enqueued_count` / `processed_count`: items queued vs. completed.
+- `total_bytes`: total bytes scanned in the job.
+- `total_scan_time_us`: sum of DSXA scan times for all files.
+- `total_request_elapsed_ms`: end-to-end time in dsx-connect (read + upload + DSXA response), summed across files.
+
+Derived fields (computed in the API response):
+
+- `avg_bytes_per_file`
+- `avg_request_elapsed_ms`
+- `scan_us_per_byte` (DSXA scan time per byte)
+- `scan_bytes_per_sec` (DSXA throughput)
+- `request_bytes_per_sec` (end-to-end throughput)
+- `processing_window_secs` (first scan start to last completion)
+
+Practical guidance:
+
+- Use `scan_bytes_per_sec` to compare DSXA performance across different deployment configurations of workers/scanners.
+- Use `request_bytes_per_sec` to capture connector + network + DSXA end-to-end throughput.
+- Increase `dsx_connect_scan_request_worker` concurrency to raise throughput when DSXA and IO are not saturated.
+- Compare per-job metrics before/after tuning worker concurrency, DSXA resources, or connector settings.
+
+UI tip:
+
+- In the UI header, use the “Compare Jobs” icon to select multiple job IDs and view a side‑by‑side throughput table.
+
 ## Policy variants (optional)
 
 The retry policy module includes named variants for special cases:

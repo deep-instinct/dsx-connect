@@ -39,6 +39,11 @@ class DsxaClientError(TaskError):
     reason = "dsxa_client_4xx"
 
 
+class DsxaAuthError(TaskError):
+    retriable = False
+    reason = "dsxa_auth"
+
+
 class MalformedResponse(TaskError):
     retriable = False
     reason = "bad_payload"

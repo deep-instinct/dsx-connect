@@ -104,19 +104,18 @@ to be scanned.
 - Use **filter** for light include/exclude tuning under that root. Remember the connector still walks everything under the asset and filters client-side.
 - Complex filters (e.g., `-tmp`) can force broad listings; whenever possible, push the boundary into the asset and keep filters simple.
 
-#### Sharding & Deployment Strategies
+## Sharding & Deployment Strategies
 Use multiple assets or include‑only filters to split a large repository into smaller partitions that can be scanned in parallel by multiple connector instances.
 
 - **Asset‑based sharding** (preferred for coarse partitions):
-    - S3: `my-bucket/A`, `my-bucket/B`, … (alphabetic)
-    - S3: `my-bucket/2025-01`, `my-bucket/2025-02`, … (time)
+    - S3/GCP/Blob: `my-bucket/A`, `my-bucket/B`, … (alphabetic)
+    - S3/GCP/Blob: `my-bucket/2025-01`, `my-bucket/2025-02`, … (time)
     - Filesystem: `/app/scan_folder/shard1`, `/app/scan_folder/shard2`
     - SharePoint: distinct doc libraries/folders
 - **Filter‑based sharding** (include‑only filters):
     - Asset at container/bucket root, with partitions via include‑only filters (e.g., `prefix1/sub1/**`, `prefix1/sub2/**`)
 
 > Compose POV: run multiple connector containers, each with a distinct asset partition or include‑only filter. In private K8S, deploy multiple releases with different values.
-
 
 ## Item Action
 
@@ -144,15 +143,3 @@ For the precise shape of each field (SharePoint site URL vs. filesystem path, et
 
 > Filters: Use the centralized rsync‑like filter rules in Reference → [Filters](../reference/filters.md).
 
-## Sharding & Deployment Strategies
-
-Split large repositories so multiple connector instances can scan in parallel:
-
-- **Asset-based sharding** (preferred):
-  - S3/GCS/Blob: `bucket/A`, `bucket/B`… or time-based prefixes (`bucket/2025-01`).
-  - Filesystem: `/app/scan_folder/shard1`, `/app/scan_folder/shard2`.
-  - SharePoint/OneDrive: separate libraries/folders.
-- **Filter-based sharding** (include-only filters) when assets must stay at the same root:
-  - Asset at container/bucket root; filters like `prefix1/**`, `prefix2/**` per connector.
-
-Run multiple connectors (Compose services or Helm releases), each with its own asset or include-only filter, to increase throughput.

@@ -42,18 +42,12 @@ theme:
 
 nav:
   - Home: index.md
-  - Architecture: overview.md
+  - Overview: overview.md
   - Getting Started:
       - Overview: getting-started.md
       - Deploying the DSX-Connect Core: getting-started-core.md
       - Deploying Your First Connector: getting-started-connector.md
-  - Connectors:
-      - Overview: connectors/index.md
-      - Concepts: connectors/concepts.md
-      - Filesystem (Overview): connectors/filesystem.md
-      - Google Cloud Storage: connectors/google-cloud-storage.md
-      - M365 Email (Design): connectors/m365-email.md
-      - SharePoint vs OneDrive: connectors/sharepoint-vs-onedrive.md
+  - Connector Concepts: connectors/concepts.md
   - Deployment:
       - Overview: deployment/index.md
       - Docker:
@@ -124,5 +118,7 @@ markdown_extensions:
 extra_javascript:
   - https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js
   - assets/docker-header.js
+  - assets/termynal.js
 extra_css:
   - assets/docker-header.css
+  - assets/termynal.css

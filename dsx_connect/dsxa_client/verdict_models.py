@@ -75,6 +75,9 @@ class DPAVerdictModel2(BaseModel):
     file_info: DPAVerdictFileInfoModel | None = None
     protected_entity: int | None = None
     scan_duration_in_microseconds: int = -1
+    dsxconnect_request_elapsed_ms: float | None = None
+    dsxconnect_read_elapsed_ms: float | None = None
+    dsxconnect_dsxa_elapsed_ms: float | None = None
     container_files_scanned: int | None = None
     container_files_scanned_size: int | None = None
     x_custom_metadata: str | None = Field(None, alias="X-Custom-Metadata")

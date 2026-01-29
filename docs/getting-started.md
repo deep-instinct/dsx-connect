@@ -100,20 +100,18 @@ Create the shared bridge network once; every compose file uses it:
 docker network create dsx-connect-network
 ```
 Confirm the network exists:
-
 ```bash
 docker network ls
 ```
 output:
-```
+```bash
 NETWORK ID     NAME                  DRIVER    SCOPE
 e7cbf5ac2957   bridge                bridge    local
 b15b2bab8be1   dsx-connect-network   bridge    local
-39abe2050363   host                  host      local
-d23daa027e36   none                  null      local
 ```
 
 ## What you’ll deploy
+
 - DSXA scanner (via `docker-compose-dsxa.yaml`)
 - DSX-Connect core (API, workers, Redis, UI) via `docker-compose-dsx-connect-all-services.yaml`
 - A sample connector (filesystem) on the same bridge network

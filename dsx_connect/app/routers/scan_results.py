@@ -102,6 +102,14 @@ async def get_job_status(job_id: str, request: Request) -> dict:
         now = int(_t.time())
         if started:
             data["duration_secs"] = str((finished or now) - started)
+        # Processing window (first start to last completion)
+        try:
+            first_start = int(data.get("first_scan_started_at", 0) or 0)
+            last_done = int(data.get("last_completed_at", 0) or 0)
+            if first_start and last_done:
+                data["processing_window_secs"] = str(max(0, last_done - first_start))
+        except Exception:
+            pass
         # ETA (if total known and some progress)
         try:
             total = None
@@ -126,6 +134,31 @@ async def get_job_status(job_id: str, request: Request) -> dict:
                             return f"{days}d {hrs:02d}:{mins:02d}:{secs:02d}"
                         return f"{hrs:02d}:{mins:02d}:{secs:02d}"
                     data["time_remaining"] = _fmt_eta(eta)
+        except Exception:
+            pass
+        # Throughput & per-job averages
+        try:
+            total_bytes = int(float(data.get("total_bytes", 0) or 0))
+        except Exception:
+            total_bytes = 0
+        try:
+            total_scan_us = int(float(data.get("total_scan_time_us", 0) or 0))
+        except Exception:
+            total_scan_us = 0
+        try:
+            total_request_ms = float(data.get("total_request_elapsed_ms", 0) or 0.0)
+        except Exception:
+            total_request_ms = 0.0
+        try:
+            if proc > 0 and total_bytes >= 0:
+                data["avg_bytes_per_file"] = str(int(total_bytes / proc)) if proc else "0"
+            if proc > 0 and total_request_ms > 0:
+                data["avg_request_elapsed_ms"] = f"{(total_request_ms / proc):.3f}"
+            if total_scan_us > 0 and total_bytes > 0:
+                data["scan_us_per_byte"] = f"{(total_scan_us / total_bytes):.6f}"
+                data["scan_bytes_per_sec"] = f"{(total_bytes / (total_scan_us / 1_000_000.0)):.2f}"
+            if total_request_ms > 0 and total_bytes > 0:
+                data["request_bytes_per_sec"] = f"{(total_bytes / (total_request_ms / 1000.0)):.2f}"
         except Exception:
             pass
     except Exception:
@@ -294,6 +327,9 @@ async def list_jobs(request: Request) -> list[dict]:
     out: list[dict] = []
     async for key in r.scan_iter(match=job_key_pattern(), count=100):
         try:
+            # Skip task list keys (handled via the parent job hash)
+            if key.endswith(":tasks"):
+                continue
             data = await r.hgetall(key)
             if not data:
                 continue
@@ -340,3 +376,41 @@ async def list_jobs(request: Request) -> list[dict]:
         except Exception:
             continue
     return out
+
+
+@router.delete(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.DELETE),
+    description="Clear job status entries (Redis job keys).",
+)
+async def clear_jobs(request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    deleted = 0
+    try:
+        async for key in r.scan_iter(match=job_key_pattern(), count=200):
+            job_id = None
+            if key.endswith(":tasks"):
+                job_id = key[len(job_key("")):-len(":tasks")]
+            else:
+                job_id = key.rsplit(":", 1)[-1]
+            try:
+                await r.delete(key)
+                deleted += 1
+            except Exception:
+                pass
+            if job_id:
+                try:
+                    await r.delete(job_keys(job_id))
+                except Exception:
+                    pass
+                # Best-effort: clear per-job scan results index
+                try:
+                    await r.delete(f"dsxconnect:scan_results_by_job:{job_id}")
+                except Exception:
+                    pass
+    except Exception as e:
+        dsx_logging.error(f"Failed to clear jobs: {e}")
+        raise HTTPException(status_code=500, detail="clear_failed")
+    return {"status": "success", "deleted_jobs": deleted}

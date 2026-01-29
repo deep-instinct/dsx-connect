@@ -94,14 +94,14 @@
         }
         .status-ok { color: var(--status-ok); }
         .status-fail { color: var(--status-fail); }
-        .gear-icon, #themeToggle, #statsIcon {
+        .gear-icon, #themeToggle, #statsIcon, #compareIcon {
             font-size: 1.25rem;
             cursor: pointer;
             color: var(--text-inverted);
             opacity: 0.8;
             transition: opacity 0.2s;
         }
-        .gear-icon:hover, #themeToggle:hover, #statsIcon:hover {
+        .gear-icon:hover, #themeToggle:hover, #statsIcon:hover, #compareIcon:hover {
             opacity: 1;
         }
         .app-version {
@@ -136,6 +136,10 @@
             display: flex; flex-direction: column;
             border: 1px solid var(--border-color);
         }
+        .job-compare-modal-content {
+            width: 92%;
+            max-width: 1300px;
+        }
         .config-modal-header {
             padding: 0.75rem 1.25rem;
             border-bottom: 1px solid var(--border-color);
@@ -148,6 +152,16 @@
         }
         .config-modal-close:hover { color: var(--text-primary); }
         .config-modal-body { padding: 1.25rem; overflow-y: auto; flex: 1; }
+        .scan-results th {
+            padding: 0.3rem 0.6rem;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+            vertical-align: middle;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        .scan-results th:first-child { text-align: left; }
         .config-tree {
             font-family: var(--font-mono); font-size: 0.8rem;
             background: var(--bg-secondary); padding: 1rem;
@@ -292,6 +306,7 @@
             API <i class="fas fa-up-right-from-square" style="font-size: 0.7rem; margin-left: 3px;"></i>
         </a>
         <i class="fas fa-chart-line" id="statsIcon" title="Scan Stats"></i>
+        <i class="fas fa-scale-balanced" id="compareIcon" title="Compare Jobs"></i>
         <i class="fas fa-moon" id="themeToggle" title="Toggle Theme"></i>
         <i class="fas fa-cog gear-icon" id="gearIcon" title="Settings"></i>
     </div>
@@ -357,6 +372,30 @@
 
 </div>
 
+<!-- Job Compare Modal -->
+<div id="jobCompareModal" class="config-modal">
+    <div class="config-modal-content job-compare-modal-content">
+        <div class="config-modal-header">
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+                <h3 id="jobCompareTitleText" style="margin:0;">Job Comparison</h3>
+                <i class="fas fa-pen-to-square" id="jobCompareTitleEdit" title="Edit title" style="cursor:pointer; opacity:0.8;"></i>
+            </div>
+            <div style="display:flex; align-items:center; gap:0.75rem;">
+                <i class="fas fa-download" id="jobCompareTitleExport" title="Export CSV" style="cursor:pointer; opacity:0.8;"></i>
+                <span class="config-modal-close" id="jobCompareModalClose">&times;</span>
+            </div>
+        </div>
+        <div class="config-modal-body">
+            <div style="margin-bottom: 0.75rem;">
+                <label for="jobCompareSelect" style="font-size:0.85rem; color: var(--text-secondary);">Select jobs</label>
+                <select id="jobCompareSelect" multiple size="6" style="width:100%; font-size:0.85rem; padding:4px;"></select>
+                <div style="margin-top:0.5rem; display:flex; gap:0.5rem; flex-wrap:wrap;"></div>
+            </div>
+            <div id="jobCompareContent">Select one or more jobs to compare.</div>
+        </div>
+    </div>
+</div>
+
 <script>
     // ---- API base: service-slug FIRST (matches APIRouter(prefix=route_path(API_PREFIX_V1))) ----
     // Server prefix is now: /dsx-connect/api/v1
@@ -384,6 +423,7 @@
                 status:  (id) => api(`scan/request/${encodeURIComponent(id)}`),
                 stats:   () => api('scan/stats'),
                 jobs: {
+                    list:   () => api('scan/jobs'),
                     status: (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}`),
                     pause:  (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}/pause`),
                     resume: (jobId) => api(`scan/jobs/${encodeURIComponent(jobId)}/resume`),
@@ -399,9 +439,19 @@
     const gearIcon = document.getElementById('gearIcon');
     const themeToggle = document.getElementById('themeToggle');
     const statsIcon = document.getElementById('statsIcon');
+    const compareIcon = document.getElementById('compareIcon');
     const statsModal = document.getElementById('statsModal');
     const statsModalClose = document.getElementById('statsModalClose');
     const statsModalContent = document.getElementById('statsModalContent');
+    const jobCompareModal = document.getElementById('jobCompareModal');
+    const jobCompareModalClose = document.getElementById('jobCompareModalClose');
+    const jobCompareSelect = document.getElementById('jobCompareSelect');
+    const jobCompareContent = document.getElementById('jobCompareContent');
+    const jobCompareTitleText = document.getElementById('jobCompareTitleText');
+    const jobCompareTitleEdit = document.getElementById('jobCompareTitleEdit');
+    const jobCompareTitleExport = document.getElementById('jobCompareTitleExport');
+    let jobCompareRowsCache = [];
+    let jobCompareTitle = localStorage.getItem('jobCompareTitle') || 'Job Comparison';
     const configSidebar = document.getElementById('configSidebar');
     const seenConnectors = new Set();
     const connectorLastSeen = new Map(); // Track when we last saw each connector
@@ -821,6 +871,42 @@
         const usStr = us.toLocaleString();
         return `${usStr} µs (${ms.toFixed(2)} ms, ${s.toFixed(3)} s)`;
     }
+    function formatRateBps(v) {
+        const num = Number(v);
+        if (!Number.isFinite(num) || num <= 0) return '';
+        const mb = num / (1024 * 1024);
+        return `${num.toFixed(2)} B/s (${mb.toFixed(2)} MB/s)`;
+    }
+    function formatDurationSec(sec) {
+        const num = Number(sec);
+        if (!Number.isFinite(num) || num <= 0) return '';
+        const s = Math.round(num);
+        const hrs = Math.floor(s / 3600);
+        const mins = Math.floor((s % 3600) / 60);
+        const secs = s % 60;
+        return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    function formatEpochTime(sec) {
+        const n = Number(sec);
+        if (!Number.isFinite(n) || n <= 0) return '';
+        const d = new Date(n * 1000);
+        const yyyy = String(d.getFullYear());
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mi = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+    }
+    function formatJobTimeRange(job) {
+        if (!job) return '';
+        const start = formatEpochTime(job.started_at || job.first_scan_started_at);
+        const end = formatEpochTime(job.finished_at || job.last_completed_at);
+        if (start && end) return `start: ${start} to finish: ${end}`;
+        if (start) return `start: ${start}`;
+        if (end) return `finish: ${end}`;
+        return '';
+    }
 
     async function fetchScanStats() {
         try {
@@ -868,6 +954,260 @@
             </table>
         `;
         return table;
+    }
+
+    async function fetchJobList() {
+        try {
+            const res = await fetch(r.scan.jobs.list());
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return await res.json();
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function buildJobOptions(jobs) {
+        if (!jobCompareSelect) return;
+        jobCompareSelect.innerHTML = '';
+        const merged = new Map();
+        (jobs || []).forEach(j => {
+            if (j && j.job_id) merged.set(j.job_id, j);
+        });
+        seenJobIds.forEach(jobId => {
+            if (!merged.has(jobId)) merged.set(jobId, { job_id: jobId });
+        });
+        const items = [...merged.values()];
+        const timeVal = (obj) => {
+            const fields = ['last_completed_at', 'last_scan_started_at', 'last_update', 'finished_at', 'started_at'];
+            for (const key of fields) {
+                const v = Number(obj && obj[key]);
+                if (Number.isFinite(v) && v > 0) return v;
+            }
+            return 0;
+        };
+        items.sort((a, b) => {
+            const ta = timeVal(a);
+            const tb = timeVal(b);
+            if (tb !== ta) return tb - ta;
+            return String(a.job_id).localeCompare(String(b.job_id));
+        });
+        items.forEach(j => {
+            const opt = document.createElement('option');
+            opt.value = j.job_id;
+            const meta = jobMeta[j.job_id];
+            const baseLabel = j.job_name || (meta && meta.connectorName ? `${j.job_id} (${meta.connectorName})` : j.job_id);
+            const timeLabel = formatJobTimeRange(j);
+            const label = timeLabel ? `${baseLabel} • ${timeLabel}` : baseLabel;
+            opt.textContent = label;
+            opt.title = j.job_id;
+            jobCompareSelect.appendChild(opt);
+        });
+    }
+
+    async function runJobComparison() {
+        if (!jobCompareSelect) return;
+        const selected = [...jobCompareSelect.selectedOptions].map(o => o.value).filter(Boolean);
+        if (!selected.length) {
+            jobCompareContent.textContent = 'Select one or more jobs to compare.';
+            jobCompareRowsCache = [];
+            return;
+        }
+        jobCompareContent.textContent = 'Loading...';
+        const rows = await Promise.all(selected.map(async jobId => {
+            try {
+                const res = await fetch(r.scan.jobs.status(jobId));
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                data.job_id = data.job_id || jobId;
+                return data;
+            } catch (e) {
+                return { job_id: jobId, error: String(e) };
+            }
+        }));
+        jobCompareRowsCache = rows;
+        jobCompareContent.innerHTML = renderJobCompareTable(rows);
+    }
+
+    function renderJobCompareTable(rows) {
+        if (!rows || !rows.length) return '<div>No jobs selected.</div>';
+        const header = `
+            <tr>
+                <th style="text-align:left;">Job</th>
+                <th>Status</th>
+                <th>Processed</th>
+                <th>Wall time</th>
+                <th>Total Bytes</th>
+                <th>Total bytes/sec</th>
+                <th>Scan bytes/sec</th>
+                <th>Avg Req ms</th>
+                <th>Scan ms/byte</th>
+                <th>Est DSXA Scan Time: 1GB</th>
+                <th>Est Wall Time: 1GB</th>
+                <th>Est DSXA Scan Time: 1TB</th>
+                <th>Est Wall Time: 1TB</th>
+                <th>Est DSXA Scan Time: 1M files</th>
+                <th>Est Wall Time: 1M files</th>
+            </tr>`;
+        const body = rows.map(r => {
+            if (r.error) {
+                return `<tr><td>${r.job_id}</td><td colspan="11" style="color: var(--text-secondary);">${r.error}</td></tr>`;
+            }
+            const proc = Number(r.processed_count || 0);
+            const total = Number(r.enqueued_total || r.expected_total || r.enqueued_count || 0);
+            const status = r.status || '';
+            const duration = formatDurationSec(r.duration_secs);
+            const scanUsPerByte = Number(r.scan_us_per_byte || 0);
+            const scanMsPerByte = (Number.isFinite(scanUsPerByte) && scanUsPerByte > 0)
+                ? (scanUsPerByte / 1000.0).toFixed(6)
+                : '';
+            const bytes = Number(r.total_bytes || 0);
+            const jobLabel = r.job_name ? `${r.job_name} (${r.job_id})` : r.job_id;
+            const reqBps = Number(r.request_bytes_per_sec || 0);
+            const scanBps = Number(r.scan_bytes_per_sec || 0);
+            const avgBytes = Number(r.avg_bytes_per_file || 0);
+            const estScan1GB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / scanBps) : '';
+            const estTotal1GB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / reqBps) : '';
+            const estScan1TB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024 * 1024) / scanBps) : '';
+            const estTotal1TB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024 * 1024) / reqBps) : '';
+            const estScan1MFiles = (scanBps > 0 && avgBytes > 0)
+                ? formatDurationSec((avgBytes * 1_000_000) / scanBps)
+                : '';
+            const estTotal1MFiles = (reqBps > 0 && avgBytes > 0)
+                ? formatDurationSec((avgBytes * 1_000_000) / reqBps)
+                : '';
+            return `
+                <tr>
+                    <td style="text-align:left; white-space:nowrap;">${jobLabel}</td>
+                    <td>${status}</td>
+                    <td>${proc}${total ? ` / ${total}` : ''}</td>
+                    <td>${duration}</td>
+                    <td>${bytesWithMBStr(bytes)}</td>
+                    <td>${formatRateBps(r.request_bytes_per_sec)}</td>
+                    <td>${formatRateBps(r.scan_bytes_per_sec)}</td>
+                    <td>${r.avg_request_elapsed_ms || ''}</td>
+                    <td>${scanMsPerByte}</td>
+                    <td>${estScan1GB}</td>
+                    <td>${estTotal1GB}</td>
+                    <td>${estScan1TB}</td>
+                    <td>${estTotal1TB}</td>
+                    <td>${estScan1MFiles}</td>
+                    <td>${estTotal1MFiles}</td>
+                </tr>`;
+        }).join('');
+        return `
+            <div class="scan-results-panel" style="max-height: 60vh;">
+            <table class="scan-results" style="min-width: 1200px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;">
+                <thead>${header}</thead>
+                <tbody>${body}</tbody>
+            </table>
+            </div>`;
+    }
+
+    function exportJobComparisonCsv() {
+        if (!jobCompareRowsCache || !jobCompareRowsCache.length) {
+            jobCompareContent.textContent = 'Run a comparison first.';
+            return;
+        }
+        const headers = [
+            'job_id',
+            'job_name',
+            'status',
+            'processed_count',
+            'total_count',
+            'duration_secs',
+            'total_bytes',
+            'request_bytes_per_sec',
+            'scan_bytes_per_sec',
+            'avg_request_elapsed_ms',
+            'scan_ms_per_byte',
+            'est_scan_1gb_hhmmss',
+            'est_total_1gb_hhmmss',
+            'est_scan_1tb_hhmmss',
+            'est_total_1tb_hhmmss',
+            'est_scan_1m_files_hhmmss',
+            'est_total_1m_files_hhmmss',
+        ];
+        const lines = [headers.join(',')];
+        for (const r of jobCompareRowsCache) {
+            const proc = Number(r.processed_count || 0);
+            const total = Number(r.enqueued_total || r.expected_total || r.enqueued_count || 0);
+            const reqBps = Number(r.request_bytes_per_sec || 0);
+            const scanBps = Number(r.scan_bytes_per_sec || 0);
+            const scanUsPerByte = Number(r.scan_us_per_byte || 0);
+            const scanMsPerByte = (Number.isFinite(scanUsPerByte) && scanUsPerByte > 0)
+                ? (scanUsPerByte / 1000.0).toFixed(6)
+                : '';
+            const avgBytes = Number(r.avg_bytes_per_file || 0);
+            const estScan1GB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / scanBps) : '';
+            const estTotal1GB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / reqBps) : '';
+            const estScan1TB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024 * 1024) / scanBps) : '';
+            const estTotal1TB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024 * 1024) / reqBps) : '';
+            const estScan1MFiles = (scanBps > 0 && avgBytes > 0)
+                ? formatDurationSec((avgBytes * 1_000_000) / scanBps)
+                : '';
+            const estTotal1MFiles = (reqBps > 0 && avgBytes > 0)
+                ? formatDurationSec((avgBytes * 1_000_000) / reqBps)
+                : '';
+            const row = [
+                r.job_id || '',
+                r.job_name || '',
+                r.status || '',
+                proc,
+                total,
+                r.duration_secs || '',
+                Number(r.total_bytes || 0),
+                r.request_bytes_per_sec || '',
+                r.scan_bytes_per_sec || '',
+                r.avg_request_elapsed_ms || '',
+                scanMsPerByte,
+                estScan1GB,
+                estTotal1GB,
+                estScan1TB,
+                estTotal1TB,
+                estScan1MFiles,
+                estTotal1MFiles,
+            ].map(v => {
+                const s = String(v ?? '');
+                if (s.includes('"') || s.includes(',') || s.includes('\n')) {
+                    return `"${s.replace(/\"/g, '""')}"`;
+                }
+                return s;
+            });
+            lines.push(row.join(','));
+        }
+        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const safeTitle = (jobCompareTitle || 'job-comparison')
+            .toLowerCase()
+            .replace(/[^a-z0-9\-_.]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        link.download = `${safeTitle || 'job-comparison'}-${Date.now()}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
+    async function exportSingleJobCsv() {
+        if (!jobCompareSelect) return;
+        const selected = [...jobCompareSelect.selectedOptions].map(o => o.value).filter(Boolean);
+        if (selected.length !== 1) {
+            jobCompareContent.textContent = 'Select a single job to export.';
+            return;
+        }
+        jobCompareContent.textContent = 'Loading...';
+        try {
+            const jobId = selected[0];
+            const res = await fetch(r.scan.jobs.status(jobId));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            jobCompareRowsCache = [data];
+            exportJobComparisonCsv();
+        } catch (e) {
+            jobCompareContent.textContent = `Export failed: ${e?.message || e}`;
+        }
     }
 
     async function fetchConnectors() {
@@ -1087,11 +1427,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     }
     function ensureJobInFilter(jobId, connectorName) {
         if (!jobId) return;
+        const now = Date.now();
         // Remember connector name (if provided), persist
         if (connectorName && (!jobMeta[jobId] || !jobMeta[jobId].connectorName)) {
             jobMeta[jobId] = { ...(jobMeta[jobId] || {}), connectorName };
-            try { localStorage.setItem('jobMeta', JSON.stringify(jobMeta)); } catch {}
         }
+        jobMeta[jobId] = { ...(jobMeta[jobId] || {}), lastSeenAt: now };
+        try { localStorage.setItem('jobMeta', JSON.stringify(jobMeta)); } catch {}
         const sel = document.getElementById('jobFilter');
         if (!sel) return;
         let opt = [...sel.options].find(o => o.value === jobId);
@@ -1104,6 +1446,19 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             // Update label if improved metadata
             if (opt.textContent !== label) opt.textContent = label;
         }
+        // Sort options by last seen timestamp (desc)
+        const opts = [...sel.options].filter(o => o.value);
+        opts.sort((a, b) => {
+            const ta = jobMeta[a.value]?.lastSeenAt || 0;
+            const tb = jobMeta[b.value]?.lastSeenAt || 0;
+            if (tb !== ta) return tb - ta;
+            return a.value.localeCompare(b.value);
+        });
+        sel.innerHTML = '';
+        const allOpt = document.createElement('option');
+        allOpt.value = ''; allOpt.textContent = 'All';
+        sel.appendChild(allOpt);
+        opts.forEach(o => sel.appendChild(o));
         if (!seenJobIds.has(jobId)) seenJobIds.add(jobId);
         if (currentJobFilter) sel.value = currentJobFilter;
     }
@@ -1341,11 +1696,65 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         statsModal.style.display = 'none';
     }
 
+    async function openJobCompareModal() {
+        jobCompareModal.style.display = 'block';
+        if (jobCompareTitleText) {
+            jobCompareTitleText.textContent = jobCompareTitle;
+        }
+        jobCompareContent.textContent = 'Loading jobs...';
+        const jobs = await fetchJobList();
+        buildJobOptions(jobs);
+        jobCompareContent.textContent = 'Select one or more jobs to compare.';
+    }
+    function closeJobCompareModal() {
+        jobCompareModal.style.display = 'none';
+    }
+
     statsIcon.addEventListener('click', openStatsModal);
     statsModalClose.addEventListener('click', closeStatsModal);
+    compareIcon.addEventListener('click', openJobCompareModal);
+    jobCompareModalClose.addEventListener('click', closeJobCompareModal);
+    jobCompareSelect.addEventListener('change', runJobComparison);
+    jobCompareTitleExport.addEventListener('click', () => {
+        if (jobCompareRowsCache && jobCompareRowsCache.length > 0) {
+            exportJobComparisonCsv();
+        } else {
+            exportSingleJobCsv();
+        }
+    });
+    jobCompareTitleEdit.addEventListener('click', () => {
+        if (!jobCompareTitleText) return;
+        jobCompareTitleText.contentEditable = 'true';
+        jobCompareTitleText.focus();
+        const sel = window.getSelection();
+        if (sel) sel.selectAllChildren(jobCompareTitleText);
+    });
+    if (jobCompareTitleText) {
+        jobCompareTitleText.addEventListener('blur', () => {
+            jobCompareTitleText.contentEditable = 'false';
+            const next = jobCompareTitleText.textContent || '';
+            jobCompareTitle = next.trim() || 'Job Comparison';
+            jobCompareTitleText.textContent = jobCompareTitle;
+            try { localStorage.setItem('jobCompareTitle', jobCompareTitle); } catch {}
+        });
+        jobCompareTitleText.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                jobCompareTitleText.blur();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                jobCompareTitleText.textContent = jobCompareTitle;
+                jobCompareTitleText.blur();
+            }
+        });
+    }
     window.addEventListener('click', (event) => {
         if (event.target === statsModal) {
             closeStatsModal();
+        }
+        if (event.target === jobCompareModal) {
+            closeJobCompareModal();
         }
     });
 
@@ -2052,8 +2461,9 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         if (clearBtn) {
             clearBtn.onclick = async () => {
                 try {
-                    // 0) Clear stored results server-side
+                    // 0) Clear stored results + jobs server-side
                     try { await fetch(`${API_BASE}/scan/results`, { method: 'DELETE' }); } catch (e) { console.warn('clear results failed', e); }
+                    try { await fetch(`${API_BASE}/scan/jobs`, { method: 'DELETE' }); } catch (e) { console.warn('clear jobs failed', e); }
 
                     // 1) Clear visible results
                     const body = document.getElementById('scanResultsBody');
@@ -2080,6 +2490,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     try { localStorage.removeItem('jobMeta'); } catch {}
                     try { localStorage.removeItem('jobFilter'); } catch {}
                     updateOpenApiButtonState();
+                    if (jobCompareSelect) {
+                        jobCompareSelect.innerHTML = '';
+                    }
+                    if (jobCompareContent) {
+                        jobCompareContent.textContent = 'Select one or more jobs to compare.';
+                    }
+                    jobCompareRowsCache = [];
                 } catch {}
             };
         }

@@ -19,15 +19,6 @@ DSX‑Connect is a modular integration framework that orchestrates safe, scalabl
 *Figure 1: High-level conceptual architecture diagram*
 
 
-## Docker Image Repository
-
-If you need to mirror or pull images directly, images for dsx-connect core and connectors are published at Docker Hub under `dsxconnect/*` (https://hub.docker.com/repositories/dsxconnect). Examples:
-
-- Core: `dsxconnect/dsx-connect`
-- Connectors: `dsxconnect/filesystem-connector`, `dsxconnect/aws-s3-connector`, `dsxconnect/azure-blob-storage-connector`, etc.
-
-If your environment requires an internal registry, mirror from that namespace and update image references in docker compose or helm deployments accordingly. The rest of this guide assumes access to the `dsxconnect` Docker Hub repo.
-
 
 ## Architecture Advantages
 
@@ -39,7 +30,26 @@ If your environment requires an internal registry, mirror from that namespace an
 - **Consistent & pluggable:** All connectors share the same API contract; updating one doesn’t disrupt others.
 - **Observability:** Health endpoints, queue metrics, DLQ management, structured logs.
 
-## What’s Running Under the Hood
+## Deployment Models
+
+### Docker Image Repository
+
+If you need to mirror or pull images directly, images for dsx-connect core and connectors are published at Docker Hub under `dsxconnect/*` (https://hub.docker.com/repositories/dsxconnect). Examples:
+
+- Core: `dsxconnect/dsx-connect`
+- Connectors: `dsxconnect/filesystem-connector`, `dsxconnect/aws-s3-connector`, `dsxconnect/azure-blob-storage-connector`, etc.
+
+If your environment requires an internal registry, mirror from that namespace and update image references in docker compose or helm deployments accordingly. The rest of this guide assumes access to the `dsxconnect` Docker Hub repo.
+
+- **Docker Compose:** Ideal for evaluations and minimal production deployments.
+- **Kubernetes + Helm:** Scalable, resilient, and portable across AKS/EKS/GKE/OKE. Integrates with HA Redis, object storage, and logging.  Ideal for
+  production environments connected to multiple repositories of the same or different types, high availability a necessity.
+
+Both models use the same container images and configuration patterns, easing promotion from test to prod.
+
+See [Deployment Advanced Settings](deployment/advanced.md) for environment options and worker retry policies.
+
+## High-level Architecture
 
 The following diagram demonstrates the workflow of a scan request, from the UI/API client to the results logged/stored in the database.  Scan requests are 
 entered into a queue, which is processed by a Scan Request Worker pool.  The Scan Request Worker fetches the file content from the connector, 
@@ -151,73 +161,3 @@ flowchart TB
     - **Notification Worker:** Broadcasts scan results and job progress to subscribers (SSE/UI and other sinks).
 - **Logging & telemetry:** rsyslog/stdout for logs; queue metrics, health endpoints, and DLQ views for operational visibility.
 
-
-## Sequence: Full Scan - Processing by Scan Request Worker
-
-
-```mermaid
-sequenceDiagram
-    participant UI as Web UI/API Client
-    participant DSX as DSX-Connect core API
-    participant Queue as Queue (Redis)
-    participant Worker as Worker (Celery)
-    participant Conn as Connector
-    participant Repo as Repository
-    participant DSXA as DSXA Scanner
-
-    Note over UI, DSXA: Full Scan Initiation Flow
-
-    UI->>+DSX: POST /connectors/full_scan/{uuid}
-    DSX->>+Conn: POST /{connector}/full_scan
-    Note over DSX, Conn: Background task initiated
-
-    Conn->>+Repo: List/enumerate items
-    Repo-->>-Conn: Item keys/paths
-
-    loop For each item
-        Conn->>Conn: Build ScanRequest(location, metainfo)
-        Conn->>+DSX: POST /scan/request
-        DSX->>+Queue: Enqueue scan_request_task
-        Queue-->>-DSX: Task queued
-        DSX-->>-Conn: {status: success, message: queued}
-    end
-
-    Conn-->>-DSX: Full scan invoked (enqueued)
-    DSX-->>-UI: Full scan initiated
-
-    Note over UI, DSXA: Asynchronous Processing of Queued Scans
-
-    loop For each queued scan request
-        Worker->>+Queue: Pop scan_request_task
-        Queue-->>-Worker: ScanRequest data
-        Worker->>+Conn: POST /{connector}/read_file
-        Conn->>+Repo: Download/stream content
-        Repo-->>-Conn: Blob stream
-        Conn-->>-Worker: StreamingResponse (content)
-        Worker->>+DSXA: POST /scan/binary/v2
-        DSXA-->>-Worker: Verdict (benign/malicious)
-        alt Malicious
-            Worker->>+Conn: PUT /{connector}/item_action
-            Conn->>+Repo: Apply action (move/tag/delete)
-            Repo-->>-Conn: Action applied
-            Conn-->>-Worker: ItemActionStatusResponse
-        end
-        Worker->>Worker: Store result / notify
-    end
-```
-
-## Deployment Models
-
-- **Docker Compose:** Ideal for evaluations and minimal production deployments.
-- **Kubernetes + Helm:** Scalable, resilient, and portable across AKS/EKS/GKE/OKE. Integrates with HA Redis, object storage, and logging.  Ideal for 
-   production environments connected to multiple repositories of the same or different types, high availability a necessity.
-
-Both models use the same container images and configuration patterns, easing promotion from test to prod.
-
-See [Deployment Advanced Settings](deployment/advanced.md) for environment options and worker retry policies.
-
-## Fault Tolerance & High Availability
-
-- **Retries & DLQ:** Intelligent retries per failure type (connector/DSXA/timeouts/rate limits). DLQ preserves failed tasks for reprocessing.
-- **Graceful degradation:** Continue accepting/queuing when downstreams are degraded; resume automatically.
-- **HA patterns:** Stateless workers; shared queues; multiple API replicas; connectors operate independently.

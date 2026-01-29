@@ -137,6 +137,29 @@ class ScanResultWorker(BaseWorker):
                 r.hsetnx(key, "job_id", job_id)
                 r.hsetnx(key, "status", "running")
                 r.hincrby(key, "processed_count", 1)
+                # Aggregate per-job timing/size stats
+                try:
+                    v = getattr(scan_result, "verdict", None)
+                    fi = getattr(v, "file_info", None) if v is not None else None
+                    size = getattr(fi, "file_size_in_bytes", None) if fi is not None else None
+                    if size is not None and int(size) >= 0:
+                        r.hincrby(key, "total_bytes", int(size))
+                except Exception:
+                    pass
+                try:
+                    v = getattr(scan_result, "verdict", None)
+                    scan_us = getattr(v, "scan_duration_in_microseconds", None) if v is not None else None
+                    if scan_us is not None and int(scan_us) >= 0:
+                        r.hincrby(key, "total_scan_time_us", int(scan_us))
+                except Exception:
+                    pass
+                try:
+                    v = getattr(scan_result, "verdict", None)
+                    req_ms = getattr(v, "dsxconnect_request_elapsed_ms", None) if v is not None else None
+                    if req_ms is not None:
+                        r.hincrbyfloat(key, "total_request_elapsed_ms", float(req_ms))
+                except Exception:
+                    pass
                 # verdict breakdown
                 try:
                     v = getattr(getattr(scan_result, "verdict", None), "verdict", None)
@@ -152,7 +175,8 @@ class ScanResultWorker(BaseWorker):
                         r.hincrby(key, f"verdict_{v_key}", 1)
                 except Exception:
                     pass
-                r.hset(key, "last_update", now)
+                r.hsetnx(key, "first_completed_at", now)
+                r.hset(key, mapping={"last_completed_at": now, "last_update": now})
                 r.expire(key, 7 * 24 * 3600)
         except Exception:
             pass

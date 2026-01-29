@@ -1,5 +1,6 @@
 # … existing imports …
 import io
+import time
 import unicodedata
 import random
 import sys
@@ -24,7 +25,7 @@ from dsx_connect.connectors.client import get_connector_client
 from shared.models.connector_models import ScanRequestModel
 from dsx_connect.taskworkers.celery_app import celery_app
 from dsx_connect.taskworkers.errors import MalformedScanRequest, DsxaClientError, DsxaServerError, DsxaTimeoutError, \
-    ConnectorClientError, ConnectorServerError, ConnectorConnectionError
+    DsxaAuthError, ConnectorClientError, ConnectorServerError, ConnectorConnectionError
 from dsx_connect.taskworkers.names import Tasks, Queues
 import redis  # lightweight sync client for quick job-state checks
 from shared.dsx_logging import dsx_logging
@@ -47,6 +48,9 @@ class ScanRequestWorker(BaseWorker):
     """
     name = Tasks.REQUEST
     RETRY_GROUPS = RetryGroups.connector_and_dsxa()
+    _dsxa_auth_failed = False
+    _dsxa_auth_log_emitted = False
+    _redis = None
 
     def execute(self, scan_request_dict: dict, *, scan_request_task_id: str = None) -> str:
         # 1. Validate input (convert Pydantic errors to our domain error)
@@ -54,6 +58,35 @@ class ScanRequestWorker(BaseWorker):
             scan_request = ScanRequestModel.model_validate(scan_request_dict)
         except ValidationError as e:
             raise MalformedScanRequest(f"Invalid scan request: {e}") from e
+
+        if self.__class__._dsxa_auth_failed:
+            if not self.__class__._dsxa_auth_log_emitted:
+                dsx_logging.error(
+                    "[scan_request] DSXA auth is failing; scanner AUTH_TOKEN is missing or incorrect. "
+                    "Tasks will be sent to DLQ until DSXCONNECT_SCANNER__AUTH_TOKEN is fixed and workers restarted."
+                )
+                self.__class__._dsxa_auth_log_emitted = True
+            raise DsxaAuthError(
+                "DSXA auth failure: incorrect or missing AUTH_TOKEN/DSXCONNECT_SCANNER__AUTH_TOKEN"
+            )
+
+        # Record per-job scan start timestamps (best-effort)
+        try:
+            job_id = getattr(scan_request, "scan_job_id", None)
+            if job_id:
+                r = self.__class__._redis
+                if r is None:
+                    self.__class__._redis = redis.from_url(str(cfg.redis_url), decode_responses=True)
+                    r = self.__class__._redis
+                now = str(int(time.time()))
+                key = job_key(job_id)
+                r.hsetnx(key, "job_id", job_id)
+                r.hsetnx(key, "status", "running")
+                r.hsetnx(key, "first_scan_started_at", now)
+                r.hset(key, mapping={"last_scan_started_at": now, "last_update": now})
+                r.expire(key, 7 * 24 * 3600)
+        except Exception:
+            pass
 
         dsx_logging.info(f"[scan_request:{self.request.id}] for {scan_request.metainfo} started")
 
@@ -95,6 +128,8 @@ class ScanRequestWorker(BaseWorker):
                     raise self.retry(countdown=5)
                 return "PAUSED"
 
+        request_start = time.perf_counter()
+
         # 1b. Preflight skip for oversized files (based on provided size hint, if any)
         size_hint = getattr(scan_request, "size_in_bytes", None)
         max_file_size = getattr(cfg.scanner, "max_file_size_bytes", None)
@@ -103,7 +138,13 @@ class ScanRequestWorker(BaseWorker):
                 f"[scan_request:{getattr(self.context, 'task_id', 'unknown')}] "
                 f"Skipping {scan_request.location} (hint size {size_hint} bytes exceeds limit {max_file_size})"
             )
-            self._emit_not_scanned_verdict(scan_request_dict, scan_request, size_hint, reason="File Size Too Large")
+            self._emit_not_scanned_verdict(
+                scan_request_dict,
+                scan_request,
+                size_hint,
+                reason="File Size Too Large",
+                request_elapsed_ms=(time.perf_counter() - request_start) * 1000.0,
+            )
             return "SKIPPED_FILE_TOO_LARGE"
 
         slot_acquired = False
@@ -130,11 +171,22 @@ class ScanRequestWorker(BaseWorker):
                     scan_request,
                     size_for_verdict,
                     reason="File Size Too Large",
+                    request_elapsed_ms=(time.perf_counter() - request_start) * 1000.0,
                 )
                 return "SKIPPED_FILE_TOO_LARGE"
 
             # 3. Scan with DSXA
             dpa_verdict = self.scan_with_dsxa_stream(file_stream, scan_request, self.context.task_id)
+            request_elapsed_ms = (time.perf_counter() - request_start) * 1000.0
+            try:
+                dpa_verdict = dpa_verdict.model_copy(
+                    update={"dsxconnect_request_elapsed_ms": request_elapsed_ms}
+                )
+            except Exception:
+                try:
+                    dpa_verdict.dsxconnect_request_elapsed_ms = request_elapsed_ms
+                except Exception:
+                    pass
             dsx_logging.debug(
                 f"[scan_request:{self.context.task_id}] Verdict: {getattr(dpa_verdict, 'verdict', None)}"
             )
@@ -226,7 +278,17 @@ class ScanRequestWorker(BaseWorker):
         except DSXAError as e:
             # Map SDK errors to our taxonomy
             if isinstance(e, AuthenticationError):
-                raise DsxaClientError(f"DSXA auth error: {e}") from e
+                self.__class__._dsxa_auth_failed = True
+                if not self.__class__._dsxa_auth_log_emitted:
+                    dsx_logging.error(
+                        "DSXA auth failed (401/403). Verify AUTH_TOKEN on the scanner and "
+                        "DSXCONNECT_SCANNER__AUTH_TOKEN in dsx-connect. "
+                        "Tasks will be sent to DLQ until fixed."
+                    )
+                    self.__class__._dsxa_auth_log_emitted = True
+                raise DsxaAuthError(
+                    "DSXA auth error: incorrect or missing AUTH_TOKEN/DSXCONNECT_SCANNER__AUTH_TOKEN"
+                ) from e
             if isinstance(e, BadRequestError):
                 raise DsxaClientError(f"DSXA bad request: {e}") from e
             if isinstance(e, ServerError):
@@ -385,7 +447,14 @@ class ScanRequestWorker(BaseWorker):
             # Best-effort; if Redis is unavailable, counters may drift until service restarts
             pass
 
-    def _emit_not_scanned_verdict(self, scan_request_dict: dict, scan_request: ScanRequestModel, size: int, reason: str):
+    def _emit_not_scanned_verdict(
+        self,
+        scan_request_dict: dict,
+        scan_request: ScanRequestModel,
+        size: int,
+        reason: str,
+        request_elapsed_ms: float | None = None,
+    ):
         """Emit a synthetic Not Scanned verdict so downstream logging/UI can act on oversized files."""
         details = DPAVerdictDetailsModel(
             event_description="File not scanned",
@@ -407,6 +476,7 @@ class ScanRequestWorker(BaseWorker):
             verdict_details=details,
             file_info=file_info,
             scan_duration_in_microseconds=0,
+            dsxconnect_request_elapsed_ms=request_elapsed_ms,
         )
         verdict_payload = verdict.model_dump()
         async_result = celery_app.send_task(

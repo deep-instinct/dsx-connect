@@ -50,12 +50,13 @@ Within a few seconds the connector registers with DSX-Connect and begins monitor
 
 Done! You now have DSXA, DSX-Connect core, and a connector running together locally.
 
-Next, explore some core Connectors concepts 
+Next, explore some core Connectors concepts: 
+
 - [Next: Connector Overview](connectors/concepts.md)
 or, 
-- jump straight into deploying connectors via Docker [Docker Best Practices](deployment/docker/intro.md), 
+- jump to Deployment -> Docker section to learn more about Docker deployments.  
 or, 
-- explore deployment using Kubernetes [Kubernetes Best Practices](deployment/kubernetes/getting-started.md).
+- jump to Deployment -> Kubernetes to learn about Kubernetes deployments.
 
 
 

@@ -11,7 +11,7 @@ This guide explains the core configuration concepts and details three deployment
 - `kubectl` configured to point to your cluster.
 - `helm` for deploying helm charts
 - `openssl` for generating a self-signed certificate if you plan to enable TLS for development.
-- A dsx-connect chart release.  
+- Access to dsx-connect chart release: `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart`   
 ---
 
 ## Core Configuration Concepts
@@ -65,10 +65,12 @@ dsxa-scanner:
 
 ## Deployment Methods
 
-This chart is flexible. The following methods show how to deploy it, from a simple test to a production-grade workflow.
+The helm charts used for dsx-connect are flexible. The following methods show how to deploy it, from a simple test to a production-grade workflow.
 
 ### Assumptions
-In the following guide assumed that the release name used is "dsx" and the namespace is the `default` namespace.  for example:
+In the following sections we will use the release name: `dsx` and the  `default` namespace.
+
+Thus, when using helm, dsx as the release name and the default namespace is assumed when not supplied.
 ```bash
 helm upgrade --install dsx <helm root directory> -f <helm root directory>/values.yaml <command line arguments>
 ```
@@ -84,13 +86,14 @@ Edit `examples/secrets/tls-secret.yaml` (sample provided with the chart) or crea
 apiVersion: v1
 kind: Secret
 metadata:
-  name: <release>-dsx-connect-api-tls
-  namespace: <your-namespace>
+  name: dsx-dsx-connect-api-tls
+  namespace: default
 type: kubernetes.io/tls
 data:
   tls.crt: <base64-encoded-cert>
   tls.key: <base64-encoded-key>
 ```
+
 Apply the Secret before deploying the dsx-connect stack:
 ```bash
 kubectl apply -f examples/secrets/tls-secret.yaml
@@ -103,8 +106,8 @@ The enrollment can be any alphanumeric string, ideally a long random string, suc
 apiVersion: v1
 kind: Secret
 metadata:
-  name: <release>-dsx-connect-api-auth-enrollment
-  namespace: <your-namespace>
+  name: dsx-dsx-connect-api-auth-enrollment
+  namespace: default
 type: Opaque
 stringData:
   # REQUIRED: the enrollment token
@@ -115,7 +118,7 @@ stringData:
 kubectl apply -f examples/secrets/auth-enrollment-secret.yaml
 ```
 
-**3. Create the DIANNA API Secret:**
+**3. Create the DIANNA API Secret (if deploying with DIANNA support):**
 Edit `examples/secrets/di-api-secret.yaml` (sample provided) with your DI API token and management URL, then apply it. The sample Secret is named `di-api`; set `global.dianna.secretName` (and optionally `dsx-connect-dianna-worker.dianna.secretName`) if you use a different name.
 ```yaml
 apiVersion: v1
@@ -139,26 +142,36 @@ helm upgrade --install dsx . \
   --set-string global.dianna.secretName=di-api
 ```
 
+### Method 1: OCI and Command-Line Overrides
 
-### Method 1: Quick Start (Command-Line Overrides)
+Is this documentation we will discuss three methods for K8S deployments, the first of which is overriding configuration using command-line overrides.  There are two other approaches in a later section (deployment/kubernetes/advanced-connector-deployment.md)
 
 This method is best for quick, temporary deployments, like for local testing. It uses the `--set` flag to provide configuration directly on the command line.
 
 **4. Deploy the Stack:**
+
 *   **Simplest deployment: deploys DSXA scanner and dsx-connect on the same cluster:**
-    Development mode deployment with a local DSXA scanner.  Use the `values-dev.yaml` (or copy it) to set deploy dsx-connect with a dsxa-scanner.  
-    You can change the values in `values-dev.yaml` to match your environment,
-    but, overriding values in the command line allows for flexible deployment.  In this case the only
-    setting that needs to be set is global.image.tag.
+    Development mode deployment with a local DSXA scanner.  Use the OCI chart, and all settings are just overrides on the command line via --set
+    
+    This example assumes env settings for the DSXA appliance URL, token and scanner ID.  Replace with your values. 
     ```bash 
-    helm upgrade --install dsx . -n <namespace> -f values-dev.yaml --set-string global.image.tag=0.2.82
+    helm upgrade --install dsx \
+      oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
+      --set dsxa-scanner.enabled=true \
+      --set dsx-connect-api.auth.enabled=true \
+      --set-string dsxa-scanner.env.APPLIANCE_URL=$DSXA_APPLIANCE_URL \
+      --set-string dsxa-scanner.env.TOKEN=$DSXA_TOKEN \
+      --set-string dsxa-scanner.env.SCANNER_ID=$DSXA_SCANNER_ID \
+      --set-string global.image.tag=0.3.66
     ```
 
 *   **Using an external DSX/A Scanner, HTTP deployment:**
     In this case, using the values.yaml (the default), DSXA scanner is not deployed, so the scan binary URL must be set.
     You can either edit the values.yaml, or copy it and edit, or simply pass in settings on the helm arguments:
     ```bash
-    helm upgrade --install dsx -n <namespace> -f values.yaml --set-string global.image.tag=0.2.82
+    helm upgrade --install dsx -n <namespace> 
+      --set dsx-connect-api.auth.enabled=true \
+      --set-string global.image.tag=0.3.66 \ 
       --set-string global.env.DSXCONNECT_SCANNER__SCAN_BINARY_URL=http://my-dsxa-url:5000/scan/binary/v2
     ```
 

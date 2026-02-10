@@ -62,7 +62,9 @@ Leave `config.py` alone — it contains sane defaults. During development, overr
 | --- | --- |
 | `DSXCONNECTOR_SF_LOGIN_URL` | OAuth base URL (`https://login.salesforce.com` for production, `https://test.salesforce.com` for sandboxes). |
 | `DSXCONNECTOR_SF_API_VERSION` | Salesforce REST API version (e.g., `v60.0`). |
-| `DSXCONNECTOR_SF_CLIENT_ID` / `DSXCONNECTOR_SF_CLIENT_SECRET` | Connected App consumer key/secret. |
+| `DSXCONNECTOR_SF_CLIENT_ID` / `DSXCONNECTOR_SF_CLIENT_SECRET` | Connected App consumer key/secret (client secret required for password flow). |
+| `DSXCONNECTOR_SF_AUTH_METHOD` | Auth method: `auto` (default), `jwt`, or `password`. `auto` selects JWT when a private key is provided. |
+| `DSXCONNECTOR_SF_JWT_PRIVATE_KEY` / `DSXCONNECTOR_SF_JWT_PRIVATE_KEY_FILE` | JWT private key (PEM or base64) or path to PEM for JWT Bearer flow. |
 | `DSXCONNECTOR_SF_USERNAME` / `DSXCONNECTOR_SF_PASSWORD` / `DSXCONNECTOR_SF_SECURITY_TOKEN` | Username-password OAuth credentials (append the security token if required). |
 | `DSXCONNECTOR_ASSET` | Optional SOQL clause appended to the ContentVersion query (e.g., `ContentDocumentId = '069xx0000001234AAA'`). |
 | `DSXCONNECTOR_SF_WHERE`, `DSXCONNECTOR_SF_FIELDS`, `DSXCONNECTOR_SF_ORDER_BY` | Customize the ContentVersion query fields, filters, and ordering. |
@@ -81,10 +83,9 @@ metadata:
 type: Opaque
 stringData:
   DSXCONNECTOR_SF_CLIENT_ID: "<consumer-key>"
-  DSXCONNECTOR_SF_CLIENT_SECRET: "<consumer-secret>"
   DSXCONNECTOR_SF_USERNAME: "user@example.com"
-  DSXCONNECTOR_SF_PASSWORD: "<password>"
-  DSXCONNECTOR_SF_SECURITY_TOKEN: "<token>"
+  DSXCONNECTOR_SF_AUTH_METHOD: "jwt"
+  DSXCONNECTOR_SF_JWT_PRIVATE_KEY: "<base64-or-pem>"
 ```
 
 ```yaml

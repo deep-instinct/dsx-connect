@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import time
 from typing import Any, AsyncIterator, Dict, Iterable, List, Optional
 from urllib.parse import quote_plus
 
 import httpx
+import jwt
 
 from connectors.salesforce.config import SalesforceConnectorConfig
 from shared.dsx_logging import dsx_logging
@@ -41,13 +43,23 @@ class SalesforceClient:
             if self._access_token and time.time() < self._token_expiry - 30:
                 return
 
-            payload = {
-                "grant_type": "password",
-                "client_id": self._cfg.sf_client_id,
-                "client_secret": self._cfg.sf_client_secret,
-                "username": self._cfg.sf_username,
-                "password": f"{self._cfg.sf_password}{self._cfg.sf_security_token or ''}",
-            }
+            auth_method = (self._cfg.sf_auth_method or "auto").lower()
+            if auth_method == "auto":
+                auth_method = "jwt" if self._has_jwt_config() else "password"
+
+            if auth_method == "jwt":
+                payload = {
+                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    "assertion": self._build_jwt_assertion(),
+                }
+            else:
+                payload = {
+                    "grant_type": "password",
+                    "client_id": self._cfg.sf_client_id,
+                    "client_secret": self._cfg.sf_client_secret,
+                    "username": self._cfg.sf_username,
+                    "password": f"{self._cfg.sf_password}{self._cfg.sf_security_token or ''}",
+                }
             token_url = f"{self._cfg.sf_login_url.rstrip('/')}/services/oauth2/token"
             resp = await self._http.post(token_url, data=payload)
             try:
@@ -62,6 +74,42 @@ class SalesforceClient:
             expires_in = int(data.get("expires_in", 3600))
             self._token_expiry = time.time() + expires_in
             dsx_logging.info("Obtained Salesforce access token.")
+
+    def _has_jwt_config(self) -> bool:
+        return bool(self._cfg.sf_jwt_private_key or self._cfg.sf_jwt_private_key_file)
+
+    def _load_jwt_private_key(self) -> str:
+        if self._cfg.sf_jwt_private_key_file:
+            with open(self._cfg.sf_jwt_private_key_file, "r", encoding="utf-8") as handle:
+                return handle.read()
+        key = self._cfg.sf_jwt_private_key or ""
+        if "BEGIN" in key:
+            return key
+        try:
+            decoded = base64.b64decode(key).decode("utf-8")
+            return decoded
+        except Exception:
+            return key
+
+    def _build_jwt_assertion(self) -> str:
+        if not self._cfg.sf_client_id:
+            raise RuntimeError("Salesforce JWT auth requires DSXCONNECTOR_SF_CLIENT_ID")
+        if not self._cfg.sf_username:
+            raise RuntimeError("Salesforce JWT auth requires DSXCONNECTOR_SF_USERNAME")
+        private_key = self._load_jwt_private_key()
+        if not private_key:
+            raise RuntimeError(
+                "Salesforce JWT auth requires DSXCONNECTOR_SF_JWT_PRIVATE_KEY or DSXCONNECTOR_SF_JWT_PRIVATE_KEY_FILE"
+            )
+
+        now = int(time.time())
+        payload = {
+            "iss": self._cfg.sf_client_id,
+            "sub": self._cfg.sf_username,
+            "aud": self._cfg.sf_login_url,
+            "exp": now + int(self._cfg.sf_jwt_exp_seconds),
+        }
+        return jwt.encode(payload, private_key, algorithm=self._cfg.sf_jwt_algorithm)
 
     async def _headers(self) -> Dict[str, str]:
         await self._ensure_token()

@@ -1,7 +1,7 @@
 # … existing imports …
 import io
 import time
-import unicodedata
+import urllib.parse
 import random
 import sys
 from pathlib import Path
@@ -307,8 +307,17 @@ class ScanRequestWorker(BaseWorker):
                 pass
 
     def _build_metadata(self, scan_request: ScanRequestModel, task_id: str | None) -> str:
-        safe_meta = unicodedata.normalize("NFKD", scan_request.metainfo).encode("ascii", "ignore").decode("ascii")
-        file_path = str(scan_request.location or "")
+        def _encode_value(value: str) -> str:
+            if not value:
+                return ""
+            try:
+                value.encode("ascii")
+                return value
+            except UnicodeEncodeError:
+                return urllib.parse.quote(value, safe="")
+
+        safe_meta = _encode_value(scan_request.metainfo or "")
+        file_path = _encode_value(str(scan_request.location or ""))
         connector_name = None
         try:
             connector_name = getattr(getattr(scan_request, "connector", None), "name", None)
@@ -316,12 +325,13 @@ class ScanRequestWorker(BaseWorker):
             connector_name = None
         if not connector_name:
             connector_name = getattr(scan_request, "connector_name", None)
+        connector_name = _encode_value(connector_name or "")
         if connector_name:
             metadata_info = f"file-loc:{file_path},file-meta:{safe_meta},dsx-connect:{connector_name}"
         else:
             metadata_info = f"file-loc:{file_path},file-meta:{safe_meta}"
         if task_id:
-            metadata_info += f",task-id:{task_id}"
+            metadata_info += f",task-id:{_encode_value(task_id)}"
         return metadata_info
 
     def _convert_verdict(self, resp):

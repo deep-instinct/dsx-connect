@@ -54,6 +54,28 @@ class SalesforceConnectorConfig(BaseConnectorConfig):
         default="",
         description="Optional Salesforce security token appended to the password for username-password OAuth flow.",
     )
+    sf_auth_method: str = Field(
+        default="auto",
+        description="Salesforce auth method: auto | jwt | password (auto prefers jwt when keys are present).",
+    )
+    sf_jwt_private_key: str = Field(
+        default="",
+        description="PEM or base64-encoded private key for JWT Bearer flow.",
+    )
+    sf_jwt_private_key_file: Optional[str] = Field(
+        default=None,
+        description="Path to a PEM private key file for JWT Bearer flow.",
+    )
+    sf_jwt_algorithm: str = Field(
+        default="RS256",
+        description="JWT signing algorithm for the bearer assertion.",
+    )
+    sf_jwt_exp_seconds: int = Field(
+        default=180,
+        ge=60,
+        le=600,
+        description="JWT expiration window in seconds (default 3 minutes).",
+    )
     sf_where: str = Field(
         default="IsLatest = true",
         description="Base SOQL WHERE clause applied to ContentVersion (without the WHERE keyword).",

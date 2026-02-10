@@ -14,7 +14,7 @@ routeBase: "salesforce-connector"
 
 service:
   type: ClusterIP
-  port: 8670
+  port: 80
 
 tls:
   enabled: false
@@ -32,7 +32,7 @@ networkPolicy:
 
 env:
   LOG_LEVEL: "info"
-  DSXCONNECTOR_CONNECTOR_URL: "http://salesforce-connector:8670"
+  DSXCONNECTOR_CONNECTOR_URL: "http://salesforce-connector:80"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
@@ -48,6 +48,11 @@ env:
   DSXCONNECTOR_SF_FIELDS: "Id, Title, FileExtension, ContentSize, ContentDocumentId, CreatedDate"
   DSXCONNECTOR_SF_ORDER_BY: "CreatedDate DESC"
   DSXCONNECTOR_SF_MAX_RECORDS: "500"
+  DSXCONNECTOR_SF_AUTH_METHOD: "auto"
+  # DSXCONNECTOR_SF_JWT_PRIVATE_KEY: ""
+  # DSXCONNECTOR_SF_JWT_PRIVATE_KEY_FILE: ""
+  # DSXCONNECTOR_SF_JWT_ALGORITHM: "RS256"
+  # DSXCONNECTOR_SF_JWT_EXP_SECONDS: "180"
   # Salesforce OAuth (recommend using envSecretRefs)
   # DSXCONNECTOR_SF_CLIENT_ID: ""
   # DSXCONNECTOR_SF_CLIENT_SECRET: ""

@@ -49,7 +49,6 @@ nav:
       - Deploying Your First Connector: getting-started-connector.md
   - Connector Concepts: connectors/concepts.md
   - Deployment:
-      - Overview: deployment/index.md
       - Docker:
           - Best Practices: deployment/docker/intro.md
           - DSX-Connect Core Deployment: deployment/docker/dsx-connect.md
@@ -87,6 +86,7 @@ nav:
       - Assets: reference/assets.md
       - Azure Credentials: reference/azure-credentials.md
       - Google Cloud Credentials: reference/google-cloud-credentials.md
+      - Salesforce Credentials: reference/salesforce-credentials.md
       - Advanced Kubernetes Network Security: reference/advanced-kubernetes-network-security.md
       - UI Display Icons: reference/display-icons.md
       - DSXA Python SDK: reference/dsxa-sdk.md

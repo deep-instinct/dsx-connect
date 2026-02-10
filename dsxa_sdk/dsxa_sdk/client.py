@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import urllib.parse
 import time
 from enum import Enum
 from pathlib import Path
@@ -68,6 +69,15 @@ class _BaseDSXAClient:
         password: Optional[str],
         base64_flag: bool = False,
     ) -> Dict[str, str]:
+        def _normalize_header_value(value: str) -> str:
+            if not value:
+                return ""
+            try:
+                value.encode("ascii")
+                return value
+            except UnicodeEncodeError:
+                return urllib.parse.quote(value, safe="")
+
         headers: Dict[str, str] = {
             "Content-Type": "application/octet-stream",
         }
@@ -76,7 +86,7 @@ class _BaseDSXAClient:
             headers["protected_entity"] = str(entity)
         metadata = custom_metadata if custom_metadata is not None else self._default_metadata
         if metadata:
-            headers["X-Custom-Metadata"] = metadata
+            headers["X-Custom-Metadata"] = _normalize_header_value(metadata)
         if password:
             encoded = base64.b64encode(password.encode("utf-8")).decode("ascii")
             headers["scan_password"] = encoded

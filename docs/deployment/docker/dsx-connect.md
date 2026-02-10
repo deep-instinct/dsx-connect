@@ -2,6 +2,8 @@
 
 This guide walks through running the full dsx-connect platform (API + workers + Redis + optional log collector + optional DSXA scanner) using the Docker Compose bundle release. Examples below assume you downloaded and extracted `dsx-connect-compose-bundle-<core_version>.tar.gz`, which expands to `dsx-connect-<core_version>/`.
 
+Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases)
+
 ## Files in This Package
 
 Path: `dsx-connect-<core_version>/`

@@ -5,10 +5,11 @@ Use this guide to run the Salesforce connector alongside dsx-connect via Docker 
 ## Prerequisites
 
 - Local Docker daemon.
-- A Salesforce Connected App with the following:
-  - OAuth flow enabled for username/password.
-  - Consumer key/secret.
+- Salesforce credentials: see [Salesforce Credentials](../../reference/salesforce-credentials.md).
+- A Salesforce Connected App (JWT bearer recommended for production) with:
+  - Consumer key.
   - Integration user with API permissions to query `ContentVersion` and download binary content.
+  - Uploaded certificate for JWT bearer flow.
 - Existing dsx-connect stack (API + Redis + workers) reachable from the connector container.
 
 ## Environment Configuration
@@ -18,8 +19,11 @@ Set the following variables (either in a `.env` file or inline under `environmen
 | Variable | Description |
 | --- | --- |
 | `DSXCONNECT_ENROLLMENT_TOKEN` | Enrollment token when dsx-connect auth is enabled (skip when auth disabled). |
-| `DSXCONNECTOR_SF_CLIENT_ID` / `DSXCONNECTOR_SF_CLIENT_SECRET` | Salesforce Connected App credentials. |
-| `DSXCONNECTOR_SF_USERNAME` / `DSXCONNECTOR_SF_PASSWORD` / `DSXCONNECTOR_SF_SECURITY_TOKEN` | Integration user credentials (append the security token to the password if required). |
+| `DSXCONNECTOR_SF_CLIENT_ID` | Salesforce Connected App consumer key. |
+| `DSXCONNECTOR_SF_AUTH_METHOD` | `auto` (default), `jwt`, or `password` (use `jwt` for production). |
+| `DSXCONNECTOR_SF_JWT_PRIVATE_KEY` / `DSXCONNECTOR_SF_JWT_PRIVATE_KEY_FILE` | JWT private key (PEM or base64) or file path for JWT bearer flow. |
+| `DSXCONNECTOR_SF_USERNAME` | Integration user (required for JWT). |
+| `DSXCONNECTOR_SF_PASSWORD` / `DSXCONNECTOR_SF_SECURITY_TOKEN` | Username/password flow (dev/test only). |
 | `DSXCONNECTOR_SF_LOGIN_URL` | `https://login.salesforce.com` (prod) or `https://test.salesforce.com` (sandbox). |
 | `DSXCONNECTOR_SF_API_VERSION` | REST API version (e.g., `v60.0`). |
 | `DSXCONNECTOR_ASSET` | Optional SOQL clause appended via `AND` (e.g., `ContentDocumentId = '069xx0000001234AAA'`). |
@@ -31,10 +35,9 @@ Example `.env` snippet:
 ```env
 DSXCONNECTENROLLMENT_TOKEN=abc123
 DSXCONNECTOR_SF_CLIENT_ID=3MVG9...appkey
-DSXCONNECTOR_SF_CLIENT_SECRET=supersecret
+DSXCONNECTOR_SF_AUTH_METHOD=jwt
 DSXCONNECTOR_SF_USERNAME=dsx@customer.com
-DSXCONNECTOR_SF_PASSWORD="P@ssw0rd!"
-DSXCONNECTOR_SF_SECURITY_TOKEN=XXXXXXX
+DSXCONNECTOR_SF_JWT_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
 ```
 
 ## Compose Deployment

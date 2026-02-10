@@ -1,4 +1,4 @@
-# Kubernetes Deployment Best Practices
+# Kubernetes Deployment Getting Started
 
 Use this page as the single checklist before diving into the connector-specific guides. It covers the cluster requirements, where to fetch Helm charts, and the high-level deployment workflow shared by every dsx-connect component.
 
@@ -34,7 +34,10 @@ kubectl create secret generic aws-s3-connector-env \
 ```
 
 ## Helm chart locations
-The `inv release-all` pipeline publishes every chart to Docker Hub under the `dsxconnect` namespace. Browse the full catalog (images and charts) at [https://hub.docker.com/r/dsxconnect](https://hub.docker.com/r/dsxconnect). Pull/install specific charts directly with Helm’s OCI support.
+All DSX-Connect charts are in Docker Hub under the `dsxconnect` namespace. Browse the full catalog (images and charts) at [https://hub.docker.com/r/dsxconnect](https://hub.docker.com/r/dsxconnect). Pull/install specific charts directly with Helm’s OCI support.
+
+The deployment guides for DSX-Connect Core and all connectors will provide the OCI URL relevant to that specific deployment.
+The following lists a couple of example OCIs and install methods used.
 
 | Example component | OCI reference | Example install |
 | --- | --- | --- |
@@ -50,32 +53,8 @@ The `inv release-all` pipeline publishes every chart to Docker Hub under the `ds
 2. **Deploy dsx-connect core:** Follow [dsx-connect (Helm)](dsx-connect.md) to install the API, workers, Redis, and syslog stack. Verify `/readyz` and watch the UI before layering connectors.
 3. **Deploy connectors:** Pick the connector guide under this section (Filesystem, AWS S3, Azure Blob, Google Cloud Storage, SharePoint, OneDrive, etc.). Each page documents the required values, secrets, and network exposure.
 4. **Ingress & auth:** Configure your cluster ingress controller (NGINX, ALB, etc.) and, where required, expose only the connector webhook path. Front the dsx-connect UI/API with your organization’s SSO or oauth2-proxy.
-5. **Monitoring & rotation:** Enable Prometheus/Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](../authentication.md).
+5. **Monitoring & rotation:** Enable Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](../authentication.md).
 
-
-This keeps sensitive data in Secrets and simplifies upgrades (`helm upgrade -f values-prod.yaml`).
-
-## Reusing `.env` files from Compose / Helm
-If you already maintain `.env` files for Docker Compose, convert them directly into Kubernetes Secrets:
-
-1. Keep your connector settings in a `KEY=value` file such as `.env.aws-s3` (see Docker Quickstart step 4 for an example layout).
-2. Create a Secret:  
-   ```bash
-   kubectl create secret generic aws-s3-connector-env \
-     --from-env-file=.env.aws-s3 \
-     --namespace your-namespace
-   ```
-3. Reference it via the chart, e.g.:
-   ```yaml
-   envSecretRefs:
-     - aws-s3-connector-env
-   auth_dsxconnect:
-     enabled: true
-     enrollmentSecretName: aws-s3-connector-env
-     enrollmentKey: DSXCONNECT_ENROLLMENT_TOKEN
-   ```
-
-This way Docker Compose, Helm, and GitOps overlays can all pull from the same source of truth.
 
 ## Next steps
 - Deploy dsx-connect core via [dsx-connect (Helm)](dsx-connect.md).

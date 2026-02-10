@@ -5,7 +5,8 @@ Use this guide to deploy `salesforce-connector-chart` (under `connectors/salesfo
 ## Prerequisites
 
 - Kubernetes 1.19+, `kubectl`, and Helm 3.2+.
-- Salesforce Connected App & integration user (username/password OAuth flow).
+- Salesforce credentials: see [Salesforce Credentials](../../reference/salesforce-credentials.md).
+- Salesforce Connected App & integration user (JWT bearer recommended).
 - Access to the Helm chart (local checkout or OCI: `oci://registry-1.docker.io/dsxconnect/salesforce-connector-chart`).
 - dsx-connect deployed and reachable from the connector namespace.
 - For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
@@ -23,10 +24,8 @@ metadata:
 type: Opaque
 stringData:
   DSXCONNECTOR_SF_CLIENT_ID: "<consumer-key>"
-  DSXCONNECTOR_SF_CLIENT_SECRET: "<consumer-secret>"
   DSXCONNECTOR_SF_USERNAME: "dsx@customer.com"
-  DSXCONNECTOR_SF_PASSWORD: "<password>"
-  DSXCONNECTOR_SF_SECURITY_TOKEN: "<optional-token>"
+  DSXCONNECTOR_SF_JWT_PRIVATE_KEY: "<base64-or-pem>"
 ```
 
 ```bash

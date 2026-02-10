@@ -22,10 +22,11 @@ What DSX-Connect gives you:
 
 Whether you’re protecting cloud buckets, enterprise SaaS data, or on-prem filesystems, DSX-Connect lets you standardize how scanning happens—while keeping deployment flexible and operations observable.
 
-
+## About the Docs
 
 ## Quick Links
 - [Overview](overview.md)
+- [Deployment Bundles (docker and k8s)]()
 - [Getting Started](getting-started.md)
 - [Connectors](connectors/index.md)
 - [Deployment Models](deployment/index.md)

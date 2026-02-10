@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY connectors/framework connectors/framework
 COPY connectors/aws_s3 connectors/aws_s3
 COPY shared/ shared/
+RUN rm -f /app/connectors/aws_s3/.dev.env
 # Optional dev/demo certs live under shared/deploy/certs; copy to /app/certs if present
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

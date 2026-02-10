@@ -29,6 +29,7 @@ RUN mkdir scan_folder
 COPY connectors/framework connectors/framework
 COPY connectors/filesystem connectors/filesystem
 COPY shared/ shared/
+RUN rm -f /app/connectors/filesystem/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

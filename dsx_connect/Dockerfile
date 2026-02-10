@@ -25,6 +25,8 @@ COPY dsx_connect/ dsx_connect/
 COPY shared/ shared/
 COPY dsxa_sdk/ dsxa_sdk/
 
+RUN rm -f /app/dsx_connect/.dev.env
+
 RUN pip install --no-cache-dir ./dsxa_sdk
 
 # Dev certificates (optional, safe to include)

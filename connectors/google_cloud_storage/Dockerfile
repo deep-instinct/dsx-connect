@@ -27,6 +27,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY connectors/framework connectors/framework
 COPY connectors/google_cloud_storage connectors/google_cloud_storage
 COPY shared/ shared/
+RUN rm -f /app/connectors/google_cloud_storage/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

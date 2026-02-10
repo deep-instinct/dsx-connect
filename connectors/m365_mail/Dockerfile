@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY connectors/framework connectors/framework
 COPY connectors/m365_mail connectors/m365_mail
 COPY shared/ shared/
+RUN rm -f /app/connectors/m365_mail/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

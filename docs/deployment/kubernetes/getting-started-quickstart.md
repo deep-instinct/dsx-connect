@@ -9,33 +9,41 @@ This quickstart runs on a lightweight k3s cluster via Colima to keep things simp
 - AWS access key/secret with read/write access to a test bucket and at least one sample file already in the bucket.
 - DSXA appliance URL, scanner ID, and API token that you are allowed to use for testing.
 
-## 1. Set variables and namespace
+## 1. Define your values
+Edit the following inputs or use the defaults to your desired configuration. The values provided here will be automatically
+used in the example command lines provided.
+
+<div class="var-grid">
+  <label for="var-dsx-version">DSX_CONNECT_VERSION</label>
+  <input id="var-dsx-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.67" />
+
+  <label for="var-namespace">NAMESPACE</label>
+  <input id="var-namespace" data-var-input="NAMESPACE" value="dsx-tutorial-1" />
+
+  <label for="var-release">RELEASE</label>
+  <input id="var-release" data-var-input="RELEASE" value="dsx-tutorial-1" />
+
+  <label for="var-bucket">AWS_BUCKET</label>
+  <input id="var-bucket" data-var-input="AWS_BUCKET" value="my-demo-bucket" />
+
+  <label for="var-dsxa-url">DSXA_APPLIANCE_URL</label>
+  <input id="var-dsxa-url" data-var-input="DSXA_APPLIANCE_URL" value="your-dsxa-appliance.deepinstinctweb.com" />
+
+  <label for="var-scanner-id">DSXA_SCANNER_ID</label>
+  <input id="var-scanner-id" data-var-input="DSXA_SCANNER_ID" value="1" />
+</div>
+
+## 2. Create namespace and secrets
+
+### Namespace
 
 ```bash
-export NAMESPACE=dsx-tutorial-1
-export RELEASE=dsx-tutorial-1
-export AWS_BUCKET=my-demo-bucket      # replace with a real bucket
-export ENROLLMENT_TOKEN=$(uuidgen)    # or any strong random string
-export DSXA_APPLIANCE_URL=your-dsxa-appliance.example.com
-export DSXA_SCANNER_ID=1
-export DSXA_TOKEN=changeme
-
-kubectl create namespace $NAMESPACE
+kubectl create namespace {{NAMESPACE}}
 ```
 
-## 2. Create secrets
+If the namespace already exists, you can ignore the error.
 
-### Enrollment token
-
-```bash
-kubectl create secret generic ${RELEASE}-dsx-connect-api-auth-enrollment \
-  -n $NAMESPACE \
-  --from-literal=ENROLLMENT_TOKEN="$ENROLLMENT_TOKEN"
-```
-
-> The dsx-connect chart always looks for a Secret named `<release>-dsx-connect-api-auth-enrollment` with a key called `ENROLLMENT_TOKEN`, so keep that convention when you create it.
-
-### AWS env + connector config
+### AWS Secret 
 
 Export your AWS creds (or pull them from `~/.aws/credentials` manually) so the heredoc can reference them:
 
@@ -61,7 +69,7 @@ EOF
 ```bash
 kubectl create secret generic aws-credentials \
   --from-env-file=.env.aws-creds \
-  -n $NAMESPACE
+  -n {{NAMESPACE}}
 ```
 
 _Optional:_ If you prefer editing YAML directly or storing secrets in source control, you can create the Secret like this instead:
@@ -71,7 +79,7 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: aws-credentials  # default name expected by the Helm chart
-  namespace: ${NAMESPACE}
+  namespace: {{NAMESPACE}}
 type: Opaque
 stringData:
   AWS_ACCESS_KEY_ID: "<your-access-key-id>"
@@ -80,40 +88,38 @@ stringData:
 
 Save it as `aws-secret.yaml`, edit the values, and apply with `kubectl apply -f aws-secret.yaml`.
 
-## 3. Install dsx-connect (API + DSXA)
+## 2. Install dsx-connect (API + DSXA)
 
-Enables authentication and the bundled DSXA scanner:
+Installs dsx-connect and the bundled DSXA scanner:
 
 ```bash
-helm upgrade --install $RELEASE \
+helm upgrade --install {{RELEASE}} \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
-  --namespace $NAMESPACE \
+  --namespace {{NAMESPACE}} \
   --set dsxa-scanner.enabled=true \
-  --set dsx-connect-api.auth.enabled=true \
-  --set-string dsxa-scanner.env.APPLIANCE_URL=$DSXA_APPLIANCE_URL \
-  --set-string dsxa-scanner.env.TOKEN=$DSXA_TOKEN \
-  --set-string dsxa-scanner.env.SCANNER_ID=$DSXA_SCANNER_ID \
-  --set-string global.image.tag=0.3.46
+  --set-string dsxa-scanner.env.APPLIANCE_URL={{DSXA_APPLIANCE_URL}} \
+  --set-string dsxa-scanner.env.SCANNER_ID={{DSXA_SCANNER_ID}} \
+  --set-string global.image.tag={{DSX_CONNECT_VERSION}}
 ```
-> Example versions: the `0.3.46` tag should match the dsx-connect chart/appVersion you intend to run.
+> Example versions: the `{{DSX_CONNECT_VERSION}}` tag should match the dsx-connect chart/appVersion you intend to run.
 
 For production, store DSXA info in a Kubernetes Secret and use `values.yaml` or `helm upgrade --set-file` so tokens are not exposed in shell history. Here we keep everything inline for clarity.
 
 Check pods:
 
 ```bash
-kubectl get pods -n $NAMESPACE
+kubectl get pods -n {{NAMESPACE}}
 ```
 
-## 4. Install AWS S3 connector
+## 3. Install AWS S3 connector
 
 ```bash
 helm upgrade --install aws-s3 \
   oci://registry-1.docker.io/dsxconnect/aws-s3-connector-chart \
-  --namespace $NAMESPACE \
-  --set-string env.DSXCONNECTOR_ASSET=$AWS_BUCKET \
+  --namespace {{NAMESPACE}} \
+  --set-string env.DSXCONNECTOR_ASSET={{AWS_BUCKET}} \
   --set auth_dsxconnect.enabled=true \
-  --set auth_dsxconnect.enrollmentSecretName=${RELEASE}-dsx-connect-api-auth-enrollment \
+  --set auth_dsxconnect.enrollmentSecretName={{RELEASE}}-dsx-connect-api-auth-enrollment \
   --set auth_dsxconnect.enrollmentKey=ENROLLMENT_TOKEN \
   --set-string image.tag=0.5.27
 ```
@@ -125,7 +131,7 @@ Watch logs until the connector reports READY:
 kubectl logs deploy/aws-s3-aws-s3-connector-chart -n $NAMESPACE -f | grep READY
 ```
 
-## 5. Access the UI and test
+## 4. Access the UI and test
 
 Port-forward the dsx-connect API/UI:
 

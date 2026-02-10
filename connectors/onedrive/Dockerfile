@@ -23,6 +23,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY connectors/framework connectors/framework
 COPY connectors/onedrive connectors/onedrive
 COPY shared/ shared/
+RUN rm -f /app/connectors/onedrive/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 RUN chown -R appuser:appuser certs \

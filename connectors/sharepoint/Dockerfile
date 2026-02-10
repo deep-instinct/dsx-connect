@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY connectors/framework connectors/framework
 COPY connectors/sharepoint connectors/sharepoint
 COPY shared/ shared/
+RUN rm -f /app/connectors/sharepoint/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

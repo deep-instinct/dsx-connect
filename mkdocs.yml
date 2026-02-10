@@ -119,6 +119,8 @@ extra_javascript:
   - https://unpkg.com/mermaid@10.9.1/dist/mermaid.min.js
   - assets/docker-header.js
   - assets/termynal.js
+  - assets/vars.js
 extra_css:
   - assets/docker-header.css
   - assets/termynal.css
+  - assets/vars.css

@@ -4,12 +4,12 @@ This guide walks through running the full dsx-connect platform (API + workers + 
 
 Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases)
 
-## Files in This Package
+Files in the bundle:
 
 Path: `dsx-connect-<core_version>/`
 
 - `docker-compose-dsx-connect-all-services.yaml` — API, Redis, Celery workers, optional rsyslog profile, SSE dependencies.
-- `docker-compose-dsxa.yaml` — optional DSXA scanner for local malware verdicts (supports `AUTH_TOKEN` if enabled).
+- `docker-compose-dsxa.yaml` — optional DSXA scanner for dev/test deployments (supports `AUTH_TOKEN` if enabled).
 - `.sample.core.env` — sample env file to pin image tags and set optional auth/DSXA settings.
 
 ## Prerequisites
@@ -75,6 +75,8 @@ Worker commands follow `celery -A dsx_connect.celery_app.celery_app worker --log
 - Bring up via `docker compose --env-file dsx-connect-<core_version>/.core.env -f dsx-connect-<core_version>/docker-compose-dsxa.yaml up -d`.
 - The scan request worker hits DSXA at `http://dsxa_scanner:5000/scan/binary/v2`.
 - Can swap with a remote DSXA URL without changing compose; just override `DSXCONNECT_SCANNER__SCAN_BINARY_URL`.
+
+> Highly recommended that deployment of DSXA follows the DSXA Deployment Guide, which can be found on the customer portal.  This deployment is primarily for convenience to test DSX-Connect deployment.
 
 ## Deployment via Docker Compose
 

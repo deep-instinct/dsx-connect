@@ -29,6 +29,7 @@ VERSION_PATTERN = re.compile(r"(?:VERSION|DSX_CONNECT_VERSION|CONNECTOR_VERSION)
 # Base directories
 PROJECT_ROOT = Path(__file__).parent.resolve()
 CORE_VERSION_FILE = PROJECT_ROOT / "dsx_connect" / "version.py"
+QUICKSTART_PATH = PROJECT_ROOT / "docs" / "deployment" / "kubernetes" / "getting-started-quickstart.md"
 CONNECTORS_DIR = PROJECT_ROOT / "connectors"
 DEPLOYMENT_DIR = "docker_bundle"
 
@@ -202,6 +203,37 @@ def generate_manifest(c, out: str = "versions.json"):
     # Write manifest
     (PROJECT_ROOT / out).write_text(json.dumps(manifest, indent=2))
     print(f"Manifest written to {out}")
+
+
+def _update_quickstart_versions(manifest: dict[str, str]) -> None:
+    """Update quickstart defaults that mirror release versions."""
+    if not QUICKSTART_PATH.exists():
+        print(f"[quickstart] Skipping update; not found: {QUICKSTART_PATH}")
+        return
+
+    dsx_version = manifest.get("dsx_connect")
+    aws_version = manifest.get("aws_s3")
+
+    if not dsx_version and not aws_version:
+        print("[quickstart] No matching versions found in manifest.")
+        return
+
+    text = QUICKSTART_PATH.read_text()
+    if dsx_version:
+        text = re.sub(
+            r'(data-var-input="DSX_CONNECT_VERSION"\s+value=")[^"]+(")',
+            rf"\g<1>{dsx_version}\2",
+            text,
+        )
+    if aws_version:
+        text = re.sub(
+            r'(data-var-input="AWS_CONNECTOR_VERSION"\s+value=")[^"]+(")',
+            rf"\g<1>{aws_version}\2",
+            text,
+        )
+
+    QUICKSTART_PATH.write_text(text)
+    print(f"[quickstart] Updated {QUICKSTART_PATH}")
 
 
 def _configured_names(include_disabled: bool = False) -> list[str]:
@@ -380,6 +412,9 @@ def release_all(
     )
     # After image releases, perform Helm releases for core + selected connectors
     helm_release(c, only=only, skip=skip, include_core=True, parallel=parallel, dry_run=dry_run)
+    if not dry_run:
+        manifest = json.loads((PROJECT_ROOT / "versions.json").read_text())
+        _update_quickstart_versions(manifest)
 
 
 @task

@@ -23,6 +23,9 @@ used in the example command lines provided.
   <label for="var-release">RELEASE</label>
   <input id="var-release" data-var-input="RELEASE" value="dsx-tutorial-1" />
 
+  <label for="var-dsx-version">AWS_CONNECTOR_VERSION</label>
+  <input id="var-dsx-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.44" />
+
   <label for="var-bucket">AWS_BUCKET</label>
   <input id="var-bucket" data-var-input="AWS_BUCKET" value="my-demo-bucket" />
 
@@ -118,17 +121,14 @@ helm upgrade --install aws-s3 \
   oci://registry-1.docker.io/dsxconnect/aws-s3-connector-chart \
   --namespace {{NAMESPACE}} \
   --set-string env.DSXCONNECTOR_ASSET={{AWS_BUCKET}} \
-  --set auth_dsxconnect.enabled=true \
-  --set auth_dsxconnect.enrollmentSecretName={{RELEASE}}-dsx-connect-api-auth-enrollment \
-  --set auth_dsxconnect.enrollmentKey=ENROLLMENT_TOKEN \
-  --set-string image.tag=0.5.27
+  --set-string image.tag={{AWS_CONNECTOR_VERSION}}
 ```
-> Replace `0.5.27` with the AWS connector version you plan to run.
+> The `{{AWS_CONNECTOR_VERSION}}` tag should match the AWS connector version you plan to run.
 
 Watch logs until the connector reports READY:
 
 ```bash
-kubectl logs deploy/aws-s3-aws-s3-connector-chart -n $NAMESPACE -f | grep READY
+kubectl logs deploy/aws-s3-aws-s3-connector-chart -n {{NAMESPACE}} -f | grep READY
 ```
 
 ## 4. Access the UI and test
@@ -136,7 +136,7 @@ kubectl logs deploy/aws-s3-aws-s3-connector-chart -n $NAMESPACE -f | grep READY
 Port-forward the dsx-connect API/UI:
 
 ```bash
-kubectl port-forward svc/dsx-connect-api 8080:80 -n $NAMESPACE
+kubectl port-forward svc/dsx-connect-api 8080:80 -n {{NAMESPACE}}
 ```
 
 Port-forwarding is a quick way to expose a service for local testing only. In real deployments you’d configure an Ingress controller, LoadBalancer service, or some other edge proxy based on your cluster environment. We will provide examples throughout the guides, but the exact setup is cluster-dependent.
@@ -149,8 +149,8 @@ Note: Webhook/on-access tests require S3 event wiring, which is beyond the scope
 ## Cleanup
 
 ```bash
-helm uninstall aws-s3 -n $NAMESPACE
-helm uninstall $RELEASE -n $NAMESPACE
-kubectl delete namespace $NAMESPACE
+helm uninstall aws-s3 -n {{NAMESPACE}}
+helm uninstall {{RELEASE}} -n {{NAMESPACE}}
+kubectl delete namespace {{NAMESPACE}}
 rm .env.aws-creds
 ```

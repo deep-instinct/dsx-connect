@@ -1,0 +1,25 @@
+.var-grid {
+  display: grid;
+  grid-template-columns: 220px 320px;
+  gap: 10px 16px;
+  max-width: 600px;
+  margin: 0 0 16px 0;
+}
+
+.var-grid label {
+  font-weight: 400;
+  align-self: center;
+}
+
+.var-grid input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #c9c9c9;
+  border-radius: 6px;
+}
+
+.var-note {
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 12px;
+}

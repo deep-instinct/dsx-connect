@@ -4,24 +4,19 @@ In the following, we will deploy DSXA (the scanner) and DSX-Connect core on Dock
 
 ## How we use Docker Compose here
 - **Compose files as templates**: `docker-compose-dsxa.yaml` and `docker-compose-dsx-connect-all-services.yaml` declare the services, network, and volumes. Think of them as deployment templates you can reuse across environments.
-- **Environment files for config**: Instead of editing the compose files directly, use the sample env files included in the bundle. For core we’ll start from `.sample.core.env` and copy it to `.core.env`, then adjust values (URLs, tokens, ports) as needed. This keeps the compose files static and makes overrides easy.
+- **Environment files for config**: Instead of editing the compose files directly, use the sample env files included in the bundle. Use `sample.core.env` for dsx-connect core and `sample.dsxa.env` for the DSXA scanner, then copy them to `.core.env` and `.dsxa.env` and adjust values as needed. This keeps the compose files static and makes overrides easy.
 
 ## 1) Launch DSXA (scanner)
 
-From the extracted bundle directory, reuse the same env file you’ll use for core:
+From the extracted bundle directory, start with the DSXA sample env:
 ```bash
-cp .sample.core.env .core.env   # if you haven’t already
-# edit .core.env to set APPLIANCE_URL, TOKEN, SCANNER_ID
+cp sample.dsxa.env .dsxa.env
+# edit .dsxa.env to set APPLIANCE_URL, TOKEN, SCANNER_ID
 # optionally set DSXA_IMAGE, FLAVOR, NO_SSL, HOST_PORT, AUTH_TOKEN
 ```
 
-Example `.core.env` (core settings first, DSXA settings below):
+Example `.dsxa.env`:
 ```dotenv
-# Core settings (dsx-connect)
-DSXCONNECT_IMAGE=dsxconnect/dsx-connect:0.3.58
-#DSXCONNECT_ENROLLMENT_TOKEN=your-token   # optional, only if you enable auth
-
-# DSXA scanner settings (used by docker-compose-dsxa.yaml)
 APPLIANCE_URL=https://acme.customers.deepinstinctweb.com
 TOKEN=abcd1234-your-dsxa-token
 SCANNER_ID=dsxa-scanner-01
@@ -36,7 +31,7 @@ a complete list of available DSXA scanner settings.
 
 Then deploy DSXA with that env file:
 ```bash
-docker compose --env-file .core.env -f docker-compose-dsxa.yaml up -d
+docker compose --env-file .dsxa.env -f docker-compose-dsxa.yaml up -d
 ```
 
 Next, you can look at the scanner logs to confirm that it started and is initialized.  You can start by running:
@@ -76,10 +71,10 @@ Notes:
 
 ## 2) Launch DSX-Connect core
 
-Reuse the `.core.env` from the previous step (or copy the sample now if you skipped DSXA):
+Set up your core env file:
 ```bash
-cp .sample.core.env .core.env   # skip if already done
-# edit .core.env to set DSXCONNECT_IMAGE (and optional auth/DSXA settings)
+cp sample.core.env .core.env
+# edit .core.env to set DSXCONNECT_IMAGE (and optional auth settings)
 ```
 
 Bring up API, workers, Redis, UI using that env file:

@@ -34,7 +34,7 @@ In the extracted bundle, use `dsx-connect-<core_version>/filesystem-connector-<c
 
 Copy the sample env file and edit it:
 ```bash
-cp dsx-connect-<core_version>/filesystem-connector-<connector_version>/.sample.filesystem.env \
+cp dsx-connect-<core_version>/filesystem-connector-<connector_version>/sample.filesystem.env \
   dsx-connect-<core_version>/filesystem-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/filesystem-connector-<connector_version>/.env:
 #   DSXCONNECTOR_ASSET=/absolute/path/to/folder

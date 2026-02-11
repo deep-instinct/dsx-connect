@@ -74,7 +74,7 @@ Support full-scan bucket, no monitoring, no remediation:
 
 Deploy:
 ```bash
-cp dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/.sample.gcs.env \
+cp dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/sample.gcs.env \
   dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/.env (asset, creds path, Pub/Sub, etc.)
 docker compose --env-file dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/.env \

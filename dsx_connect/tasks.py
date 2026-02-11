@@ -70,7 +70,7 @@ def bump(c):
     new_line = f"{m.group(1)}{new_version}{m.group(5)}"
     filename.write_text(re.sub(pat, new_line, content))
     print(f"Bumped version to {new_version}")
-    env_sample = PROJECT_ROOT / "deploy" / "docker" / ".sample.core.env"
+    env_sample = PROJECT_ROOT / "deploy" / "docker" / "sample.core.env"
     _update_env_image_pin(env_sample, f"{REPO_UNAME}/{IMAGE_NAME}", new_version)
 
 

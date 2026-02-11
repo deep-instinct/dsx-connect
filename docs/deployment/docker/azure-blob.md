@@ -31,7 +31,7 @@ In the extracted bundle, use `dsx-connect-<core_version>/azure-blob-storage-conn
 
 Copy the sample env file and edit it:
 ```bash
-cp dsx-connect-<core_version>/azure-blob-storage-connector-<connector_version>/.sample.azure-blob.env \
+cp dsx-connect-<core_version>/azure-blob-storage-connector-<connector_version>/sample.azure-blob.env \
   dsx-connect-<core_version>/azure-blob-storage-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/azure-blob-storage-connector-<connector_version>/.env (AZURE_STORAGE_CONNECTION_STRING, DSXCONNECTOR_ASSET, etc.)
 ```

@@ -41,7 +41,7 @@ In the extracted bundle, start from `dsx-connect-<core_version>/m365-mail-connec
 Example:
 
 ```bash
-cp dsx-connect-<core_version>/m365-mail-connector-<connector_version>/.sample.m365-mail.env \
+cp dsx-connect-<core_version>/m365-mail-connector-<connector_version>/sample.m365-mail.env \
   dsx-connect-<core_version>/m365-mail-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/m365-mail-connector-<connector_version>/.env (tenant/client creds, mailbox scope, optional webhook URL)
 docker compose --env-file dsx-connect-<core_version>/m365-mail-connector-<connector_version>/.env \

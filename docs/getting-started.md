@@ -31,11 +31,12 @@ After extracting, you should see:
 compose-bundle-0.3.57/
   docker-compose-dsxa.yaml
   docker-compose-dsx-connect-all-services.yaml
-  .sample.core.env
+  sample.core.env
+  sample.dsxa.env
   aws-s3-connector-0.5.36/
   ...
   filesystem-connector-0.5.24/
-    .sample.filesystem.env
+    sample.filesystem.env
     docker-compose-filesystem-connector.yaml
 ```
 In the topmost directory, you'll find the compose files you'll use to deploy DSX-Connect and DSXA scanner.  Note the version number (in this case 0.3.57)- 
@@ -47,7 +48,8 @@ Please refer to the DSX for Applications documentation for more information on h
 
 - ```docker-compose-dsx-connect-all-services.yaml``` deployment for the DSX-Connect core stack. 
 
-- ```.sample.core.env``` is a sample environment file that you can use as a starting point for configuration in your own environment.  
+- ```sample.core.env``` is a sample environment file that you can use as a starting point for dsx-connect core configuration.  
+- ```sample.dsxa.env``` is a sample environment file for the DSXA scanner container.
 Example below:
 ```dotenv
 # Env for DSX-Connect core. Pin image tags and supply optional DSXA/auth settings. Copy to .core.env and set values per environment (dev/stage/prod).

@@ -501,7 +501,7 @@ def bundle(c):
     # Core compose + env sample
     core_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml"
     dsxa_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
-    env_core = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / ".sample.core.env"
+    env_core = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "sample.core.env"
     for src in (core_compose_src, dsxa_compose_src, env_core):
         if src.exists():
             c.run(f"cp -f {src} {core_bundle}/{src.name}")
@@ -525,7 +525,7 @@ def bundle(c):
             if docker_src_dir.exists():
                 for f in docker_src_dir.glob("docker-compose-*.yaml"):
                     c.run(f"cp -f {f} {dest_dir}/{f.name}")
-                for env_sample in docker_src_dir.glob(".sample.*.env"):
+                for env_sample in docker_src_dir.glob("sample.*.env"):
                     c.run(f"cp -f {env_sample} {dest_dir}/{env_sample.name}")
             else:
                 for f in deploy_dir.glob("docker-compose-*.yaml"):

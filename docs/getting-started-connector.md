@@ -12,7 +12,7 @@ mkdir -p ~/Documents/dsx-connect-test
 In the extracted bundle:
 ```bash
 cd filesystem-connector-<version>
-cp .sample.filesystem.env .filesystem.env
+cp sample.filesystem.env .filesystem.env
 ```
 
 Then edit `.filesystem.env` to set:

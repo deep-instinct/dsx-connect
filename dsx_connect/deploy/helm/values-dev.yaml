@@ -118,6 +118,7 @@ dsx-connect-dianna-worker:
 
 redis:
   enabled: true
+  fullnameOverride: redis
   image:
     repository: redis
     tag: "7-alpine"
@@ -125,6 +126,7 @@ redis:
 
 rsyslog:
   enabled: true
+  fullnameOverride: rsyslog
 
 ingress:
   enabled: false

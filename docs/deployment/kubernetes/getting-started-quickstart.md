@@ -15,7 +15,7 @@ used in the example command lines provided.
 
 <div class="var-grid">
   <label for="var-dsx-version">DSX_CONNECT_VERSION</label>
-  <input id="var-dsx-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.67" />
+  <input id="var-dsx-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.68" />
 
   <label for="var-namespace">NAMESPACE</label>
   <input id="var-namespace" data-var-input="NAMESPACE" value="dsx-tutorial-1" />
@@ -24,7 +24,7 @@ used in the example command lines provided.
   <input id="var-release" data-var-input="RELEASE" value="dsx-tutorial-1" />
 
   <label for="var-dsx-version">AWS_CONNECTOR_VERSION</label>
-  <input id="var-dsx-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.44" />
+  <input id="var-dsx-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.45" />
 
   <label for="var-bucket">AWS_BUCKET</label>
   <input id="var-bucket" data-var-input="AWS_BUCKET" value="my-demo-bucket" />
@@ -99,6 +99,7 @@ Installs dsx-connect and the bundled DSXA scanner:
 helm upgrade --install {{RELEASE}} \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --namespace {{NAMESPACE}} \
+  --set dsx-connect-api.auth.enabled=false \
   --set dsxa-scanner.enabled=true \
   --set-string dsxa-scanner.env.APPLIANCE_URL={{DSXA_APPLIANCE_URL}} \
   --set-string dsxa-scanner.env.SCANNER_ID={{DSXA_SCANNER_ID}} \
@@ -117,13 +118,13 @@ kubectl get pods -n {{NAMESPACE}}
 ## 3. Install AWS S3 connector
 
 ```bash
-helm upgrade --install aws-s3 \
+helm upgrade --install aws -n {{NAMESPACE}} \
   oci://registry-1.docker.io/dsxconnect/aws-s3-connector-chart \
   --namespace {{NAMESPACE}} \
   --set-string env.DSXCONNECTOR_ASSET={{AWS_BUCKET}} \
   --set-string image.tag={{AWS_CONNECTOR_VERSION}}
 ```
-> The `{{AWS_CONNECTOR_VERSION}}` tag should match the AWS connector version you plan to run.
+> The `image.tag` should match the AWS connector version you plan to run.
 
 Watch logs until the connector reports READY:
 

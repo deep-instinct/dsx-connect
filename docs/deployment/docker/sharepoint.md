@@ -40,7 +40,7 @@ Define these values in your Compose environment (the sample file expects plain `
 
 Copy the sample env file and edit it:
 ```bash
-cp dsx-connect-<core_version>/sharepoint-connector-<connector_version>/.sample.sharepoint.env \
+cp dsx-connect-<core_version>/sharepoint-connector-<connector_version>/sample.sharepoint.env \
   dsx-connect-<core_version>/sharepoint-connector-<connector_version>/.env
 ```
 

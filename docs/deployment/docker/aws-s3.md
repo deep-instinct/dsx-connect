@@ -31,7 +31,7 @@ In the extracted bundle, use `dsx-connect-<core_version>/aws-s3-connector-<conne
 
 Copy the sample env file and edit it:
 ```bash
-cp dsx-connect-<core_version>/aws-s3-connector-<connector_version>/.sample.aws-s3.env \
+cp dsx-connect-<core_version>/aws-s3-connector-<connector_version>/sample.aws-s3.env \
   dsx-connect-<core_version>/aws-s3-connector-<connector_version>/.env
 # edit dsx-connect-<core_version>/aws-s3-connector-<connector_version>/.env (AWS_* credentials, DSXCONNECTOR_ASSET, etc.)
 ```

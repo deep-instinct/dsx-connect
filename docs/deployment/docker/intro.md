@@ -37,7 +37,7 @@ If you must use a local env file for Docker Compose:
 - Restrict file permissions: `chmod 600 .env`.
 - Treat it as ephemeral: create it only for the duration of the deployment run, and delete it when you’re done.
 - Rotate credentials regularly
-- Avoid copying into tickets/docs: share only sample files (e.g., `.sample.*.env`) with blanks/placeholders.
+- Avoid copying into tickets/docs: share only sample files (e.g., `sample.*.env`) with blanks/placeholders.
 - Add a pre-flight secret scan before publishing: e.g., run `rg` for common patterns or use tooling like `trufflehog`/`git-secrets`.
 
 If you can use a secrets manager, we recommend it.
@@ -99,18 +99,19 @@ For connectors, use the same pattern: mount `./certs:/app/certs:ro` into the con
 
 ## Deployment Example: OneDrive Connector
 1. Download and extract the Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`), which expands to `dsx-connect-<core_version>/`.
-2. Copy the core sample env: `cp dsx-connect-<core_version>/.sample.core.env example.core.env`. 
-3. Run DSXA if needed:
+2. Copy the core sample env: `cp dsx-connect-<core_version>/sample.core.env example.core.env`. 
+3. If you need a local DSXA scanner, copy the DSXA sample env: `cp dsx-connect-<core_version>/sample.dsxa.env example.dsxa.env`.
+4. Run DSXA if needed:
 ```bash
-docker compose --env-file example.core.env -f dsx-connect-<core_version>/docker-compose-dsxa.yaml up -d
+docker compose --env-file example.dsxa.env -f dsx-connect-<core_version>/docker-compose-dsxa.yaml up -d
 ```
-4. Run core (example):  
+5. Run core (example):  
    ```bash
    docker network create dsx-connect-network || true
    docker compose --env-file example.core.env -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml up -d
    ```
-5. Copy the connector sample env: `cp dsx-connect-<core_version>/onedrive-connector-<connector_version>/.sample.onedrive.env example.onedrive.env`.
-6. Edit `example.onedrive.env` (tenant/client creds, asset, etc.)
+6. Copy the connector sample env: `cp dsx-connect-<core_version>/onedrive-connector-<connector_version>/sample.onedrive.env example.onedrive.env`.
+7. Edit `example.onedrive.env` (tenant/client creds, asset, etc.)
    ```dotenv
     # Env for OneDrive connector. Pin the image and set Tenant, Client ID, Client Secret, User and Asset. 
     
@@ -124,7 +125,7 @@ docker compose --env-file example.core.env -f dsx-connect-<core_version>/docker-
     DSXCONNECTOR_FILTER=
     #DSXCONNECT_ENROLLMENT_TOKEN=abc123
    ```
-5. Deploy the OneDrive connector:  
+8. Deploy the OneDrive connector:  
    ```bash
    docker compose --env-file example.onedrive.env \
      -f dsx-connect-<core_version>/onedrive-connector-<connector_version>/docker-compose-onedrive-connector.yaml up -d

@@ -1,11 +1,11 @@
 {
-  "dsx_connect": "0.3.68",
-  "google_cloud_storage": "0.5.43",
-  "onedrive": "0.1.22",
-  "filesystem": "0.5.45",
-  "azure_blob_storage": "0.5.45",
-  "sharepoint": "0.3.40",
+  "dsx_connect": "0.3.69",
+  "google_cloud_storage": "0.5.44",
+  "onedrive": "0.1.23",
+  "filesystem": "0.5.46",
+  "azure_blob_storage": "0.5.46",
+  "sharepoint": "0.3.41",
   "salesforce": "0.1.0",
-  "aws_s3": "0.5.45",
-  "m365_mail": "0.1.28"
+  "aws_s3": "0.5.46",
+  "m365_mail": "0.1.29"
 }

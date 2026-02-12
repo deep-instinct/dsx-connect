@@ -62,7 +62,7 @@ dsx-connect-scan-request-worker:
     LOG_LEVEL: debug
   celery:
     # queue: "dev.dsx_connect.scans.request"
-    concurrency: 1
+    concurrency: 2
 
 dsx-connect-verdict-action-worker:
   enabled: true

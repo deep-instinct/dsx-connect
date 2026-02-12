@@ -697,8 +697,8 @@ Workers scale with two knobs. Use them together for best results:
 
 Guidance:
 
-- The Scan request workers are generally the place to start with concurrency.  These workers take enqueued scan request tasks, reads a file from a connector, and sends the file to DSXA for scanning.
-  Needless to say, a single pod / single celery worker can only handle a single scan request at a time.
+- The scan request workers are generally the place to start with concurrency. These workers take enqueued scan requests, read a file from a connector, and send it to DSXA for scanning.
+- Default scan_request concurrency is `2`, so each pod can handle two scan requests at a time. Adding another pod doubles that (e.g., 2 pods × 2 concurrency = 4 total workers).
 - Start by raising `celery.concurrency` modestly (2–4), then add `replicaCount` to spread load across nodes.
 - If CPU-bound within a pod, increase pod resources or add replicas. If I/O-bound (network/Redis/HTTP), modest concurrency increases often help.
 - Example: 3 pods × concurrency 3 ≈ 9 workers on the queue.

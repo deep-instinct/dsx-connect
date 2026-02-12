@@ -141,11 +141,11 @@ See [Deploying with SSL/TLS](./tls.md) for Docker Compose specifics (dev cert ge
 By default, workers in DSX-Connect fetch and process one task at a time.  The following table describes each worker, which queue it pulls tasks from and default concurrency.
 
 | Worker | Queue | Default concurrency | Responsibilities |
-| --- | --- |------------| --- |
-| `dsx_connect_scan_request_worker` | `scan_request_queue` | 1 | Fetch files from connectors, submit to DSXA, enqueue verdicts. IO-bound; scale this first. |
-| `dsx_connect_verdict_action_worker` | `verdict_action_queue` | 1 | Execute post-scan actions (delete/move/tag). Calls back into connectors. |
-| `dsx_connect_results_worker` | `scan_result_queue` | 1 | Persist results, update stats, forward to syslog. |
-| `dsx_connect_notification_worker` | `scan_result_notification_queue` | 1 | Publish events via Redis pub/sub, SSE, optional webhooks. |
+| --- | --- |---------------------| --- |
+| `dsx_connect_scan_request_worker` | `scan_request_queue` | 2                   | Fetch files from connectors, submit to DSXA, enqueue verdicts. IO-bound; scale this first. |
+| `dsx_connect_verdict_action_worker` | `verdict_action_queue` | 1                   | Execute post-scan actions (delete/move/tag). Calls back into connectors. |
+| `dsx_connect_results_worker` | `scan_result_queue` | 1                   | Persist results, update stats, forward to syslog. |
+| `dsx_connect_notification_worker` | `scan_result_notification_queue` | 1                   | Publish events via Redis pub/sub, SSE, optional webhooks. |
 
 
 To change concurrency in Docker Compose, set the env overrides in `sample.core.env`, copy it to `.core.env`, and redeploy the stack. For example:

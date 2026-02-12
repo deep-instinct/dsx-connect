@@ -1,5 +1,5 @@
 x-common-env: &common-env
-  DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://dsxa_scanner:5000/scan/binary/v2"
+  DSXCONNECT_SCANNER__SCAN_BINARY_URL: ${DSXCONNECT_SCANNER__SCAN_BINARY_URL:-http://dsxa_scanner:5000/scan/binary/v2}
   DSXCONNECT_SCANNER__AUTH_TOKEN: ${DSXCONNECT_SCANNER__AUTH_TOKEN:-}
   DSXCONNECT_WORKERS__BROKER: "redis://redis:6379/5"
   DSXCONNECT_WORKERS__BACKEND: "redis://redis:6379/6"
@@ -13,7 +13,7 @@ x-common-env: &common-env
   DSXCONNECT_RESULTS_DB: "redis://redis:6379/3"
   DSXCONNECT_RESULTS_DB__RETAIN: 100
   PYTHONUNBUFFERED: 1
-  DSXCONNECT_AUTH__ENABLED: "false"
+  DSXCONNECT_AUTH__ENABLED: ${DSXCONNECT_AUTH__ENABLED:-false}
 
 x-core-image: &core-image ${DSXCONNECT_IMAGE:-dsxconnect/dsx-connect:latest}
 
@@ -75,7 +75,7 @@ services:
       celery -A dsx_connect.taskworkers.celery_app.celery_app worker
       --loglevel=warning
       -Q dev.dsx_connect.scans.request
-      --concurrency=${DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY:-1}
+      --concurrency=${DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY:-2}
     restart: unless-stopped
 
 

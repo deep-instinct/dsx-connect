@@ -50,6 +50,7 @@ nav:
   - Connector Concepts: connectors/concepts.md
   - Deployment:
       - Docker:
+          - Resource Recommendations: deployment/docker/resource-recommendations.md
           - Best Practices: deployment/docker/intro.md
           - DSX-Connect Core Deployment: deployment/docker/dsx-connect.md
           - Connector Deployments:
@@ -63,6 +64,7 @@ nav:
               - OneDrive: deployment/docker/onedrive.md
           - Deploying with SSL/TLS: deployment/docker/tls.md
       - Kubernetes:
+          - Resource Recommendations: deployment/kubernetes/resource-recommendations.md
           - Best Practices: deployment/kubernetes/getting-started.md
           - Quick Tutorial: deployment/kubernetes/getting-started-quickstart.md
           - DSX-Connect Core Deployment: deployment/kubernetes/dsx-connect.md
@@ -79,7 +81,6 @@ nav:
           - Deploying with SSL/TLS: deployment/tls.md
           - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md
           - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
-          - Kubernetes Guides (Per Connector): deployment/k8s-guides.md
           - Log Collectors: deployment/log-collectors.md
       - Advanced Settings: deployment/advanced.md
   - Reference:
@@ -87,7 +88,6 @@ nav:
       - Azure Credentials: reference/azure-credentials.md
       - Google Cloud Credentials: reference/google-cloud-credentials.md
       - Salesforce Credentials: reference/salesforce-credentials.md
-      - Advanced Kubernetes Network Security: reference/advanced-kubernetes-network-security.md
       - UI Display Icons: reference/display-icons.md
       - DSXA Python SDK: reference/dsxa-sdk.md
       - Filters (Details): reference/filters.md

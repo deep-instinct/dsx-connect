@@ -1,7 +1,6 @@
-document.addEventListener("DOMContentLoaded", () => {
+function initVars() {
   const inputs = document.querySelectorAll("[data-var-input]");
   const values = {};
-  const codeBlocks = document.querySelectorAll("pre > code");
 
   function applyValue(name, value) {
     values[name] = value;
@@ -9,7 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
       el.textContent = value;
     });
 
-    codeBlocks.forEach((el) => {
+    document.querySelectorAll("pre > code").forEach((el) => {
       if (!el.dataset.originalText) {
         el.dataset.originalText = el.textContent;
       }
@@ -31,4 +30,10 @@ document.addEventListener("DOMContentLoaded", () => {
       applyValue(name, e.target.value);
     });
   });
-});
+}
+
+if (window.document$ && typeof window.document$.subscribe === "function") {
+  window.document$.subscribe(initVars);
+} else {
+  document.addEventListener("DOMContentLoaded", initVars);
+}

@@ -14,8 +14,8 @@ Edit the following inputs or use the defaults to your desired configuration. The
 used in the example command lines provided.
 
 <div class="var-grid">
-  <label for="var-dsx-version">DSX_CONNECT_VERSION</label>
-  <input id="var-dsx-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.68" />
+  <label for="var-dsx-connect-version">DSX_CONNECT_VERSION</label>
+  <input id="var-dsx-connect-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.69" />
 
   <label for="var-namespace">NAMESPACE</label>
   <input id="var-namespace" data-var-input="NAMESPACE" value="dsx-tutorial-1" />
@@ -23,8 +23,8 @@ used in the example command lines provided.
   <label for="var-release">RELEASE</label>
   <input id="var-release" data-var-input="RELEASE" value="dsx-tutorial-1" />
 
-  <label for="var-dsx-version">AWS_CONNECTOR_VERSION</label>
-  <input id="var-dsx-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.45" />
+  <label for="var-aws-connector-version">AWS_CONNECTOR_VERSION</label>
+  <input id="var-aws-connector-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.46" />
 
   <label for="var-bucket">AWS_BUCKET</label>
   <input id="var-bucket" data-var-input="AWS_BUCKET" value="my-demo-bucket" />
@@ -34,6 +34,9 @@ used in the example command lines provided.
 
   <label for="var-scanner-id">DSXA_SCANNER_ID</label>
   <input id="var-scanner-id" data-var-input="DSXA_SCANNER_ID" value="1" />
+
+  <label for="var-dsxa-token">DSXA_TOKEN</label>
+  <input id="var-dsxa-token" data-var-input="DSXA_TOKEN" value="changeme" />
 </div>
 
 ## 2. Create namespace and secrets
@@ -102,6 +105,7 @@ helm upgrade --install {{RELEASE}} \
   --set dsx-connect-api.auth.enabled=false \
   --set dsxa-scanner.enabled=true \
   --set-string dsxa-scanner.env.APPLIANCE_URL={{DSXA_APPLIANCE_URL}} \
+  --set-string dsxa-scanner.env.TOKEN={{DSXA_TOKEN}} \
   --set-string dsxa-scanner.env.SCANNER_ID={{DSXA_SCANNER_ID}} \
   --set-string global.image.tag={{DSX_CONNECT_VERSION}}
 ```

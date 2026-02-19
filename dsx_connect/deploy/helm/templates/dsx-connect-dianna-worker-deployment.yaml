@@ -6,6 +6,7 @@
 {{- $celery := default (dict) $worker.celery -}}
 {{- $localDi := default (dict) $worker.dianna -}}
 {{- $replicas := default 1 $worker.replicaCount -}}
+{{- $resources := default (dict) $worker.resources -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -127,6 +128,8 @@ spec:
               value: "{{ $value }}"
             {{- end }}
             {{- end }}
+          resources:
+            {{- toYaml $resources | nindent 12 }}
           readinessProbe:
             exec:
               command:

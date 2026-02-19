@@ -30,10 +30,12 @@ If you need strict per‑container limits, use Kubernetes (k3s/k8s). We do not s
 ## Test and Tune (recommended process)
 
 Use **Job Comparisons** in the UI to measure throughput on real workloads. Run representative jobs (same mix and size as production) and compare:
+
 - Total bytes/sec and DSXA scan time per GB.
 - Job wall time and queue wait time.
 
 Then tune in this order:
+
 1. **scan_request worker concurrency** (largest impact).
 2. **Connector replicas** for IO‑heavy repositiry sources.
 3. **Redis memory** (avoid evictions and backlog stalls).

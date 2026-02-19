@@ -51,8 +51,13 @@ data:
     {{- end }}
 
     {{- if .Values.config.forward.enabled }}
+    {{- if or (eq .Values.config.forward.format "solarwinds") (and .Values.config.forward.token (ne .Values.config.forward.token "")) }}
+    # SolarWinds Observability syslog format (token-based)
+    template(name="SWOFormat" type="string"
+             string="<%pri%>1 %timestamp:::date-rfc3339% %HOSTNAME% %app-name% %procid% %msgid% [{{ .Values.config.forward.token }}@41058]%msg:::sp-if-no-1st-sp%%msg%")
+    {{- end }}
     {{- if .Values.config.forward.tls }}
-    module(load="gtls")
+    module(load="lmnsd_gtls")
     action(type="omfwd"
            protocol="tcp"
            target="{{ .Values.config.forward.target }}"
@@ -60,12 +65,20 @@ data:
            StreamDriver="gtls"
            StreamDriverMode="1"
            StreamDriverAuthMode="x509/name"
-           StreamDriverPermittedPeers="{{ .Values.config.forward.permittedPeer }}")
+           StreamDriverPermittedPeers="{{ .Values.config.forward.permittedPeer }}"
+           {{- if or (eq .Values.config.forward.format "solarwinds") (and .Values.config.forward.token (ne .Values.config.forward.token "")) }}
+           template="SWOFormat"
+           {{- end }}
+           )
     {{- else }}
     action(type="omfwd"
            protocol="tcp"
            target="{{ .Values.config.forward.target }}"
-           port="{{ .Values.config.forward.port }}")
+           port="{{ .Values.config.forward.port }}"
+           {{- if or (eq .Values.config.forward.format "solarwinds") (and .Values.config.forward.token (ne .Values.config.forward.token "")) }}
+           template="SWOFormat"
+           {{- end }}
+           )
     {{- end }}
     {{- end }}
 

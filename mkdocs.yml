@@ -81,7 +81,6 @@ nav:
           - Deploying with SSL/TLS: deployment/tls.md
           - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md
           - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
-          - Log Collectors: deployment/log-collectors.md
       - Advanced Settings: deployment/advanced.md
   - Reference:
       - Assets: reference/assets.md
@@ -96,6 +95,7 @@ nav:
   - Developer's Guide:
       - Operations:
           - Connector State KV: operations/kv-state.md
+          - Rsyslog TLS Image: operations/rsyslog-tls-image.md
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect

@@ -7,6 +7,7 @@
 {{- $waitFor := default (dict) $worker.waitFor -}}
 {{- $rsyslogWait := default (dict) $waitFor.rsyslog -}}
 {{- $replicas := default 1 $worker.replicaCount -}}
+{{- $resources := default (dict) $worker.resources -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -141,4 +142,6 @@ spec:
               value: "{{ $value }}"
             {{- end }}
             {{- end }}
+          resources:
+            {{- toYaml $resources | nindent 12 }}
 {{- end }}

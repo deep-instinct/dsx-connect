@@ -32,3 +32,6 @@ config:
     port: 6514
     tls: true
     permittedPeer: "siem.example.com"
+    # Optional: SolarWinds Observability (token-based syslog)
+    format: "default"   # "default" or "solarwinds"
+    token: ""

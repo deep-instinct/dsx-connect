@@ -46,7 +46,7 @@ For the rest of this section, we will just refer to two .env files:
     # Env for DSXA scanner container. Copy to xxxx.dsxa.env and set values per environment.
     
     DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020                 # used by docker-compose-dsxa.yaml
-    APPLIANCE_URL=https://<di>.customers.deepinstinctweb.com   # DSXA appliance URL
+    APPLIANCE_URL=<di>.customers.deepinstinctweb.com           # DSXA appliance URL
     TOKEN=<DSXA token>                                         # DSXA registration token
     SCANNER_ID=<scanner id>                                    # Scanner ID
     #AUTH_TOKEN=<auth token>                                    # optional REST auth for DSXA scanner
@@ -61,7 +61,7 @@ For the rest of this section, we will just refer to two .env files:
     ```
    Use `docker logs` to confirm that DSXA is running.    
 
-3. **Deploy dsx-connect stack** 
+3. **Deploy DSX-Connect stack** 
 
     Use the .env file to configure settings.  There are one or two required settings.  
     `DSXCONNECT_IMAGE`: always required, specifies the where to download the DSX-Connect image
@@ -127,17 +127,17 @@ For the rest of this section, we will just refer to two .env files:
 | Need persistent Redis | Mount a volume to `/data` in the Redis service. |
 | Large backlogs | Scale `dsx_connect_scan_request_worker` (and connectors/DSXA) to increase throughput. |
 
-# Advanced Deployment
+## Advanced Deployment
 
-## Authentication
+### Authentication
 - Docker Compose deployments intentionally run with connector auth disabled (no enrollment tokens, connectors unauthenticated). This keeps local demos simple.
 - For production-grade deployments with enrollment + DSX-HMAC enforced, use the Helm charts (`dsx_connect/deploy/helm`) where secrets and toggles are managed securely.
 
-## TLS Options
+### TLS Options
 
 See [Deploying with SSL/TLS](./tls.md) for Docker Compose specifics (dev cert generation, runtime mounts, and client trust).
 
-## Celery Workers
+### Workers
 By default, workers in DSX-Connect fetch and process one task at a time.  The following table describes each worker, which queue it pulls tasks from and default concurrency.
 
 | Worker | Queue | Default concurrency | Responsibilities |

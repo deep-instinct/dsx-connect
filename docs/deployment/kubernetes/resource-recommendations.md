@@ -32,11 +32,10 @@ These are starting points for DSX-Connect and connectors. They assume streaming 
 
 ## Test and Tune (recommended process)
 
-Use **Job Comparisons** in the UI to measure throughput on real workloads. Run representative jobs (same mix and size as production) and compare:
-- Total bytes/sec and DSXA scan time per GB.
-- Job wall time and queue wait time.
+Use **Job Comparisons** in the UI to measure throughput on real workloads. Run representative jobs (same mix and size as production) and compare.
 
 Then tune in this order:
+
 1. **scan_request worker concurrency/replicas** (largest impact).
 2. **Connector replicas** for IO‑heavy sources.
 3. **Redis memory** (avoid evictions and backlog stalls).
@@ -44,3 +43,5 @@ Then tune in this order:
 5. **Network bandwidth/latency** between connector, core, and DSXA.
 
 For Kubernetes, scale replicas or set per-worker concurrency in Helm values.
+
+See Deployment Guides on the core and connectors for specific tuning information. 

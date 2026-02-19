@@ -13,8 +13,10 @@ global:
     DSXCONNECT_SCANNER__SCAN_BINARY_URL: "http://external-dsxa:5000/scan/binary/v2"
     # Optional: auth token for DSXA (sent as AUTH/AUTH_TOKEN headers by dsxa_sdk)
     # DSXCONNECT_SCANNER__AUTH_TOKEN: ""
-    # Results/stats DB URL (redis://... => Redis, anything else => in-memory)
-    DSXCONNECT_RESULTS_DB: redis://redis:6379/3
+
+    DSXCONNECT_SYSLOG__SYSLOG_SERVER_URL: "rsyslog"
+    DSXCONNECT_SYSLOG__SYSLOG_SERVER_PORT: "514"
+    DSXCONNECT_SYSLOG__TRANSPORT: "tcp"
 
   # Optional shared image defaults (components fall back to these when set)
   image:
@@ -29,16 +31,31 @@ global:
     # port: 5000                     # optional: override port (defaults to 5000)
     # scheme: http                   # optional: http|https (defaults to http)
 
-# typical deployments would have dsxa-scanners in their own cluster and namespace, but for if all that's needed
+# typical deployments would have dsxa-scanners in their own cluster and/or namespace, but if all that's needed
 # is a single dsxa-scanner pod that only supports scan/binary/v2 (file size <= 2GB), then enable here.
 dsxa-scanner:
   enabled: false
+#  env:
+#    # Override these with your own DSXA appliance settings before enabling in any environment.
+#    APPLIANCE_URL: "your-dsxa-appliance.deepinstinctweb.com"
+#    TOKEN: "REPLACE_WITH_APPLIANCE_TOKEN"
+#    SCANNER_ID: "0"
+#    FLAVOR: "rest,config"
+#    NO_SSL: "true"
+#    AUTH_TOKEN: ""
 
 dsx-connect-api:
   enabled: true
   service:
     port: 80
     # type: ClusterIP
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   tls:
     enabled: false
     # secretName: ""           # defaults to <release>-dsx-connect-api-tls when enabled
@@ -46,7 +63,8 @@ dsx-connect-api:
     LOG_LEVEL: info
   auth:
     enabled: true
-    # Provide the enrollment Secret name via dsx_connect/deploy/helm/examples/secrets/auth-enrollment-secret.yaml.
+    # Example enrollment Secret in examples/secrets/auth-enrollment-secret.yaml.
+    # Secret name defaults to <release>-dsx-connect-api-auth-enrollment when enabled
     # Leave value unset in production so the chart references your Secret instead.
     enrollment:
       key: ENROLLMENT_TOKEN
@@ -54,6 +72,13 @@ dsx-connect-api:
 dsx-connect-scan-request-worker:
   enabled: true
   replicaCount: 1
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
   env:
     LOG_LEVEL: info
   celery:
@@ -63,6 +88,13 @@ dsx-connect-scan-request-worker:
 dsx-connect-verdict-action-worker:
   enabled: true
   replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   env:
     LOG_LEVEL: info
   celery:
@@ -72,6 +104,13 @@ dsx-connect-verdict-action-worker:
 dsx-connect-results-worker:
   enabled: true
   replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   env:
     LOG_LEVEL: info
     DSXCONNECT_SYSLOG__TRANSPORT: tcp
@@ -83,6 +122,13 @@ dsx-connect-notification-worker:
   enabled: true
   replicaCount: 1
   # image:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
   env:
     LOG_LEVEL: info
   celery:
@@ -92,16 +138,20 @@ dsx-connect-notification-worker:
 dsx-connect-dianna-worker:
   enabled: true
   replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
   env:
     LOG_LEVEL: info
   celery:
     # queue: "dev.dsx_connect.analyze.dianna"
     concurrency: 1
   dianna:
-    # Optionally set these inline, or supply a Secret (see examples/secrets/di-api-secret.yaml) and reference it via global.dianna.secretName.
-    # managementUrl: "https://di.example.com"
-    # apiToken: "<token>"
-    # additional DIANNA worker settings
+    # Override other DIANNA tuning (verifyTls, chunkSize, poll settings, etc.) here if needed.
     # verifyTls: true
     # caBundle: ""
     # chunkSize: 4194304
@@ -117,18 +167,40 @@ redis:
   image:
     repository: redis
     tag: "7-alpine"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 2Gi
   # For advanced tuning (command flags, probes, resources), see charts/redis/values.yaml.
 
 rsyslog:
   enabled: true
   fullnameOverride: rsyslog
+  # The bundled rsyslog chart forwards scan results to external syslog collectors. If you enable TLS forwarding,
+  # rsyslog must have the gtls module available. The stock rsyslog/rsyslog image does not ship with gtls, so you
+  # need to use a small derivative image.
+  image:
+    repository: dsxconnect/dsx-connect-rsyslog-gnutls
+    tag: "1.0.3"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
   # For advanced tuning, see charts/rsyslog/values.yaml.
+  # example forwarding:
+#  config:
+#    forward:
+#      enabled: true
+#      format: "solarwinds"
+#      token: "<solar winds destination token>"
+#      target: "syslog.collector.na-01.cloud.solarwinds.com"
+#      port: 6514
+#      tls: true
+#      permittedPeer: "*.collector.na-01.cloud.solarwinds.com"
 
-ingress:
-  enabled: false
-  host: "dsx-connect.127.0.0.1.nip.io"
-  ingressClassName: ""
-  # For TLS, the secret must be created separately (e.g., kubectl create secret tls my-ingress-tls --cert=... --key=...)
-  # and its name should be specified in the dsx-connect-api.tls.secretName if it's the same secret.
-  # If you have a separate secret for Ingress, specify it here:
-  # tlsSecretName: ""

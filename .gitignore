@@ -21,3 +21,7 @@ dsxa_sdk/tests/assets/samples/
 shared/deploy/certs/*.crt
 shared/deploy/certs/*.key
 /.codex/
+/TODO.md
+/connectors/filesystem/data/
+/connectors/filesystem/data/
+/connectors/onedrive/data/

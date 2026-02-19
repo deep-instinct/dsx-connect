@@ -29,6 +29,8 @@ spec:
               containerPort: {{ .Values.service.udpPort }}
               protocol: UDP
             {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /etc/rsyslog.conf
@@ -51,4 +53,3 @@ spec:
             name: {{ include "rsyslog.fullname" . }}-config
         - name: varlog
           emptyDir: {}
-

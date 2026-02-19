@@ -22,6 +22,8 @@ spec:
           command: {{ .Values.command | toYaml | nindent 12 }}
           ports:
             - containerPort: {{ .Values.service.port }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
           {{- $interval := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.interval | default 10)) "" | int }}
           {{- $timeout := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.timeout | default 1)) "" | int }}
           {{- $retries := regexReplaceAll "[^0-9]" (printf "%v" (.Values.healthcheck.retries | default 3)) "" | int }}

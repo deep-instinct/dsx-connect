@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dsx-connect-api
+  # replace with the namespace
+  namespace: <namespace>
+spec:
+  # k3s clusters typically ships with Traefik as the ingress controller.
+  # If you installed a different controller, adjust the class accordingly.
+  ingressClassName: traefik
+  rules:
+    # replace with the IP address of your k3s cluster.  for convenience, one can use nip.io to act as DNS, resolving dsx-connect.<ip address>.nip.io to the IP address of your k3s cluster.
+    - host: <<dsx-connect.<ip address>.nip.io>>
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dsx-connect-api
+                port:
+                  number: 80
+  # To enable TLS termination at Traefik, create a TLS secret and uncomment below:
+#  tls:
+#   - hosts:
+#       - dsx-connect.<IP Address>.nip.io
+#     secretName: <tls secret name>

@@ -11,6 +11,7 @@
 {{- $servicePort := default 80 $service.port -}}
 {{- $serviceType := default "ClusterIP" $service.type -}}
 {{- $tlsEnabled := default false $tls.enabled -}}
+{{- $resources := default (dict) $api.resources -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -141,6 +142,8 @@ spec:
               value: "{{ $value }}"
             {{- end }}
             {{- end }}
+          resources:
+            {{- toYaml $resources | nindent 12 }}
           {{- if $tlsEnabled }}
           volumeMounts:
             - name: tls-certs

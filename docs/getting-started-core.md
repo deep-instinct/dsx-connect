@@ -8,23 +8,30 @@ In the following, we will deploy DSXA (the scanner) and DSX-Connect core on Dock
 
 ## 1) Launch DSXA (scanner)
 
-From the extracted bundle directory, start with the DSXA sample env:
+Set up your core env file:
 ```bash
 cp sample.dsxa.env .dsxa.env
-# edit .dsxa.env to set APPLIANCE_URL, TOKEN, SCANNER_ID
-# optionally set DSXA_IMAGE, FLAVOR, NO_SSL, HOST_PORT, AUTH_TOKEN
 ```
 
+!!! tip "Environment file naming"
+    Docker Compose automatically loads a file named `.env` by default.  
+    In this guide, we explicitly use `--env-file` to load `.core.env` and `.dsxa.env`, allowing separate configuration for the core and scanner components.
+
+    Because environment files often contain sensitive values (tokens, credentials, URLs), make sure never committed to source control or shared publicly.
+ 
+From the extracted bundle directory, start with the DSXA sample env:
+```bash
 Example `.dsxa.env`:
 ```dotenv
 APPLIANCE_URL=https://acme.customers.deepinstinctweb.com
 TOKEN=abcd1234-your-dsxa-token
 SCANNER_ID=dsxa-scanner-01
 DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020
-FLAVOR=rest,config
-NO_SSL=true
-HOST_PORT=15000
-AUTH_TOKEN=    # optional (leave blank if DSXA auth is disabled)
+#AUTH_TOKEN=<auth token>                                    # optional REST auth for DSXA scanner
+#FLAVOR=rest,config                                         # optional, used by docker-compose-dsxa.yaml; defaults to rest,config
+#NO_SSL=true                                                # optional, used by docker-compose-dsxa.yaml; defaults to true
+#HOST_PORT=15000                                            # optional host port override, used by docker-compose-dsxa.yaml; defaults to 5000
+
 ```
 Note: please see the DSX for Applications Deployment Guide for more details on how to obtain the `APPLIANCE_URL` and `TOKEN`, and 
 a complete list of available DSXA scanner settings.
@@ -61,8 +68,6 @@ and eventually:
 ```
 That's an indicator that the scanner is up and running.
 
-
-
 Notes:
 
 - DSXA binds to `dsx-connect-network` on the docker local port '5000' and exposes port `5000` on the host via `HOST_PORT` (default 15000). Set `HOST_PORT` in your env to override without editing YAML.
@@ -86,11 +91,11 @@ docker compose --env-file .core.env -f docker-compose-dsx-connect-all-services.y
 ```bash
 docker compose -f docker-compose-dsx-connect-all-services.yaml ps
 ```
-You should see the API (`dsx-connect-api`), workers, Redis, and support services. The UI becomes available at `http://localhost:8586/`.
+You should see the API (`dsx-connect-api`), workers, Redis, and support services. The DSX-Connect Console becomes available at `http://localhost:8586/`.
 
-Open a browser and navigate to `http://localhost:8586/`. You should see the DSX-Connect UI.
+Open a browser and navigate to `http://localhost:8586/`. You should see the DSX-Connect Console.
 
-![img.png](img.png)
+![DSX-Connect Console](assets/ui_screenshot_no_connectors.png)
 
 Notice that the UI is connected to the scanner running on port 15000 as indicated by the "Connected:..." message.  If you see this message you
 are on the right track!  Congratulations!
@@ -99,12 +104,3 @@ From here you can look at the core config, the RestAPI, change visual aspects, b
 
 [Next: Deploying Your First Connector](getting-started-connector.md)
 
-## Troubleshooting
-Run ```bash docker ps```
-
-```
-bd2b23ddd997   dsxconnect/dsx-connect:0.3.57      "python dsx_connect/…"   38 hours ago     Up 38 hours (unhealthy)   0.0.0.0:8586->8586/tcp, :::8586->8586/tcp       dsx_connect_api-1
-```
-```bash
-docker logs dsx_connect_api-1
-```

@@ -2,7 +2,7 @@
 <p style="text-align:center; margin: 0 0 4px 0;">
   <img src="assets/dsx-header-logo.svg" alt="DSX-Connect" width="640" height="120" style="display:inline-block; vertical-align:middle;" />
 </p>
-<p style="text-align:left; margin: 0 0 12px 0;"><strong>Stop zero-day and AI-generated malware in any repository, anywhere.</strong></p>
+<p style="text-align:left; margin: 0 0 12px 0;"><strong>Stop zero-day and AI-generated malware - any file, anywhere.</strong></p>
 
 DSX-Connect is a modular, event-driven framework that extends **Deep Instinct's** [**DSX for Applications**](https://www.deepinstinct.com/dsx/dsx-applications) (DSXA) to any repository or service.
 It orchestrates how files are discovered, scanned, and remediated—allowing Deep Instinct’s deep-learning engine to protect cloud, SaaS, and on-prem data against even previously unseen threats.

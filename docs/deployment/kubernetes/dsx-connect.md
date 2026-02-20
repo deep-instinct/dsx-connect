@@ -768,25 +768,42 @@ rsyslog:
 ```
 
 
-### Concurrency and Replicas
+### Scaling DSX-Connect: Concurrency and Replicas
 
 Workers scale with two knobs. Use them together for best results:
 
+Terminology:
 - Replica count (`replicaCount`): number of pods. Each pod has its own CPU/memory limits/requests and its own Celery process. Good for horizontal scaling and resilience.
 - Concurrency (`celery.concurrency`): number of task workers inside one pod. Increases parallelism within a pod; shares that pod’s resources.
+- Task: tasks are processed by the workers. 
+  - One such task is a scan request, which is processed by a Scan Request worker.
+  - Scan Request Workers queue Verdict tasks, which are processed by a Verdict worker.
+  - Verdict Workers queue results tasks, which are processed by a Results worker. 
+- Task queue: a queue of tasks waiting to be processed.
+- Job: a 'job' is a set of all tasks initiated by a user (via the UI or API). A job can contain multiple scan requests.
 
-Guidance:
+- `concurrency` adds to speed of processing tasks (and a job) by adding Worker parallelism.  
+- `replicaCount` adds Worker fault tolerance and parallelism by adding more pods of a particular worker type. 
 
-- The scan request workers are generally the place to start with concurrency. These workers take enqueued scan requests, read a file from a connector, and send it to DSXA for scanning.
-- Default scan_request concurrency is `2`, so each scan_request pod can handle two scan requests at a time. Adding another pod doubles that (e.g., 2 pods × 2 concurrency = 4 total workers).
-- Start by raising `celery.concurrency` modestly (2–4), then add `replicaCount` to spread load across nodes.
-- If CPU-bound within a pod, increase pod resources or add replicas. If I/O-bound (network/Redis/HTTP), modest concurrency increases often help.
-- Scale downstream workers (verdict/result/notification) when increasing request throughput to avoid bottlenecks.
+Note that while increasing replicas does increase parallelism, it is not as effecient as increasing concurrency.  
 
 #### Practical Tuning Tips
-- Continue favoring modest Celery concurrency (2–4) before adding pods; add replicas when you see CPU saturation or want resiliency.
-- For connectors, bump `workers` to 2–4 if read_file handlers are CPU-bound or you want more in-pod parallel reads; add connector replicas if a single pod’s CPU or network is saturated, or for HA.
-- If you notice uneven distribution across connector replicas due to HTTP keep-alive, higher Celery concurrency tends to open more connections and spread load better; you can also tune httpx connection limits if needed later.
+
+- The scan request workers are generally the place to start with concurrency. These workers take enqueued scan requests, read a file from a connector, and send it to DSXA for scanning.  It is far and a away the most time consuming and resource intensive Worker.
+- Default scan_request concurrency is `2`, so each scan_request pod can handle two scan requests at a time. Adding another pod doubles that (e.g., 2 pods × 2 concurrency = 4 total workers).
+- Start by raising `celery.concurrency` modestly (2–4), then add `replicaCount` to spread load across nodes.
+- If when increasing concurrency you notice resource peaks CPU/memory-bound within a pod, increase pod resources or add replicas.
+- Scale downstream workers (verdict/result/notification) when increasing request throughput to avoid bottlenecks.
+
+A Scan setup like this:
+
+| | Concurrency | Replicas | Scan Request Workers |
+| | ------------ |----------|-------------- |
+| | 2            | 2        | 4             |
+
+Gives you good concurrency and resilency, for a total of 4 Scan Request workers.  
+
+
 
 #### Note on Connector Replicas
 
@@ -800,8 +817,6 @@ Connectors also have a replicaCount, but it's important to understand what it's 
       To parallelize work across a single asset intentionally, prefer:
     - Increasing connector `workers` (Uvicorn processes) for in-pod concurrency, and/or
     - Running multiple connector releases with different `DSXCONNECTOR_FILTER` partitions (sharding), so Full Scan is performed in parallel across slices by distinct connector instances.
-
-
 
 ### Client Trust and CA Bundles
 
@@ -821,22 +836,6 @@ It is important to understand that even with `verify=false`, the connection is s
 
 3.  **Configure the Client's Helm Chart:**
     Refer to the client's (e.g., `connectors/azure_blob_storage/deploy/helm/DEVELOPER_README.md`) documentation for how to configure its `DSXCONNECTOR_CA_BUNDLE` and `DSXCONNECTOR_VERIFY_TLS` settings to trust this CA.
-
-
-
-## Ingress & Load Balancer Examples
-
-The core chart deliberately stops at ClusterIP services so it works across any platform. If you need ingress routes or load balancer services, use the sample manifests under `dsx_connect/deploy/helm/examples/ingress/`.
-
-- Pick the file that matches your environment (e.g., `ingress-colima.yaml`, `ingress-eks-alb.yaml`, `openshift-route.yaml`)
-- Edit hosts/TLS secrets as needed
-- Apply it after installing the chart:
-
-```bash
-kubectl apply -f dsx_connect/deploy/helm/examples/ingress/ingress-colima.yaml
-```
-
-These are meant as starting points—feel free to adapt or author your own ingress resources if your environment requires different settings.
 
 ## Configuration Reference
 

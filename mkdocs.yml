@@ -77,6 +77,7 @@ nav:
               - Salesforce: deployment/kubernetes/salesforce.md
               - M365 Mail: deployment/kubernetes/m365-mail.md
               - OneDrive: deployment/kubernetes/onedrive.md
+          - Performance Tuning with Job Comparisons: deployment/kubernetes/performance-tuning-job-comparisons.md
           - Using DSX-Connect Authentication: deployment/authentication.md
           - Deploying with SSL/TLS: deployment/tls.md
           - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md

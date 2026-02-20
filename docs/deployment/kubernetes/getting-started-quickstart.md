@@ -15,7 +15,7 @@ used in the example command lines provided.
 
 <div class="var-grid">
   <label for="var-dsx-connect-version">DSX_CONNECT_VERSION</label>
-  <input id="var-dsx-connect-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.70" />
+  <input id="var-dsx-connect-version" data-var-input="DSX_CONNECT_VERSION" value="0.3.73" />
 
   <label for="var-namespace">NAMESPACE</label>
   <input id="var-namespace" data-var-input="NAMESPACE" value="dsx-tutorial-1" />
@@ -24,7 +24,7 @@ used in the example command lines provided.
   <input id="var-release" data-var-input="RELEASE" value="dsx-tutorial-1" />
 
   <label for="var-aws-connector-version">AWS_CONNECTOR_VERSION</label>
-  <input id="var-aws-connector-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.47" />
+  <input id="var-aws-connector-version" data-var-input="AWS_CONNECTOR_VERSION" value="0.5.48" />
 
   <label for="var-bucket">AWS_BUCKET</label>
   <input id="var-bucket" data-var-input="AWS_BUCKET" value="my-demo-bucket" />

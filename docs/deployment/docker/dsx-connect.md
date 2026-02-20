@@ -30,8 +30,8 @@ different images, like so:.
 Then when using docker compose, use `--env-file` to point Compose at the .env of your choosing.
 
 For the rest of this section, we will just refer to two .env files:
-- `.dsxa.env`: used for configuration of DSXA scanner deployment
-- `.core.env`: used for configuration of DSX-Connect core deployment
+- `sample.dsxa.env`: used for configuration of DSXA scanner deployment
+- `sample.core.env`: used for configuration of DSX-Connect core deployment
 
 1. **Create shared network (once)**  
    ```bash
@@ -40,7 +40,7 @@ For the rest of this section, we will just refer to two .env files:
 2. **Deploy DSXA scanner (optional)**
     If you already have a DSXA scanner deployed that you are planning to use, skip this step.  If you want to use a DSXA scanner deployed within the same Docker host, use this.
 
-    Edit the .env file for DSXA as needed.  The first four configuration settings are required. 
+    Edit the `sample.dsxa.env` file for DSXA as needed or use the example below.  The first four configuration settings are required. 
 
     ```dotenv
     # Env for DSXA scanner container. Copy to xxxx.dsxa.env and set values per environment.
@@ -63,7 +63,7 @@ For the rest of this section, we will just refer to two .env files:
 
 3. **Deploy DSX-Connect stack** 
 
-    Use the .env file to configure settings.  There are one or two required settings.  
+    Use the `sample.core.env` file to configure settings or create your own .env file.  There are one or two required settings.  
     `DSXCONNECT_IMAGE`: always required, specifies the where to download the DSX-Connect image
     `DSXCONNECT_SCANNER__SCAN_BINARY_URL`:
 
@@ -88,7 +88,7 @@ For the rest of this section, we will just refer to two .env files:
    There are several other configuration options, which will be covered in Advanced Deployment below.
 
    ```bash
-   docker compose --env-file dsx-connect-<core_version>/.core.env \
+   docker compose --env-file dsx-connect-<core_version>/sample.core.env \
      -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml up -d
    ```
    Expected output (example):
@@ -106,12 +106,12 @@ For the rest of this section, we will just refer to two .env files:
 4. **Verify**  
 
    - API: http://localhost:8586  
-   - `docker compose --env-file dsx-connect-<core_version>/.core.env -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml ps` to confirm healthy containers.  
+   - `docker compose --env-file dsx-connect-<core_version>/sample.core.env -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml ps` to confirm healthy containers.  
    - Logs: `docker compose -f ... logs -f dsx_connect_api`
 
 **Stop the services**  
    ```bash
-   docker compose --env-file dsx-connect-<core_version>/.core.env \
+   docker compose --env-file dsx-connect-<core_version>/sample.core.env \
      -f dsx-connect-<core_version>/docker-compose-dsx-connect-all-services.yaml down
    ```
 

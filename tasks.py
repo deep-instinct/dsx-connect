@@ -502,7 +502,8 @@ def bundle(c):
     core_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml"
     dsxa_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
     env_core = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "sample.core.env"
-    for src in (core_compose_src, dsxa_compose_src, env_core):
+    env_dsxa = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "sample.dsxa.env"
+    for src in (core_compose_src, dsxa_compose_src, env_core, env_dsxa):
         if src.exists():
             c.run(f"cp -f {src} {core_bundle}/{src.name}")
     _append_bundle_readme(core_bundle / "README.md")

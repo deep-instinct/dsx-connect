@@ -50,6 +50,8 @@ scanVolume:
   mountPath: /app/scan_folder
 ```
 
+Note: `scanVolume.enabled` must be `true` or the connector will scan an empty directory. On Colima, ensure the host path is shared with the VM (for example, via `colima start --mount ...`) or the pod will see an empty mount.
+
 Quarantine volume (optional; good for move/move_tag):
 
 ```yaml
@@ -62,7 +64,7 @@ quarantineVolume:
 Verify after deployment:
 
 ```bash
-kubectl exec -it deploy/filesystem-connector -- ls /app/scan_folder
+kubectl exec -it deploy/<release-name> -- ls /app/scan_folder
 ```
 
 ### dsx-connect endpoint

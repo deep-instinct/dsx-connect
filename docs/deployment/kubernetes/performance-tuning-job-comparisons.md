@@ -1,6 +1,6 @@
 # Performance Tuning with DSX-Connect Job Comparisons
 
-This guide explains how to use the **Job Comparison** feature in the DSX-Connect Console to tune performance.
+This guide explains how to use the **Job Comparison** feature in the DSX-Connect Console to tune DSXA and DSx-Connect performance.
 
 The goal is to:
 

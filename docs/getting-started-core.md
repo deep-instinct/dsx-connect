@@ -70,7 +70,7 @@ That's an indicator that the scanner is up and running.
 
 Notes:
 
-- DSXA binds to `dsx-connect-network` on the docker local port '5000' and exposes port `5000` on the host via `HOST_PORT` (default 15000). Set `HOST_PORT` in your env to override without editing YAML.
+- DSXA binds to `dsx-connect-network` on the docker local port '5000' and exposes port `5000` on the host via `HOST_PORT`. Set `HOST_PORT` in your env to override without editing YAML.
 - In docker compose, the 'up' command asks docker to start all services defined in the compose file.  -d means 'detached mode', which means the services will run in the background.
 - 
 

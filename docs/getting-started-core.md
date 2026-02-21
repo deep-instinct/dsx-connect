@@ -97,7 +97,7 @@ Open a browser and navigate to `http://localhost:8586/`. You should see the DSX-
 
 ![DSX-Connect Console](assets/ui_screenshot_no_connectors.png)
 
-Notice that the UI is connected to the scanner running on port 15000 as indicated by the "Connected:..." message.  If you see this message you
+Notice that the UI is connected to the scanner running on port 5000 as indicated by the "Connected:..." message.  If you see this message you
 are on the right track!  Congratulations!
 
 From here you can look at the core config, the RestAPI, change visual aspects, but we aren't yet to the point of scanning files, which is what we will do next.

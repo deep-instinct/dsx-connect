@@ -1,10 +1,11 @@
+
 # Connector Concepts
 
 If you've run through Getting Started and deployed your first connector - a Filesystem Connector - you now have
-a basic understanding of how to use all connectors. 
+a basic understanding of how to use all connectors.
 
-Every connector exposes the same API and core configuration knobs. These shared concepts keep dsx-connect behavior 
-consistent regardless of whether you are scanning an S3 bucket or a SharePoint site. Now that you've stood up a 
+Every connector exposes the same API and core configuration knobs. These shared concepts keep dsx-connect behavior
+consistent regardless of whether you are scanning an S3 bucket or a SharePoint site. Now that you've stood up a
 Filesystem Connector, let's take a closer look at what happens when you run Full Scan on that connector.
 
 
@@ -28,7 +29,7 @@ In this example, the Filesystem Connector is deployed with:
 * ASSET = ~/Documents <= (the root directory to start scans)
 * ITEM_ACTION_METADATA = ~/Documents/quarantine <= (directory for quarantined files)
 
-> note: more discussion on ASSET and ITEM_ACTION_METADATA in the next section 
+> note: more discussion on ASSET and ITEM_ACTION_METADATA in the next section
 
 Step-by-step:
 
@@ -37,23 +38,24 @@ Step-by-step:
 3. sends Scan Requests to DSX-Connect which queues each request.  Scan Requests are a lightweight object that contains the file path and metadata, and the address of the connector making the request
 4. DSX‑Connect Scan Request Worker dequeues a Scan Request and...
 5. Requests the file from the connector (`read_file`), the connector reads the file, sends to back to the worker and...
-6. the Scan Request Worker scans the file with DSXA and 
+6. the Scan Request Worker scans the file with DSXA and
 7. queues the DSXA verdict in the Verdict Action Queue.
 8. Verdict Action Worker dequeues a verdict and then, depending on the verdict...
 9. calls on the connector's `item_action` to take action the connector (delete/move/tag the file). In this case, the Filesystem Connector moves the file to ~/Documents/quarantine.  Queues the scan verdict and item action results.
 10. Dequeues scan result and sends scan statistics and results to an internal database (accessible via DSX-Connect API and Console) and rsyslog. RSyslog captures all scan results (regardless of verdict).  RSyslog can be configured to forward events to external log collectors or SIEMs.
 
-> Note the DSXA Scanner sends malicious verdicts to the DSX Console.  The DSX console should always be considered the definitive source of malicious events
- 
+!!! note
+The DSXA Scanner sends malicious verdicts to the Deep Instinct Management Console.  The Deep Instinct Management Console should always be considered the definitive source of malicious events
+
 Benefits of decoupling: resiliency (queue persistence), scale (parallel workers), and isolation (enumeration doesn’t block scanning).
 
 ### Why this architecture works
 
-You may be thinking - couldn't I just write a script that scans the files and does the right thing?  And, yes, you could.  
+You may be thinking - couldn't I just write a script that scans the files and does the right thing?  And, yes, you could.
 
 You could build a script/application that enumerates through files and for each one encountered, read the file, scan the file and do something with the result.  You can even make it so
 that this application uses advanced concepts such as multiprocessing and async IO in order to parallelize scanning for a more scalable solution.  And, you could build in functionaility for error handling such as
-retries with exponential backoff and jitter, dead-letter queues for really nasty issues, and tracking where you are in a scan so that when 
+retries with exponential backoff and jitter, dead-letter queues for really nasty issues, and tracking where you are in a scan so that when
 a scan over millions of files fails somewhere in the middle, you can resume where you left off.
 
 However, the DSX-Connect core gives you those pieces for free:
@@ -85,29 +87,34 @@ Asset is the exact scan root. Providers can often narrow list operations to `nam
 ### Filter
 
 `DSXCONNECTOR_FILTER` narrows the asset with rsync‑like include/exclude rules evaluated under the asset root.
-See [Filters (Details)](../reference/filters.md) fo rmor information on filter rules. 
+See [Filters (Details)](../reference/filters.md) for more information on filter rules.
 
-For connectors this usually means filtering on subdirectories or prefixes (e.g. `logs/2025/*`). The semantics are 
+For connectors this usually means filtering on subdirectories or prefixes (e.g. `logs/2025/*`). The semantics
 of how a filter works per a given connector is connector-specific, but the intent is identical: scope the files
 to be scanned under the asset without changing the root.
 
-Most repositories (S3, Blob, GCS, filesystem, SharePoint) only support narrowing via “prefix/scope” 
-(asset); there is no native include/exclude filtering on list APIs, so the connector must walk every object under the 
-asset during a full_scan. For example, Azure Blob only exposes container/optional-prefix list APIs — it cannot answer 
-“list only PDFs or skip tmp/”. 
+Many repositories and SaaS products (S3, Blob, GCS, SharePoint, OneDrive, Salesforce, etc...) only support narrowing via “prefix/scope”
+(asset); there is no native include/exclude filtering on list APIs, so the connector must walk every object under the
+asset during a full_scan. For example, Azure Blob only exposes container/optional-prefix list APIs — it cannot filter enumerations on filters such as
+“'give me all PDFs' or 'skip files in tmp/' directories/prefixes”.
 
-As such, when a connector enumerates through ASSET, filtering is applied in the connector (i.e., the connector retrieves the 
-meta information on every file under ASSET and filters there).  It does not reduce 
-the number files/objects that a Connector's `full_scan` has to process, just the list of files sent as scan requests 
+As such, when a connector enumerates through an ASSET, filtering is applied in the connector, i.e., the connector retrieves the
+meta information on every file under ASSET and then applies filters.  It does not reduce
+the number files/objects that a Connector's `full_scan` has to process, just the list of files sent as scan requests
 to be scanned.
 
+The main point - filters may not reduce the number of files that a connector processes, but it will reduce the number fo files scanned.
+
 ### Asset vs Filter:
-  - **Asset**: exact scan root; pushes coarse scoping to the provider (fastest listing).
-  - **Filter**: wildcard include/exclude under the asset; evaluated locally after listing.
-- Common equivalences:
-  - `asset=my-bucket`, `filter=prefix1/**`  ≈  `asset=my-bucket/prefix1`, `filter=""`
-  - `asset=my-bucket`, `filter=sub1`       ≈  `asset=my-bucket/sub1`, `filter=""`
-  - `asset=my-bucket`, `filter=sub1/*`     ≈  `asset=my-bucket/sub1`, `filter="*"`
+- **Asset**: exact scan root; pushes coarse scoping to the provider (fastest listing).
+- **Filter**: wildcard include/exclude under the asset; evaluated locally after listing.
+- Always opt for the finer grained asset definition:
+
+| OK                                     | Better |
+|----------------------------------------|----|
+| `asset=my-bucket`, `filter=prefix1/**` |  `asset=my-bucket/prefix1`, `filter=""` |
+| `asset=my-bucket`, `filter=sub1`       | `asset=my-bucket/sub1`, `f ilter=""` |
+| `asset=my-bucket`, `filter=sub1/*`     | `asset=my-bucket/sub1`, `filter="*"` |
 
 ### Guidance:
 - Prefer **asset** for coarse boundaries (folders/prefixes/libraries) so listing stays narrow.

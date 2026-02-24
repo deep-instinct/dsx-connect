@@ -40,63 +40,137 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
 
+#nav:
+#  - Home: index.md
+#  - Overview: overview.md
+#  - Getting Started:
+#      - Overview: getting-started.md
+#      - Deploying the DSX-Connect Core: getting-started/getting-started-docker.md
+#      - Deploying Your First Connector: getting-started-connector.md
+#  - Connector Concepts: connectors/concepts.md
+#  - Deployment:
+#      - Docker:
+#          - Resource Recommendations: deployment/docker/resource-recommendations.md
+#          - Best Practices: deployment/docker/intro.md
+#          - DSX-Connect Core Deployment: deployment/docker/dsx-connect.md
+#          - Connector Deployments:
+#              - AWS S3: deployment/docker/aws-s3.md
+#              - Azure Blob Storage: deployment/docker/azure-blob.md
+#              - Filesystem: deployment/docker/filesystem.md
+#              - Google Cloud Storage: deployment/docker/google-cloud-storage.md
+#              - SharePoint: deployment/docker/sharepoint.md
+#              - Salesforce: deployment/docker/salesforce.md
+#              - M365 Email: deployment/docker/m365-mail.md
+#              - OneDrive: deployment/docker/onedrive.md
+#          - Deploying with SSL/TLS: deployment/docker/tls.md
+#      - Kubernetes:
+#          - Resource Recommendations: deployment/kubernetes/resource-recommendations.md
+#          - Best Practices: deployment/kubernetes/getting-started.md
+#          - Quick Tutorial: deployment/kubernetes/getting-started-quickstart.md
+#          - DSX-Connect Core Deployment: deployment/kubernetes/dsx-connect.md
+#          - Connector Deployments:
+#              - AWS S3: deployment/kubernetes/aws-s3.md
+#              - Azure Blob Storage: deployment/kubernetes/azure-blob.md
+#              - Filesystem: deployment/kubernetes/filesystem.md
+#              - Google Cloud Storage: deployment/kubernetes/google-cloud-storage.md
+#              - SharePoint: deployment/kubernetes/sharepoint.md
+#              - Salesforce: deployment/kubernetes/salesforce.md
+#              - M365 Mail: deployment/kubernetes/m365-mail.md
+#              - OneDrive: deployment/kubernetes/onedrive.md
+#          - Performance Tuning with Job Comparisons: deployment/kubernetes/performance-tuning-job-comparisons.md
+#          - Understanding DSX-Connect Authentication: deployment/authentication.md
+#          - Deploying with SSL/TLS: deployment/tls.md
+#          - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md
+#          - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
+#      - Advanced Settings: deployment/advanced.md
+#  - Reference:
+#      - Assets: reference/assets.md
+#      - Azure Credentials: reference/azure-credentials.md
+#      - Google Cloud Credentials: reference/google-cloud-credentials.md
+#      - Salesforce Credentials: reference/salesforce-credentials.md
+#      - UI Display Icons: reference/display-icons.md
+#      - DSXA Python SDK: reference/dsxa-sdk.md
+#      - Filters (Details): reference/filters.md
+#  - Case Studies:
+#      - Scanning Windows Fileshares: case-studies/windows-fileshares.md
+#  - Developer's Guide:
+#      - Operations:
+#          - Connector State KV: operations/kv-state.md
+#          - Rsyslog TLS Image: operations/rsyslog-tls-image.md
+#  - Resources:
+#      - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
+#      - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
+#      - GitHub: https://github.com/deep-instinct/dsx-connect
+
 nav:
   - Home: index.md
-  - Overview: overview.md
+
   - Getting Started:
-      - Overview: getting-started.md
-      - Deploying the DSX-Connect Core: getting-started-core.md
-      - Deploying Your First Connector: getting-started-connector.md
-  - Connector Concepts: connectors/concepts.md
+      - Overview: getting-started/overview.md
+      - Docker Compose Quickstart: getting-started/docker-quickstart.md
+      - Kubernetes (Helm) Quickstart: getting-started/kubernetes-quickstart.md
+
+  - Core Concepts:
+      - Architecture Overview: concepts/architecture.md
+      - Connector Model: concepts/connectors.md
+      - Authentication Model: concepts/authentication.md
+      - TLS / HTTPS Model: concepts/tls.md
+      - Performance & Throughput: concepts/performance.md
+      - Job Comparison Explained: concepts/job-comparison.md
+      - Choosing Your Deployment: concepts/deployment-models.md
+
   - Deployment:
-      - Docker:
+      - Docker Compose:
+          - Overview: deployment/docker/overview.md
           - Resource Recommendations: deployment/docker/resource-recommendations.md
-          - Best Practices: deployment/docker/intro.md
-          - DSX-Connect Core Deployment: deployment/docker/dsx-connect.md
-          - Connector Deployments:
-              - AWS S3: deployment/docker/aws-s3.md
-              - Azure Blob Storage: deployment/docker/azure-blob.md
-              - Filesystem: deployment/docker/filesystem.md
-              - Google Cloud Storage: deployment/docker/google-cloud-storage.md
-              - SharePoint: deployment/docker/sharepoint.md
-              - Salesforce: deployment/docker/salesforce.md
-              - M365 Email: deployment/docker/m365-mail.md
-              - OneDrive: deployment/docker/onedrive.md
-          - Deploying with SSL/TLS: deployment/docker/tls.md
-      - Kubernetes:
+          - Core Deployment: deployment/docker/dsx-connect.md
+          - Connectors:
+              - Filesystem: deployment/docker/connectors/filesystem.md
+              - Google Cloud Storage: deployment/docker/connectors/google-cloud-storage.md
+              - OneDrive: deployment/docker/connectors/onedrive.md
+              - M365 Mail: deployment/docker/connectors/m365-mail.md
+              - Salesforce: deployment/docker/connectors/salesforce.md
+              - SharePoint: deployment/docker/connectors/sharepoint.md
+              - AWS S3 (reference architecture): deployment/docker/connectors/aws-s3.md
+              - Azure Blob Storage (reference architecture): deployment/docker/connectors/azure-blob.md
+
+      - Kubernetes (Helm):
           - Resource Recommendations: deployment/kubernetes/resource-recommendations.md
-          - Best Practices: deployment/kubernetes/getting-started.md
-          - Quick Tutorial: deployment/kubernetes/getting-started-quickstart.md
-          - DSX-Connect Core Deployment: deployment/kubernetes/dsx-connect.md
-          - Connector Deployments:
-              - AWS S3: deployment/kubernetes/aws-s3.md
-              - Azure Blob Storage: deployment/kubernetes/azure-blob.md
-              - Filesystem: deployment/kubernetes/filesystem.md
-              - Google Cloud Storage: deployment/kubernetes/google-cloud-storage.md
-              - SharePoint: deployment/kubernetes/sharepoint.md
-              - Salesforce: deployment/kubernetes/salesforce.md
-              - M365 Mail: deployment/kubernetes/m365-mail.md
-              - OneDrive: deployment/kubernetes/onedrive.md
-          - Performance Tuning with Job Comparisons: deployment/kubernetes/performance-tuning-job-comparisons.md
-          - Using DSX-Connect Authentication: deployment/authentication.md
-          - Deploying with SSL/TLS: deployment/tls.md
-          - "Walkthrough: Deploying Full Stack with Authentication and TLS": deployment/kubernetes/getting-started-quickstart-azure.md
-          - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
-      - Advanced Settings: deployment/advanced.md
+          - Core Deployment: deployment/kubernetes/dsx-connect.md
+          - Core Configuration Reference: deployment/kubernetes/configuration-reference.md
+          - Access & Ingress: deployment/kubernetes/access.md
+          - Security:
+              - Configure Authentication: deployment/kubernetes/authentication.md
+              - Configure TLS / Ingress: deployment/kubernetes/tls.md
+          - Scaling & Performance: deployment/kubernetes/scaling.md
+          - Connectors:
+              - Filesystem: deployment/kubernetes/connectors/filesystem.md
+              - Google Cloud Storage: deployment/kubernetes/connectors/google-cloud-storage.md
+              - OneDrive: deployment/kubernetes/connectors/onedrive.md
+              - M365 Mail: deployment/kubernetes/connectors/m365-mail.md
+              - Salesforce: deployment/kubernetes/connectors/salesforce.md
+              - SharePoint: deployment/kubernetes/connectors/sharepoint.md
+              - AWS S3 (reference architecture): deployment/kubernetes/connectors/aws-s3.md
+              - Azure Blob Storage (reference architecture): deployment/kubernetes/connectors/azure-blob.md
+          - DIANNA Worker: deployment/kubernetes/dianna.md
+
+  - Walkthroughs:
+      - End-to-End (Docker): walkthroughs/docker-full-stack.md
+      - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
+
+  - Operations:
+      - Performance Tuning: operations/performance-tuning-job-comparisons.md
+      - Syslog Forwarding: operations/syslog.md
+      - Monitoring & Logs: operations/monitoring.md
+      - Troubleshooting: operations/troubleshooting.md
+      - Upgrades: operations/upgrades.md
+
   - Reference:
-      - Assets: reference/assets.md
-      - Azure Credentials: reference/azure-credentials.md
-      - Google Cloud Credentials: reference/google-cloud-credentials.md
-      - Salesforce Credentials: reference/salesforce-credentials.md
-      - UI Display Icons: reference/display-icons.md
-      - DSXA Python SDK: reference/dsxa-sdk.md
-      - Filters (Details): reference/filters.md
-  - Case Studies:
-      - Scanning Windows Fileshares: case-studies/windows-fileshares.md
-  - Developer's Guide:
-      - Operations:
-          - Connector State KV: operations/kv-state.md
-          - Rsyslog TLS Image: operations/rsyslog-tls-image.md
+      - Configuration Reference: reference/configuration.md
+      - Environment Variables: reference/environment.md
+      - Helm Values: reference/helm-values.md
+      - API Reference: reference/api.md
+
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect

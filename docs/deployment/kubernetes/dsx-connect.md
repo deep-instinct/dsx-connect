@@ -11,10 +11,9 @@ This guide explains the core configuration concepts and details three deployment
 - `kubectl` configured to point to your cluster.
 - `openssl` for generating a self-signed certificate if you plan to enable TLS for development.
 - Access to dsx-connect chart release: `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart`   
----
-## Concepts
 
-### Release and Namespace Conventions
+
+## Naming Conventions
 
 In the following sections we will use the release name: `dsx` and the  `dsx-connect` namespace.  In examples with name or namespace, the documentation has taken the liberty of inserting these values.  
 
@@ -29,7 +28,7 @@ metadata:
   namespace: dsx-connect
 ```
 
-### Chart vs Image Versioning
+## Chart vs Image Versioning
 
 DSX-Connect helm chart versions are intentionally paired with an appVersion upon release builds.  If you don't specify a chart version when retrieving the chart from OCI, you will always get the _latest_ tagged version
 
@@ -71,11 +70,11 @@ address in deployment methods below.
 
 ## One-time Bootstrap (per namespace)
 
-Before starting the dsx-connect deployment, create the namespace then create any secrets required by the features you enable.
+Before deploying DSX-Connect, create the namespace and any secrets required by the features you enable.
 
-### Create Namespace
+### Create namespace
 
-If the namespace `dsx-connect` doesn't already exist, create it: 
+If the namespace `dsx-connect` doesn't already exist:
 
 ```bash
 kubectl create namespace dsx-connect
@@ -85,89 +84,13 @@ kubectl create namespace dsx-connect
 
 #### Required secrets by feature
 
-| Feature you enable              | Values toggle                               | Secret required       | Expected default name                        | Required when… |
-|---------------------------------|---------------------------------------------|-----------------------|----------------------------------------------|----------------|
-| DSX-Connect API auth enrollment | `dsx-connect-api.auth.enabled=true`         | Enrollment token      | `<release>-dsx-connect-api-auth-enrollment`  | You want connectors to authenticate to the DSX-Connect API using an enrollment token |
-| TLS                             | `dsx-connect-api.tls.enabled=true`          | TLS certificate       | `<release>-dsx-connect-api-tls`              | You want HTTPS between connectors/clients and the DSX-Connect API |
-| DIANNA                          | `dsx-connect-dianna-worker.enabled=true`    | DIANNA API secret     | `dianna-api` (or configured)                 | You are deploying the DIANNA worker to integrate with Deep Instinct management |
+| Feature you enable                                         | Values toggle                            | Secret required   | Expected default name                       | Required when…                                                                       |
+| ---------------------------------------------------------- | ---------------------------------------- | ----------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
+| [Enrollment token (API auth bootstrap)](authentication.md) | `dsx-connect-api.auth.enabled=true`      | Enrollment token  | `<release>-dsx-connect-api-auth-enrollment` | You want connectors to authenticate to the DSX-Connect API using an enrollment token |
+| [TLS](tls.md)                                              | `dsx-connect-api.tls.enabled=true`       | TLS certificate   | `<release>-dsx-connect-api-tls`             | You want HTTPS between connectors/clients and the DSX-Connect API                    |
+| [DIANNA](dianna.md)                                        | `dsx-connect-dianna-worker.enabled=true` | DIANNA API secret | `dianna-api` (or configured)                | You are deploying the DIANNA worker to integrate with Deep Instinct management       |
 
 
-#### Create the enrollment token secret 
-
-The helm chart provides an example Secret here: `examples/secrets/auth-enrollment-secret.yaml`, which looks like this:
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: <release>-dsx-connect-api-auth-enrollment
-  namespace: <namespace>
-type: Opaque
-stringData:
-  ENROLLMENT_TOKEN: "change-me-strong-enrollment-token"
-```
-We will need to edit this Secret before we can add it into the cluster.
-The dsx-connect helm chart is designed to calculate the secret name to look for based on its release name, i.e.: `<release>-dsx-connect-api-auth-enrollment`.  This is a 
-common Helm pattern to avoid collisions across namespaces/releases.
-
-The `ENROLLMENT_TOKEN` can be any alphanumeric string, ideally a long random string, such as a UUID.  Complete authentication
-enrollment secret for release `dsx` on namespace `dsx-connect`.
- 
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dsx-dsx-connect-api-auth-enrollment
-  namespace: dsx-connect
-type: Opaque
-stringData:
-  ENROLLMENT_TOKEN: F0DCA5BB-52CB-4944-BB06-64756B27F8A8
-```
-
-```bash
-kubectl apply -f examples/secrets/auth-enrollment-secret.yaml
-```
-
-#### Create the TLS certificate secret
-
-Edit `examples/secrets/tls-secret.yaml` (sample provided with the chart) or create your own. The chart expects a Secret named `<release>-dsx-connect-api-tls` (e.g., `dsx-dsx-connect-api-tls` when the release is `dsx`).
-
-Replace `<base64-encoded-cert>` and `<base64-encoded-key>`.
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dsx-dsx-connect-api-tls
-  namespace: dsx-connect
-type: kubernetes.io/tls
-data:
-  tls.crt: <base64-encoded-cert>
-  tls.key: <base64-encoded-key>
-```
-
-Apply the Secret before deploying the dsx-connect stack:
-```bash
-kubectl apply -f examples/secrets/tls-secret.yaml
-```
-
-#### Create the DIANNA API Secret (if deploying with DIANNA support)
-Edit `examples/secrets/dianna-api-secret.yaml` (sample provided) with your DI API token and management URL, then apply it. The sample Secret is named `dianna-api`; set `global.dianna.secretName` (and optionally `dsx-connect-dianna-worker.dianna.secretName`) if you use a different name.
-
-Replace `<DIANNA-API-token>` with the Deep Instinct management console API token (DIANNA User) and the managementURL with your Deep Instinct console.
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: dianna-api
-  namespace: dsx-connect
-type: Opaque
-stringData:
-  apiToken: "<DIANNA-API-token>"
-  managementUrl: "<your DI console>.deepinstinctweb.com"
-```
-```bash
-kubectl apply -f examples/secrets/dianna-api-secret.yaml
-```
 ## Deploy DSX-Connect (pick one method)
 
 For the full list of values used in deployments, see [Configuration Reference](#configuration-reference).
@@ -353,7 +276,7 @@ For the following examples, we will assume the kubernetes cluster is installed o
 For local testing, port-forward the API service and open the UI in a browser:
 
 * localhost only (default)
-  * By default, kubectl port-forward binds to 127.0.0.1 only (localhost).
+    * By default, kubectl port-forward binds to 127.0.0.1 only (localhost).
 ```bash
 kubectl port-forward -n dsx-connect svc/dsx-connect-api 8080:80
 ```
@@ -362,7 +285,7 @@ Then open:
 `http://127.0.0.1:8080/`
 
 * To make reachable from other machines on the same subnet (bind to all interfaces)
-  * --address 0.0.0.0 exposes the port on all interfaces—make sure your VM firewall/security rules allow (and that you’re okay exposing it on the network).
+    * --address 0.0.0.0 exposes the port on all interfaces—make sure your VM firewall/security rules allow (and that you’re okay exposing it on the network).
 ```bash
 kubectl port-forward -n dsx-connect svc/dsx-connect-api 8080:80 --address 0.0.0.0
 ```
@@ -371,51 +294,6 @@ Then open:
 `http://<internal ip adress of cluster host>:8080/` or, following the example: `http://10.2.4.103:8080/`
 
 Port-forwarding is convenient for local testing, but once you CTRL-C out of the kubectl command, the port will be closed.
-
-#### Ingress and edge exposure caveat (read this first)
-
-The Ingress examples in this guide are **k3s-specific** and assume you are using **Traefik** as the Ingress Controller (which is commonly installed by default with k3s, but may be disabled or replaced in some installs).
-
-The examples in this guide use **k3s + Traefik Ingress** because it’s a common, simple lab setup. 
-
-
-In real environments, *how traffic gets to `dsx-connect-api`* is often dictated by the Kubernetes platform (OpenShift Routes, 
-cloud load balancers, vendor gateways) and/or by external networking/security products. Regarding the 
-latter, **routing to DSX-Connect could be handled entirely outside the Kubernetes cluster** — for example by a hardware/software load balancer, 
-WAF (e.g., Barracuda), reverse proxy, or an enterprise ingress gateway. In those designs, you typically **do not use Kubernetes Ingress at all**. 
-Instead, you expose the API using a Service type that an external device can reach.
-
-When you do *not* use Ingress
-
-If an external device (WAF/LB/proxy) will route traffic into the cluster, expose `dsx-connect-api` using one of these:
-
-- **NodePort**  
-  Use when you have reachable node IPs and want the external device to target `nodeIP:nodePort` directly (common in labs and on-prem clusters without a cloud LB).
-- **LoadBalancer**  
-  Use when your platform provides a load balancer implementation (cloud provider, MetalLB, etc.) and you want a stable external VIP/DNS.
-
-In both cases, the external device becomes the “ingress” for the application, and Kubernetes Ingress objects are unnecessary.
-
-When you *do* use Ingress, just note that kubernetes “edge exposure” is not one thing—it varies widely by platform and vendor:
-
-- **Ingress controllers differ** across environments (Traefik, NGINX Ingress, HAProxy, AWS ALB, GCE, Istio gateways, etc.).
-- **OpenShift does not use standard Ingress as the primary mechanism**; it typically uses **Routes** (with an OpenShift Router implementation).
-- **Load balancers differ** based on where Kubernetes runs (bare metal vs. cloud) and what LB implementation you have (MetalLB, cloud LB integrations, etc.).
-- TLS termination, redirects, authentication, WAFs, external-dns, and certificate management can all be handled at different layers depending on your stack.
-
-Because of this, the set of possible combinations of:
-
-- Kubernetes distribution/vendor/version
-- Ingress controller (or Routes / Gateway API)
-- Load balancer implementation
-- DNS and certificate strategy
-
-…is effectively **near endless** and **well beyond the scope** of this deployment guide.
-
-**Scope of this guide:** provide working examples for **k3s + Traefik** that you can use as a reference and adapt to your environment.
-
-If you are on another platform (EKS/AKS/GKE/OpenShift), treat these manifests as **conceptual templates** and use your platform’s recommended ingress/exposure mechanism.
-
 
 #### Ingress example for k3s / Traefik
 
@@ -466,166 +344,7 @@ You should now be able to browse to the DSX-Connect UI at:
 ```text
 http://dsx-connect.10.2.4.103.nip.io
 ```
-
-#### Ingress example for k3s with TLS termination
-
-In this mode, **Traefik terminates TLS** (HTTPS) at the edge, and forwards plain HTTP to the `dsx-connect-api` service inside the cluster.
-
-_Traffic flow_
-
-- Browser/connector → `https://dsx-connect.<IP>.nip.io` (TLS)
-- Traefik → `http://dsx-connect-api` (no TLS, inside cluster)
-
-This is a common pattern for labs and many production environments (with a real certificate).
-
-1) Pick your hostname
-
-For a lab VM at `10.2.4.103`, a convenient host is:
-
-- `dsx-connect.10.2.4.103.nip.io`
-
-`nip.io` provides DNS resolution only; you still need ports 80/443 reachable to Traefik.
-
-2) Create a TLS secret in the same namespace as the Ingress
-
-> The TLS Secret must live in the **same namespace as the Ingress resource**.
-
-For a lab/self-signed cert:
-
-```bash
-export HOST=dsx-connect.10.2.4.103.nip.io
-
-openssl req -x509 -nodes -newkey rsa:2048 \
-  -keyout tls-k3s.key -out tls-k3s.crt -days 365 \
-  -subj "/CN=$HOST" \
-  -addext "subjectAltName=DNS:$HOST"
-```
-
-Create the Kubernetes TLS secret (namespace shown as dsx-connect):
-
-```bash
-kubectl -n dsx-connect create secret tls tls-k3s \
---cert=tls-k3s.crt \
---key=tls-k3s.key
-```
-Note that the secret name here is `tls-k3s`.
-
-Verify that the secret was created in our namespace:
-```bash
-kubectl get secret -n dsx-connect tls-k3s
-```
-
-Use a manifest similar to the following, including the tls secret name (see: `examples/ingress/ingress-k3s-traefik-tls.yaml`):
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: dsx-connect-api
-  namespace: dsx-connect
-spec:
-  ingressClassName: traefik
-  rules:
-    - host: dsx-connect.10.2.4.103.nip.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: dsx-connect-api
-                port:
-                  number: 80
-  tls:
-    - hosts:
-        - dsx-connect.10.2.4.103.nip.io
-      secretName: tls-k3s
-```
-
-Then apply the ingress (depending on what filename used):
-```bash
-kubectl apply -f examples/ingress/ingress-k3s-traefik-tls.yaml
-```
-
-Verify that the ingress is deployed:
-```bash
-kubectl get ingress -n dsx-connect
-```
-...output should look like this:
-```bash
-kubectl get ingress -n dsx-connect
-NAME              CLASS     HOSTS                           ADDRESS      PORTS     AGE
-dsx-connect-api   traefik   dsx-connect.10.2.4.103.nip.io   10.2.4.103   80, 443   79m
-```
-
-You should now be able to browse to the DSX-Connect UI at:
-```text
-https://dsx-connect.10.2.4.103.nip.io
-```
-
----
-**Enforce HTTP -> HTTPS redirects**
-
-By default, Traefik listens on both:
- * web → port 80 (HTTP)
- * websecure → port 443 (HTTPS)
-
-Even with TLS configured, users can still access the UI via HTTP.  There's a few ways to enforce HTTPS, 
-and the simplest is to configure Traefik to redirect HTTP to HTTPS.  Note that this effects ALL traffic going through Traefik, 
-including the API.
-
-1) Create a HelmChartConfig for Traefik
-
-k3s installs Traefik via a managed Helm chart in the kube-system namespace.
-We override its configuration using a HelmChartConfig resource.
-
-Create a file `traefik-https-redirect.yaml`:
-```yaml
-apiVersion: helm.cattle.io/v1
-kind: HelmChartConfig
-metadata:
-  name: traefik
-  namespace: kube-system
-spec:
-  valuesContent: |-
-    ports:
-      web:
-        port: 80
-      websecure:
-        port: 443
-    additionalArguments:
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-```
-2) Apply the configuration
-
-```bash 
-kubectl apply -f traefik-https-redirect.yaml
-```
-
-3) Restart Traefik
-
-```bash
-kubectl rollout restart deployment/traefik -n kube-system
-```
-Wait for Traefik to restart:
-```bash
-kubectl rollout status deployment/traefik -n kube-system
-```
-should read `deployment "traefik" successfully rolled out` once complete.
-
-4) Verify Redirect Behavior
-
-```bash
-curl -v http://dsx-connect.10.2.4.103.nip.io/ -o /dev/null
-```
-Expected:
-
-* HTTP/1.1 301 or 308
-* Location: https://dsx-connect.10.2.4.103.nip.io/
-
-You can now browse to `http://dsx-connect.10.2.4.103.nip.io` and be redirected to https.
-
-## Deployment Done - In the DSX-Connect Console and Next Steps
+## Deployment Done - In the DSX-Connect Console
 
 With everything deployed successfully and one the access methods applied (see [Access](#access-port-forwardingress)) you
 should see a UI similar to this:
@@ -637,285 +356,23 @@ You should see the message: "Connected..." in the top left - this indicates that
 Also, note that there's not a lot you can _do_ yet, other than looking at current configuration (the gear icon), since you haven't scanned anything yet.
 To do so, you will need to add a connector.
 
-## Operations / Advanced
+## Next Steps / Links
 
-Many deployment variables have sensible default values set directly within the component templates.  You only need to override them if your deployment requires a different value.
+Advanced Deployment Guides:
 
-To override a default environment variable, specify it under the `env` section of the respective component in your custom `values.yaml` file.
+- [Access and Ingress](access.md)
+- [Authentication](authentication.md)
+- [TLS](tls.md)
+- [DIANNA](dianna.md)
 
-### Syslog forwarding
+- [Connectors]
 
-The `dsx-connect-results-worker` component is responsible for logging scan results to syslog.
+Operations:
 
-This helm chart default includes a rsyslog service that can be used to collect scan results within the cluster.  The rsyslog 
-service is enabled by default, but can be disabled by setting `rsyslog.enabled=false` in the `values.yaml` file.
-
-#### Syslog format
-
-Syslog payloads are JSON objects with these top-level fields:
-
-- `timestamp`: UTC ISO-8601 timestamp.
-- `source`: constant `dsx-connect`.
-- `scan_request`: the original scan request (location, metainfo, connector, scan_job_id, size_in_bytes).
-- `verdict`: DSXA verdict details (verdict, file_info, verdict_details, scan_duration_in_microseconds, etc.).
-- `item_action`: connector action status (status, message, item_action).
-
-Example payload:
-
-```json
-{
-  "timestamp": "2026-02-10T23:12:34.567Z",
-  "source": "dsx-connect",
-  "scan_request": {
-    "location": "/path/to/file.docx",
-    "metainfo": "{\"bucket\":\"docs\"}",
-    "connector_url": "http://filesystem-connector:8080",
-    "size_in_bytes": 14844,
-    "scan_job_id": "job-123"
-  },
-  "verdict": {
-    "scan_guid": "007ea79292ae4261ad82269cd13051b9",
-    "verdict": "Benign",
-    "verdict_details": { "event_description": "File identified as benign" },
-    "file_info": {
-      "file_type": "OOXMLFileType",
-      "file_size_in_bytes": 14844,
-      "file_hash": "286865e7337f30ac2d119d8edc9c36f6a11552eb23c50a1137a19e0ace921e8e"
-    },
-    "scan_duration_in_microseconds": 10404
-  },
-  "item_action": {
-    "status": "nothing",
-    "message": "No action taken",
-    "item_action": "nothing"
-  }
-}
-```
-
-On the wire, syslog lines are prefixed with `dsx-connect ` followed by the JSON payload. The bundled rsyslog chart extracts the JSON for output/forwarding.
-
-#### Reading syslog output
-
-By default, the bundled rsyslog writes parsed scan-result JSON to stdout. That means you can observe syslog output by tailing the rsyslog pod logs, for example:
-
-`kubectl logs -n <namespace> -l app.kubernetes.io/name=rsyslog -f`
-
-This is the quickest way to verify scan-result messages are flowing before forwarding to an external collector.
-
-#### Forward internal rsyslog to an external syslog
-
-The bundled rsyslog chart supports forwarding all scan-result messages to an external syslog receiver. Enable forwarding under `rsyslog.config.forward`:
-
-```yaml
-rsyslog:
-  config:
-    forward:
-      enabled: true
-      target: "syslog.example.com"
-      port: 514
-      tls: false
-```
-
-#### Forward to Papertrail
-
-Papertrail accepts standard syslog over TCP or TLS. Use the hostname/port from your Papertrail log destination.
-
-TCP (no TLS):
-```yaml
-rsyslog:
-  config:
-    forward:
-      enabled: true
-      target: "logsN.papertrailapp.com"
-      port: 514
-      tls: false
-```
-
-TLS (recommended by Papertrail):
-```yaml
-rsyslog:
-  config:
-    forward:
-      enabled: true
-      target: "logsN.papertrailapp.com"
-      port: 6514
-      tls: true
-      permittedPeer: "*.papertrailapp.com"
-```
-
-TLS forwarding requires an rsyslog image with the `gtls` module. See the Developer's Guide: [Rsyslog TLS Image](../../operations/rsyslog-tls-image.md).
-
-Notes:
-
-- Replace `logsN.papertrailapp.com` with your Papertrail destination hostname.
-- If you enable TLS, ensure `permittedPeer` matches the certificate name used by your destination.
-
-#### Forward to SolarWinds Observability (token-based syslog)
-
-SolarWinds Observability uses a token-based syslog format. Set `format` to `solarwinds` and provide the destination token.
-
-```yaml
-rsyslog:
-  config:
-    forward:
-      enabled: true
-      target: "syslog.collector.na-01.cloud.solarwinds.com"
-      port: 6514
-      tls: true
-      permittedPeer: "*.collector.na-01.cloud.solarwinds.com"
-      format: "solarwinds"
-      token: "<your-syslog-token>"
-```
-
-
-### Scaling DSX-Connect: Concurrency and Replicas
-
-Workers scale with two knobs. Use them together for best results:
-
-Terminology:
-- Replica count (`replicaCount`): number of pods. Each pod has its own CPU/memory limits/requests and its own Celery process. Good for horizontal scaling and resilience.
-- Concurrency (`celery.concurrency`): number of task workers inside one pod. Increases parallelism within a pod; shares that pod’s resources.
-- Task: tasks are processed by the workers. 
-  - One such task is a scan request, which is processed by a Scan Request worker.
-  - Scan Request Workers queue Verdict tasks, which are processed by a Verdict worker.
-  - Verdict Workers queue results tasks, which are processed by a Results worker. 
-- Task queue: a queue of tasks waiting to be processed.
-- Job: a 'job' is a set of all tasks initiated by a user (via the UI or API). A job can contain multiple scan requests.
-
-- `concurrency` adds to speed of processing tasks (and a job) by adding Worker parallelism.  
-- `replicaCount` adds Worker fault tolerance and parallelism by adding more pods of a particular worker type. 
-
-Note that while increasing replicas does increase parallelism, it is not as effecient as increasing concurrency.  
-
-#### Practical Tuning Tips
-
-- The scan request workers are generally the place to start with concurrency. These workers take enqueued scan requests, read a file from a connector, and send it to DSXA for scanning.  It is far and a away the most time consuming and resource intensive Worker.
-- Default scan_request concurrency is `2`, so each scan_request pod can handle two scan requests at a time. Adding another pod doubles that (e.g., 2 pods × 2 concurrency = 4 total workers).
-- Start by raising `celery.concurrency` modestly (2–4), then add `replicaCount` to spread load across nodes.
-- If when increasing concurrency you notice resource peaks CPU/memory-bound within a pod, increase pod resources or add replicas.
-- Scale downstream workers (verdict/result/notification) when increasing request throughput to avoid bottlenecks.
-
-A Scan setup like this:
-
-| | Concurrency | Replicas | Scan Request Workers |
-| | ------------ |----------|-------------- |
-| | 2            | 2        | 4             |
-
-Gives you good concurrency and resilency, for a total of 4 Scan Request workers.  
-
-
-
-#### Note on Connector Replicas
-
-Connectors also have a replicaCount, but it's important to understand what it's doing:
-
-- Setting a connector chart’s `replicaCount > 1` deploys multiple identical connector pods that each register independently with dsx-connect, each with a unique connector UUID. The UI will show multiple connectors for the same asset/filter.
-- A Full Scan request (from the UI or API) targets a single registered connector instance. Increasing `replicaCount` does not parallelize a single full-scan enqueue path.
-- Where replicas do help:
-    - High availability (one pod can restart while another continues to serve), and
-    - Serving concurrent `read_file` requests from the dsx-connect scan-request workers (Kubernetes Service balances connections across pods; higher Celery concurrency opens more connections and spreads load).
-      To parallelize work across a single asset intentionally, prefer:
-    - Increasing connector `workers` (Uvicorn processes) for in-pod concurrency, and/or
-    - Running multiple connector releases with different `DSXCONNECTOR_FILTER` partitions (sharding), so Full Scan is performed in parallel across slices by distinct connector instances.
-
-### Client Trust and CA Bundles
-
-When clients (like the Azure Blob Storage Connector) communicate with the `dsx-connect-api` server over HTTPS, they must be able to verify the server's identity. If the `dsx-connect-api` server is using a certificate from an internal or self-signed Certificate Authority (CA), you must provide that CA's certificate to each client in a **CA Bundle**.
-
-**Encryption vs. Authentication:**
-It is important to understand that even with `verify=false`, the connection is still **encrypted**. However, without verification, the identity of the server is not **authenticated**. This leaves you vulnerable to man-in-the-middle attacks. **Using a CA bundle to verify the connection is critical for security.**
-
-**Procedure for Clients (e.g., Azure Blob Storage Connector):**
-
-1.  **Obtain the CA Certificate:** Get the public certificate file (e.g., `ca.crt`) of the CA that signed your `dsx-connect-api` server's certificate.
-
-2.  **Create a Secret from the CA Certificate:**
-    ```bash
-    kubectl create secret generic dsx-connect-ca --from-file=ca.crt=/path/to/your/ca.crt
-    ```
-
-3.  **Configure the Client's Helm Chart:**
-    Refer to the client's (e.g., `connectors/azure_blob_storage/deploy/helm/DEVELOPER_README.md`) documentation for how to configure its `DSXCONNECTOR_CA_BUNDLE` and `DSXCONNECTOR_VERIFY_TLS` settings to trust this CA.
-
-## Configuration Reference
-
-The following section highlights some of the most common configurations for deployments.  These
-will be used in the next sections when we deploy DSX-Connect.
-
-Note that the `values.yaml` contains many more configuration option, many of which will not be detailed here as they are common
-helm/k8s deployment settings, e.g., `resources.requests.cpu/memory`.
-
-### Global settings
-The `global` section covers common settings used by one or more deployed components:
-
-| Name                                              | Description                                                        | Example Value                                          | Common Use                                       
-  |---------------------------------------------------|--------------------------------------------------------------------|--------------------------------------------------------|--------------------------------------------------|
-| `global.image.tag`                                | dsx-connect image tag to deploy; if blank, uses Chart `appVersion` | `0.3.69`                                               | Leave blank `''` and use latest version          |                                    |
-| `global.image.repository`                         | Docker Hub reposiroty hosting DSX-Connect images                   | Defaults to dsxconnect/dsx-connect                     | Leave as-is unless you use a specific repository | 
-| `global.env.DSXCONNECT_SCANNER__SCAN_BINARY_URL`  | DSXA scan endpoint (use when DSXA is external to this chart)       | `https://my-dsxa.example.com/scan/binary/v2`           | << that                                          |                                                | 
-| `global.env.DSXCONNECT_SCANNER__AUTH_TOKEN`       | DSXA scanner API authorization token                               | Needed if DSXA scanner deployed with API authorization | Leave commented out if authorization not used    |  
-
-
-Next, each of the deployed services:
-### dsxa-scanner
-
-| Name                    | Description                                                                                                                                                                          | Example Value                                                          | Common Use                              |
-|-------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------|-----------------------------------------|
-| `dsxa-scanner.enabled`  | if `false`, DSX-Connect uses scanner specified by DSXCONNECT_SCANNER__SCAN_BINARY_URL`; if `true` a local DSXA scanner will be deployed and used                                     | `false` or `true`                                                      | `false`                                 |
-| `dsxa-scanner.env.xxxx` | If enabled, uncomment and supply DSXA scanner settings, as defined in the DSX for Applications Deployment Guide.  NOTE: if not using AUTH_TOKEN, this line needs to be commented out | ```APPLIANCE_URL: "https://your-dsxa-appliance.deepinstinctweb.com" ``` | Leave commented out if enabled = `false` |
-
-### dsx-connect-api
-
-| Name                                  | Description                                                                                                    | Example Value                                         | Common Use                                                                                                |
-|---------------------------------------|----------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|-----------------------------------------------------------------------------------------------------------|
-| `dsx-connect-api.auth.enabled`        | if `true`, DSX-Connect API expects an Enrollment token for bootstrapping Connector <-> core API authentication | `true` or `false`                                     | `true`                                                                                                    |
-| `dsx-connect-api.auth.enrollment.key` | Secret key name used to read the enrollment token                                                              | `ENROLLMENT_TOKEN`                                    | Leave as default unless your Secret uses a different key                                                  |
-| `dsx-connect-api.tls.enabled` | if `true`, DSX-Connect API expects a TLS secret                                                                | `true` or `false`                                     |                                                                                                           |
-| `dsx-connect-api.tls.secretName` | Used when tls enabled, references the TLS secret | `<release>-dsx-connect-api-tls` or line commented out | Defaults to `<release>-dsx-connect-api-tls`.  If secret applied with this name, leave this line commented |                              
-
-### dsx-connect-scan-request-worker
-
-| Name                                               | Description                                   | Example Value    | Common Use |
-|----------------------------------------------------|-----------------------------------------------|------------------|------------|
-| `dsx-connect-scan-request-worker.enabled`          | Enable the scan request worker deployment     | `true` or `false`| `true`     |
-| `dsx-connect-scan-request-worker.replicaCount`     | Number of worker pods                         | `1`              | `1`        |
-| `dsx-connect-scan-request-worker.env.LOG_LEVEL`    | Log level for the worker                      | `debug`, `info`, `warning`, `error` | `info`     |
-| `dsx-connect-scan-request-worker.celery.concurrency` | Number of worker processes per pod          | `2`              | `2`        |
-
-### dsx-connect-verdict-action-worker
-
-| Name                                                | Description                                   | Example Value    | Common Use |
-|-----------------------------------------------------|-----------------------------------------------|------------------|------------|
-| `dsx-connect-verdict-action-worker.enabled`         | Enable the verdict action worker deployment   | `true` or `false`| `true`     |
-| `dsx-connect-verdict-action-worker.replicaCount`    | Number of worker pods                         | `1`              | `1`        |
-| `dsx-connect-verdict-action-worker.env.LOG_LEVEL`   | Log level for the worker                      | `debug`, `info`, `warning`, `error` | `info`     |
-| `dsx-connect-verdict-action-worker.celery.concurrency` | Number of worker processes per pod         | `1`              | `1`        |
-
-### dsx-connect-results-worker
-
-| Name                                            | Description                                   | Example Value    | Common Use |
-|-------------------------------------------------|-----------------------------------------------|------------------|------------|
-| `dsx-connect-results-worker.enabled`            | Enable the results worker deployment          | `true` or `false`| `true`     |
-| `dsx-connect-results-worker.replicaCount`       | Number of worker pods                         | `1`              | `1`        |
-| `dsx-connect-results-worker.env.LOG_LEVEL`      | Log level for the worker                      | `debug`, `info`, `warning`, `error` | `info`     |
-| `dsx-connect-results-worker.celery.concurrency` | Number of worker processes per pod            | `1`              | `1`        |
-
-### dsx-connect-notification-worker
-
-| Name                                                  | Description                                   | Example Value    | Common Use |
-|-------------------------------------------------------|-----------------------------------------------|------------------|------------|
-| `dsx-connect-notification-worker.enabled`             | Enable the notification worker deployment     | `true` or `false`| `true`     |
-| `dsx-connect-notification-worker.replicaCount`        | Number of worker pods                         | `1`              | `1`        |
-| `dsx-connect-notification-worker.env.LOG_LEVEL`       | Log level for the worker                      | `debug`, `info`, `warning`, `error` | `info`     |
-| `dsx-connect-notification-worker.celery.concurrency`  | Number of worker processes per pod            | `1`              | `1`        |
-
-### dsx-connect-dianna-worker
-
-| Name                                           | Description                                   | Example Value    | Common Use |
-|------------------------------------------------|-----------------------------------------------|------------------|------------|
-| `dsx-connect-dianna-worker.enabled`            | Enable the DIANNA worker deployment           | `false` or `true`| `false`    |
-| `dsx-connect-dianna-worker.replicaCount`       | Number of worker pods                         | `1`              | `1`        |
-| `dsx-connect-dianna-worker.env.LOG_LEVEL`      | Log level for the worker                      | `debug`, `info`, `warning`, `error` | `info`     |
-| `dsx-connect-dianna-worker.celery.concurrency` | Number of worker processes per pod            | `1`              | `1`        |
-
+- For performance tuning guidance, see:
+- [Performance Tuning with Job Comparisons](../../operations/performance-tuning-job-comparisons.md)
+- [Syslog Format and Forwarding](../../operations/syslog.md)
+- [Upgrading](upgrading.md)
+- [Uninstalling](uninstalling.md)
+- [Troubleshooting](troubleshooting.md)
 

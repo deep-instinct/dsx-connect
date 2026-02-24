@@ -1,51 +1,72 @@
 # Resource Recommendations (Docker)
 
-These are starting points for DSX-Connect and connectors running under Docker Compose. 
-They assume streaming scans from Connectors (no full file buffering), 
-one file per scan request worker at a time, and typical file workloads.
+These are starting points for DSX-Connect and connectors running under Docker Compose.
 
-## Overall Docker Host / Docker Host VM Sizing
+They assume:
 
-Docker essentially takes on the resources of its host Linux system, whether baremetal or a Linux VM.   For Docker Desktop (Windows/macOS)
-the same rule applies (under the covers, Docker Desktop is simply running Docker on a Linux VM on top of the host OS), so 
-whatever resources are allocated to Docker Desktop's VM, are available to DSX-Connect containers.
-Docker Compose does not enforce granular per‑container CPU/RAM limits in standard mode, so treat these as **overall Docker host** recommendations:
+* One file processed per scan request worker at a time
+* Typical business file workloads
+* A single-host Docker environment
 
-| Deployment Size | CPU | RAM | Notes                                                             |
-|-----------------| --- | --- |-------------------------------------------------------------------|
-| Dev/test/POV    | 4 vCPU | 8 GB | Enough for core + one connector + local DSXA scanner.             |
-| Medium          | 8 vCPU | 16 GB | Supports multiple connectors and higher scan concurrency. |
-| Large           | 16+ vCPU | 32+ GB | For higher scan volume or larger file mixes.                      |
+These recommendations apply to the overall Docker host (or Docker Desktop VM).
 
-If you need strict per‑container limits, use Kubernetes (k3s/k8s). We do not support Swarm‑specific tuning in this guide.
+## Docker Host Sizing
 
-## File Mix Examples (impact on throughput)
+Docker containers consume resources from the underlying Linux host (or Docker Desktop VM on macOS/Windows).
 
-| Mix | Typical Size | What Changes                                                                                                                                                                                                 |
-| --- | --- |--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Office/PDF only | Small–medium | High scan rate, connector IO is often the bottleneck (i.e how fast can the connector read the file off the repository). Concurrent Scan Request Workers increase the number that can be processed at a time. |
-| Executables | Medium–large | Connector <-> Scan Request Worker <-> DSXA Scanner time increases, moving file from repo to scanner.                                                                                                         |
-| Archives | Small–very large | DSXA scan time increases; scan_request Worker IO-bound on large archives; nested files increase total work.                                                                                                  |
+Ensure Docker Desktop is allocated sufficient CPU and memory for the expected workload.
 
-## Test and Tune (recommended process)
+| Deployment Size  | CPU      | RAM    | Notes                                        |
+| ---------------- | -------- | ------ | -------------------------------------------- |
+| Dev / Test / POC | 4 vCPU   | 8 GB   | Core + one connector + optional local DSXA   |
+| Medium           | 8 vCPU   | 16 GB  | Multiple connectors and moderate concurrency |
+| Large            | 16+ vCPU | 32+ GB | Higher scan volume or larger file workloads  |
 
-Use **Job Comparisons** in the UI to measure throughput on real workloads. Run representative jobs (same mix and size as production) and compare:
+These are host-level sizing guidelines.
 
-- Total bytes/sec and DSXA scan time per GB.
-- Job wall time and queue wait time.
+While Docker supports per-container limits, Compose deployments typically rely on overall host sizing rather than cluster-level resource scheduling. For strict workload isolation or node-level resource governance, use Kubernetes.
 
-Then tune in this order:
+---
 
-1. **scan_request worker concurrency** (largest impact).
-2. **Connector replicas** for IO‑heavy repositiry sources.
-3. **Redis memory** (avoid evictions and backlog stalls).
-4. **DSXA capacity** (scan time increases for larger files and archives).
-5. **Network bandwidth/latency** between connector, core, and DSXA.   Ultimately the speed of processing a single file is dominated by this factor, but also typically the last thing that can be tuned.
+## Workload Considerations
 
-For Docker Compose, concurrency can be configured on deployment (`sample.core.env` example shown):
+Resource requirements vary depending on:
+
+* File size distribution
+* File type mix
+* DSXA scan cost per byte
+* Connector I/O performance
+* Network throughput between connector, core, and DSXA
+
+In many environments:
+
+* Small office documents are I/O-bound.
+* Large binaries and archives increase DSXA processing time.
+* Deeply nested archives increase total scan work.
+
+Because Docker runs all services on a single host, CPU, memory, disk I/O, and network bandwidth are shared across:
+
+* API
+* Workers
+* Redis
+* Connectors
+* Optional DSXA container
+
+Monitor system-level utilization to avoid contention.
+
+## Concurrency in Docker
+
+Throughput in Docker Compose is primarily controlled via worker concurrency, and of these scan_request workers affect throughput the most.
+
+Example:
+
 ```dotenv
 DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY=4
 DSXCONNECT_VERDICT_ACTION_WORKER_CONCURRENCY=1
 DSXCONNECT_RESULTS_WORKER_CONCURRENCY=1
 DSXCONNECT_NOTIFICATION_WORKER_CONCURRENCY=1
 ```
+
+For structured tuning guidance, see:
+
+[Operations → Performance Tuning](../../operations/performance-tuning-job-comparisons.md)

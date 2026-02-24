@@ -1,29 +1,39 @@
 #
-<p style="text-align:center; margin: 0 0 4px 0;"> <img src="assets/dsx-header-logo.svg" alt="DSX-Connect" width="640" height="120" style="display:inline-block; vertical-align:middle;" /> </p> <p style="text-align:left; margin: 0 0 12px 0; font-size: 1.1em;"> <strong>Any file. Anywhere.</strong> Stop zero-day and AI-generated malware.</p>
+<div style="display:flex; justify-content:center; margin-bottom:8px;">
+  <img src="assets/dsx-header-logo.svg"
+       alt="DSX-Connect"
+       style="max-width:480px; width:100%; height:auto;" />
+</div>
 
-DSX-Connect is a modular, event-driven orchestration framework that extends Deep Instinct’s DSX for Applications
-(DSXA) to protect files across cloud, SaaS, and on-prem repositories.
+<p style="text-align:center; margin: 0 0 18px 0; font-size: 1.3em; font-weight: 600;">
+  Any file. Anywhere.
+</p>
 
-It standardizes how files are discovered, scanned, and remediated — allowing Deep Instinct’s deep-learning engine to prevent zero-day and AI-generated malware wherever data resides.
+<p style="text-align:center; max-width: 820px; margin: 0 auto 24px auto;">
+  DSX-Connect is a modular, event-driven orchestration framework that extends 
+  <strong>Deep Instinct’s <a href="https://www.deepinstinct.com/dsx/dsx-applications">DSX for Applications</a></strong> 
+  to protect files across cloud, SaaS, and on-prem repositories.
+</p>
 
-![DSX‑Connect Architecture](assets/dsx-connect-design.svg)
+<p style="text-align:center; max-width: 820px; margin: 0 auto 28px auto;">
+  It standardizes how files are discovered, scanned, and remediated — enabling deep-learning malware prevention against zero-day and AI-generated threats wherever data resides.
+</p>
 
-At its core, DSX-Connect separates where files live from how they are scanned.
-
-A reusable scanning engine built on queues and workers handles orchestration, while pluggable connectors adapt that engine to each repository.
-
-This architecture enables consistent protection across environments — without re-architecting your infrastructure.
-
+<p style="text-align:center;">
+  <img src="assets/dsx-connect-design.svg" alt="DSX-Connect Architecture" style="max-width: 100%; height: auto;" />
+</p>
+<hr style="margin: 32px 0 24px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);" />
 What DSX-Connect Provides
 
-* A reusable, event-driven scanning core built for predictable scale 
-* Pluggable connectors for cloud storage, SaaS platforms, and filesystems 
-* Support for on-demand and event-driven scanning workflows 
-* Fault-tolerant execution with durable queues and retry handling 
+* A reusable, event-driven scanning core built for predictable scale
+* Pluggable connectors for cloud storage, SaaS platforms, and filesystems
+* Support for on-demand and event-driven scanning workflows
+* Fault-tolerant execution with durable queues and retry handling
 * Portable deployment via Docker Compose or Kubernetes (Helm)
 * Seamless integration with DSX for Applications’ deep-learning malware detection
 
 Whether protecting cloud buckets, enterprise SaaS data, or on-prem filesystems, DSX-Connect enables consistent malware prevention — any file, anywhere.
+
 
 ## Who This Is For
 

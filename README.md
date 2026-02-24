@@ -34,7 +34,7 @@ See each directory’s README for component-specific details (e.g., `dsx_connect
 
 ## Online Docs 
 
-DSX-Connect docs are hosted on GitHub Pages at:  https://logang-di.github.io/dsx-connect/
+DSX-Connect docs are hosted on GitHub Pages at: https://deep-instinct.github.io/dsx-connect/
 
 When source docs (./docs/* or mkdocs.yml) are committed to GitHub repository, the docs are automatically rebuilt and published via GitHub Actions.
 

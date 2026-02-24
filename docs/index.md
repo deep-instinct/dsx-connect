@@ -22,13 +22,84 @@ What DSX-Connect gives you:
 
 Whether you’re protecting cloud buckets, enterprise SaaS data, or on-prem filesystems, DSX-Connect lets you standardize how scanning happens—while keeping deployment flexible and operations observable.
 
-## About the Docs
+## Who This Is For
+
+This documentation is intended for:
+
+- Security engineers deploying file scanning across repositories
+- Platform engineers operating DSX-Connect at scale
+- DevOps teams integrating DSX-Connect into CI/CD or cloud workflows
+- Architects evaluating deployment models
+
+
+## About the Documentation
+
+The DSX-Connect documentation is organized by role and lifecycle stage.
+
+If you are new to DSX-Connect:
+
+* Start with **Getting Started** for a quick deployment.
+* Review **Core Concepts** to understand architecture, connectors, and performance.
+
+If you are deploying:
+
+* Use **Deployment** for Docker Compose or Kubernetes (Helm).
+* See **Choosing Your Deployment** to understand the trade-offs.
+
+If you are operating at scale:
+
+* Use **Operations** for performance tuning, logging, monitoring, and upgrades.
+* Refer to **Scaling & Performance (Kubernetes)** for infrastructure-level scaling.
+
+If you need configuration details:
+
+* Use **Reference** for environment variables, Helm values, and API definitions.
+
+This structure separates:
+
+* System concepts
+* Deployment mechanics
+* Operational procedures
+* Reference material
+
+So you can quickly find what you need.
+
+---
 
 ## Quick Links
-- [Overview](overview.md)
-- [Deployment Bundles (docker and k8s)]()
-- [Getting Started](getting-started.md)
-- [Connectors](connectors/index.md)
-- [Deployment Models](deployment/index.md)
-- [Deployment Advanced Settings](deployment/advanced.md)
-- [Filters Reference](reference/filters.md)
+
+### 🚀 Getting Started
+
+* [Overview](getting-started/overview.md)
+* [Docker Compose Quickstart](getting-started/docker-quickstart.md)
+* [Kubernetes (Helm) Quickstart](getting-started/kubernetes-quickstart.md)
+
+### 🧠 Core Concepts
+
+* [Architecture Overview](concepts/architecture.md)
+* [Connector Model](concepts/connectors.md)
+* [Performance & Throughput](concepts/performance.md)
+* [Choosing Your Deployment](concepts/deployment-models.md)
+
+### ⚙️ Deployment
+
+* [Docker Compose Overview](deployment/docker/overview.md)
+* [Kubernetes (Helm) Deployment](deployment/kubernetes/dsx-connect.md)
+* [Scaling & Performance (Kubernetes)](deployment/kubernetes/scaling.md)
+
+### 🔧 Operations
+
+* [Performance Tuning](operations/performance-tuning-job-comparisons.md)
+* [Syslog Forwarding](operations/syslog.md)
+
+### 📚 Reference
+
+* [Configuration Reference](reference/configuration.md)
+* [Environment Variables](reference/environment.md)
+* [Filters Reference](reference/filters.md)
+
+### 📦 Releases
+
+* [Docker Compose Bundles](https://github.com/deep-instinct/dsx-connect/releases)
+* [Docker Hub Images](https://hub.docker.com/repositories/dsxconnect)
+* [GitHub Repository](https://github.com/deep-instinct/dsx-connect)

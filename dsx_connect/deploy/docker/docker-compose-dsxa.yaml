@@ -8,7 +8,7 @@ services:
       SCANNER_ID: ${SCANNER_ID}
       FLAVOR: ${FLAVOR:-rest,config}
       NO_SSL: ${NO_SSL:-true}
-      - AUTH_TOKEN
+#      AUTH_TOKEN
     ports:
       - "${HOST_PORT:-5000}:5000"
     networks:

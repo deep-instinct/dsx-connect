@@ -83,10 +83,10 @@ cp sample.dsxa.env .dsxa.env
 Edit `.dsxa.env` and set:
 
 ```dotenv
+DSXA_IMAGE=<location of dsxa image repo>
 APPLIANCE_URL=<your-DI-appliance>.deepinstinctweb.com
 TOKEN=<your-DI-appliance-token>
 SCANNER_ID=<your-scanner-id>
-DSXA_IMAGE=<location of dsxa image repo>
 #HOST_PORT=15000
 ```
 
@@ -100,6 +100,9 @@ DSXA_IMAGE=<location of dsxa image repo>
 docker compose --env-file .dsxa.env -f docker-compose-dsxa.yaml up -d
 ```
 
+!!! tip "Troubleshooting Tip" 
+    To see DSXA logs on the stdout, run without `-d` (detached).  This is useful for troubleshooting DSXA launch issues, as you can see the logs immediately.  Once you ctrl-c out of the logs, the container will stop. 
+
 ### Verify DSXA Started
 
 ```bash
@@ -109,13 +112,13 @@ docker ps
 You should see a container similar to:
 
 ```
-dsxa_scanner-1   dsxconnect/dpa-rocky9:4.1.1.2020
+<name of scanner>   dsxconnect/dpa-rocky9:4.1.1.2020
 ```
 
 Check logs:
 
 ```bash
-docker logs dsxa_scanner-1
+docker logs <name of scanner>
 ```
 
 Look for:

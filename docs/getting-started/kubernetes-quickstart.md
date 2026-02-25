@@ -17,10 +17,7 @@ By the end, you will:
 
 ## Prerequisites
 
-* Kubernetes 1.19+
-  * For quickstart, consider a lightweight local Kubernetes cluster.
-    * macOS: [Colima](https://github.com/abiosoft/colima/blob/main/README.md) with k3s: `colima start --kubernetes` 
-    * Linux: [K3S](https://docs.k3s.io/)
+* Kubernetes 1.19+.  [Lightweight K8S Recommendations](../reference/installations/kubernetes.md)
 * Helm 3+
 * kubectl configured for your cluster
 * DSXA appliance URL, scanner ID, and API token

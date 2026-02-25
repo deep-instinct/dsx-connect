@@ -11,7 +11,7 @@ By the end, you will:
 
 ## Prerequisites
 
-* Docker Desktop (or Docker Engine) installed
+* Docker installed ([Docker Install Reference](../reference/installations/dockerinstalls.md))  
 * DSXA scanner token from Deep Instinct
 * The DSX-Connect compose bundle downloaded
 

@@ -170,6 +170,8 @@ nav:
       - Environment Variables: reference/environment.md
       - Helm Values: reference/helm-values.md
       - API Reference: reference/api.md
+      - Tools:
+          - Docker: reference/installations/dockerinstalls.md
 
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases

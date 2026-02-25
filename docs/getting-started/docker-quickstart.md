@@ -25,14 +25,16 @@ Download the latest release bundle from the
 Grab the asset named:
 
 ```
-dsx-compose-bundle-<version>.tar.gz
+dsx-connect-compose-bundle-<version>.tar.gz
 ```
 
 Extract it:
 
 ```bash
-tar -xzf dsx-compose-bundle-<version>.tar.gz
-cd dsx-compose-bundle-<version>
+tar -xzf dsx-connect-compose-bundle-<version>.tar.gz
+```
+```bash
+cd dsx-connect-<version>
 ```
 
 You should now see:
@@ -43,6 +45,7 @@ docker-compose-dsx-connect-all-services.yaml
 sample.core.env
 sample.dsxa.env
 filesystem-connector-<version>/
+...
 ```
 
 ---

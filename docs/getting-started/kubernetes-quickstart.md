@@ -25,19 +25,25 @@ By the end, you will:
 
 ## 1) Set Variables
 
+
 Adjust values as needed:
 
 ```bash
 export NAMESPACE=dsx-demo
 export RELEASE=dsx-demo
-export DSX_CONNECT_VERSION=0.3.73
-export FILESYSTEM_CONNECTOR_VERSION=0.5.24
+export DSX_CONNECT_VERSION=<dsx-connect-version>
+export FILESYSTEM_CONNECTOR_VERSION=<filesystem-connector-version>
 
-export DSXA_APPLIANCE_URL=your-dsxa-appliance.deepinstinctweb.com
-export DSXA_SCANNER_ID=1
-export DSXA_TOKEN=changeme
+export DSXA_APPLIANCE_URL=<your-dsxa-appliance>.deepinstinctweb.com
+export DSXA_SCANNER_ID=<scanner id>
+export DSXA_TOKEN=<DSXA DI appliance token>
 ```
 
+!!! Note    
+    The DSXA_ settings are exactly the same as the ones you use to deploy DSXA, for example:
+    When you look in the DI Console under Settings > Deployment > Application Security, note this CLI command:
+    `docker run -it --rm -e APPLIANCE_URL=selab-dpa.customers.deepinstinctweb.com -e TOKEN=<token> -e SCANNER_ID=43 -e FLAVOR='rest,config' -p 443:5000 dpa_scanner`
+    APPLIANCE_URL, TOKEN, SCANNER_ID, all map to the DSXA_ variables of the same name.
 
 ## 2) Create Namespace
 

@@ -87,8 +87,11 @@ DSXA_IMAGE=<location of dsxa image repo>
 APPLIANCE_URL=<your-DI-appliance>.deepinstinctweb.com
 TOKEN=<your-DI-appliance-token>
 SCANNER_ID=<your-scanner-id>
-#HOST_PORT=15000
+#HOST_PORT=5000
 ```
+
+!!! note "APPLIANCE_URL"
+    The URL should be in the format: `<your-DI-appliance>.deepinstinctweb.com` No "https://"!
 
 !!! tip
     Environment files may contain sensitive values.
@@ -198,8 +201,8 @@ cp sample.filesystem.env .filesystem.env
 Edit `.filesystem.env`:
 
 ```dotenv
-DSXCONNECTOR_ASSET=/Users/<you>/Documents/dsx-connect-test
-DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=/Users/<you>/Documents/dsx-connect-test/dsxconnect-quarantine
+DSXCONNECTOR_ASSET=</path/to/scan/directory>
+DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=</path/to/scan/directory>/dsxconnect-quarantine
 #DSXCONNECTOR_ITEM_ACTION=move
 ```
 

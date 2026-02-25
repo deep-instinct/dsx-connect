@@ -112,13 +112,14 @@ docker ps
 You should see a container similar to:
 
 ```
-<name of scanner>   dsxconnect/dpa-rocky9:4.1.1.2020
+CONTAINER ID   IMAGE                              COMMAND                  CREATED          STATUS          PORTS                                       NAMES
+393391645b43   dsxconnect/dpa-rocky9:4.1.1.2020   "/bin/bash -c 'sourc…"   16 minutes ago   Up 16 minutes   0.0.0.0:5000->5000/tcp, :::5000->5000/tcp   dsx-connect-0375-dsxa_scanner-1
 ```
 
-Check logs:
+Check logs - copy the container name or use the container ID from above:
 
 ```bash
-docker logs <name of scanner>
+docker logs <name/id of scanner>
 ```
 
 Look for:

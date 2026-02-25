@@ -17,9 +17,8 @@ This page explains your platform options — and our recommendations.
     macOS and Windows require a lightweight Linux VM to run containers.  
     Docker Desktop is the fastest way to get started, but alternatives exist.
 
----
 
-## 🐧 Linux (Recommended for Production)
+## 🐧 Linux (Recommended for 'Lightweight' Production)
 
 On Linux, Docker runs **natively**.  
 There is no hidden virtual machine and no additional overhead.
@@ -41,8 +40,9 @@ Supported distributions include:
 !!! tip "Best Choice for DSX-Connect"
     Native Linux Docker is:
     
-    - Ideal for production
-    - Ideal for Kubernetes worker nodes
+    - Familiarity - no additional learning curve for many developers/DevOps teams
+    - Ideal for some prodcution deployments (see caveat below)
+    - Easy to install and upgrade
     - Ideal for CI/CD runners
     - Lower overhead than Desktop variants
 
@@ -52,6 +52,15 @@ After installation validation:
 docker version
 docker run hello-world
 ```
+
+!!! note "Production Caveat"
+    While Docker Engine on Linux is appropriate for lightweight production use,
+    most enterprise deployments of DSX-Connect should use Kubernetes.
+
+    See: [Concepts → Choosing Your Deployment](../concepts/choosing-your-deployment.md)
+
+For larger-scale, high-availability, or horizontally scaled environments,
+Kubernetes provides better orchestration, resiliency, and lifecycle management.
 
 ---
 

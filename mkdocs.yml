@@ -172,6 +172,9 @@ nav:
       - API Reference: reference/api.md
       - Tools:
           - Docker: reference/installations/dockerinstalls.md
+      - Concepts:
+          - Containers vs VMs: reference/concepts/containers-vs-vms.md
+          - Evolution of Containers: reference/concepts/containers-evolution.md
 
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases

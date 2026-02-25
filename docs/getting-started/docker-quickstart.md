@@ -119,7 +119,7 @@ CONTAINER ID   IMAGE                              COMMAND                  CREAT
 Check logs - copy the container name or use the container ID from above:
 
 ```bash
-docker logs <name/id of scanner>
+docker logs <container name/id>
 ```
 
 Look for:

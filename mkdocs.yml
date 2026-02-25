@@ -155,6 +155,7 @@ nav:
           - DIANNA Worker: deployment/kubernetes/dianna.md
 
   - Walkthroughs:
+      - Scanning Windows Fileshares: case-studies/windows-fileshares.md
       - End-to-End (Docker): walkthroughs/docker-full-stack.md
       - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
 

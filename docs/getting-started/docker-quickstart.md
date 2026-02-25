@@ -25,14 +25,14 @@ Download the latest release bundle from the
 Grab the asset named:
 
 ```
-compose-bundle-<version>.tar.gz
+dsx-compose-bundle-<version>.tar.gz
 ```
 
 Extract it:
 
 ```bash
-tar -xzf compose-bundle-<version>.tar.gz
-cd compose-bundle-<version>
+tar -xzf dsx-compose-bundle-<version>.tar.gz
+cd dsx-compose-bundle-<version>
 ```
 
 You should now see:
@@ -80,10 +80,10 @@ cp sample.dsxa.env .dsxa.env
 Edit `.dsxa.env` and set:
 
 ```dotenv
-APPLIANCE_URL=https://acme.customers.deepinstinctweb.com
-TOKEN=abcd1234-your-dsxa-token
-SCANNER_ID=dsxa-scanner-01
-DSXA_IMAGE=dsxconnect/dpa-rocky9:4.1.1.2020
+APPLIANCE_URL=<your-DI-appliance>.deepinstinctweb.com
+TOKEN=<your-DI-appliance-token>
+SCANNER_ID=<your-scanner-id>
+DSXA_IMAGE=<location of dsxa image repo>
 #HOST_PORT=15000
 ```
 

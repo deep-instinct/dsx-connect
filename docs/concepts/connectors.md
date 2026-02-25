@@ -216,14 +216,17 @@ Examples:
     * `bucket/A`
     * `bucket/B`
     * `bucket/C`
+  
 * Time partitions:
 
     * `bucket/2025-01`
     * `bucket/2025-02`
+  
 * Filesystem:
 
     * `/data/shard1`
     * `/data/shard2`
+  
 * SharePoint:
 
     * Separate document libraries or folder scopes
@@ -236,15 +239,6 @@ This approach:
 * Aligns with horizontal worker scaling
 
 Filter-based sharding is possible but less efficient because enumeration still occurs at the broader asset level.
-
-Sharding becomes especially important in Kubernetes deployments where connector instances can scale horizontally.
-
-See:
-
-* Choosing Your Deployment
-* Scaling & Performance (Kubernetes)
-
----
 
 ## Item Actions
 

@@ -14,7 +14,6 @@ By the end, you will:
 * See the Filesystem connector registered
 * Run your first scan
 
----
 
 ## Prerequisites
 
@@ -26,9 +25,6 @@ By the end, you will:
 * kubectl configured for your cluster
 * DSXA appliance URL, scanner ID, and API token
 
-
-
----
 
 ## 1) Set Variables
 
@@ -45,7 +41,6 @@ export DSXA_SCANNER_ID=1
 export DSXA_TOKEN=changeme
 ```
 
----
 
 ## 2) Create Namespace
 
@@ -80,7 +75,6 @@ Wait until all pods are `Running`.
 
 ✅ Core and DSXA are now deployed.
 
----
 
 ## 4) Use a HostPath Folder for Test Data (Local Dev)
 
@@ -96,7 +90,6 @@ echo "hello dsx" > "$HOST_SCAN_PATH/test.txt"
 
 Note: ensure your local Kubernetes VM can see this path (for Colima: `colima start --mount /Users/<you>:/Users/<you>`).
 
----
 
 ## 5) Install Filesystem Connector
 
@@ -123,7 +116,6 @@ READY
 
 ✅ When READY appears, the connector is registered.
 
----
 
 ## 6) Access the UI
 
@@ -144,7 +136,6 @@ You should see:
 * Filesystem connector listed
 * DSXA connected
 
----
 
 ## 7) Run a Scan
 
@@ -155,7 +146,6 @@ You should see `test.txt` scanned, and any other file in the scan path.
 
 ✅ If results appear, your Kubernetes deployment is fully operational.
 
----
 
 ## Success 🎉
 
@@ -166,7 +156,11 @@ You now have:
 * A Filesystem connector
 * A completed scan
 
----
+## Next Steps
+
+* Learn about DSX-Connect Architecture [Core Concepts](../concepts/architecture.md)
+* Learn about [Connectors](../concepts/connectors.md)
+
 
 ## Cleanup
 

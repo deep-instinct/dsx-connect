@@ -1,51 +1,5 @@
 # DIANNA Worker (Kubernetes)
 
-DIANNA (Deep Instinct Advanced Neural Network Assistant) is the generative AI component of Deep Instinct DSX.
-
-It combines:
-
-* The DSX Brain (deep learning malware detection)
-* A specialized LLM tuned for malware analysis and explainability
-
-Together, this provides:
-
-* Real-time insight into zero-day threats
-* Human-readable explanations of malicious behavior
-* Actionable intelligence for security teams
-
-When the DIANNA worker is enabled in DSX-Connect, scan results can be forwarded to the Deep Instinct Management Console for AI-driven analysis and enrichment.
-
-This feature is optional and not required for core file scanning.
-
-## When to Enable DIANNA
-
-Enable the DIANNA worker when:
-
-* You want explainability for malicious verdicts
-* You want enriched analysis beyond binary clean/malicious results
-* You are integrating DSX-Connect into a broader Deep Instinct security deployment
-
-Leave it disabled when:
-
-* DIANNA integration is not required
-
-Excellent — this is exactly the right time to split DIANNA into a clean, first-class optional feature page.
-
-Below is a fully structured `dianna.md` page that:
-
-* Uses exactly one `#`
-* No horizontal rules
-* Matches the structure of Authentication and TLS
-* Clearly separates Secret creation from Helm enablement
-* Aligns with your current `values.yaml`
-* Avoids duplicating too much config reference detail
-
-You can drop this into `deployment/kubernetes/dianna.md`.
-
----
-
-# DIANNA Worker (Kubernetes)
-
 The DIANNA worker integrates DSX-Connect with the Deep Instinct Management Console. When enabled, it forwards relevant scan events for additional analysis and policy-driven actions.
 
 This feature is optional and not required for core DSX-Connect operation.

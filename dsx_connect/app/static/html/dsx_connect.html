@@ -1257,6 +1257,8 @@ function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
                     const extra = json.description ? ` (${json.description})` : '';
                     showNotification(`Full scan initiated for ${connectorName}${extra}`, 'success');
                     if (jobId) {
+                        resetResultsJobFilterToAll();
+                        scheduleResultsRefreshFallback();
                         rememberActiveJob(jobId, connectorUuid);
                         const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
                         if (noteEl) noteEl.textContent = `Job ${jobId.substring(0,8)}… started`;
@@ -1293,6 +1295,8 @@ function invokeSampleScanByUuid(connectorUuid, scanUrl, connectorName, n = 5) {
                     const extra = json.description ? ` (${json.description})` : '';
                     showNotification(`Sample scan queued for ${connectorName}${extra}`, 'success');
                     if (jobId) {
+                        resetResultsJobFilterToAll();
+                        scheduleResultsRefreshFallback();
                         rememberActiveJob(jobId, connectorUuid);
                         const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
                         if (noteEl) noteEl.textContent = `Job ${jobId.substring(0,8)}… started`;
@@ -1473,6 +1477,21 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const url = `${API_BASE}/scan/results?limit=${MAX_RESULTS}&job_id=${encodeURIComponent(jid)}`;
             window.open(url, '_blank', 'noopener');
         };
+    }
+
+    function resetResultsJobFilterToAll() {
+        currentJobFilter = '';
+        jobFocusJobId = '';
+        try { localStorage.removeItem('jobFilter'); } catch {}
+        const sel = document.getElementById('jobFilter');
+        if (sel) sel.value = '';
+        updateOpenApiButtonState();
+    }
+
+    function scheduleResultsRefreshFallback() {
+        // SSE is primary; this backstops UI state drift after triggering scans.
+        setTimeout(() => { prefillResultsOnLoad(); }, 2500);
+        setTimeout(() => { prefillResultsOnLoad(); }, 7000);
     }
 
     async function applyResultsFilter() {

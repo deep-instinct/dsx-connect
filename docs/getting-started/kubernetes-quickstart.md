@@ -31,8 +31,6 @@ Adjust values as needed:
 ```bash
 export NAMESPACE=dsx-demo
 export RELEASE=dsx-demo
-export DSX_CONNECT_VERSION=<dsx-connect-version>
-export FILESYSTEM_CONNECTOR_VERSION=<filesystem-connector-version>
 
 export DSXA_APPLIANCE_URL=<your-dsxa-appliance>.deepinstinctweb.com
 export DSXA_SCANNER_ID=<scanner id>
@@ -64,8 +62,7 @@ helm upgrade --install $RELEASE \
   --set-string global.env.DSXCONNECT_SCANNER__SCAN_BINARY_URL= \
   --set-string dsxa-scanner.env.APPLIANCE_URL=$DSXA_APPLIANCE_URL \
   --set-string dsxa-scanner.env.TOKEN=$DSXA_TOKEN \
-  --set-string dsxa-scanner.env.SCANNER_ID=$DSXA_SCANNER_ID \
-  --set-string global.image.tag=$DSX_CONNECT_VERSION
+  --set-string dsxa-scanner.env.SCANNER_ID=$DSXA_SCANNER_ID
 ```
 
 Check pods:
@@ -81,17 +78,34 @@ Wait until all pods are `Running`.
 
 ## 4) Use a HostPath Folder for Test Data (Local Dev)
 
-For local clusters (Colima/k3s/minikube), use a hostPath so the connector can read from your local drive.
+Choose one option based on your local cluster:
 
-Pick a local folder and add a test file:
+### Option A: Colima
+
+Use a path that exists inside the Colima VM:
 
 ```bash
-export HOST_SCAN_PATH=/Users/<you>/Documents/dsx-connect-test
-mkdir -p "$HOST_SCAN_PATH"
-echo "hello dsx" > "$HOST_SCAN_PATH/test.txt"
+export HOST_SCAN_PATH=/var/dsx-connect-test
+colima ssh -- sudo mkdir -p "$HOST_SCAN_PATH"
+colima ssh -- sh -lc 'echo "hello dsx" | sudo tee /var/dsx-connect-test/test.txt >/dev/null'
 ```
 
-Note: ensure your local Kubernetes VM can see this path (for Colima: `colima start --mount /Users/<you>:/Users/<you>`).
+If you want to scan a macOS path (for example `/Users/<you>/Documents/dsx-connect-test`), start Colima with that mount:
+
+```bash
+colima stop
+colima start --mount /Users/<you>:/Users/<you>
+```
+
+### Option B: k3s
+
+Use a path on the k3s node host filesystem:
+
+```bash
+export HOST_SCAN_PATH=/var/dsx-connect-test
+sudo mkdir -p "$HOST_SCAN_PATH"
+echo "hello dsx" | sudo tee "$HOST_SCAN_PATH/test.txt" >/dev/null
+```
 
 
 ## 5) Install Filesystem Connector
@@ -100,7 +114,6 @@ Note: ensure your local Kubernetes VM can see this path (for Colima: `colima sta
 helm upgrade --install fs \
   oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
   --namespace $NAMESPACE \
-  --set-string image.tag=$FILESYSTEM_CONNECTOR_VERSION \
   --set scanVolume.enabled=true \
   --set scanVolume.hostPath=$HOST_SCAN_PATH
 ```

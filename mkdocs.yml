@@ -156,27 +156,27 @@ nav:
 
   - Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
-      - End-to-End (Docker): walkthroughs/docker-full-stack.md
-      - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
+#      - End-to-End (Docker): walkthroughs/docker-full-stack.md
+#      - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
 
   - Operations:
       - Performance Tuning: operations/performance-tuning-job-comparisons.md
       - Syslog Forwarding: operations/syslog.md
-      - Monitoring & Logs: operations/monitoring.md
-      - Troubleshooting: operations/troubleshooting.md
-      - Upgrades: operations/upgrades.md
+#      - Monitoring & Logs: operations/monitoring.md
+#      - Troubleshooting: operations/troubleshooting.md
+#      - Upgrades: operations/upgrades.md
 
   - Reference:
-      - Configuration Reference: reference/configuration.md
-      - Environment Variables: reference/environment.md
-      - Helm Values: reference/helm-values.md
-      - API Reference: reference/api.md
+#      - Configuration Reference: reference/configuration.md
+#      - Environment Variables: reference/environment.md
+#      - Helm Values: reference/helm-values.md
+#      - API Reference: reference/api.md
       - Tools:
           - Docker: reference/installations/dockerinstalls.md
           - Kubernetes: reference/installations/kubernetes.md
       - Concepts:
           - Containers vs VMs: reference/concepts/containers-vs-vms.md
-          - Evolution of Containers: reference/concepts/containers-evolution.md
+          - Evolution of Containers: reference/concepts/evolutionofdocker.md
 
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases

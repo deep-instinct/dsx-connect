@@ -1,4 +1,5 @@
 import os
+import re
 from typing import Optional
 from uuid import UUID
 
@@ -10,7 +11,6 @@ import httpx
 from shared.models.connector_models import (
     ScanRequestModel,
     ConnectorInstanceModel,
-    ItemActionEnum,
 )
 from shared.dsx_logging import dsx_logging
 from shared.routes import API_PREFIX_V1, DSXConnectAPI, Action, route_name, route_path, ConnectorAPI
@@ -106,9 +106,8 @@ def _quarantine_candidate_paths(location: str, metainfo: str, connector: Connect
         return candidates
     candidates.append(location)
 
-    action = getattr(connector, "item_action", None)
     qdir = (getattr(connector, "item_action_move_metainfo", None) or "").strip()
-    if action in {ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG} and qdir:
+    if qdir:
         base1 = os.path.basename(location)
         base2 = os.path.basename(metainfo or "")
         for base in [base1, base2]:
@@ -118,6 +117,34 @@ def _quarantine_candidate_paths(location: str, metainfo: str, connector: Connect
             if qp not in candidates:
                 candidates.append(qp)
     return candidates
+
+
+def _extract_move_destination(item_action: object) -> Optional[str]:
+    """Best-effort extraction of moved file destination from item_action text."""
+    if not item_action:
+        return None
+    msg = str(getattr(item_action, "message", "") or "")
+    desc = str(getattr(item_action, "description", "") or "")
+    text = f"{msg} {desc}".strip()
+    if not text:
+        return None
+    m = re.search(r"\bmoved\s+to\s+(.+)$", text, flags=re.IGNORECASE)
+    if not m:
+        return None
+    # Trim punctuation commonly present in human-readable messages.
+    return m.group(1).strip().rstrip('.')
+
+
+def _dedupe_paths(paths: list[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for p in paths:
+        key = str(p or "").strip()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
 
 
 @router.post(
@@ -200,12 +227,13 @@ async def request_dianna_analysis_from_siem(
                     connector = None
             if connector is None and conn_url_raw:
                 connector = await _lookup_by_url(registry, request, str(conn_url_raw))
-            if connector is not None and rec.get("location"):
+            resolved_loc = rec.get("resolved_location") or rec.get("location")
+            if connector is not None and resolved_loc:
                 scan_req_from_index = ScanRequestModel(
                     connector=connector,
                     connector_url=connector.url,
-                    location=str(rec.get("location")),
-                    metainfo=str(rec.get("metainfo") or rec.get("location")),
+                    location=str(resolved_loc),
+                    metainfo=str(rec.get("metainfo") or resolved_loc),
                 )
 
     if payload.scan_request_task_id and scan_req_from_index is None:
@@ -260,8 +288,28 @@ async def request_dianna_analysis_from_siem(
         )
     metainfo = metainfo or location
 
-    # Resolve readable location: original first, then quarantine candidate if configured.
-    candidate_locations = _quarantine_candidate_paths(location, metainfo, connector)
+    # Resolve readable location:
+    # 1) explicit moved destination from prior item_action details (if available)
+    # 2) original location
+    # 3) quarantine directory candidates
+    candidate_locations: list[str] = []
+    move_dest = None
+    if payload.scan_request_task_id:
+        try:
+            rows_for_move = _results_database.find("scan_request_task_id", payload.scan_request_task_id) or []
+            if rows_for_move:
+                move_dest = _extract_move_destination(getattr(rows_for_move[0], "item_action", None))
+        except Exception:
+            move_dest = None
+    if scan_req_from_index is not None:
+        idx_loc = str(getattr(scan_req_from_index, "location", "") or "")
+        if idx_loc:
+            move_dest = move_dest or idx_loc
+
+    if move_dest:
+        candidate_locations.append(move_dest)
+    candidate_locations.extend(_quarantine_candidate_paths(location, metainfo, connector))
+    candidate_locations = _dedupe_paths(candidate_locations)
     resolved_location = None
     probe_results: list[str] = []
     for cand in candidate_locations:
@@ -402,9 +450,21 @@ async def get_dianna_result_by_task_id(dianna_analysis_task_id: str):
     # SUCCESS: task result should carry DIANNA identifier (analysisId or upload_id)
     result_value = getattr(task, "result", None)
     identifier = None
-    if result_value is not None:
+    result_debug = result_value
+    if isinstance(result_value, dict):
+        identifier = (
+            result_value.get("analysis_id")
+            or result_value.get("analysisId")
+            or result_value.get("upload_id")
+            or result_value.get("uploadId")
+        )
+        if identifier is None:
+            nested = result_value.get("response") if isinstance(result_value.get("response"), dict) else None
+            if nested:
+                identifier = nested.get("analysis_id") or nested.get("analysisId") or nested.get("upload_id")
+    elif result_value is not None:
         s = str(result_value).strip()
-        if s and s.upper() != "OK":
+        if s and s.upper() not in {"OK", "NONE"}:
             identifier = s
 
     if not identifier:
@@ -413,6 +473,7 @@ async def get_dianna_result_by_task_id(dianna_analysis_task_id: str):
             "task_state": state,
             "dianna_analysis_task_id": dianna_analysis_task_id,
             "message": "task completed but no analysis identifier is available",
+            "task_result": result_debug,
         }
 
     payload = _fetch_dianna_result_payload(identifier)

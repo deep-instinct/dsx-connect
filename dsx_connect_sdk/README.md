@@ -30,6 +30,8 @@ print(result)
 ```bash
 dsx-dianna --base-url http://127.0.0.1:8586 analyze-from-siem --scan-request-task-id <id>
 
+dsx-dianna --base-url http://127.0.0.1:8586 analyze --scan-request-task-id <id> --attempts 60 --sleep-seconds 2
+
 dsx-dianna --base-url http://127.0.0.1:8586 get-result --dianna-analysis-task-id <task-id> --attempts 30
 ```
 

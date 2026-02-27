@@ -24,6 +24,26 @@ class DiannaAnalysisWorker(BaseWorker):
     name = Tasks.DIANNA_ANALYZE
     RETRY_GROUPS = RetryGroups.connector()  # network to DI may be treated as connector-like
 
+    @staticmethod
+    def _result_payload(
+            *,
+            status: str,
+            analysis_id: str | int | None = None,
+            upload_id: str | None = None,
+            response: Dict[str, Any] | None = None,
+            message: str | None = None,
+    ) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"status": status}
+        if analysis_id is not None and str(analysis_id).strip():
+            payload["analysis_id"] = str(analysis_id)
+        if upload_id:
+            payload["upload_id"] = upload_id
+        if response is not None:
+            payload["response"] = response
+        if message:
+            payload["message"] = message
+        return payload
+
     def execute(self, scan_request_dict: dict, *, archive_password: str | None = None,
                 scan_request_task_id: str | None = None) -> str:
         # Validate minimal scan request using existing model
@@ -74,7 +94,7 @@ class DiannaAnalysisWorker(BaseWorker):
                     offset += len(chunk)
                 sha256 = hasher.hexdigest()
 
-                if upload_status in {"FAILED", "ERROR", "CANCELLED"}:
+                if upload_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
                     msg = (
                         f"DIANNA upload returned terminal status {upload_status} "
                         f"(analysisId={(resp_json or {}).get('analysisId')}, upload_id={upload_id})"
@@ -99,12 +119,12 @@ class DiannaAnalysisWorker(BaseWorker):
                         notifier.publish_scan_results_sync(ui_event)
                     except Exception:
                         pass
-                    return "ERROR"
+                    return self._result_payload(status="ERROR", upload_id=upload_id, response=resp_json, message=msg)
 
-                if upload_status == "SUCCESS" and not upload_id:
-                    analysis_id = (resp_json or {}).get("analysisId")
+                analysis_id = (resp_json or {}).get("analysisId")
+                if not upload_id and analysis_id is not None:
                     immediate_result: Dict[str, Any] | None = None
-                    if cfg.poll_results_enabled and analysis_id is not None:
+                    if cfg.poll_results_enabled:
                         try:
                             poll_url = cfg.management_url.rstrip('/') + f"/api/v1/dianna/analysisResult/{analysis_id}"
                             deadline = time.time() + int(cfg.poll_timeout_seconds)
@@ -114,7 +134,7 @@ class DiannaAnalysisWorker(BaseWorker):
                                 if gr.status_code == 200:
                                     immediate_result = gr.json() if gr.content else {}
                                     status = str((immediate_result or {}).get("status", "")).upper()
-                                    if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED"}:
+                                    if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
                                         break
                                 time.sleep(interval)
                         except Exception as e:
@@ -160,9 +180,20 @@ class DiannaAnalysisWorker(BaseWorker):
                         }))
                     except Exception:
                         pass
-                    if final_status in {"FAILED", "ERROR", "CANCELLED"}:
-                        return "ERROR"
-                    return str(analysis_id or "OK")
+                    if final_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
+                        return self._result_payload(
+                            status=final_status,
+                            analysis_id=analysis_id,
+                            upload_id=upload_id,
+                            response=final_analysis,
+                            message="DIANNA returned terminal failure status",
+                        )
+                    return self._result_payload(
+                        status=final_status or "SUCCESS",
+                        analysis_id=analysis_id,
+                        upload_id=upload_id,
+                        response=final_analysis,
+                    )
 
                 # Initial notify: upload completed, analysis queued
                 try:
@@ -173,7 +204,7 @@ class DiannaAnalysisWorker(BaseWorker):
                     notifier = Notifiers(bus)
                     ui_event = {
                         "type": "dianna_analysis",
-                        "status": "QUEUED",
+                        "status": str(upload_status or "QUEUED"),
                         "location": scan_req.location,
                         "connector_url": scan_req.connector_url,
                         "sha256": sha256,
@@ -196,7 +227,7 @@ class DiannaAnalysisWorker(BaseWorker):
                                 analysis_result = gr.json() if gr.content else {}
                                 status = str((analysis_result or {}).get("status", "")).upper()
                                 last_status = status or last_status
-                                if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED"}:
+                                if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
                                     break
                             # Non-200: treat as transient and keep polling
                         except Exception:
@@ -228,12 +259,17 @@ class DiannaAnalysisWorker(BaseWorker):
                         pass
 
                 terminal_status = str((analysis_result or {}).get("status", "")).upper() if analysis_result else None
-                if terminal_status in {"FAILED", "ERROR", "CANCELLED"}:
+                if terminal_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
                     dsx_logging.warning(
                         f"[dianna:{self.context.task_id}] analysis failed for {scan_req.location} "
                         f"(status={terminal_status}, upload_id={upload_id})"
                     )
-                    return "ERROR"
+                    return self._result_payload(
+                        status=terminal_status,
+                        upload_id=upload_id,
+                        response=analysis_result,
+                        message="DIANNA returned terminal failure status",
+                    )
         except httpx.HTTPStatusError as e:
             code = getattr(e.response, 'status_code', 'unknown')
             msg = f"HTTP {code}: {e}"
@@ -257,7 +293,7 @@ class DiannaAnalysisWorker(BaseWorker):
                 notifier.publish_scan_results_sync(ui_event)
             except Exception:
                 pass
-            return "ERROR"
+            return self._result_payload(status="ERROR", upload_id=upload_id, response=resp_json, message=msg)
         except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as e:
             msg = f"connection: {e}"
             dsx_logging.warning(f"[dianna:{self.context.task_id}] DIANNA connection error: {e}")
@@ -279,7 +315,7 @@ class DiannaAnalysisWorker(BaseWorker):
                 notifier.publish_scan_results_sync(ui_event)
             except Exception:
                 pass
-            return "ERROR"
+            return self._result_payload(status="ERROR", upload_id=upload_id, response=resp_json, message=msg)
         except Exception as e:
             # Any other DIANNA-side error: log and continue; no retry, no DLQ
             msg = str(e)
@@ -302,7 +338,7 @@ class DiannaAnalysisWorker(BaseWorker):
                 notifier.publish_scan_results_sync(ui_event)
             except Exception:
                 pass
-            return "ERROR"
+            return self._result_payload(status="ERROR", upload_id=upload_id, response=resp_json, message=msg)
 
         # Best-effort syslog emission of analysis event (upload + optional result)
         try:
@@ -325,28 +361,22 @@ class DiannaAnalysisWorker(BaseWorker):
         except Exception:
             pass
 
-        # Publish a lightweight SSE event for the UI (reuse scan-result channel)
-        try:
-            from dsx_connect.messaging.bus import SyncBus
-            from dsx_connect.messaging.notifiers import Notifiers
-            from dsx_connect.config import get_config as _gc
-            bus = SyncBus(str(_gc().redis_url))
-            notifier = Notifiers(bus)
-            ui_event = {
-                "type": "dianna_analysis",
-                "location": scan_req.location,
-                "connector_url": scan_req.connector_url,
-                "sha256": sha256,
-                "upload_id": upload_id,
-            }
-            notifier.publish_scan_results_sync(ui_event)
-        except Exception:
-            pass
-
         dsx_logging.info(
             f"[dianna:{self.context.task_id}] analysis queued for {scan_req.location} (sha256={sha256[:12]}...)"
         )
-        return upload_id or "OK"
+        analysis_id = None
+        if isinstance(resp_json, dict):
+            analysis_id = resp_json.get("analysisId") or resp_json.get("analysis_id")
+        message = None
+        if not upload_id and not analysis_id:
+            message = "no analysis identifier returned by DIANNA; likely no accepted upload"
+        return self._result_payload(
+            status="QUEUED",
+            analysis_id=analysis_id,
+            upload_id=upload_id,
+            response=resp_json,
+            message=message,
+        )
 
     def _read_file_stream_from_connector(self, scan_request: ScanRequestModel, chunk_size: int):
         try:

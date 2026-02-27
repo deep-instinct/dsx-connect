@@ -1,5 +1,6 @@
 # dsx_connect/taskworkers/workers/scan_result.py
 from __future__ import annotations
+import re
 from typing import Any, Dict
 import time
 import redis as _redis
@@ -296,6 +297,13 @@ class ScanResultWorker(BaseWorker):
                             retain_days=getattr(cfg.dianna, "index_retain_days", 90),
                         )
                         fi = getattr(getattr(scan_result, "verdict", None), "file_info", None)
+                        ia = getattr(scan_result, "item_action", None)
+                        ia_text = f"{getattr(ia, 'message', '') or ''} {getattr(ia, 'description', '') or ''}".strip()
+                        move_dest = None
+                        if ia_text:
+                            m = re.search(r"\bmoved\s+to\s+(.+)$", ia_text, flags=re.IGNORECASE)
+                            if m:
+                                move_dest = m.group(1).strip().rstrip('.')
                         index_payload = {
                             "scan_request_task_id": scan_result.scan_request_task_id,
                             "scan_job_id": getattr(scan_result, "scan_job_id", None),
@@ -303,7 +311,10 @@ class ScanResultWorker(BaseWorker):
                             "connector_name": getattr(getattr(sr, "connector", None), "name", None),
                             "connector_url": getattr(sr, "connector_url", None),
                             "location": getattr(sr, "location", None),
+                            "resolved_location": move_dest or getattr(sr, "location", None),
                             "metainfo": getattr(sr, "metainfo", None),
+                            "item_action_message": getattr(ia, "message", None),
+                            "item_action_description": getattr(ia, "description", None),
                             "file_hash": getattr(fi, "file_hash", None) if fi is not None else None,
                         }
                         index.put(scan_result.scan_request_task_id, index_payload)

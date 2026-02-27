@@ -324,6 +324,10 @@
         <select id="jobFilter" style="font-size:0.85rem; padding: 2px 6px;">
             <option value="">All</option>
         </select>
+        <label for="maliciousOnlyFilter" style="font-size:0.85rem; color: var(--text-secondary); display:inline-flex; align-items:center; gap:0.3rem; margin-left: 0.4rem;">
+            <input type="checkbox" id="maliciousOnlyFilter">
+            Only malicious
+        </label>
         <button id="jobFilterOpenApi" style="font-size:0.85rem; padding: 2px 8px;" disabled title="Open results API for selected job">Open API</button>
         <button id="scanResultsClear" style="font-size:0.85rem; padding: 2px 8px;" title="Clear visible results and reset filter">Clear</button>
     </div>
@@ -461,6 +465,7 @@
     const seenJobIds = new Set();
     const diannaResultsByScanKey = new Map();
     let currentJobFilter = localStorage.getItem('jobFilter') || '';
+    let currentMaliciousOnly = localStorage.getItem('resultsMaliciousOnly') === '1';
     let jobFocusJobId = '';
     let jobMeta = {};
     try { jobMeta = JSON.parse(localStorage.getItem('jobMeta') || '{}'); } catch { jobMeta = {}; }
@@ -1489,6 +1494,31 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         updateOpenApiButtonState();
     }
 
+    function isMaliciousScanResult(rec) {
+        return String(rec?.verdict?.verdict || '').toLowerCase() === 'malicious';
+    }
+
+    function refreshNoResultsRowState() {
+        const body = document.getElementById('scanResultsBody');
+        if (!body) return;
+        const rows = [...body.querySelectorAll('tr[data-result-row]')];
+        const visibleRows = rows.filter((tr) => tr.style.display !== 'none');
+        let noRow = document.getElementById('noResultsRow');
+
+        if (visibleRows.length === 0) {
+            const msg = rows.length === 0 ? 'No scan results' : 'No scan results match current filters';
+            if (!noRow) {
+                noRow = document.createElement('tr');
+                noRow.id = 'noResultsRow';
+            }
+            noRow.innerHTML = `<td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 1rem; border: none;">${msg}</td>`;
+            if (!noRow.parentNode) body.appendChild(noRow);
+            return;
+        }
+
+        if (noRow) noRow.remove();
+    }
+
     function scheduleResultsRefreshFallback() {
         // SSE is primary; this backstops UI state drift after triggering scans.
         setTimeout(() => { prefillResultsOnLoad(); }, 2500);
@@ -1498,8 +1528,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     async function applyResultsFilter() {
         const sel = document.getElementById('jobFilter');
         if (!sel) return;
+        const maliciousOnlyEl = document.getElementById('maliciousOnlyFilter');
         currentJobFilter = sel.value || '';
+        currentMaliciousOnly = !!(maliciousOnlyEl && maliciousOnlyEl.checked);
         localStorage.setItem('jobFilter', currentJobFilter);
+        localStorage.setItem('resultsMaliciousOnly', currentMaliciousOnly ? '1' : '0');
         updateOpenApiButtonState();
         // If a specific job is selected and it differs from current focus, load full results for that job
         if (currentJobFilter && currentJobFilter !== jobFocusJobId) {
@@ -1545,13 +1578,16 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const rows = body ? [...body.querySelectorAll('tr[data-result-row]')] : [];
         rows.forEach(tr => {
             const jid = tr.dataset.jobId || '';
-            tr.style.display = (!currentJobFilter || jid === currentJobFilter) ? '' : 'none';
+            const isMalicious = tr.dataset.isMalicious === '1';
+            const visible = (!currentJobFilter || jid === currentJobFilter) && (!currentMaliciousOnly || isMalicious);
+            tr.style.display = visible ? '' : 'none';
             const detail = document.getElementById(tr.dataset.detailId || '');
-            if (detail) detail.style.display = (!currentJobFilter || jid === currentJobFilter) ? (detail.style.display || 'none') : 'none';
+            if (detail && !visible) detail.style.display = 'none';
         });
+        refreshNoResultsRowState();
     }
     document.addEventListener('change', (e) => {
-        if (e.target && e.target.id === 'jobFilter') applyResultsFilter();
+        if (e.target && (e.target.id === 'jobFilter' || e.target.id === 'maliciousOnlyFilter')) applyResultsFilter();
     });
     function rememberActiveJob(jobId, connectorUuid) {
         try {
@@ -2011,6 +2047,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const row = document.createElement('tr');
         row.dataset.resultRow = '1';
         row.dataset.jobId = jobId;
+        row.dataset.isMalicious = isMaliciousScanResult(rec) ? '1' : '0';
         row.dataset.scanKey = scanKey;
         row.classList.add('clickable-row');
         row.addEventListener('click', () => toggleDetail(uniqueId));
@@ -2081,7 +2118,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         tableBody.prepend(row);
 
         // Apply filter visibility
-        if (currentJobFilter && jobId && jobId !== currentJobFilter) {
+        const shouldShow = (!currentJobFilter || jobId === currentJobFilter) && (!currentMaliciousOnly || row.dataset.isMalicious === '1');
+        if (!shouldShow) {
             row.style.display = 'none';
         }
 
@@ -2098,6 +2136,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 });
             }
         } catch {}
+        refreshNoResultsRowState();
     }
 
     function toggleDetail(id) {
@@ -2592,9 +2631,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         fetchConnectors();
         initializeSSEConnections();
         const sel = document.getElementById('jobFilter');
+        const maliciousOnlyEl = document.getElementById('maliciousOnlyFilter');
+        if (maliciousOnlyEl) maliciousOnlyEl.checked = currentMaliciousOnly;
         if (sel) {
             sel.value = currentJobFilter;
-            if (currentJobFilter) applyResultsFilter();
+            if (currentJobFilter || currentMaliciousOnly) applyResultsFilter();
         }
         loadLastScanNotes();
         updateOpenApiButtonState();
@@ -2630,9 +2671,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     seenJobIds.clear();
                     jobMeta = {};
                     currentJobFilter = '';
+                    currentMaliciousOnly = false;
                     jobFocusJobId = '';
                     try { localStorage.removeItem('jobMeta'); } catch {}
                     try { localStorage.removeItem('jobFilter'); } catch {}
+                    try { localStorage.removeItem('resultsMaliciousOnly'); } catch {}
+                    const maliciousOnlyEl = document.getElementById('maliciousOnlyFilter');
+                    if (maliciousOnlyEl) maliciousOnlyEl.checked = false;
                     updateOpenApiButtonState();
                     if (jobCompareSelect) {
                         jobCompareSelect.innerHTML = '';

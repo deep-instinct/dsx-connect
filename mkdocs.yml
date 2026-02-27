@@ -154,7 +154,7 @@ nav:
               - Azure Blob Storage (reference architecture): deployment/kubernetes/azure-blob.md
           - DIANNA Worker: deployment/kubernetes/dianna.md
 
-  - Walkthroughs:
+  - Case-Studies/Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
 #      - End-to-End (Docker): walkthroughs/docker-full-stack.md
 #      - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
@@ -171,12 +171,18 @@ nav:
 #      - Environment Variables: reference/environment.md
 #      - Helm Values: reference/helm-values.md
 #      - API Reference: reference/api.md
+      - Filter Syntax: reference/filters.md
       - Tools:
           - Docker: reference/installations/dockerinstalls.md
           - Kubernetes: reference/installations/kubernetes.md
       - Concepts:
           - Containers vs VMs: reference/concepts/containers-vs-vms.md
           - Evolution of Containers: reference/concepts/evolutionofdocker.md
+      - Repository Credentials:
+        - Azure Credentials: reference/azure-credentials.md
+        - Google Cloud Credentials: reference/google-cloud-credentials.md
+        - Salesforce Credentials: reference/salesforce-credentials.md
+      - UI Display Icons: reference/display-icons.md
 
   - Resources:
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases

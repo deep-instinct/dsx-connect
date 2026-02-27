@@ -17,6 +17,11 @@ global:
     DSXCONNECT_SYSLOG__SYSLOG_SERVER_URL: "rsyslog"
     DSXCONNECT_SYSLOG__SYSLOG_SERVER_PORT: "514"
     DSXCONNECT_SYSLOG__TRANSPORT: "tcp"
+    # DIANNA malicious SIEM index retention (separate from scan_results retention)
+    DSXCONNECT_DIANNA__ENABLED: "true"
+    DSXCONNECT_DIANNA__INDEX_DATABASE_LOC: "redis://redis:6379/4"
+    DSXCONNECT_DIANNA__INDEX_RETAIN_DAYS: "90"
+    DSXCONNECT_DIANNA__INDEX_STORE_ON_MALICIOUS: "true"
 
   # Optional shared image defaults (components fall back to these when set)
   image:

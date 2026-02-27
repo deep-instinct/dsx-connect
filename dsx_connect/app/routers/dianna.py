@@ -3,6 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel
 import httpx
 
@@ -85,7 +86,7 @@ def _probe_read_via_connector(scan_req: ScanRequestModel) -> tuple[bool, str]:
     target = scan_req.connector or scan_req.connector_url
     try:
         with get_connector_client(target) as client:
-            response = client.post(ConnectorAPI.READ_FILE, json_body=scan_req.model_dump())
+            response = client.post(ConnectorAPI.READ_FILE, json_body=jsonable_encoder(scan_req))
         status_code = response.status_code
         ok = 200 <= status_code < 300
         try:
@@ -163,7 +164,11 @@ async def request_dianna_analysis(
             await notifiers.publish_scan_results_async(event)
     except Exception:
         pass
-    return {"status": "accepted", "task_id": async_result.id}
+    return {
+        "status": "accepted",
+        "dianna_analysis_task_id": async_result.id,
+        "task_id": async_result.id,  # backward compatibility
+    }
 
 
 @router.post(
@@ -313,7 +318,8 @@ async def request_dianna_analysis_from_siem(
 
     return {
         "status": "accepted",
-        "task_id": async_result.id,
+        "dianna_analysis_task_id": async_result.id,
+        "task_id": async_result.id,  # backward compatibility
         "connector_uuid": str(connector.uuid) if connector.uuid else None,
         "location_requested": location,
         "location_resolved": resolved_location,
@@ -327,6 +333,10 @@ async def request_dianna_analysis_from_siem(
     status_code=status.HTTP_200_OK,
 )
 async def get_dianna_result(analysis_id: str):
+    return _fetch_dianna_result_payload(analysis_id)
+
+
+def _fetch_dianna_result_payload(analysis_id: str) -> dict:
     cfg = get_config().dianna
     url = cfg.management_url.rstrip("/") + f"/api/v1/dianna/analysisResult/{analysis_id}"
     headers = {"accept": "application/json"}
@@ -359,3 +369,53 @@ async def get_dianna_result(analysis_id: str):
         raise HTTPException(status_code=503, detail=f"dianna_unavailable: {e}") from e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"dianna_result_lookup_failed: {e}") from e
+
+
+@router.get(
+    route_path(DSXConnectAPI.DIANNA_PREFIX, "result", "by-task", "{dianna_analysis_task_id}"),
+    name=route_name(DSXConnectAPI.DIANNA_PREFIX, "result-by-task", Action.GET),
+    status_code=status.HTTP_200_OK,
+)
+async def get_dianna_result_by_task_id(dianna_analysis_task_id: str):
+    task = celery_app.AsyncResult(dianna_analysis_task_id)
+    state = str(getattr(task, "state", "UNKNOWN")).upper()
+
+    if state in {"PENDING", "RECEIVED", "STARTED", "RETRY"}:
+        return {
+            "status": "processing",
+            "task_state": state,
+            "dianna_analysis_task_id": dianna_analysis_task_id,
+        }
+
+    if state in {"FAILURE", "REVOKED"}:
+        detail = str(getattr(task, "result", "task_failed"))
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "error",
+                "task_state": state,
+                "dianna_analysis_task_id": dianna_analysis_task_id,
+                "message": detail,
+            },
+        )
+
+    # SUCCESS: task result should carry DIANNA identifier (analysisId or upload_id)
+    result_value = getattr(task, "result", None)
+    identifier = None
+    if result_value is not None:
+        s = str(result_value).strip()
+        if s and s.upper() != "OK":
+            identifier = s
+
+    if not identifier:
+        return {
+            "status": "accepted",
+            "task_state": state,
+            "dianna_analysis_task_id": dianna_analysis_task_id,
+            "message": "task completed but no analysis identifier is available",
+        }
+
+    payload = _fetch_dianna_result_payload(identifier)
+    payload["dianna_analysis_task_id"] = dianna_analysis_task_id
+    payload["resolved_from"] = "task_result"
+    return payload

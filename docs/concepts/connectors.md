@@ -194,6 +194,15 @@ Prefer pushing boundaries into the asset:
 | `asset=my-bucket`, `filter=prefix1/**` | `asset=my-bucket/prefix1`, `filter=""` |
 | `asset=my-bucket`, `filter=sub1/*`     | `asset=my-bucket/sub1`, `filter="*"`   |
 
+### Filters vs Assets — Pros & Cons
+- **Assets (partitioning at source):**
+    - Pros: enables parallel enumeration; reduces per‑connector list volume; isolates failures per shard
+    - Cons: requires coordination of partitioning (naming/scope decisions)
+- **Filters (evaluation at connector):**
+    - Pros: simple per‑connector scoping without changing infrastructure; expressive (rsync‑like)
+    - Cons: filters are applied after listing within the asset; for very large repos, exhaustive filters can still incur heavy list operations
+
+
 Guidance:
 
 * Prefer **asset** for coarse boundaries (folders/prefixes/libraries).

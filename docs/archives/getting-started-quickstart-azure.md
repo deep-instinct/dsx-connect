@@ -11,7 +11,7 @@ It also enables:
 - **DSX-Connect Authentication** (enrollment token + DSX-HMAC)
 - **SSL/TLS** for the dsx-connect API (in-pod TLS)
 
-For production-style values files and GitOps patterns, see [Advanced Connector Deployment](advanced-connector-deployment.md) and [Using DSX-Connect Authentication](../authentication.md).
+For production-style values files and GitOps patterns, see [Advanced Connector Deployment](../deployment/kubernetes/advanced-connector-deployment.md) and [Using DSX-Connect Authentication](authentication.md).
 
 ## Prerequisites
 
@@ -104,7 +104,7 @@ helm upgrade --install ${RELEASE} oci://registry-1.docker.io/dsxconnect/dsx-conn
 ## 4) Install the Azure Blob connector (auth enabled)
 This enables connector-side auth and points the connector at the in-cluster dsx-connect API over HTTPS.
 
-For local demo TLS, verification against a self-signed dsx-connect cert will fail unless you provide a CA bundle. For simplicity this walkthrough disables verification; for production, see [Deploying with SSL/TLS](../tls.md).
+For local demo TLS, verification against a self-signed dsx-connect cert will fail unless you provide a CA bundle. For simplicity this walkthrough disables verification; for production, see [Deploying with SSL/TLS](tls.md).
 
 ```bash
 helm upgrade --install ${CONNECTOR_RELEASE} oci://registry-1.docker.io/dsxconnect/azure-blob-connector-chart \

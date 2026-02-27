@@ -100,7 +100,7 @@ rsyslog:
       permittedPeer: "*.papertrailapp.com"
 ```
 
-TLS forwarding requires an rsyslog image with the `gtls` module. See the Developer's Guide: [Rsyslog TLS Image](../../operations/rsyslog-tls-image.md).
+TLS forwarding requires an rsyslog image with the `gtls` module. See the Developer's Guide: [Rsyslog TLS Image](rsyslog-tls-image.md).
 
 Notes:
 

@@ -107,8 +107,8 @@ So you can quickly find what you need.
 
 ### 📚 Reference
 
-* [Configuration Reference](reference/configuration.md)
-* [Environment Variables](reference/environment.md)
+* [Configuration Reference](deployment/kubernetes/configuration-reference.md)
+* [Environment Variables](deployment/kubernetes/configuration-reference.md#global-settings)
 * [Filters Reference](reference/filters.md)
 
 ### 📦 Releases

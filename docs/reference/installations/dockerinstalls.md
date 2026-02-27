@@ -57,7 +57,7 @@ docker run hello-world
     While Docker Engine on Linux is appropriate for lightweight production use,
     most enterprise deployments of DSX-Connect should use Kubernetes.
 
-    See: [Concepts → Choosing Your Deployment](../concepts/choosing-your-deployment.md)
+See: [Concepts → Choosing Your Deployment](../../concepts/deployment-models.md)
 
 For larger-scale, high-availability, or horizontally scaled environments,
 Kubernetes provides better orchestration, resiliency, and lifecycle management.

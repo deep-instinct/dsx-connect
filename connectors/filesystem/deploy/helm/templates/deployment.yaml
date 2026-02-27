@@ -119,9 +119,9 @@ spec:
             - name: PYTHONUNBUFFERED
               value: "1"
             - name: DSXCONNECTOR_ASSET
-              value: {{ ternary .Values.scanVolume.mountPath ((get .Values.env "DSXCONNECTOR_ASSET") | default "/app/scan_folder") .Values.scanVolume.enabled | quote }}
+              value: {{ (get .Values.env "DSXCONNECTOR_ASSET") | default "/app/scan_folder" | quote }}
             - name: DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO
-              value: {{ ternary .Values.quarantineVolume.mountPath ((get .Values.env "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO") | default "/app/quarantine") .Values.quarantineVolume.enabled | quote }}
+              value: {{ (get .Values.env "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO") | default "/app/quarantine" | quote }}
             {{ $useTlsStr := (toString (default "" .Values.env.DSXCONNECTOR_USE_TLS)) }}
             {{ $isTls := eq (lower $useTlsStr) "true" }}
             {{ $scheme := ternary "https" "http" $isTls }}

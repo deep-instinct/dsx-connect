@@ -93,11 +93,11 @@ kubectl create namespace dsx-connect
 
 ## Deploy DSX-Connect (pick one method)
 
-For the full list of values used in deployments, see [Configuration Reference](#configuration-reference).
+For the full list of values used in deployments, see [Configuration Reference](configuration-reference.md).
 
 ### Method 1: OCI and Command-Line Overrides (quick/temporary)
 
-Is this guide we will discuss three methods for K8S deployments, the first of which is overriding configuration using command-line overrides.  There are two other approaches in a later section (deployment/kubernetes/advanced-connector-deployment.md)
+This guide discusses three methods for Kubernetes deployments, the first of which is command-line overrides. There are two other approaches in a later section: [Advanced Connector Deployment](advanced-connector-deployment.md).
 
 Here we don't need to pull or edit the chart and values files - we will just use them as-is via referencing the OCI repository where the charts reside and then setting configuration values on the command-line.  
 
@@ -225,7 +225,7 @@ experiment with types of deployments, and/or pin specific environments and versi
 The key difference - `values.yaml` deploys without DSXA, defaults to using API authentication, and has exposed resource tuning parameters typical for staging and production. 
 `values-dev.yaml` will deploy a _single_ DSXA scanner on the same cluster, requires no secrets, and is tuned for this simpler set up.
 
-Configure your values.yaml, setting variables as needed (see: [Configuration Reference](#configuration-reference))
+Configure your `values.yaml`, setting variables as needed (see: [Configuration Reference](configuration-reference.md)).
 Install the chart, referencing your values file with the `-f` flag.  The `.` assumes you are currently in the `dsx-connect-chart/` directory. 
 
 ```bash
@@ -365,14 +365,11 @@ Advanced Deployment Guides:
 - [TLS](tls.md)
 - [DIANNA](dianna.md)
 
-- [Connectors]
+- [Connectors](../../connectors/index.md)
 
 Operations:
 
 - For performance tuning guidance, see:
 - [Performance Tuning with Job Comparisons](../../operations/performance-tuning-job-comparisons.md)
 - [Syslog Format and Forwarding](../../operations/syslog.md)
-- [Upgrading](upgrading.md)
-- [Uninstalling](uninstalling.md)
-- [Troubleshooting](troubleshooting.md)
-
+- [Upgrading](../../operations/upgrading.md)

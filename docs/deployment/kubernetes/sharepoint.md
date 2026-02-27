@@ -37,10 +37,10 @@ kubectl create secret generic sharepoint-credentials \
 Defaults to the in-cluster dsx-connect service. Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` if dsx-connect is exposed through another hostname.
 
 ### Authentication (Optional)
-See [Using DSX-Connect Authentication](../authentication.md).
+See [Using DSX-Connect Authentication](authentication.md).
 
 ### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](../tls.md).
+See [Deploying with SSL/TLS](tls.md).
 
 ## Deployment
 

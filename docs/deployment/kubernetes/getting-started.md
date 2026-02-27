@@ -53,12 +53,12 @@ The following lists a couple of example OCIs and install methods used.
 2. **Deploy dsx-connect core:** Follow [dsx-connect (Helm)](dsx-connect.md) to install the API, workers, Redis, and syslog stack. Verify `/readyz` and watch the UI before layering connectors.
 3. **Deploy connectors:** Pick the connector guide under this section (Filesystem, AWS S3, Azure Blob, Google Cloud Storage, SharePoint, OneDrive, etc.). Each page documents the required values, secrets, and network exposure.
 4. **Ingress & auth:** Configure your cluster ingress controller (NGINX, ALB, etc.) and, where required, expose only the connector webhook path. Front the dsx-connect UI/API with your organization’s SSO or oauth2-proxy.
-5. **Monitoring & rotation:** Enable Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](../authentication.md).
+5. **Monitoring & rotation:** Enable Syslog targets if you have centralized logging, and plan secret rotations (enrollment token CSVs, connector credentials, DSX-HMAC reprovisioning) as described in [Deployment → Authentication](authentication.md).
 
 
 ## Next steps
 - Deploy dsx-connect core via [dsx-connect (Helm)](dsx-connect.md).
 - Choose the connector page that matches your repository (Filesystem, AWS S3, Azure Blob Storage, Google Cloud Storage, SharePoint, OneDrive, M365 Mail, etc.).
-- Review [Deployment → Authentication](../authentication.md) for the enrollment + DSX-HMAC model used by every connector.
+- Review [Deployment → Authentication](authentication.md) for the enrollment + DSX-HMAC model used by every connector.
 
 Once the core stack is online and at least one connector is registered, log into the dsx-connect UI to monitor health, run scans, and verify webhook activity.

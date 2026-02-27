@@ -4,7 +4,7 @@
 # - hostPath refers to the Colima VM's filesystem. Colima (Lima) exposes your macOS home under /Users by default.
 # - Use an absolute path under /Users/... that exists on your Mac.
 # - This is for development only; prefer a PVC for production.
-# - The chart will set DSXCONNECTOR_ASSET to scanVolume.mountPath automatically.
+# - Set DSXCONNECTOR_ASSET explicitly to your intended source path semantics.
 # - For quarantine moves, either use a subfolder under the same mountPath or enable quarantineVolume below.
 
 scanVolume:

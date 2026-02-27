@@ -120,4 +120,4 @@ b15b2bab8be1   dsx-connect-network   bridge    local
 
 Continue to the core deployment to start the stack.
 
-[Next: Deploying the DSX-Connect Core](getting-started-core.md)
+[Next: Deploying the DSX-Connect Core](getting-started/docker-quickstart.md)

@@ -112,16 +112,17 @@ services:
     ports: [ "8620:8620" ]
     volumes:
       - type: bind
-        source: /mnt/DESKTOP1/share
+        source: ${DESKTOP1_ASSET:-/mnt/DESKTOP1/share}
         target: /app/scan_folder
       - type: bind
-        source: /var/lib/dsxconnect/quarantine-DESKTOP1
+        source: ${DESKTOP1_QUARANTINE:-/var/lib/dsxconnect/quarantine-DESKTOP1}
         target: /app/quarantine
     environment:
       DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector-desktop1:8620"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
-      DSXCONNECTOR_ASSET: "/app/scan_folder"
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+      # Keep these source-centric (host semantics), not container target paths.
+      DSXCONNECTOR_ASSET: ${DESKTOP1_ASSET:-/mnt/DESKTOP1/share}
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DESKTOP1_QUARANTINE:-/var/lib/dsxconnect/quarantine-DESKTOP1}
       DSXCONNECTOR_MONITOR: "true"
       DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
       DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
@@ -134,16 +135,16 @@ services:
     ports: [ "8621:8620" ]
     volumes:
       - type: bind
-        source: /mnt/DESKTOP2/share
+        source: ${DESKTOP2_ASSET:-/mnt/DESKTOP2/share}
         target: /app/scan_folder
       - type: bind
-        source: /var/lib/dsxconnect/quarantine-DESKTOP2
+        source: ${DESKTOP2_QUARANTINE:-/var/lib/dsxconnect/quarantine-DESKTOP2}
         target: /app/quarantine
     environment:
       DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector-desktop2:8620"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
-      DSXCONNECTOR_ASSET: "/app/scan_folder"
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+      DSXCONNECTOR_ASSET: ${DESKTOP2_ASSET:-/mnt/DESKTOP2/share}
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DESKTOP2_QUARANTINE:-/var/lib/dsxconnect/quarantine-DESKTOP2}
       DSXCONNECTOR_MONITOR: "true"
       DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
       DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
@@ -156,6 +157,8 @@ Notes:
 
 - The service name is the DNS name on the Docker network; keep `DSXCONNECTOR_CONNECTOR_URL` aligned with the service/alias.
 - Host ports (`8620`, `8621`, …) must be unique per connector.
+- Source-first rule: set `DSXCONNECTOR_ASSET`/`DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` to source and quarantine paths.
+- Treat `/app/scan_folder` and `/app/quarantine` as internal mount targets only; do not use them as the connector asset values.
 - Managing many connectors this way can get cumbersome; Kubernetes scales this pattern with per-release values instead of many compose edits.
 
 

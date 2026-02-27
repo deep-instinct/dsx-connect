@@ -43,8 +43,10 @@ env:
   # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
   # Defaults to http/https://dsx-connect-api based on DSXCONNECTOR_USE_TLS.
   DSXCONNECTOR_ITEM_ACTION: "nothing"         # nothing, delete, tag, move, move_tag
+  # Source/target semantics: set to your real scan source path and quarantine destination path.
+  # These should represent the paths users reason about (asset source and quarantine target).
+  # If you mount storage into the container, ensure the mounted path aligns with these values.
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
-# `DSXCONNECTOR_ASSET` defaults to scanVolume.mountPath when scanVolume.enabled=true.
   DSXCONNECTOR_ASSET: "/app/scan_folder"
   DSXCONNECTOR_FILTER: ""
   DSXCONNECTOR_SCAN_BY_PATH: "False"

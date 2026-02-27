@@ -72,10 +72,10 @@ kubectl exec -it deploy/<release-name> -- ls /app/scan_folder
 Defaults to `http://dsx-connect-api` (or HTTPS when TLS is on). Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` for external endpoints.
 
 ### Authentication (Optional)
-See [Using DSX-Connect Authentication](../authentication.md).
+See [Using DSX-Connect Authentication](authentication.md).
 
 ### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](../tls.md).
+See [Deploying with SSL/TLS](tls.md).
 
 ### Ingress & NetworkPolicy (optional)
 

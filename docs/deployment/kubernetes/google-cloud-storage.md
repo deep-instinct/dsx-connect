@@ -61,10 +61,10 @@ Pub/Sub is the recommended trigger path. You can also drive the connector via `/
 Defaults to the in-cluster service (`http://dsx-connect-api`). Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` for external deployments.
 
 ### Authentication (Optional)
-See [Using DSX-Connect Authentication](../authentication.md).
+See [Using DSX-Connect Authentication](authentication.md).
 
 ### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](../tls.md).
+See [Deploying with SSL/TLS](tls.md).
 
 ### Webhook ingress (optional)
 

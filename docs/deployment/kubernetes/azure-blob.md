@@ -41,10 +41,10 @@ Filters follow rsync semantics (`?`, `*`, `**`, `+`, `-`). See the chart values 
 The chart defaults to `http://dsx-connect-api` (or `https://dsx-connect-api` when TLS is enabled). Override with `env.DSXCONNECTOR_DSX_CONNECT_URL` if your dsx-connect instance is reachable via another hostname or port.
 
 ### Authentication (Optional)
-See [Using DSX-Connect Authentication](../authentication.md).
+See [Using DSX-Connect Authentication](authentication.md).
 
 ### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](../tls.md).
+See [Deploying with SSL/TLS](tls.md).
 
 ## Deployment
 

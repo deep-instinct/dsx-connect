@@ -85,6 +85,24 @@ dsx-connect-scan-request-worker:
     # queue: "dev.dsx_connect.scans.request"
     concurrency: 2
 
+dsx-connect-scan-request-batch-worker:
+  enabled: false
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    LOG_LEVEL: info
+  celery:
+    # queue: "dev.dsx_connect.scans.request.batch"
+    concurrency: 1
+    batchSize: 10
+    maxBatchSize: 100
+
 dsx-connect-verdict-action-worker:
   enabled: true
   replicaCount: 1
@@ -203,4 +221,3 @@ rsyslog:
 #      port: 6514
 #      tls: true
 #      permittedPeer: "*.collector.na-01.cloud.solarwinds.com"
-

@@ -12,6 +12,8 @@
 {{- $serviceType := default "ClusterIP" $service.type -}}
 {{- $tlsEnabled := default false $tls.enabled -}}
 {{- $resources := default (dict) $api.resources -}}
+{{- $batchWorker := default (dict) (index $root.Values "dsx-connect-scan-request-batch-worker") -}}
+{{- $batchCelery := default (dict) $batchWorker.celery -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -85,6 +87,12 @@ spec:
               value: {{ $env.PYTHONUNBUFFERED | default "1" | quote }}
             - name: LOG_LEVEL
               value: {{ $env.LOG_LEVEL | default "info" | quote }}
+            - name: DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_ENABLED
+              value: {{ default false $batchWorker.enabled | toString | quote }}
+            - name: DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_DEFAULT_SIZE
+              value: {{ default 10 $batchCelery.batchSize | toString | quote }}
+            - name: DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_MAX_SIZE
+              value: {{ default 100 $batchCelery.maxBatchSize | toString | quote }}
             {{- if (default false $auth.enabled) }}
             - name: DSXCONNECT_AUTH__ENABLED
               value: "true"
@@ -137,7 +145,7 @@ spec:
             {{- end }}
             {{- end }}
             {{- range $key, $value := $env }}
-            {{- if not (has $key (list "DSXCONNECT_APP_ENV" "DSXCONNECT_SCANNER__SCAN_BINARY_URL" "DSXCONNECT_WORKERS__BROKER" "DSXCONNECT_WORKERS__BACKEND" "DSXCONNECT_REDIS_URL" "DSXCONNECT_RESULTS_DB" "DSXCONNECT_RESULTS_DB__RETAIN" "PYTHONUNBUFFERED" "LOG_LEVEL")) }}
+            {{- if not (has $key (list "DSXCONNECT_APP_ENV" "DSXCONNECT_SCANNER__SCAN_BINARY_URL" "DSXCONNECT_WORKERS__BROKER" "DSXCONNECT_WORKERS__BACKEND" "DSXCONNECT_REDIS_URL" "DSXCONNECT_RESULTS_DB" "DSXCONNECT_RESULTS_DB__RETAIN" "PYTHONUNBUFFERED" "LOG_LEVEL" "DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_ENABLED" "DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_DEFAULT_SIZE" "DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_MAX_SIZE")) }}
             - name: {{ $key }}
               value: "{{ $value }}"
             {{- end }}

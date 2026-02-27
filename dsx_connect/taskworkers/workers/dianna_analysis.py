@@ -44,12 +44,14 @@ class DiannaAnalysisWorker(BaseWorker):
 
         resp_json: Optional[Dict[str, Any]] = None
         upload_id: Optional[str] = None
+        sha256: Optional[str] = None
 
         analysis_result: Optional[Dict[str, Any]] = None
         try:
             with httpx.Client(timeout=timeout, verify=(cfg.ca_bundle or cfg.verify_tls)) as client:
                 hasher = hashlib.sha256()
                 offset = 0
+                upload_status: Optional[str] = None
                 for chunk in file_stream:
                     if not chunk:
                         continue
@@ -68,8 +70,99 @@ class DiannaAnalysisWorker(BaseWorker):
                     r.raise_for_status()
                     resp_json = r.json() if r.content else {}
                     upload_id = (resp_json or {}).get('upload_id') or upload_id
+                    upload_status = str((resp_json or {}).get("status", "")).upper() or upload_status
                     offset += len(chunk)
                 sha256 = hasher.hexdigest()
+
+                if upload_status in {"FAILED", "ERROR", "CANCELLED"}:
+                    msg = (
+                        f"DIANNA upload returned terminal status {upload_status} "
+                        f"(analysisId={(resp_json or {}).get('analysisId')}, upload_id={upload_id})"
+                    )
+                    dsx_logging.warning(f"[dianna:{self.context.task_id}] {msg}")
+                    try:
+                        from dsx_connect.messaging.bus import SyncBus
+                        from dsx_connect.messaging.notifiers import Notifiers
+                        from dsx_connect.config import get_config as _gc
+                        bus = SyncBus(str(_gc().redis_url))
+                        notifier = Notifiers(bus)
+                        ui_event = {
+                            "type": "dianna_analysis",
+                            "status": upload_status,
+                            "location": scan_req.location,
+                            "connector_url": scan_req.connector_url,
+                            "sha256": sha256,
+                            "upload_id": upload_id,
+                            "analysis": resp_json or {},
+                            "error": msg,
+                        }
+                        notifier.publish_scan_results_sync(ui_event)
+                    except Exception:
+                        pass
+                    return "ERROR"
+
+                if upload_status == "SUCCESS" and not upload_id:
+                    analysis_id = (resp_json or {}).get("analysisId")
+                    immediate_result: Dict[str, Any] | None = None
+                    if cfg.poll_results_enabled and analysis_id is not None:
+                        try:
+                            poll_url = cfg.management_url.rstrip('/') + f"/api/v1/dianna/analysisResult/{analysis_id}"
+                            deadline = time.time() + int(cfg.poll_timeout_seconds)
+                            interval = max(1, int(cfg.poll_interval_seconds))
+                            while time.time() < deadline:
+                                gr = client.get(poll_url, headers={**headers, "accept": "application/json"})
+                                if gr.status_code == 200:
+                                    immediate_result = gr.json() if gr.content else {}
+                                    status = str((immediate_result or {}).get("status", "")).upper()
+                                    if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED"}:
+                                        break
+                                time.sleep(interval)
+                        except Exception as e:
+                            dsx_logging.warning(
+                                f"[dianna:{self.context.task_id}] analysisResult lookup failed for {analysis_id}: {e}"
+                            )
+
+                    dsx_logging.info(
+                        f"[dianna:{self.context.task_id}] analysis completed immediately for {scan_req.location} "
+                        f"(analysisId={analysis_id})"
+                    )
+                    final_analysis = immediate_result or resp_json or {}
+                    final_status = str((final_analysis or {}).get("status", "SUCCESS")).upper() or "SUCCESS"
+                    try:
+                        from dsx_connect.messaging.bus import SyncBus
+                        from dsx_connect.messaging.notifiers import Notifiers
+                        from dsx_connect.config import get_config as _gc
+                        bus = SyncBus(str(_gc().redis_url))
+                        notifier = Notifiers(bus)
+                        ui_event = {
+                            "type": "dianna_analysis",
+                            "status": final_status,
+                            "location": scan_req.location,
+                            "connector_url": scan_req.connector_url,
+                            "sha256": sha256,
+                            "upload_id": upload_id,
+                            "analysis": final_analysis,
+                            "is_malicious": bool((final_analysis or {}).get("isFileMalicious", False)),
+                        }
+                        notifier.publish_scan_results_sync(ui_event)
+                    except Exception:
+                        pass
+                    try:
+                        from json import dumps
+                        syslog_logger.info(dumps({
+                            "event": "dianna_analysis",
+                            "location": scan_req.location,
+                            "connector_url": scan_req.connector_url,
+                            "sha256": sha256,
+                            "upload_id": upload_id,
+                            "phase": "RESULT",
+                            "analysis": final_analysis,
+                        }))
+                    except Exception:
+                        pass
+                    if final_status in {"FAILED", "ERROR", "CANCELLED"}:
+                        return "ERROR"
+                    return str(analysis_id or "OK")
 
                 # Initial notify: upload completed, analysis queued
                 try:
@@ -133,6 +226,14 @@ class DiannaAnalysisWorker(BaseWorker):
                         notifier.publish_scan_results_sync(ui_event)
                     except Exception:
                         pass
+
+                terminal_status = str((analysis_result or {}).get("status", "")).upper() if analysis_result else None
+                if terminal_status in {"FAILED", "ERROR", "CANCELLED"}:
+                    dsx_logging.warning(
+                        f"[dianna:{self.context.task_id}] analysis failed for {scan_req.location} "
+                        f"(status={terminal_status}, upload_id={upload_id})"
+                    )
+                    return "ERROR"
         except httpx.HTTPStatusError as e:
             code = getattr(e.response, 'status_code', 'unknown')
             msg = f"HTTP {code}: {e}"

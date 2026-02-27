@@ -68,6 +68,17 @@ dsx-connect-scan-request-worker:
     # queue: "dev.dsx_connect.scans.request"
     concurrency: 2
 
+dsx-connect-scan-request-batch-worker:
+  enabled: false
+  replicaCount: 1
+  env:
+    LOG_LEVEL: debug
+  celery:
+    # queue: "dev.dsx_connect.scans.request.batch"
+    concurrency: 1
+    batchSize: 10
+    maxBatchSize: 100
+
 dsx-connect-verdict-action-worker:
   enabled: true
   replicaCount: 1
@@ -134,4 +145,3 @@ rsyslog:
   image:
     repository: dsxconnect/dsx-connect-rsyslog-gnutls
     tag: "1.0.4"
-

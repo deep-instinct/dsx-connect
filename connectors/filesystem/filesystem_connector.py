@@ -183,12 +183,51 @@ async def shutdown_event():
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     dsx_logging.debug(
-        f"Scanning files at: {config.asset}, filter='{config.filter}')"
+        f"Scanning files at: {config.asset}, filter='{config.filter}', batch={batch}, batch_size={batch_size})"
     )
     quarantine_paths = _quarantine_paths()
     count = 0
+    seen = 0
+    batch_errors = 0
+    batch_items: list[ScanRequestModel] = []
+    effective_batch_size = 1
+    use_batch = bool(batch)
+    if use_batch:
+        caps = await connector.get_core_scan_batch_capabilities()
+        if not bool(caps.get("enabled", False)):
+            dsx_logging.info("Batch full scan requested but core batch mode is disabled; falling back to single-item enqueue.")
+            use_batch = False
+        else:
+            default_size = max(1, int(caps.get("default_size", 10)))
+            max_size = max(1, int(caps.get("max_size", 100)))
+            requested = batch_size if isinstance(batch_size, int) and batch_size > 0 else default_size
+            effective_batch_size = min(max(1, int(requested)), max_size)
+            dsx_logging.info(
+                f"Using full-scan batch mode: effective_batch_size={effective_batch_size} "
+                f"(requested={batch_size}, default={default_size}, max={max_size})"
+            )
+
+    async def _flush_batch() -> None:
+        nonlocal count, batch_errors, batch_items
+        if not batch_items:
+            return
+        resp = await connector.scan_file_request_batch(batch_items, batch_size=effective_batch_size)
+        if resp.status == StatusResponseEnum.SUCCESS:
+            count += len(batch_items)
+        else:
+            batch_errors += 1
+            dsx_logging.warning(
+                f"Batch enqueue failed for {len(batch_items)} item(s): "
+                f"{resp.message} ({resp.description})"
+            )
+        batch_items = []
+
     async for file_path in get_filepaths_async(
             pathlib.Path(config.asset),
             config.filter):
@@ -201,14 +240,30 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
             size_hint = p.stat().st_size
         except Exception:
             pass
-        status_response = await connector.scan_file_request(
-            ScanRequestModel(location=str(file_path), metainfo=file_path.name, size_in_bytes=size_hint))
-        dsx_logging.debug(f'Sent scan request for {file_path}, result: {status_response}')
-        count += 1
-        if limit and count >= limit:
+        req = ScanRequestModel(location=str(file_path), metainfo=file_path.name, size_in_bytes=size_hint)
+        seen += 1
+        if use_batch:
+            batch_items.append(req)
+            if len(batch_items) >= effective_batch_size:
+                await _flush_batch()
+        else:
+            status_response = await connector.scan_file_request(req)
+            dsx_logging.debug(f'Sent scan request for {file_path}, result: {status_response}')
+            if status_response.status == StatusResponseEnum.SUCCESS:
+                count += 1
+        if limit and seen >= limit:
             break
-    dsx_logging.info(f"Full scan enqueued {count} item(s) (asset={config.asset}, filter='{config.filter or ''}')")
-    return StatusResponse(status=StatusResponseEnum.SUCCESS, message='Full scan invoked and scan requests sent.', description=f"enqueued={count}")
+    if use_batch and batch_items:
+        await _flush_batch()
+    dsx_logging.info(
+        f"Full scan enqueued {count} item(s) "
+        f"(asset={config.asset}, filter='{config.filter or ''}', batch={use_batch}, batch_errors={batch_errors})"
+    )
+    return StatusResponse(
+        status=StatusResponseEnum.SUCCESS,
+        message='Full scan invoked and scan requests sent.',
+        description=f"enqueued={count} batch={use_batch} batch_errors={batch_errors}",
+    )
 
 
 @connector.preview

@@ -91,6 +91,22 @@ app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 {{- include "dsx.component.labels" (dict "root" . "component" "dsx-connect-scan-request-worker") -}}
 {{- end }}
 
+{{- define "dsx-connect-scan-request-batch-worker.name" -}}
+{{- include "dsx.component.name" (dict "root" . "component" "dsx-connect-scan-request-batch-worker") -}}
+{{- end }}
+
+{{- define "dsx-connect-scan-request-batch-worker.fullname" -}}
+{{- include "dsx.component.fullname" (dict "root" . "component" "dsx-connect-scan-request-batch-worker") -}}
+{{- end }}
+
+{{- define "dsx-connect-scan-request-batch-worker.selectorLabels" -}}
+{{- include "dsx.component.selectorLabels" (dict "root" . "component" "dsx-connect-scan-request-batch-worker") -}}
+{{- end }}
+
+{{- define "dsx-connect-scan-request-batch-worker.labels" -}}
+{{- include "dsx.component.labels" (dict "root" . "component" "dsx-connect-scan-request-batch-worker") -}}
+{{- end }}
+
 {{- define "dsx-connect-verdict-action-worker.name" -}}
 {{- include "dsx.component.name" (dict "root" . "component" "dsx-connect-verdict-action-worker") -}}
 {{- end }}

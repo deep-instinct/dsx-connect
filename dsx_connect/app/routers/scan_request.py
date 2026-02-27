@@ -18,6 +18,7 @@ from dsx_connect.taskworkers.celery_app import celery_app
 from dsx_connect.taskworkers.names import Tasks, Queues
 from shared.models.status_responses import StatusResponse, StatusResponseEnum
 from dsx_connect.messaging.state_keys import job_key, job_keys
+from dsx_connect.config import get_config
 
 
 class ScanRequestStatus(BaseModel):
@@ -26,6 +27,20 @@ class ScanRequestStatus(BaseModel):
     status: StatusResponseEnum  # SUCCESS/ERROR for your API contract
     result: Optional[Any] = None  # include only on SUCCESS (if you store a result)
     error: Optional[str] = None  # include only on FAILURE
+
+
+class ScanRequestBatchRequest(BaseModel):
+    requests: list[ScanRequestModel]
+    batch_size: int = 10
+
+
+class ScanRequestBatchResponse(BaseModel):
+    status: StatusResponseEnum
+    message: str
+    description: str | None = None
+    task_ids: list[str]
+    queued_items: int
+    batch_size: int
 
 
 router = APIRouter(prefix=route_path(API_PREFIX_V1))
@@ -149,6 +164,133 @@ async def post_scan_request(
             description="Failed to queue scan task",
             message=str(e),
         )
+
+
+@router.post(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, "request_batch"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, "request_batch", Action.CREATE),
+    description="Queue scan requests in batches.",
+    status_code=202,
+    response_model=ScanRequestBatchResponse,
+)
+async def post_scan_request_batch(
+        payload: ScanRequestBatchRequest,
+        request: Request,
+        idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+        job_name: Optional[str] = Header(default=None, alias="X-Job-Name"),
+) -> ScanRequestBatchResponse:
+    # Keep auth behavior aligned with single-request route.
+    await require_dsx_hmac_inbound(request)
+    workers_cfg = get_config().workers
+    if not getattr(workers_cfg, "scan_request_batch_enabled", False):
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message="Batch scan requests are disabled",
+            description="Set DSXCONNECT_WORKERS__SCAN_REQUEST_BATCH_ENABLED=true",
+            task_ids=[],
+            queued_items=0,
+            batch_size=max(1, int(payload.batch_size or 10)),
+        )
+
+    if not payload.requests:
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message="No requests provided",
+            description="requests must contain at least one scan request",
+            task_ids=[],
+            queued_items=0,
+            batch_size=max(1, int(payload.batch_size or 10)),
+        )
+
+    default_batch_size = max(1, int(getattr(workers_cfg, "scan_request_batch_default_size", 10)))
+    max_batch_size = max(1, int(getattr(workers_cfg, "scan_request_batch_max_size", 100)))
+    requested_batch_size = max(1, int(payload.batch_size or default_batch_size))
+    batch_size = min(requested_batch_size, max_batch_size)
+    serialized_requests: list[dict[str, Any]] = []
+    per_job_counts: dict[str, int] = {}
+    now = str(int(time.time()))
+
+    for req in payload.requests:
+        if not getattr(req, "scan_job_id", None):
+            req.scan_job_id = str(_uuid.uuid4())
+        serialized = req.model_dump()
+        serialized_requests.append(serialized)
+        per_job_counts[req.scan_job_id] = per_job_counts.get(req.scan_job_id, 0) + 1
+
+    # Pre-increment enqueued counters so job progress works for batched intake.
+    try:
+        r = getattr(request.app.state, "redis", None)
+        if r is not None:
+            for job_id, count in per_job_counts.items():
+                key = job_key(job_id)
+                await r.hsetnx(key, "job_id", job_id)
+                await r.hsetnx(key, "status", "running")
+                await r.hsetnx(key, "started_at", now)
+                await r.hincrby(key, "enqueued_count", count)
+                mapping = {"last_update": now}
+                if job_name:
+                    mapping["job_name"] = job_name
+                await r.hset(key, mapping=mapping)
+                await r.expire(key, 7 * 24 * 3600)
+    except Exception:
+        pass
+
+    task_ids: list[str] = []
+    try:
+        for start in range(0, len(serialized_requests), batch_size):
+            chunk = serialized_requests[start:start + batch_size]
+            result = celery_app.send_task(
+                Tasks.REQUEST_BATCH,
+                queue=Queues.REQUEST_BATCH,
+                args=[chunk],
+                kwargs={"batch_size": batch_size},
+            )
+            task_ids.append(result.id)
+    except (BrokerOperationalError, RedisConnectionError) as e:
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message=str(e),
+            description="Task broker unavailable",
+            task_ids=task_ids,
+            queued_items=0,
+            batch_size=batch_size,
+        )
+    except (RedisTimeoutError, CeleryTimeoutError) as e:
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message=str(e),
+            description="Timed out queuing batch scan task",
+            task_ids=task_ids,
+            queued_items=0,
+            batch_size=batch_size,
+        )
+    except CeleryError as e:
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message=str(e),
+            description="Failed to queue batch scan task (celery error)",
+            task_ids=task_ids,
+            queued_items=0,
+            batch_size=batch_size,
+        )
+    except Exception as e:
+        return ScanRequestBatchResponse(
+            status=StatusResponseEnum.ERROR,
+            message=str(e),
+            description="Failed to queue batch scan task",
+            task_ids=task_ids,
+            queued_items=0,
+            batch_size=batch_size,
+        )
+
+    return ScanRequestBatchResponse(
+        status=StatusResponseEnum.SUCCESS,
+        message=f"Queued {len(serialized_requests)} scan requests in {len(task_ids)} batch task(s)",
+        description="Batch scan tasks queued",
+        task_ids=task_ids,
+        queued_items=len(serialized_requests),
+        batch_size=batch_size,
+    )
 
 
 # Lightweight protected endpoint for HMAC verification that does not enqueue to Celery

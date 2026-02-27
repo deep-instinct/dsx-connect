@@ -110,6 +110,8 @@ class SyslogConfig(BaseSettings):
 
 class DiannaConfig(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__")
+    # Feature toggle for DIANNA integration paths.
+    enabled: bool = False
     # Base URL of Deep Instinct management console, e.g., https://di.example.com
     management_url: str = "https://selab-dpa.customers.deepinstinctweb.com"
     # API token for DIANNA REST API
@@ -130,6 +132,11 @@ class DiannaConfig(BaseSettings):
     poll_interval_seconds: int = 5
     # Maximum time to wait for a final result (seconds)
     poll_timeout_seconds: int = 900
+    # Separate SIEM helper index for malicious scan_request_task_id -> connector/file context.
+    # Kept independently from scan_results retention.
+    index_database_loc: str = "redis://redis:6379/4"
+    index_retain_days: int = 90
+    index_store_on_malicious: bool = True
 
     # Allow scientific notation or float-like env values for chunk_size (e.g., "4.194304e+06")
     @field_validator("chunk_size", mode="before")
@@ -181,6 +188,10 @@ class CeleryTaskConfig(BaseSettings):
     retry_dsxa_server_errors: bool = True
     retry_dsxa_client_errors: bool = True
     retry_queue_dispatch_errors: bool = False
+    # Batch scan request capabilities advertised to connectors via /config.
+    scan_request_batch_enabled: bool = False
+    scan_request_batch_default_size: int = 10
+    scan_request_batch_max_size: int = 100
 
 
 # class SecurityConfig(BaseSettings):

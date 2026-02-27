@@ -12,6 +12,7 @@ celery_app = Celery(
     backend=str(cfg.backend),
     include=[
         "dsx_connect.taskworkers.workers.scan_request",
+        "dsx_connect.taskworkers.workers.scan_request_batch",
         "dsx_connect.taskworkers.workers.verdict_action",
         "dsx_connect.taskworkers.workers.scan_result",
         "dsx_connect.taskworkers.workers.scan_result_notify",
@@ -27,6 +28,7 @@ celery_app.conf.update(
     task_default_queue=Queues.REQUEST,
     task_queues=[
         Queue(Queues.REQUEST, Exchange(Queues.REQUEST), routing_key=Queues.REQUEST),
+        Queue(Queues.REQUEST_BATCH, Exchange(Queues.REQUEST_BATCH), routing_key=Queues.REQUEST_BATCH),
         Queue(Queues.RESULT,  Exchange(Queues.RESULT),  routing_key=Queues.RESULT),
         Queue(Queues.VERDICT, Exchange(Queues.VERDICT), routing_key=Queues.VERDICT),
         Queue(Queues.NOTIFICATION, Exchange(Queues.NOTIFICATION), routing_key=Queues.NOTIFICATION),
@@ -34,6 +36,7 @@ celery_app.conf.update(
     ],
     task_routes={
         Tasks.REQUEST: {"queue": Queues.REQUEST, "routing_key": Queues.REQUEST},
+        Tasks.REQUEST_BATCH: {"queue": Queues.REQUEST_BATCH, "routing_key": Queues.REQUEST_BATCH},
         Tasks.RESULT:  {"queue": Queues.RESULT,  "routing_key": Queues.RESULT},
         Tasks.VERDICT: {"queue": Queues.VERDICT, "routing_key": Queues.VERDICT},
         Tasks.NOTIFICATION: {"queue": Queues.NOTIFICATION, "routing_key": Queues.NOTIFICATION},

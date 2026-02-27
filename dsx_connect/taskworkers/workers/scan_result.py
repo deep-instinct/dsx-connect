@@ -276,12 +276,45 @@ class ScanResultWorker(BaseWorker):
 
             # Optionally trigger DIANNA analysis on malicious verdicts
             try:
+                v = getattr(getattr(scan_result, "verdict", None), "verdict", None)
+                v_norm = str(v or '').lower()
+                is_malicious = ('malicious' in v_norm or v_norm in ('bad', 'infected'))
+                sr = getattr(scan_result, 'scan_request', None)
+
+                # Persist malicious lookup context for SIEM-triggered DIANNA callbacks.
+                if (
+                    is_malicious
+                    and getattr(cfg.dianna, "enabled", False)
+                    and getattr(cfg.dianna, "index_store_on_malicious", True)
+                    and getattr(scan_result, "scan_request_task_id", None)
+                    and sr is not None
+                ):
+                    try:
+                        from dsx_connect.database.dianna_siem_index_redis import DiannaSiemIndexRedis
+                        index = DiannaSiemIndexRedis(
+                            database_loc=getattr(cfg.dianna, "index_database_loc", str(cfg.redis_url)),
+                            retain_days=getattr(cfg.dianna, "index_retain_days", 90),
+                        )
+                        fi = getattr(getattr(scan_result, "verdict", None), "file_info", None)
+                        index_payload = {
+                            "scan_request_task_id": scan_result.scan_request_task_id,
+                            "scan_job_id": getattr(scan_result, "scan_job_id", None),
+                            "connector_uuid": str(getattr(getattr(sr, "connector", None), "uuid", "") or ""),
+                            "connector_name": getattr(getattr(sr, "connector", None), "name", None),
+                            "connector_url": getattr(sr, "connector_url", None),
+                            "location": getattr(sr, "location", None),
+                            "metainfo": getattr(sr, "metainfo", None),
+                            "file_hash": getattr(fi, "file_hash", None) if fi is not None else None,
+                        }
+                        index.put(scan_result.scan_request_task_id, index_payload)
+                        dsx_logging.info(
+                            f"[scan_result] stored malicious SIEM index for scan_request_task_id={scan_result.scan_request_task_id}"
+                        )
+                    except Exception as e:
+                        dsx_logging.warning(f"[scan_result] malicious SIEM index store failed: {e}")
+
                 if getattr(cfg.dianna, 'auto_on_malicious', False):
-                    v = getattr(getattr(scan_result, "verdict", None), "verdict", None)
-                    v_norm = str(v or '').lower()
-                    if 'malicious' in v_norm or v_norm in ('bad', 'infected'):
-                        sr = getattr(scan_result, 'scan_request', None)
-                        if sr and getattr(sr, 'connector_url', None) and getattr(sr, 'location', None):
+                    if is_malicious and sr and getattr(sr, 'connector_url', None) and getattr(sr, 'location', None):
                             payload = {
                                 "connector": getattr(sr, 'connector', None).model_dump() if getattr(sr, 'connector', None) else None,
                                 "connector_url": sr.connector_url,

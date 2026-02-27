@@ -125,14 +125,14 @@ nav:
           - Resource Recommendations: deployment/docker/resource-recommendations.md
           - Core Deployment: deployment/docker/dsx-connect.md
           - Connectors:
-              - Filesystem: deployment/docker/connectors/filesystem.md
-              - Google Cloud Storage: deployment/docker/connectors/google-cloud-storage.md
-              - OneDrive: deployment/docker/connectors/onedrive.md
-              - M365 Mail: deployment/docker/connectors/m365-mail.md
-              - Salesforce: deployment/docker/connectors/salesforce.md
-              - SharePoint: deployment/docker/connectors/sharepoint.md
-              - AWS S3 (reference architecture): deployment/docker/connectors/aws-s3.md
-              - Azure Blob Storage (reference architecture): deployment/docker/connectors/azure-blob.md
+              - Filesystem: deployment/docker/filesystem.md
+              - Google Cloud Storage: deployment/docker/google-cloud-storage.md
+              - OneDrive: deployment/docker/onedrive.md
+              - M365 Mail: deployment/docker/m365-mail.md
+              - Salesforce: deployment/docker/salesforce.md
+              - SharePoint: deployment/docker/sharepoint.md
+              - AWS S3 (reference architecture): deployment/docker/aws-s3.md
+              - Azure Blob Storage (reference architecture): deployment/docker/azure-blob.md
 
       - Kubernetes (Helm):
           - Resource Recommendations: deployment/kubernetes/resource-recommendations.md
@@ -144,14 +144,14 @@ nav:
               - Configure TLS / Ingress: deployment/kubernetes/tls.md
           - Scaling & Performance: deployment/kubernetes/scaling.md
           - Connectors:
-              - Filesystem: deployment/kubernetes/connectors/filesystem.md
-              - Google Cloud Storage: deployment/kubernetes/connectors/google-cloud-storage.md
-              - OneDrive: deployment/kubernetes/connectors/onedrive.md
-              - M365 Mail: deployment/kubernetes/connectors/m365-mail.md
-              - Salesforce: deployment/kubernetes/connectors/salesforce.md
-              - SharePoint: deployment/kubernetes/connectors/sharepoint.md
-              - AWS S3 (reference architecture): deployment/kubernetes/connectors/aws-s3.md
-              - Azure Blob Storage (reference architecture): deployment/kubernetes/connectors/azure-blob.md
+              - Filesystem: deployment/kubernetes/filesystem.md
+              - Google Cloud Storage: deployment/kubernetes/google-cloud-storage.md
+              - OneDrive: deployment/kubernetes/onedrive.md
+              - M365 Mail: deployment/kubernetes/m365-mail.md
+              - Salesforce: deployment/kubernetes/salesforce.md
+              - SharePoint: deployment/kubernetes/sharepoint.md
+              - AWS S3 (reference architecture): deployment/kubernetes/aws-s3.md
+              - Azure Blob Storage (reference architecture): deployment/kubernetes/azure-blob.md
           - DIANNA Worker: deployment/kubernetes/dianna.md
 
   - Walkthroughs:

@@ -10,7 +10,7 @@ from random import random
 from typing import Any
 from contextlib import asynccontextmanager
 from fastapi.encoders import jsonable_encoder
-from fastapi import FastAPI, APIRouter, Request, BackgroundTasks, Depends, HTTPException
+from fastapi import FastAPI, APIRouter, Request, BackgroundTasks, Depends, HTTPException, Query
 from typing import Callable, Awaitable, Optional
 
 from starlette.responses import StreamingResponse, JSONResponse, Response
@@ -421,65 +421,123 @@ class DSXConnector:
 
     # ----------------- outward calls -----------------
 
-    async def scan_file_request(self, scan_request: ScanRequestModel) -> StatusResponse:
+    async def _is_job_paused_or_cancelled(self, job_id: str) -> bool:
+        try:
+            async with httpx.AsyncClient(verify=self._httpx_verify, timeout=5.0) as client:
+                raw_url = service_url(
+                    self.dsx_connect_url,
+                    API_PREFIX_V1,
+                    DSXConnectAPI.SCAN_PREFIX,
+                    ScanPath.JOBS,
+                    f"{job_id}",
+                    "raw",
+                )
+                r = await client.get(raw_url)
+                if r.status_code != 200:
+                    return False
+                data = r.json().get("data", {})
+                return data.get("paused") == "1" or data.get("cancel") == "1"
+        except Exception:
+            return False
+
+    def _prepare_scan_request_common(self, scan_request: ScanRequestModel) -> tuple[bool, StatusResponse | None]:
         if self.connector_running_model.status != ConnectorStatusEnum.READY:
             dsx_logging.warning(
                 "Skipping scan request for %s because connector is not registered with dsx-connect (status=%s).",
                 scan_request.location,
                 self.connector_running_model.status.value,
             )
-            return StatusResponse(
+            return False, StatusResponse(
                 status=StatusResponseEnum.ERROR,
                 description="Connector not registered with dsx-connect",
                 message="Scan request skipped because dsx-connect is unavailable.",
             )
 
         if self.connector_running_model.item_action_move_metainfo in scan_request.location:
-            return StatusResponse(status=StatusResponseEnum.NOTHING, description="Quarantine path", message=f"Skip {scan_request.location}")
+            return False, StatusResponse(
+                status=StatusResponseEnum.NOTHING,
+                description="Quarantine path",
+                message=f"Skip {scan_request.location}",
+            )
+
         scan_request.connector = self.connector_running_model
         scan_request.connector_url = self.connector_running_model.url
-        # Ensure scan_job_id is set: use context from full_scan, else generate per-request id (e.g., webhook event)
         if not getattr(scan_request, "scan_job_id", None):
             job_ctx = _SCAN_JOB_ID.get()
             scan_request.scan_job_id = job_ctx or str(uuid.uuid4())
-        # If in a full-scan job, increment the job enqueue counter
         try:
             if _SCAN_JOB_ID.get() == scan_request.scan_job_id:
                 c = _SCAN_ENQ_COUNTER.get()
                 _SCAN_ENQ_COUNTER.set(c + 1)
         except Exception:
             pass
+        return True, None
+
+    async def _post_json_with_optional_hmac(self, url: str, payload: Any):
+        async with httpx.AsyncClient(verify=self._httpx_verify) as client:
+            import json as _json
+            try:
+                content = _json.dumps(payload, separators=(",", ":")).encode()
+                hdrs = self._dsx_hmac_headers("POST", url, content)
+                return await client.post(url, content=content, headers=hdrs or None)
+            except Exception:
+                hdrs = self._dsx_hmac_headers("POST", url, b"")
+                return await client.post(url, json=payload, headers=hdrs or None)
+
+    async def get_core_scan_batch_capabilities(self) -> dict[str, Any]:
+        defaults = {"enabled": False, "default_size": 10, "max_size": 100}
+        try:
+            now = asyncio.get_running_loop().time()
+            cache = getattr(self, "_scan_batch_cap_cache", None)
+            if cache and (now - cache.get("ts", 0.0)) < 30.0:
+                return cache.get("data", defaults)
+        except Exception:
+            pass
+
+        out = dict(defaults)
+        try:
+            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONFIG)
+            async with httpx.AsyncClient(verify=self._httpx_verify, timeout=5.0) as client:
+                resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json() or {}
+                workers = data.get("workers") or {}
+                out["enabled"] = bool(workers.get("scan_request_batch_enabled", False))
+                out["default_size"] = max(1, int(workers.get("scan_request_batch_default_size", 10)))
+                out["max_size"] = max(1, int(workers.get("scan_request_batch_max_size", 100)))
+        except Exception:
+            pass
+        try:
+            self._scan_batch_cap_cache = {
+                "ts": asyncio.get_running_loop().time(),
+                "data": out,
+            }
+        except Exception:
+            pass
+        return out
+
+    async def scan_file_request(self, scan_request: ScanRequestModel) -> StatusResponse:
+        ok, response = self._prepare_scan_request_common(scan_request)
+        if not ok:
+            return response or StatusResponse(status=StatusResponseEnum.ERROR, message="scan request skipped")
 
         # Respect job pause: best-effort pre-check against dsx-connect job state
         try:
             job_id = getattr(scan_request, "scan_job_id", None)
-            if job_id and _SCAN_JOB_ID.get() == job_id:
-                # Only check when running within a full-scan context
-                async with httpx.AsyncClient(verify=self._httpx_verify, timeout=5.0) as client:
-                    raw_url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, f"{job_id}", "raw")
-                    r = await client.get(raw_url)
-                    if r.status_code == 200:
-                        data = r.json().get("data", {})
-                        if data.get("paused") == "1" or data.get("cancel") == "1":
-                            dsx_logging.debug(f"Job {job_id} paused/cancelled; skipping enqueue for {scan_request.location}")
-                            return StatusResponse(status=StatusResponseEnum.NOTHING,
-                                                  message="Job paused",
-                                                  description=f"scan_job_id={job_id}")
+            if job_id and _SCAN_JOB_ID.get() == job_id and await self._is_job_paused_or_cancelled(job_id):
+                dsx_logging.debug(f"Job {job_id} paused/cancelled; skipping enqueue for {scan_request.location}")
+                return StatusResponse(
+                    status=StatusResponseEnum.NOTHING,
+                    message="Job paused",
+                    description=f"scan_job_id={job_id}",
+                )
         except Exception:
             # Non-fatal: continue enqueue if state check fails
             pass
         try:
-            async with httpx.AsyncClient(verify=self._httpx_verify) as client:
-                url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, ScanPath.REQUEST)
-                payload = jsonable_encoder(scan_request)
-                import json as _json
-                try:
-                    content = _json.dumps(payload, separators=(",", ":")).encode()
-                    hdrs = self._dsx_hmac_headers("POST", url, content)
-                    resp = await client.post(url, content=content, headers=hdrs or None)
-                except Exception:
-                    hdrs = self._dsx_hmac_headers("POST", url, b"")
-                    resp = await client.post(url, json=payload, headers=hdrs or None)
+            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, ScanPath.REQUEST)
+            payload = jsonable_encoder(scan_request)
+            resp = await self._post_json_with_optional_hmac(url, payload)
             resp.raise_for_status()
             self.scan_request_count += 1
             return StatusResponse(**resp.json())
@@ -496,6 +554,75 @@ class DSXConnector:
         except Exception as e:
             dsx_logging.error("Unexpected error during scan request", exc_info=True)
             return StatusResponse(status=StatusResponseEnum.ERROR, description="Unexpected error in scan request", message=str(e))
+
+    async def scan_file_request_batch(self, scan_requests: list[ScanRequestModel], batch_size: int | None = None) -> StatusResponse:
+        if not scan_requests:
+            return StatusResponse(status=StatusResponseEnum.NOTHING, message="No scan requests", description="empty_batch")
+
+        prepared: list[dict[str, Any]] = []
+        skipped = 0
+        for req in scan_requests:
+            ok, _ = self._prepare_scan_request_common(req)
+            if not ok:
+                skipped += 1
+                continue
+            prepared.append(jsonable_encoder(req))
+
+        if not prepared:
+            return StatusResponse(
+                status=StatusResponseEnum.NOTHING,
+                message="No scan requests queued",
+                description=f"all_skipped={skipped}",
+            )
+
+        try:
+            job_id = getattr(scan_requests[0], "scan_job_id", None)
+            if job_id and _SCAN_JOB_ID.get() == job_id and await self._is_job_paused_or_cancelled(job_id):
+                return StatusResponse(
+                    status=StatusResponseEnum.NOTHING,
+                    message="Job paused",
+                    description=f"scan_job_id={job_id}",
+                )
+        except Exception:
+            pass
+
+        payload: dict[str, Any] = {"requests": prepared}
+        if isinstance(batch_size, int) and batch_size > 0:
+            payload["batch_size"] = batch_size
+
+        try:
+            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, "request_batch")
+            resp = await self._post_json_with_optional_hmac(url, payload)
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+            queued = int(body.get("queued_items") or len(prepared))
+            self.scan_request_count += queued
+            return StatusResponse(
+                status=StatusResponseEnum.SUCCESS,
+                message=f"Batch scan queued ({queued} items)",
+                description=f"batch_size={payload.get('batch_size', 'default')} skipped={skipped}",
+            )
+        except httpx.ConnectError as e:
+            dsx_logging.warning("dsx-connect unreachable during batch scan request: %s", e)
+            return StatusResponse(
+                status=StatusResponseEnum.ERROR,
+                description="dsx-connect unreachable",
+                message="Failed to deliver batch scan request; dsx-connect not reachable.",
+            )
+        except httpx.HTTPStatusError as e:
+            dsx_logging.error("HTTP error during batch scan request", exc_info=True)
+            return StatusResponse(
+                status=StatusResponseEnum.ERROR,
+                description="Failed to send batch scan request",
+                message=str(e),
+            )
+        except Exception as e:
+            dsx_logging.error("Unexpected error during batch scan request", exc_info=True)
+            return StatusResponse(
+                status=StatusResponseEnum.ERROR,
+                description="Unexpected error in batch scan request",
+                message=str(e),
+            )
 
     async def get_status(self):
         dsxa_status = await self.test_dsx_connect()
@@ -705,7 +832,13 @@ class DSXAConnectorRouter(APIRouter):
                                         message="No handler registered for quarantine_action",
                                         description="Add a decorator (ex: @connector.item_action) to handle item_action requests")
 
-    async def _run_full_scan(self, limit: int | None, job_id: str):
+    async def _run_full_scan(
+        self,
+        limit: int | None,
+        job_id: str,
+        batch: bool = False,
+        batch_size: int | None = None,
+    ):
         """Run connector full_scan handler within a scan-job context."""
         token = _SCAN_JOB_ID.set(job_id)
         ctoken = _SCAN_ENQ_COUNTER.set(0)
@@ -713,13 +846,17 @@ class DSXAConnectorRouter(APIRouter):
             handler = self._connector.full_scan_handler
             if not handler:
                 return
-            # Call with limit if supported
+            # Pass only supported parameters to preserve backwards compatibility.
             try:
                 params = inspect.signature(handler).parameters
-                if 'limit' in params:
-                    await handler(limit)  # type: ignore[misc]
-                else:
-                    await handler()  # type: ignore[misc]
+                kwargs: dict[str, Any] = {}
+                if "limit" in params:
+                    kwargs["limit"] = limit
+                if "batch" in params:
+                    kwargs["batch"] = batch
+                if "batch_size" in params:
+                    kwargs["batch_size"] = batch_size
+                await handler(**kwargs)  # type: ignore[misc]
             except ValueError:
                 # Fallback: call without inspection
                 await handler()  # type: ignore[misc]
@@ -757,27 +894,33 @@ class DSXAConnectorRouter(APIRouter):
             except Exception:
                 pass
 
-    async def post_full_scan(self, request: Request, background_tasks: BackgroundTasks) -> StatusResponse:
-        # Optional limit=N query to enqueue a small sample for testing
-        limit_q = request.query_params.get("limit")
-        try:
-            limit = int(limit_q) if limit_q is not None else None
-            if limit is not None and limit < 1:
-                limit = 1
-        except Exception:
-            limit = None
+    async def post_full_scan(
+        self,
+        request: Request,
+        background_tasks: BackgroundTasks,
+        limit: int | None = Query(
+            default=None,
+            ge=1,
+            description="Maximum number of items to enqueue in this run. Leave null to process all discovered items.",
+        ),
+        batch: bool = Query(default=False, description="Request batched enqueue mode when supported by connector/core."),
+        batch_size: int | None = Query(default=None, ge=1, description="Requested batch size; clamped by core max."),
+        job_id: str | None = Query(default=None, description="Optional existing job ID; if omitted, connector generates one."),
+    ) -> StatusResponse:
 
         if self._connector.full_scan_handler:
             # Allow caller to provide job_id, else generate a new one
-            job_id = request.query_params.get("job_id") or str(uuid.uuid4())
+            job_id = job_id or str(uuid.uuid4())
             # Schedule within the running event loop to avoid threadpool/no-loop issues
-            asyncio.create_task(self._run_full_scan(limit, job_id))
+            asyncio.create_task(self._run_full_scan(limit, job_id, batch=batch, batch_size=batch_size))
             return StatusResponse(
                 status=StatusResponseEnum.SUCCESS,
                 message="Full scan initiated",
                 description=(
                     "The scan is running in the background. "
                     f"job_id={job_id}{f' limit={limit}' if limit else ''}"
+                    f"{f' batch={batch}' if batch else ''}"
+                    f"{f' batch_size={batch_size}' if batch_size else ''}"
                 )
             )
         return StatusResponse(status=StatusResponseEnum.ERROR,

@@ -331,7 +331,7 @@ class ScanRequestWorker(BaseWorker):
         else:
             metadata_info = f"file-loc:{file_path},file-meta:{safe_meta}"
         if task_id:
-            metadata_info += f",task-id:{_encode_value(task_id)}"
+            metadata_info += f",scan_request_task_id:{_encode_value(task_id)}"
         return metadata_info
 
     def _convert_verdict(self, resp):

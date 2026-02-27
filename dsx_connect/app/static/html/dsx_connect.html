@@ -459,6 +459,7 @@
     let connectorRegistrationSSE = null;
     const MAX_RESULTS = 1000; // cap rows for performance
     const seenJobIds = new Set();
+    const diannaResultsByScanKey = new Map();
     let currentJobFilter = localStorage.getItem('jobFilter') || '';
     let jobFocusJobId = '';
     let jobMeta = {};
@@ -1655,6 +1656,15 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
         const dotColor = isReady ? 'var(--card-status-ok)' : '#f59e0b';
         const dotTitle = isReady ? 'Ready' : 'Not ready';
+        const issueIcon = !isReady ? `
+                    <i class="fas fa-triangle-exclamation"
+                       style="font-size: 0.95rem; cursor: pointer; color: #f59e0b; opacity: 0.9; transition: opacity 0.2s;"
+                       title="View readiness issue"
+                       onclick="showConnectorIssue('${conn.uuid}', '${(displayName || '').replace(/'/g, "\'")}')"
+                       onmouseover="this.style.opacity='1'"
+                       onmouseout="this.style.opacity='0.9'">
+                    </i>
+        ` : '';
 
         const displayName = (cfg && cfg.display_name) ? cfg.display_name : conn.name;
         card.innerHTML = `
@@ -1670,6 +1680,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         border-radius: 50%;
                         animation: pulse 2s infinite;
                     " title="${dotTitle}"></span>
+                    ${issueIcon}
                     <i class="fas fa-cog"
                        style="font-size: 0.9rem; cursor: pointer; color: var(--text-secondary); opacity: 0.7; transition: opacity 0.2s;"
                        title="View configuration"
@@ -1905,6 +1916,57 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     }
 
     // ===== SCAN RESULTS =====
+    function buildScanKey(connectorUrl, location) {
+        const cu = String(connectorUrl || '').trim();
+        const loc = String(location || '').trim();
+        if (!cu || !loc) return '';
+        return `${cu}::${loc}`;
+    }
+
+    function renderDiannaPanel(evt) {
+        if (!evt || typeof evt !== 'object') {
+            return `<div style="color: var(--text-secondary);">DIANNA: no analysis yet.</div>`;
+        }
+        const st = String(evt.status || 'UPDATED').toUpperCase();
+        const color = (
+            st === 'SUCCESS' ? 'var(--card-status-ok)'
+            : (st === 'QUEUED' ? 'var(--text-secondary)'
+            : 'var(--status-fail)')
+        );
+        const analysisObj = evt.analysis && typeof evt.analysis === 'object' ? evt.analysis : null;
+        const pretty = analysisObj ? JSON.stringify(analysisObj, null, 2) : '';
+        const err = evt.error ? `<div><strong>Error:</strong> ${escHtml(evt.error)}</div>` : '';
+        return `
+            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
+                <div style="margin-bottom: 4px;">
+                    <strong>DIANNA:</strong>
+                    <span style="color: ${color};">${escHtml(st)}</span>
+                </div>
+                ${err}
+                ${pretty ? `<pre>${escHtml(pretty)}</pre>` : ''}
+            </div>
+        `;
+    }
+
+    function applyDiannaToRenderedRows(scanKey) {
+        if (!scanKey) return;
+        const evt = diannaResultsByScanKey.get(scanKey);
+        if (!evt) return;
+        const panels = document.querySelectorAll('.dianna-analysis-panel');
+        panels.forEach((panel) => {
+            if (panel.dataset.scanKey === scanKey) {
+                panel.innerHTML = renderDiannaPanel(evt);
+            }
+        });
+    }
+
+    function ingestDiannaEvent(evt) {
+        const key = buildScanKey(evt?.connector_url, evt?.location);
+        if (!key) return;
+        diannaResultsByScanKey.set(key, evt);
+        applyDiannaToRenderedRows(key);
+    }
+
     function renderScanResult(data) {
         if (!data || typeof data !== 'object') return;
         // Unwrap nested { type: 'scan_result', scan_result: {...} }
@@ -1940,10 +2002,16 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const fileType = rec.verdict?.file_info?.file_type || '';
         const [fileIconClass, colorClass] = getFileTypeIcon(fileType);
         const uniqueId = `expand-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        const scanKey = buildScanKey(
+            rec.scan_request?.connector_url || rec.scan_request?.connector?.url || rec.connector_url,
+            rec.scan_request?.location
+        );
+        const diannaEvt = scanKey ? diannaResultsByScanKey.get(scanKey) : null;
 
         const row = document.createElement('tr');
         row.dataset.resultRow = '1';
         row.dataset.jobId = jobId;
+        row.dataset.scanKey = scanKey;
         row.classList.add('clickable-row');
         row.addEventListener('click', () => toggleDetail(uniqueId));
         row.innerHTML = `
@@ -1967,18 +2035,21 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         detailRow.style.display = 'none';
         row.dataset.detailId = uniqueId;
         detailRow.dataset.jobId = jobId;
+        detailRow.dataset.scanKey = scanKey;
         const canAnalyze = (verdict?.verdict || '').toLowerCase() === 'malicious' && rec.scan_request?.connector?.uuid && rec.scan_request?.location;
         const analyzeBtn = canAnalyze ? `<button id="btn-di-${uniqueId}" class="btn btn-small" style="margin: 6px 0;" title="Analyze with DIANNA">Analyze with DIANNA</button>` : '';
         detailRow.innerHTML = `
             <td colspan="3" class="detail-row-content">
                 <div style="margin-bottom: 6px; display:flex; justify-content: space-between; align-items: center; gap: 12px;">
                     <div>
+                        <div><strong>scan_request_task_id:</strong> <code>${escHtml(rec.scan_request_task_id || '-')}</code></div>
                         <strong>Path:</strong>
                         <span style="white-space: pre-wrap;">${rec.scan_request?.metainfo || '-'}</span>
                     </div>
                     ${analyzeBtn}
                 </div>
                 <pre>${JSON.stringify(rec.verdict, null, 2)}</pre>
+                <div class="dianna-analysis-panel" data-scan-key="${escHtml(scanKey)}">${renderDiannaPanel(diannaEvt)}</div>
             </td>
         `;
         if (canAnalyze) {
@@ -2163,6 +2234,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     return;
                 }
                 if (message.type === 'dianna_analysis') {
+                    ingestDiannaEvent(message);
                     const loc = message.location || '(unknown file)';
                     const st = String(message.status || '').toUpperCase();
                     if (st === 'QUEUED') {
@@ -2320,6 +2392,59 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
     // Kick off meta load early (version badge)
     loadMetaFooter();
+
+    function escHtml(v) {
+        return String(v ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+    }
+
+    async function showConnectorIssue(uuid, connectorName) {
+        const modal = document.getElementById('configModal');
+        const title = document.getElementById('configModalTitle');
+        const content = document.getElementById('configModalContent');
+
+        title.textContent = `Readiness Issue: ${connectorName}`;
+        content.innerHTML = 'Loading readiness details...';
+        modal.style.display = 'block';
+
+        const lines = [];
+        const pushLine = (label, value) => {
+            if (value == null || value === '') return;
+            lines.push(`<div><strong>${escHtml(label)}:</strong> ${escHtml(value)}</div>`);
+        };
+
+        try {
+            const rz = await fetchSafe(r.connectors.readyz(uuid));
+            let rzBody = {};
+            try { rzBody = rz ? await rz.json().catch(() => ({})) : {}; } catch {}
+            pushLine('readyz HTTP', rz ? rz.status : 'network error');
+            pushLine('status', rzBody.status);
+            pushLine('meta_info', rzBody.meta_info);
+            pushLine('repo reason', rzBody.last_repo_check_reason);
+            pushLine('repo message', rzBody.last_repo_check_message);
+            if (rzBody.detail) pushLine('detail', rzBody.detail);
+
+            const rc = await fetchSafe(r.connectors.repocheck(uuid));
+            let rcBody = {};
+            try { rcBody = rc ? await rc.json().catch(() => ({})) : {}; } catch {}
+            pushLine('repo_check HTTP', rc ? rc.status : 'network error');
+            pushLine('repo_check status', rcBody.status);
+            pushLine('repo_check message', rcBody.message);
+            pushLine('repo_check description', rcBody.description);
+
+            if (!lines.length) {
+                content.innerHTML = '<div class="config-error">No issue details available.</div>';
+                return;
+            }
+            content.innerHTML = `<div class="config-tree">${lines.join('')}</div>`;
+        } catch (error) {
+            content.innerHTML = `<div class="config-error">Failed to load readiness issue: ${escHtml(error?.message || error)}</div>`;
+        }
+    }
 
     async function showConnectorConfig(uuid, connectorName) {
         const modal = document.getElementById('configModal');

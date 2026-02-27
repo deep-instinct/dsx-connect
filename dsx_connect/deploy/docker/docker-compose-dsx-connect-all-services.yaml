@@ -132,6 +132,26 @@ services:
       --concurrency=${DSXCONNECT_NOTIFICATION_WORKER_CONCURRENCY:-1}
     restart: unless-stopped
 
+  dsx_connect_dianna_worker:
+    image: *core-image
+    environment:
+      <<: *common-env
+      LOG_LEVEL: debug
+      DSXCONNECT_DIANNA__MANAGEMENT_URL: ${DSXCONNECT_DIANNA__MANAGEMENT_URL}
+      DSXCONNECT_DIANNA__API_TOKEN: ${DSXCONNECT_DIANNA__API_TOKEN}
+      DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS: ${DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dsx-network
+    command: >
+      celery -A dsx_connect.taskworkers.celery_app.celery_app worker
+      --loglevel=warning
+      -Q dev.dsx_connect.analyze.dianna
+      --concurrency=${DSXCONNECT_DIANNA_WORKER_CONCURRENCY:-1}
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine  # Use newer version
     networks:

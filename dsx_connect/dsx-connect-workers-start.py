@@ -36,16 +36,21 @@ if __name__ == "__main__":
     print(f"  - {Queues.RESULT}")
     print(f"  - {Queues.NOTIFICATION}")
     print(f"  - {Queues.ANALYZE}")
+    if getattr(config.workers, "scan_request_batch_enabled", False):
+        print(f"  - {Queues.REQUEST_BATCH}")
 
     pool = os.getenv("DSXCONNECT_WORKER_POOL", "solo")
     concurrency = int(os.getenv("DSXCONNECT_WORKER_CONCURRENCY",
                                 os.getenv("DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY", "1")))
+    queues = [Queues.REQUEST, Queues.VERDICT, Queues.RESULT, Queues.NOTIFICATION, Queues.ANALYZE]
+    if getattr(config.workers, "scan_request_batch_enabled", False):
+        queues.append(Queues.REQUEST_BATCH)
 
     dsx_logging.info(f"Starting Celery worker (pool={pool}, concurrency={concurrency})...")
     celery_app.worker_main([
         "worker",
         "--loglevel=warning",
         f"--pool={pool}",
-        f"--queues={Queues.REQUEST},{Queues.VERDICT},{Queues.RESULT},{Queues.NOTIFICATION},{Queues.ANALYZE}",  #,{config.celery_app.encrypted_file_queue}
+        f"--queues={','.join(queues)}",  # include batch queue when enabled
         f"--concurrency={concurrency}"
     ])

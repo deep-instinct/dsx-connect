@@ -1,113 +1,126 @@
-# Filesystem Connector — Helm Deployment
+# Filesystem Connector (Kubernetes)
 
-Deploy the `filesystem-connector-chart` (under `connectors/filesystem/deploy/helm`) to scan on-prem or mounted network shares from Kubernetes.
+The Filesystem connector integrates with storage that is accessible as a mounted filesystem.
 
-## Prerequisites
+In Kubernetes, the behavior of this connector is determined entirely by the **storage model backing the volume**.
 
-- Kubernetes 1.19+ cluster with `kubectl`.
-- Helm 3.2+.
-- Access to `oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart`.
-- A volume (PVC, hostPath, or CSI driver) that exposes the filesystem to be scanned.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+Before deploying, to understand which storage model is suitable for your environment: [Concepts → Choosing the Right Connector](../../xconcepts/choosing-the-right-connector)
 
-## Preflight Tasks
+---
 
-1. Provision the volume and (if using PVC) bind it in the connector namespace.
-2. Decide where the volume should mount inside the pod (default `/app/scan_folder`).
-3. Decide where quarantine moves should land (reuse the same volume or mount a second one).
-4. Confirm the namespace can reach dsx-connect’s service/ingress.
+## Recommended Pattern: PVC-Backed Storage
 
-## Configuration
+In production Kubernetes environments, the Filesystem connector should mount storage via a PersistentVolumeClaim (PVC).
 
-### Required settings
+This allows:
 
-- `scanVolume.*`: enable the mount and point to the PVC/hostPath plus `mountPath`.
-- `quarantineVolume.*` (optional but recommended when using `move`/`move_tag`): mount a PVC/hostPath to `/app/quarantine`.
-- `env.DSXCONNECTOR_ASSET`: automatically set to `scanVolume.mountPath`, override if needed.
-- `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`: set automatically to `quarantineVolume.mountPath` when enabled (defaults to `/app/quarantine` if not).
-- `env.DSXCONNECTOR_FILTER`: optional rsync-style include/exclude list (see [Filter reference](../../reference/filters.md)).
-- Monitoring flags: `env.DSXCONNECTOR_MONITOR`, `env.DSXCONNECTOR_MONITOR_FORCE_POLLING`, `env.DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS`.
-- Remediation: `env.DSXCONNECTOR_ITEM_ACTION`, `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`.
-- `workers` and `replicaCount` for concurrency/HA.
+- Node-independent scheduling
+- Portability across cluster nodes
+- Horizontal scalability
+- Alignment with Kubernetes storage architecture
 
-### Storage examples
-
-PVC:
+In the helm chart for this connector, note the examples/volume-mounts/ directory, which contains examples of how to mount a PVC to NFS, SMB, EFS, etc...
+Example:
 
 ```yaml
-scanVolume:
-  enabled: true
-  existingClaim: my-files-pvc
-  mountPath: /app/scan_folder
+volumeMounts:
+  - name: scan-root
+    mountPath: /app/scan_folder
+
+volumes:
+  - name: scan-root
+    persistentVolumeClaim:
+      claimName: dsxconnect-scan-pvc
 ```
 
-HostPath (single-node dev):
+### Storage Requirements
+
+For multi-replica deployments, the storage class should support:
+
+* `ReadWriteMany` (RWX)
+
+Examples:
+
+* NFS
+* Windows Fileshares (SMB)
+* AWS EFS
+* Azure Files
+* CephFS
+* Longhorn (RWX)
+
+When backed by network storage, the Filesystem connector behaves similarly to object storage connectors.
+
+---
+
+## Node-Local Storage (`hostPath`) - i.e. Scan a Local Filesystem
+
+For single-node clusters (k3s, Colima, etc.), you may mount node-local storage using `hostPath`.
+
+Example:
 
 ```yaml
-scanVolume:
-  enabled: true
-  hostPath: /Users/<you>/scan-data
-  mountPath: /app/scan_folder
+volumes:
+  - name: scan-root
+    hostPath:
+      path: /mnt/DESKTOP1/share
+      type: Directory
 ```
 
-Note: `scanVolume.enabled` must be `true` or the connector will scan an empty directory. On Colima, ensure the host path is shared with the VM (for example, via `colima start --mount ...`) or the pod will see an empty mount.
+### Important
 
-Quarantine volume (optional; good for move/move_tag):
+* `hostPath` binds the connector to a specific node.
+* Scaling replicas requires identical paths across nodes.
+* Scheduling constraints may be required.
+* Behavior varies by platform.
 
-```yaml
-quarantineVolume:
-  enabled: true
-  hostPath: /Users/<you>/scan-data/dsxconnect-quarantine
-  mountPath: /app/quarantine
-```
+This pattern is suitable for:
 
-Verify after deployment:
+* Development
+* Edge nodes
+* Controlled single-node clusters
 
-```bash
-kubectl exec -it deploy/<release-name> -- ls /app/scan_folder
-```
+For purely node-local scanning, Docker Compose may be operationally simpler.
 
-### dsx-connect endpoint
+---
 
-Defaults to `http://dsx-connect-api` (or HTTPS when TLS is on). Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` for external endpoints.
+## Scaling Considerations
 
-### Authentication (Optional)
-See [Using DSX-Connect Authentication](authentication.md).
+Even with shared RWX storage:
 
-### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](tls.md).
+* Multiple replicas scanning the same root will duplicate enumeration.
+* Partition large datasets using asset-based sharding.
 
-### Ingress & NetworkPolicy (optional)
+Example:
 
-- Enable `ingressWebhook` if you must expose `/filesystem-connector/webhook/event`.
-- Use `networkPolicy.allowFrom` to restrict ingress to dsx-connect and your ingress controller (example in the chart values).
+* `/data/shard1`
+* `/data/shard2`
+* `/data/shard3`
 
-## Deployment
+Each connector instance should own a distinct root.
 
-### Method 1 – OCI chart with CLI overrides (fastest)
+See:
 
-```bash
-helm install fs-dev oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
-  --version <chart-version> \
-  --set scanVolume.enabled=true \
-  --set scanVolume.existingClaim=my-pvc \
-  --set-string env.DSXCONNECTOR_FILTER="" \
-  --set-string image.tag=<connector-version>
-```
+[Concepts → Performance & Throughput](../../concepts/performance.md)
 
-For pulled-chart installs and GitOps/production patterns (values files, Flux/Argo), see [Advanced Connector Deployment](advanced-connector-deployment.md).
+---
 
-## Verification
+## Production Guidance
 
-```bash
-helm list
-kubectl get pods
-kubectl logs deploy/filesystem-connector -f
-```
+| Environment              | Recommended Storage         |
+| ------------------------ | --------------------------- |
+| Docker Compose           | Host mount or network share |
+| Kubernetes (single node) | hostPath acceptable         |
+| Kubernetes (cluster)     | PVC with RWX storage        |
 
-## Scaling guidance
+---
 
-- Increase `workers` for additional in-pod `read_file` concurrency.
-- Raise `replicaCount` for HA. Each pod registers independently; replicas do not split an individual full scan but improve throughput/resiliency.
+## Summary
 
-See `connectors/filesystem/deploy/helm/values.yaml` for the full parameter reference.
+The Filesystem connector is storage-agnostic.
+
+Operational differences arise from the storage backend:
+
+* Node-local storage introduces scheduling constraints.
+* Network-backed storage aligns with Kubernetes architecture.
+* The connector model remains consistent across both.
+

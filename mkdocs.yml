@@ -118,6 +118,7 @@ nav:
       - Performance & Throughput: concepts/performance.md
       - Job Comparison Explained: concepts/job-comparison.md
       - Choosing Your Deployment: concepts/deployment-models.md
+      - Choose Your Connector: concepts/choosing-the-right-connector.md
 
   - Deployment:
       - Docker Compose:
@@ -133,6 +134,7 @@ nav:
               - SharePoint: deployment/docker/sharepoint.md
               - AWS S3 (reference architecture): deployment/docker/aws-s3.md
               - Azure Blob Storage (reference architecture): deployment/docker/azure-blob.md
+          - Storage & Mounts: deployment/docker/storage-mounts.md
 
       - Kubernetes (Helm):
           - Resource Recommendations: deployment/kubernetes/resource-recommendations.md

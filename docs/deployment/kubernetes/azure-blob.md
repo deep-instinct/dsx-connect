@@ -13,7 +13,7 @@ Use this guide to deploy `azure-blob-storage-connector-chart` (found under `conn
 ## Preflight Tasks
 
 1. Create the Azure Storage connection-string Secret **before** installing the chart:
-   - Edit and apply `connectors/azure_blob_storage/deploy/helm/azure-secret.yaml`, **or**
+   - Edit and apply `connectors/azure_blob_storage/deploy/helm/examples/azure-secret.yaml`, **or**
    - Create it inline:
      ```bash
      kubectl create secret generic azure-storage-connection-string \

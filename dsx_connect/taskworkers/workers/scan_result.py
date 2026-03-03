@@ -240,6 +240,18 @@ class ScanResultWorker(BaseWorker):
             from dsx_connect.config import get_config
             cfg = get_config()
 
+            # UI notification first so frontend is not blocked by downstream extras
+            if getattr(cfg.workers, "enable_notifications", True):
+                try:
+                    celery_app.send_task(
+                        name=Tasks.NOTIFICATION,
+                        queue=Queues.NOTIFICATION,
+                        args=[scan_result.model_dump()]
+                    )
+                    dsx_logging.debug("[scan_result] notification published")
+                except Exception as e:
+                    dsx_logging.warning(f"[scan_result] notify failed: {e}")
+
             if getattr(cfg.workers, "enable_scan_results_db", True):
                 try:
                     self.__class__._scan_results_db.insert(scan_result)
@@ -262,18 +274,6 @@ class ScanResultWorker(BaseWorker):
                     except Exception:
                         loc = "?"
                     dsx_logging.warning(f"[scan_result] stats update failed (loc={loc}): {e}")
-
-            # Example: UI notifications
-            if getattr(cfg.workers, "enable_notifications", True):
-                try:
-                    task = celery_app.send_task(
-                        name=Tasks.NOTIFICATION,
-                        queue=Queues.NOTIFICATION,
-                        args=[scan_result.model_dump()]
-                    )
-                    dsx_logging.debug("[scan_result] notification published")
-                except Exception as e:
-                    dsx_logging.warning(f"[scan_result] notify failed: {e}")
 
             # Optionally trigger DIANNA analysis on malicious verdicts
             try:
@@ -332,13 +332,31 @@ class ScanResultWorker(BaseWorker):
                                 "location": sr.location,
                                 "metainfo": getattr(sr, 'metainfo', sr.location),
                             }
-                            celery_app.send_task(
+                            scan_request_task_id = getattr(scan_result, "scan_request_task_id", None)
+                            # Idempotency guard for auto mode: only enqueue once per scan_request_task_id.
+                            auto_key = None
+                            r = getattr(self.__class__, "_redis", None)
+                            if scan_request_task_id and r is not None:
+                                auto_key = f"dsxconnect:dianna:auto:enqueued:{scan_request_task_id}"
+                                if not r.set(auto_key, "1", nx=True, ex=90 * 24 * 3600):
+                                    dsx_logging.info(
+                                        f"[scan_result] auto DIANNA already enqueued for scan_request_task_id={scan_request_task_id}"
+                                    )
+                                    return
+                            async_result = celery_app.send_task(
                                 Tasks.DIANNA_ANALYZE,
                                 args=[payload],
-                                kwargs={},
+                                kwargs={
+                                    "scan_request_task_id": scan_request_task_id,
+                                    "scan_job_id": getattr(scan_result, "scan_job_id", None),
+                                    "source": "auto",
+                                },
                                 queue=Queues.ANALYZE,
                             )
-                            dsx_logging.info("[scan_result] auto DIANNA analysis enqueued")
+                            dsx_logging.info(
+                                f"[scan_result] auto DIANNA analysis enqueued task={async_result.id} "
+                                f"scan_request_task_id={scan_request_task_id}"
+                            )
             except Exception as e:
                 dsx_logging.warning(f"[scan_result] auto-dianna failed: {e}")
 

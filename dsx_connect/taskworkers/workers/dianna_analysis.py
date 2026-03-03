@@ -45,11 +45,51 @@ class DiannaAnalysisWorker(BaseWorker):
         return payload
 
     def execute(self, scan_request_dict: dict, *, archive_password: str | None = None,
-                scan_request_task_id: str | None = None) -> str:
+                scan_request_task_id: str | None = None, scan_job_id: str | None = None, source: str | None = None) -> str:
         # Validate minimal scan request using existing model
         scan_req = ScanRequestModel.model_validate(scan_request_dict)
 
         cfg = get_config().dianna
+        terminal_statuses = {"SUCCESS", "FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}
+
+        def _persist_terminal_result(*, status: str, analysis: Dict[str, Any] | None = None,
+                                     analysis_id: str | int | None = None, upload_id: str | None = None,
+                                     message: str | None = None) -> None:
+            try:
+                from dsx_connect.database.dianna_analysis_results_redis import DiannaAnalysisResultsRedis
+                store = DiannaAnalysisResultsRedis(
+                    database_loc=getattr(cfg, "index_database_loc", str(get_config().redis_url)),
+                    retain_days=getattr(cfg, "index_retain_days", 90),
+                )
+                payload = {
+                    "event": "dianna_analysis_result",
+                    "status": status,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
+                    "dianna_analysis_task_id": self.context.task_id,
+                    "analysis_id": str(analysis_id) if analysis_id is not None else None,
+                    "upload_id": upload_id,
+                    "location": scan_req.location,
+                    "connector_url": scan_req.connector_url,
+                    "sha256": sha256,
+                    "analysis": analysis or {},
+                    "message": message,
+                    "timestamp": int(time.time()),
+                }
+                store.put(
+                    self.context.task_id,
+                    payload,
+                    scan_request_task_id=scan_request_task_id,
+                )
+                try:
+                    from json import dumps
+                    syslog_logger.info(dumps(payload))
+                except Exception:
+                    pass
+            except Exception as e:
+                dsx_logging.warning(f"[dianna:{self.context.task_id}] persist terminal result failed: {e}")
+
         chunk_size = int(cfg.chunk_size)
         file_stream, total_size = self._read_file_stream_from_connector(scan_req, chunk_size)
         if total_size is None:
@@ -113,6 +153,9 @@ class DiannaAnalysisWorker(BaseWorker):
                             "connector_url": scan_req.connector_url,
                             "sha256": sha256,
                             "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                             "analysis": resp_json or {},
                             "error": msg,
                         }
@@ -134,7 +177,7 @@ class DiannaAnalysisWorker(BaseWorker):
                                 if gr.status_code == 200:
                                     immediate_result = gr.json() if gr.content else {}
                                     status = str((immediate_result or {}).get("status", "")).upper()
-                                    if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
+                                    if status in terminal_statuses:
                                         break
                                 time.sleep(interval)
                         except Exception as e:
@@ -161,6 +204,9 @@ class DiannaAnalysisWorker(BaseWorker):
                             "connector_url": scan_req.connector_url,
                             "sha256": sha256,
                             "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                             "analysis": final_analysis,
                             "is_malicious": bool((final_analysis or {}).get("isFileMalicious", False)),
                         }
@@ -175,12 +221,22 @@ class DiannaAnalysisWorker(BaseWorker):
                             "connector_url": scan_req.connector_url,
                             "sha256": sha256,
                             "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                             "phase": "RESULT",
                             "analysis": final_analysis,
                         }))
                     except Exception:
                         pass
                     if final_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
+                        _persist_terminal_result(
+                            status=final_status,
+                            analysis=final_analysis,
+                            analysis_id=analysis_id,
+                            upload_id=upload_id,
+                            message="DIANNA returned terminal failure status",
+                        )
                         return self._result_payload(
                             status=final_status,
                             analysis_id=analysis_id,
@@ -188,6 +244,12 @@ class DiannaAnalysisWorker(BaseWorker):
                             response=final_analysis,
                             message="DIANNA returned terminal failure status",
                         )
+                    _persist_terminal_result(
+                        status=final_status or "SUCCESS",
+                        analysis=final_analysis,
+                        analysis_id=analysis_id,
+                        upload_id=upload_id,
+                    )
                     return self._result_payload(
                         status=final_status or "SUCCESS",
                         analysis_id=analysis_id,
@@ -209,6 +271,9 @@ class DiannaAnalysisWorker(BaseWorker):
                         "connector_url": scan_req.connector_url,
                         "sha256": sha256,
                         "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                     }
                     notifier.publish_scan_results_sync(ui_event)
                 except Exception:
@@ -227,7 +292,7 @@ class DiannaAnalysisWorker(BaseWorker):
                                 analysis_result = gr.json() if gr.content else {}
                                 status = str((analysis_result or {}).get("status", "")).upper()
                                 last_status = status or last_status
-                                if status in {"SUCCESS", "FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
+                                if status in terminal_statuses:
                                     break
                             # Non-200: treat as transient and keep polling
                         except Exception:
@@ -251,6 +316,9 @@ class DiannaAnalysisWorker(BaseWorker):
                             "connector_url": scan_req.connector_url,
                             "sha256": sha256,
                             "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                             "analysis": analysis_result,
                             "is_malicious": bool((analysis_result or {}).get("isFileMalicious", False)),
                         }
@@ -259,16 +327,25 @@ class DiannaAnalysisWorker(BaseWorker):
                         pass
 
                 terminal_status = str((analysis_result or {}).get("status", "")).upper() if analysis_result else None
-                if terminal_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
-                    dsx_logging.warning(
-                        f"[dianna:{self.context.task_id}] analysis failed for {scan_req.location} "
-                        f"(status={terminal_status}, upload_id={upload_id})"
+                if terminal_status in terminal_statuses:
+                    if terminal_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"}:
+                        dsx_logging.warning(
+                            f"[dianna:{self.context.task_id}] analysis failed for {scan_req.location} "
+                            f"(status={terminal_status}, upload_id={upload_id})"
+                        )
+                    _persist_terminal_result(
+                        status=terminal_status,
+                        analysis=analysis_result,
+                        analysis_id=(analysis_result or {}).get("analysisId"),
+                        upload_id=upload_id,
+                        message=("DIANNA returned terminal failure status" if terminal_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"} else None),
                     )
                     return self._result_payload(
                         status=terminal_status,
+                        analysis_id=(analysis_result or {}).get("analysisId"),
                         upload_id=upload_id,
                         response=analysis_result,
-                        message="DIANNA returned terminal failure status",
+                        message=("DIANNA returned terminal failure status" if terminal_status in {"FAILED", "ERROR", "CANCELLED", "UNSUPPORTED_FILE_TYPE"} else None),
                     )
         except httpx.HTTPStatusError as e:
             code = getattr(e.response, 'status_code', 'unknown')
@@ -288,6 +365,9 @@ class DiannaAnalysisWorker(BaseWorker):
                     "connector_url": scan_req.connector_url,
                     "sha256": sha256,
                     "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                     "error": msg,
                 }
                 notifier.publish_scan_results_sync(ui_event)
@@ -310,6 +390,9 @@ class DiannaAnalysisWorker(BaseWorker):
                     "connector_url": scan_req.connector_url,
                     "sha256": sha256,
                     "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                     "error": msg,
                 }
                 notifier.publish_scan_results_sync(ui_event)
@@ -333,6 +416,9 @@ class DiannaAnalysisWorker(BaseWorker):
                     "connector_url": scan_req.connector_url,
                     "sha256": sha256,
                     "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
                     "error": msg,
                 }
                 notifier.publish_scan_results_sync(ui_event)
@@ -348,6 +434,9 @@ class DiannaAnalysisWorker(BaseWorker):
                 "connector_url": scan_req.connector_url,
                 "sha256": sha256,
                 "upload_id": upload_id,
+                    "scan_request_task_id": scan_request_task_id,
+                    "scan_job_id": scan_job_id,
+                    "source": source,
             }
             from json import dumps
             # Upload completion

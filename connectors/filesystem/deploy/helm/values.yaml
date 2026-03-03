@@ -55,6 +55,15 @@ env:
 # Optional additional secrets projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
 envSecretRefs: []
 
+
+scanVolume:
+  enabled: false
+  mountPath: "/app/scan_folder"
+  existingClaim: ""
+  hostPath: ""
+  readOnly: false
+  subPath: ""
+
 quarantineVolume:
   enabled: false
   mountPath: "/app/quarantine"
@@ -68,14 +77,6 @@ auth_dsxconnect:
   clockSkewSeconds: 60
   enrollmentSecretName: ""
   enrollmentKey: ENROLLMENT_TOKEN  # Secret providing DSXCONNECT_ENROLLMENT_TOKEN when dsx-connect auth is enabled
-
-scanVolume:
-  enabled: false
-  mountPath: "/app/scan_folder"
-  existingClaim: ""
-  hostPath: ""
-  readOnly: false
-  subPath: ""
 
 dataVolume:
   enabled: true

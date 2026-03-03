@@ -15,7 +15,7 @@ Use this guide to deploy the `google-cloud-storage-connector-chart` for full sca
 Create the service-account Secret before installing:
 
 ```yaml
-# gcp-sa-secret.yaml
+# connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -27,7 +27,7 @@ stringData:
 ```
 
 ```bash
-kubectl apply -f gcp-sa-secret.yaml
+kubectl apply -f connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
 ```
 
 The chart references `gcp-sa` by default; set `serviceAccount.secretName` if you use a different name.

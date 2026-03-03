@@ -22,6 +22,7 @@ from dsx_connect.connectors.client import get_connector_client
 from dsx_connect.database.database_factory import database_scan_results_factory
 from dsx_connect.config import get_config
 from dsx_connect.database.dianna_siem_index_redis import DiannaSiemIndexRedis
+from dsx_connect.database.dianna_analysis_results_redis import DiannaAnalysisResultsRedis
 
 
 router = APIRouter(prefix=route_path(API_PREFIX_V1))
@@ -30,6 +31,10 @@ _results_database = database_scan_results_factory(
     retain=get_config().results_database.retain,
 )
 _dianna_index = DiannaSiemIndexRedis(
+    database_loc=get_config().dianna.index_database_loc,
+    retain_days=get_config().dianna.index_retain_days,
+)
+_dianna_results_store = DiannaAnalysisResultsRedis(
     database_loc=get_config().dianna.index_database_loc,
     retain_days=get_config().dianna.index_retain_days,
 )
@@ -172,7 +177,7 @@ async def request_dianna_analysis(
     async_result = celery_app.send_task(
         Tasks.DIANNA_ANALYZE,
         args=[scan_req.model_dump()],
-        kwargs={"archive_password": payload.archive_password},
+        kwargs={"archive_password": payload.archive_password, "source": "ui"},
         queue=Queues.ANALYZE,
     )
     dsx_logging.info(f"[dianna] enqueued analysis {async_result.id} for {payload.location}")
@@ -341,7 +346,7 @@ async def request_dianna_analysis_from_siem(
     async_result = celery_app.send_task(
         Tasks.DIANNA_ANALYZE,
         args=[scan_req.model_dump()],
-        kwargs={"archive_password": payload.archive_password},
+        kwargs={"archive_password": payload.archive_password, "scan_request_task_id": payload.scan_request_task_id, "scan_job_id": getattr(scan_req_from_result, "scan_job_id", None) if scan_req_from_result is not None else getattr(scan_req_from_index, "scan_job_id", None), "source": "siem"},
         queue=Queues.ANALYZE,
     )
     dsx_logging.info(
@@ -419,6 +424,36 @@ def _fetch_dianna_result_payload(analysis_id: str) -> dict:
         raise HTTPException(status_code=500, detail=f"dianna_result_lookup_failed: {e}") from e
 
 
+
+
+@router.get(
+    route_path(DSXConnectAPI.DIANNA_PREFIX, "result", "by-scan-request", "{scan_request_task_id}"),
+    name=route_name(DSXConnectAPI.DIANNA_PREFIX, "result-by-scan-request", Action.GET),
+    status_code=status.HTTP_200_OK,
+)
+async def get_dianna_result_by_scan_request_task_id(scan_request_task_id: str):
+    try:
+        persisted = _dianna_results_store.get_by_scan_request(scan_request_task_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"dianna_result_lookup_failed: {e}") from e
+
+    if not persisted:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "status": "not_found",
+                "scan_request_task_id": scan_request_task_id,
+                "message": "no persisted DIANNA result for scan_request_task_id",
+            },
+        )
+
+    return {
+        "status": "success",
+        "scan_request_task_id": scan_request_task_id,
+        "resolved_from": "persisted_terminal_result",
+        "result": persisted,
+    }
+
 @router.get(
     route_path(DSXConnectAPI.DIANNA_PREFIX, "result", "by-task", "{dianna_analysis_task_id}"),
     name=route_name(DSXConnectAPI.DIANNA_PREFIX, "result-by-task", Action.GET),
@@ -468,6 +503,18 @@ async def get_dianna_result_by_task_id(dianna_analysis_task_id: str):
             identifier = s
 
     if not identifier:
+        try:
+            persisted = _dianna_results_store.get_by_task(dianna_analysis_task_id)
+        except Exception:
+            persisted = None
+        if persisted:
+            return {
+                "status": "success",
+                "task_state": state,
+                "dianna_analysis_task_id": dianna_analysis_task_id,
+                "resolved_from": "persisted_terminal_result",
+                "result": persisted,
+            }
         return {
             "status": "accepted",
             "task_state": state,

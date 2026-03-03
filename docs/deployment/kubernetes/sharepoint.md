@@ -20,7 +20,7 @@ kubectl create secret generic sharepoint-credentials \
   --from-literal=DSXCONNECTOR_SP_CLIENT_SECRET=<client-secret>
 ```
 
-(`connectors/sharepoint/deploy/helm/sp-secret.yaml` provides a template if you prefer editing a manifest.)
+(`connectors/sharepoint/deploy/helm/examples/sp-secret.yaml` provides a template if you prefer editing a manifest.)
 
 ## Configuration
 

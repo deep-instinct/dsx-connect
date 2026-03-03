@@ -1,0 +1,39 @@
+###
+# Replace the command snippet in the docker-compose-dsx-connect-all-services.yaml file with this one to forward to splunk
+rsyslog:
+  image: rsyslog/rsyslog
+  networks:
+    dsx-network:
+      aliases: ["syslog", "rsyslog"]
+  restart: unless-stopped
+  user: "0:0"
+  cap_add: ["NET_BIND_SERVICE"]
+  entrypoint: ["/bin/sh","-lc"]
+  command:
+    - |
+      cat > /etc/rsyslog.conf << 'EOF'
+      module(load="imuxsock")
+      module(load="imtcp")
+      module(load="imudp")
+      
+      input(type="imtcp" port="514")
+      input(type="imudp" port="514")
+      
+      template(name="rawMsg" type="string" string="%msg%\n")
+      
+      # Local visibility in docker logs
+      *.* action(type="omfile" file="/dev/stdout" template="rawMsg")
+      
+      # Forward everything to Splunk TCP input
+      *.* action(
+        type="omfwd"
+        target="10.2.4.36"
+        port="1514"
+        protocol="tcp"
+        template="rawMsg"
+        action.resumeRetryCount="-1"
+        queue.type="linkedList"
+        queue.size="10000"
+      )
+      EOF
+      exec rsyslogd -n -f /etc/rsyslog.conf

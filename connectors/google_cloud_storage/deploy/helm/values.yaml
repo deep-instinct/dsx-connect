@@ -55,7 +55,7 @@ auth_dsxconnect:
 
 gcp:
   # Optional: mount a GCP service account JSON Secret and set GOOGLE_APPLICATION_CREDENTIALS
-  credentialsSecretName: "gcp-sa"  # see connectors/google_cloud_storage/deploy/helm/gcp-sa-secret.yaml
+  credentialsSecretName: "gcp-sa"  # see connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
   mountPath: "/app/creds"
   filename: "service-account.json"
 

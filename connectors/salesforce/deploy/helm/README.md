@@ -38,7 +38,7 @@ Notes:
 
 ## Secrets (JWT + TLS)
 
-Create a Secret for Salesforce JWT credentials (example: `sf-secret.yaml`):
+Create a Secret for Salesforce JWT credentials (example: `examples/sf-secret.yaml`):
 
 ```yaml
 apiVersion: v1
@@ -54,7 +54,7 @@ stringData:
 ```
 
 ```bash
-kubectl apply -f sf-secret.yaml
+kubectl apply -f examples/sf-secret.yaml
 ```
 
 Reference the secret in `values.yaml`:
@@ -64,7 +64,7 @@ envSecretRefs:
   - salesforce-connector-credentials
 ```
 
-Create a TLS Secret for connector HTTPS (example: `tls-secret.yaml`):
+Create a TLS Secret for connector HTTPS (example: `examples/tls-secret.yaml`):
 
 ```yaml
 apiVersion: v1
@@ -78,7 +78,7 @@ data:
 ```
 
 ```bash
-kubectl apply -f tls-secret.yaml
+kubectl apply -f examples/tls-secret.yaml
 ```
 
 Enable TLS in `values.yaml` (the chart mounts the secret as `salesforce-connector-tls`):

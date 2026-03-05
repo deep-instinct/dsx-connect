@@ -52,25 +52,11 @@ class DatabaseConfig(BaseSettings):
 class ScannerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__", populate_by_name=True)
     # Base URL for DSXA (without path). Example: http://0.0.0.0:5000
-    base_url: str = Field(
-        default="http://0.0.0.0:5000",
-        validation_alias=AliasChoices("DSXCONNECT_SCANNER__BASE_URL", "SCANNER_BASE_URL"),
-    )
+    base_url: str = "http://0.0.0.0:5000"
     # Backwards compatibility: full scan_binary_url; if provided, base_url is derived when not explicitly set.
-    scan_binary_url: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("DSXCONNECT_SCANNER__SCAN_BINARY_URL", "SCAN_BINARY_URL"),
-    )
+    scan_binary_url: str | None = None
     # Optional bearer token for DSXA
-    auth_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "AUTH_TOKEN",
-            "auth_token",
-            "DSXCONNECT_SCANNER__AUTH_TOKEN",
-            "SCANNER_AUTH_TOKEN",
-        ),
-    )
+    auth_token: str | None = None
     verify_tls: bool = True
     timeout_seconds: float = 600.0
     # Upper bound of concurrent/pending scans we allow before applying backpressure
@@ -91,6 +77,27 @@ class ScannerConfig(BaseSettings):
                 if marker in url:
                     url = url.split(marker, 1)[0]
                 self.base_url = url
+        except Exception:
+            pass
+        return self
+
+
+    @model_validator(mode="after")
+    def _apply_legacy_env_keys(self):
+        """Support legacy flat env keys when present."""
+        try:
+            if not self.scan_binary_url:
+                legacy_scan = os.getenv("SCAN_BINARY_URL")
+                if legacy_scan:
+                    self.scan_binary_url = legacy_scan
+            if (self.base_url == "http://0.0.0.0:5000" or not self.base_url):
+                legacy_base = os.getenv("SCANNER_BASE_URL")
+                if legacy_base:
+                    self.base_url = legacy_base
+            if not self.auth_token:
+                legacy_auth = os.getenv("AUTH_TOKEN") or os.getenv("auth_token") or os.getenv("SCANNER_AUTH_TOKEN")
+                if legacy_auth is not None:
+                    self.auth_token = legacy_auth
         except Exception:
             pass
         return self
@@ -221,6 +228,9 @@ class DSXConnectConfig(BaseSettings):
     syslog: SyslogConfig = SyslogConfig()
     dianna: DiannaConfig = DiannaConfig()
 
+    # Persist UI-driven core config updates only for local runtimes by default.
+    config_persist_local_only: bool = True
+
     # Outbound HMAC provisioned per-connector at registration; no global required
 
     # TLS/SSL for API server
@@ -247,6 +257,25 @@ class DSXConnectConfig(BaseSettings):
                     self.results_database.retain = int(env_ret)
                 except Exception:
                     pass
+
+            env_scan = os.getenv("DSXCONNECT_SCANNER__SCAN_BINARY_URL")
+            if env_scan:
+                self.scanner.scan_binary_url = env_scan
+                if self.scanner.base_url == "http://0.0.0.0:5000" or not self.scanner.base_url:
+                    try:
+                        url = str(env_scan).rstrip('/')
+                        marker = '/scan/binary'
+                        if marker in url:
+                            url = url.split(marker, 1)[0]
+                        self.scanner.base_url = url
+                    except Exception:
+                        pass
+            env_base = os.getenv("DSXCONNECT_SCANNER__BASE_URL")
+            if env_base:
+                self.scanner.base_url = env_base
+            env_auth = os.getenv("DSXCONNECT_SCANNER__AUTH_TOKEN")
+            if env_auth is not None:
+                self.scanner.auth_token = env_auth
         except Exception:
             pass
         return self
@@ -275,6 +304,85 @@ def reload_config() -> DSXConnectConfig:
 def app_env() -> str:
     # resolves to "dev" | "stg" | "prod"
     return get_config().app_env.value
+
+
+def _effective_env_file() -> Path | None:
+    """Resolve local runtime env file path when present."""
+    path_str = os.getenv("DSXCONNECT_ENV_FILE") or os.getenv("DSXCONNECTOR_ENV_FILE")
+    if not path_str:
+        return None
+    try:
+        return Path(path_str).expanduser().resolve()
+    except Exception:
+        try:
+            return Path(path_str).expanduser()
+        except Exception:
+            return None
+
+
+def _is_local_env_file(env_file: Path) -> bool:
+    try:
+        local_root = (Path.home() / ".dsx-connect-local").resolve()
+        env_resolved = env_file.resolve()
+        return env_resolved == local_root or local_root in env_resolved.parents
+    except Exception:
+        return False
+
+
+def persist_core_overrides(updates: dict[str, str]) -> tuple[bool, str]:
+    """Persist selected core env keys for local runs only."""
+    cfg = get_config()
+    if not getattr(cfg, "config_persist_local_only", True):
+        return False, "disabled_by_config"
+
+    env_file = _effective_env_file()
+    if env_file is None:
+        return False, "no_env_file"
+    if not _is_local_env_file(env_file):
+        return False, "env_not_local"
+    if not env_file.exists():
+        return False, "env_file_missing"
+
+    cleaned: dict[str, str] = {}
+    for k, v in (updates or {}).items():
+        key = str(k or "").strip()
+        if not key.startswith("DSXCONNECT_"):
+            continue
+        val = str(v if v is not None else "")
+        if "\n" in val or "\r" in val:
+            val = val.replace("\r", " ").replace("\n", " ")
+        cleaned[key] = val
+
+    if not cleaned:
+        return False, "no_supported_updates"
+
+    lines = env_file.read_text(encoding="utf-8").splitlines()
+    seen = set()
+    out: list[str] = []
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            out.append(line)
+            continue
+        key, _sep, _rest = line.partition("=")
+        k = key.strip()
+        if k in cleaned:
+            out.append(f"{k}={cleaned[k]}")
+            seen.add(k)
+        else:
+            out.append(line)
+
+    for k, v in cleaned.items():
+        if k not in seen:
+            out.append(f"{k}={v}")
+
+    env_file.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+    for k, v in cleaned.items():
+        os.environ[k] = v
+
+    return True, str(env_file)
 
 
 # helper to grab the runtime environment

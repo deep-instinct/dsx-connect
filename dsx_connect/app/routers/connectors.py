@@ -5,6 +5,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Request, Path, HTTPException, Depends, status
 from starlette.responses import JSONResponse, Response
+from pydantic import BaseModel
 
 from dsx_connect.connectors import registration
 from dsx_connect.connectors.client import get_connector_client, \
@@ -45,6 +46,13 @@ def get_registry(request: Request) -> Optional[ConnectorsRegistry]:
 def get_redis(request: Request):
     # wherever you stash the async Redis client at startup
     return getattr(request.app.state, "redis", None)
+
+
+class ConnectorConfigUpdateRequest(BaseModel):
+    asset: str | None = None
+    filter: str | None = None
+    item_action: str | None = None
+    item_action_move_metainfo: str | None = None
 
 async def _lookup(
         registry: Optional[ConnectorsRegistry],
@@ -493,6 +501,41 @@ async def get_connector_config(
     except Exception as e:
         # Log unexpected errors with stack trace for debugging
         dsx_logging.error(f"Unexpected error in connector CONFIG call: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+@router.put(
+    route_path(DSXConnectAPI.CONNECTORS_PREFIX, ConnectorPath.TRIGGER_CONFIG_CONNECTOR),
+    name=route_name(DSXConnectAPI.CONNECTORS_PREFIX, ConnectorPath.TRIGGER_CONFIG_CONNECTOR, Action.UPDATE),
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+)
+async def update_connector_config(
+        request: Request,
+        body: ConnectorConfigUpdateRequest,
+        connector_uuid: UUID = Path(..., description="UUID of the connector"),
+        registry=Depends(get_registry),
+):
+    conn = await _lookup(registry, request, connector_uuid)
+    if not conn:
+        raise HTTPException(status_code=404, detail=f"No connector found with UUID={connector_uuid}")
+
+    payload = body.model_dump(exclude_none=True)
+    if not payload:
+        raise HTTPException(status_code=400, detail="no_fields_to_update")
+
+    try:
+        async with get_async_connector_client(conn) as client:
+            response = await client.put(ConnectorAPI.CONFIG, json_body=payload)
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=e.response.status_code, detail=e.response.text)
+    except (httpx.ConnectError, httpx.TimeoutException) as e:
+        dsx_logging.warning(f"Connector CONFIG update failed - service unavailable at {conn.url}: {type(e).__name__}")
+        raise HTTPException(status_code=502, detail=f"Connector service unavailable: {type(e).__name__}")
+    except Exception as e:
+        dsx_logging.error(f"Unexpected error in connector CONFIG update call: {str(e)}", exc_info=True)
         raise HTTPException(status_code=502, detail=str(e))
 
 

@@ -13,20 +13,19 @@ from shared.file_ops import relpath_matches_filter
 # Reload config to pick up environment variables
 config = ConfigManager.reload_config()
 
-# Derive bucket and base prefix from asset, supporting both "bucket" and "bucket/prefix" forms
-try:
-    raw_asset = (config.asset or "").strip()
+
+def _derive_asset_parts(asset_value: str) -> tuple[str, str]:
+    raw_asset = (asset_value or "").strip()
     if "/" in raw_asset:
         bucket, prefix = raw_asset.split("/", 1)
-        config.asset_bucket = bucket.strip()
-        config.asset_prefix_root = prefix.strip("/")
-    else:
-        config.asset_bucket = raw_asset
-        config.asset_prefix_root = ""
-except Exception:
-    # Fallback: treat entire asset as bucket
-    config.asset_bucket = config.asset
-    config.asset_prefix_root = ""
+        return bucket.strip(), prefix.strip("/")
+    return raw_asset, ""
+
+
+bucket, prefix = _derive_asset_parts(config.asset)
+config.asset_bucket = bucket
+config.asset_prefix_root = prefix
+
 connector = DSXConnector(config)
 
 aws_s3_client = AWSS3Client(s3_endpoint_url=config.s3_endpoint_url, s3_endpoint_verify=config.s3_endpoint_verify)
@@ -153,6 +152,94 @@ async def preview_provider(limit: int) -> list[str]:
     except Exception:
         pass
     return items
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    """Update runtime-editable connector config fields and persist for local runs when enabled."""
+    changed = False
+
+    if isinstance(payload.get("asset"), str):
+        asset_raw = payload.get("asset", "").strip()
+        if asset_raw:
+            config.asset = asset_raw
+            changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                config.item_action = ItemActionEnum(action_raw)
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": ["asset", "filter", "item_action", "item_action_move_metainfo"],
+        }
+
+    # Keep derived parts aligned with current asset.
+    bucket, prefix = _derive_asset_parts(config.asset)
+    config.asset_bucket = bucket
+    config.asset_prefix_root = prefix
+
+    # Keep running model in sync for UI and downstream handlers.
+    try:
+        connector.connector_running_model.asset = config.asset
+        connector.connector_running_model.filter = config.filter
+        connector.connector_running_model.item_action = config.item_action
+        connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+        prefix_disp = f"/{config.asset_prefix_root}" if getattr(config, 'asset_prefix_root', '') else ""
+        connector.connector_running_model.meta_info = f"S3 Bucket: {config.asset_bucket}{prefix_disp}, filter: {config.filter or '(none)'}"
+    except Exception:
+        pass
+
+    # Keep singleton in sync for components that call ConfigManager.get_config().
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    # Persist only for local runtime envs (e.g., ~/.dsx-connect-local/*/.env.local)
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides({
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+        })
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    persistence_message = (
+        f"persisted to {persist_detail}" if persisted else f"runtime-only ({persist_detail})"
+    )
+
+    return {
+        **connector.connector_running_model.model_dump(),
+        "asset": config.asset,
+        "filter": config.filter,
+        "resolved_asset_base": config.asset,
+        "persistence": {
+            "applied": persisted,
+            "detail": persist_detail,
+        },
+        "note": f"S3 asset update applied; {persistence_message}",
+    }
 
 
 @connector.item_action

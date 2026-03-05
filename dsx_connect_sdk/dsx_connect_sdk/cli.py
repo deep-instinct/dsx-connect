@@ -6,7 +6,7 @@ from typing import Optional
 
 import typer
 
-from .client import DiannaApiClient
+from .client import DSXConnectClient
 from .exceptions import DiannaApiError
 
 app = typer.Typer(help="CLI for DSX-Connect DIANNA APIs")
@@ -17,7 +17,7 @@ def _print_json(payload) -> None:
 
 
 def _poll_by_task_with_progress(
-    client: DiannaApiClient,
+    client,
     dianna_analysis_task_id: str,
     *,
     attempts: int,
@@ -52,7 +52,8 @@ def main(
     base_url: str = typer.Option("http://127.0.0.1:8586", help="DSX-Connect base URL"),
     timeout: float = typer.Option(20.0, help="HTTP timeout seconds"),
 ) -> None:
-    ctx.obj = {"client": DiannaApiClient(base_url=base_url, timeout=timeout)}
+    sdk = DSXConnectClient(base_url=base_url, timeout=timeout)
+    ctx.obj = {"sdk": sdk, "dianna": sdk.dianna}
 
 
 @app.command("analyze-from-siem")
@@ -65,7 +66,7 @@ def analyze_from_siem(
     metainfo: Optional[str] = typer.Option(None),
     archive_password: Optional[str] = typer.Option(None),
 ) -> None:
-    client: DiannaApiClient = ctx.obj["client"]
+    client = ctx.obj["dianna"]
     try:
         res = client.analyze_from_siem(
             scan_request_task_id=scan_request_task_id,
@@ -96,7 +97,7 @@ def analyze_and_wait(
     sleep_seconds: float = typer.Option(2.0, min=0.0, help="sleep between attempts"),
 ) -> None:
     """Enqueue DIANNA analysis and poll until terminal/accepted status."""
-    client: DiannaApiClient = ctx.obj["client"]
+    client = ctx.obj["dianna"]
     try:
         enqueue = client.analyze_from_siem(
             scan_request_task_id=scan_request_task_id,
@@ -138,7 +139,7 @@ def get_result(
     attempts: int = typer.Option(1, min=1),
     sleep_seconds: float = typer.Option(2.0, min=0.0),
 ) -> None:
-    client: DiannaApiClient = ctx.obj["client"]
+    client = ctx.obj["dianna"]
     if not analysis_id and not dianna_analysis_task_id:
         raise typer.BadParameter("Provide --analysis-id or --dianna-analysis-task-id.")
     if analysis_id and dianna_analysis_task_id:

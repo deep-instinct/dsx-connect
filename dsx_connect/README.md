@@ -82,3 +82,33 @@ inv release     # bump patch version, prepare, build docker image (see tasks.py 
 - The packaged distribution produced by `inv prepare` contains everything required for release (helm chart, docker-compose, start scripts).
 
 Happy hacking!***
+
+## Local Runtime Manager (macOS MVP)
+
+Run DSX-Connect core + workers + Redis locally (no Docker/K8s):
+
+```bash
+# 1) create local state + env template
+python3 dsx_connect/local/dsx_connect_local.py init
+
+# 2) edit ~/.dsx-connect-local/.env.local (scanner URL/token, auth, dianna)
+
+# 3) start stack
+python3 dsx_connect/local/dsx_connect_local.py start
+
+# check status
+python3 dsx_connect/local/dsx_connect_local.py status
+
+# tail logs
+python3 dsx_connect/local/dsx_connect_local.py logs api --lines 100
+python3 dsx_connect/local/dsx_connect_local.py logs workers --lines 100
+python3 dsx_connect/local/dsx_connect_local.py logs redis --lines 100
+
+# stop stack
+python3 dsx_connect/local/dsx_connect_local.py stop
+```
+
+Notes:
+- Requires `redis-server` in `PATH` (`brew install redis` on macOS).
+- Default runtime dir: `~/.dsx-connect-local`.
+- Default Redis port for local runtime: `6380`.

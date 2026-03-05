@@ -3,11 +3,11 @@ import json
 import os
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from http.client import HTTPException
 
 from redis.asyncio import Redis
-from fastapi import FastAPI, Request, Path, APIRouter, Depends, Query
+from fastapi import FastAPI, Request, Path, APIRouter, Depends, Query, HTTPException
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 import uvicorn
 import pathlib
@@ -15,7 +15,7 @@ import pathlib
 from starlette import status
 from starlette.responses import FileResponse, StreamingResponse, JSONResponse
 
-from dsx_connect.config import get_config, get_auth_config
+from dsx_connect.config import get_config, get_auth_config, persist_core_overrides
 from dsx_connect.connectors.registry import ConnectorsRegistry
 from dsx_connect.messaging.bus import Bus
 from dsx_connect.messaging.channels import Channel
@@ -38,6 +38,65 @@ from dsx_connect.app.routers import scan_request, scan_results, connectors, dead
 from dsx_connect import version
 
 # ---- Helper functions ----
+
+
+class CoreConfigUpdateRequest(BaseModel):
+    scan_binary_url: str | None = None
+
+
+def _normalize_scanner_base_url(scan_binary_url: str) -> str:
+    url = str(scan_binary_url).strip().rstrip('/')
+    marker = '/scan/binary'
+    if marker in url:
+        return url.split(marker, 1)[0]
+    return url
+
+
+def _worker_deployment_summary(cfg) -> dict:
+    def _env_int(*keys: str, default: int = 1) -> int:
+        for k in keys:
+            v = os.getenv(k)
+            if v is None or str(v).strip() == "":
+                continue
+            try:
+                return int(str(v).strip())
+            except Exception:
+                continue
+        return default
+
+    global_conc = _env_int("DSXCONNECT_WORKER_CONCURRENCY", default=1)
+    workers = {
+        "scan_request": {
+            "enabled": True,
+            "concurrency": _env_int("DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=1),
+        },
+        "verdict_action": {
+            "enabled": True,
+            "concurrency": _env_int("DSXCONNECT_VERDICT_ACTION_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=global_conc),
+        },
+        "results": {
+            "enabled": True,
+            "concurrency": _env_int("DSXCONNECT_RESULTS_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=global_conc),
+        },
+        "notification": {
+            "enabled": True,
+            "concurrency": _env_int("DSXCONNECT_NOTIFICATION_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=global_conc),
+        },
+        "dianna": {
+            "enabled": bool(getattr(cfg.dianna, "enabled", False)),
+            "concurrency": _env_int("DSXCONNECT_DIANNA_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=1),
+        },
+        "scan_request_batch": {
+            "enabled": bool(getattr(cfg.workers, "scan_request_batch_enabled", False)),
+            "concurrency": _env_int("DSXCONNECT_SCAN_REQUEST_BATCH_WORKER_CONCURRENCY", "DSXCONNECT_WORKER_CONCURRENCY", default=1),
+        },
+    }
+    return {
+        "worker_pool": os.getenv("DSXCONNECT_WORKER_POOL", "solo"),
+        "global_concurrency": global_conc,
+        "workers": workers,
+    }
+
 
 def get_redis(request: Request) -> Redis | None:
     """Return the shared async Redis client stashed on app.state (or None)."""
@@ -225,7 +284,68 @@ api = APIRouter(prefix=route_path(API_PREFIX_V1), tags=["core"])
          description="Get all configuration",
          status_code=status.HTTP_200_OK)
 def get_config_all():
-    return get_config()
+    cfg = get_config()
+    payload = cfg.model_dump()
+    payload["deployment"] = _worker_deployment_summary(cfg)
+    try:
+        auth_cfg = get_auth_config()
+        payload["auth"] = {
+            "enabled": bool(getattr(auth_cfg, "enabled", False)),
+        }
+    except Exception:
+        payload["auth"] = {"enabled": False}
+    return payload
+
+
+
+def _apply_core_config_update(payload: dict):
+    if not payload:
+        raise HTTPException(status_code=400, detail="no_fields_to_update")
+
+    cfg = get_config()
+
+    if "scan_binary_url" in payload:
+        raw = str(payload.get("scan_binary_url") or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="scan_binary_url cannot be empty")
+        cfg.scanner.scan_binary_url = raw
+        cfg.scanner.base_url = _normalize_scanner_base_url(raw)
+        os.environ["DSXCONNECT_SCANNER__SCAN_BINARY_URL"] = raw
+
+    persisted, detail = (False, "not_attempted")
+    try:
+        persisted, detail = persist_core_overrides({
+            "DSXCONNECT_SCANNER__SCAN_BINARY_URL": cfg.scanner.scan_binary_url or "",
+        })
+    except Exception as e:
+        persisted, detail = (False, f"persist_error:{type(e).__name__}")
+
+    return {
+        "scanner": {
+            "base_url": cfg.scanner.base_url,
+            "scan_binary_url": cfg.scanner.scan_binary_url,
+        },
+        "persistence": {
+            "applied": persisted,
+            "detail": detail,
+        },
+    }
+
+
+@api.put(route_path(DSXConnectAPI.CONFIG.value),
+         name=route_name(DSXConnectAPI.CONFIG, action=Action.UPDATE),
+         description="Update editable runtime core configuration",
+         status_code=status.HTTP_200_OK)
+def update_config(body: CoreConfigUpdateRequest):
+    return _apply_core_config_update(body.model_dump(exclude_none=True))
+
+
+@api.post(route_path(DSXConnectAPI.CONFIG.value),
+          name=route_name(DSXConnectAPI.CONFIG, action=Action.UPDATE) + ":post",
+          description="Compatibility alias: update editable runtime core configuration",
+          status_code=status.HTTP_200_OK)
+def update_config_post(body: CoreConfigUpdateRequest):
+    return _apply_core_config_update(body.model_dump(exclude_none=True))
 
 
 @api.get(route_path("meta"),

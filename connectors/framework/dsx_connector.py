@@ -30,6 +30,7 @@ from connectors.framework.auth_hmac import (
     reload_settings as reload_connector_auth_settings,
     auth_enabled as connector_auth_enabled,
 )
+from connectors.framework.dsx_connect_sdk_loader import load_sdk
 
 # Context variable to propagate a scan job id during full_scan
 _SCAN_JOB_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("scan_job_id", default=None)
@@ -150,6 +151,7 @@ class DSXConnector:
         self.repo_check_connection_handler: Optional[Callable[[], bool | Awaitable[bool]]] = None
 
         self.config_handler: Optional[Callable[[ConnectorInstanceModel], Awaitable[ConnectorInstanceModel]]] = None
+        self.config_update_handler: Optional[Callable[[dict], Awaitable[Any]]] = None
         # Optional preview provider: returns up to N sample item identifiers
         self.preview_provider: Optional[Callable[[int], Awaitable[list[str]]]] = None
         # Optional estimate provider: returns {"count": int|None, "confidence": "exact"|"unknown"}
@@ -167,6 +169,20 @@ class DSXConnector:
         else:
             self._httpx_verify = True
 
+        # Prefer dsx_connect_sdk root client domains for core API calls when available.
+        self._sdk = None
+        try:
+            sdk_client_cls, _core_error_cls = load_sdk()
+            if sdk_client_cls:
+                self._sdk = sdk_client_cls(
+                    base_url=self.dsx_connect_url,
+                    timeout=20.0,
+                    verify=self._httpx_verify,
+                    auth_header_builder=self._dsx_hmac_headers,
+                )
+        except Exception:
+            self._sdk = None
+    
         # Initialize FastAPI app (lifespan handles registration + shutdown)
         self._initialize_app()
 
@@ -279,6 +295,10 @@ class DSXConnector:
 
     def config(self, func: Callable[[ConnectorInstanceModel], Awaitable[ConnectorInstanceModel]]):
         self.config_handler = func
+        return func
+
+    def config_update(self, func: Callable[[dict], Awaitable[Any]]):
+        self.config_update_handler = func
         return func
 
     def preview(self, func: Callable[[int], Awaitable[list[str]]]):
@@ -474,6 +494,32 @@ class DSXConnector:
         return True, None
 
     async def _post_json_with_optional_hmac(self, url: str, payload: Any):
+        # SDK path is preferred; this method remains as fallback helper for legacy call sites.
+        if self._sdk is not None:
+            try:
+                if str(url).endswith('/request_batch'):
+                    out = await self._sdk.scan.request_batch(payload)
+                else:
+                    out = await self._sdk.scan.request(payload)
+
+                class _Resp:
+                    status_code = 200
+                    content = b'{}'
+
+                    def __init__(self, data):
+                        self._data = data
+
+                    def raise_for_status(self):
+                        return None
+
+                    def json(self):
+                        return self._data
+
+                return _Resp(out)
+            except Exception:
+                # Fallback to legacy HTTPX path below.
+                pass
+
         async with httpx.AsyncClient(verify=self._httpx_verify) as client:
             import json as _json
             try:
@@ -496,15 +542,18 @@ class DSXConnector:
 
         out = dict(defaults)
         try:
-            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONFIG)
-            async with httpx.AsyncClient(verify=self._httpx_verify, timeout=5.0) as client:
-                resp = await client.get(url)
-            if resp.status_code == 200:
-                data = resp.json() or {}
-                workers = data.get("workers") or {}
-                out["enabled"] = bool(workers.get("scan_request_batch_enabled", False))
-                out["default_size"] = max(1, int(workers.get("scan_request_batch_default_size", 10)))
-                out["max_size"] = max(1, int(workers.get("scan_request_batch_max_size", 100)))
+            if self._sdk is not None:
+                data = await self._sdk.core.get_config()
+            else:
+                url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONFIG)
+                async with httpx.AsyncClient(verify=self._httpx_verify, timeout=5.0) as client:
+                    resp = await client.get(url)
+                data = resp.json() if resp.status_code == 200 else {}
+
+            workers = (data or {}).get("workers") or {}
+            out["enabled"] = bool(workers.get("scan_request_batch_enabled", False))
+            out["default_size"] = max(1, int(workers.get("scan_request_batch_default_size", 10)))
+            out["max_size"] = max(1, int(workers.get("scan_request_batch_max_size", 100)))
         except Exception:
             pass
         try:
@@ -535,23 +584,32 @@ class DSXConnector:
             # Non-fatal: continue enqueue if state check fails
             pass
         try:
-            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, ScanPath.REQUEST)
             payload = jsonable_encoder(scan_request)
-            resp = await self._post_json_with_optional_hmac(url, payload)
-            resp.raise_for_status()
+            if self._sdk is not None:
+                body = await self._sdk.scan.request(payload)
+            else:
+                url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, ScanPath.REQUEST)
+                resp = await self._post_json_with_optional_hmac(url, payload)
+                resp.raise_for_status()
+                body = resp.json()
             self.scan_request_count += 1
-            return StatusResponse(**resp.json())
-        except httpx.ConnectError as e:
-            dsx_logging.warning("dsx-connect unreachable during scan request: %s", e)
-            return StatusResponse(
-                status=StatusResponseEnum.ERROR,
-                description="dsx-connect unreachable",
-                message="Failed to deliver scan request; dsx-connect not reachable.",
-            )
-        except httpx.HTTPStatusError as e:
-            dsx_logging.error("HTTP error during scan request", exc_info=True)
-            return StatusResponse(status=StatusResponseEnum.ERROR, description="Failed to send scan request", message=str(e))
+            return StatusResponse(**body)
         except Exception as e:
+            status_code = getattr(e, "status_code", None)
+            if status_code:
+                dsx_logging.error("HTTP error during scan request", exc_info=True)
+                return StatusResponse(
+                    status=StatusResponseEnum.ERROR,
+                    description="Failed to send scan request",
+                    message=f"HTTP {status_code}: {getattr(e, 'payload', e)}",
+                )
+            if isinstance(e, httpx.ConnectError):
+                dsx_logging.warning("dsx-connect unreachable during scan request: %s", e)
+                return StatusResponse(
+                    status=StatusResponseEnum.ERROR,
+                    description="dsx-connect unreachable",
+                    message="Failed to deliver scan request; dsx-connect not reachable.",
+                )
             dsx_logging.error("Unexpected error during scan request", exc_info=True)
             return StatusResponse(status=StatusResponseEnum.ERROR, description="Unexpected error in scan request", message=str(e))
 
@@ -591,32 +649,36 @@ class DSXConnector:
             payload["batch_size"] = batch_size
 
         try:
-            url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, "request_batch")
-            resp = await self._post_json_with_optional_hmac(url, payload)
-            resp.raise_for_status()
-            body = resp.json() if resp.content else {}
-            queued = int(body.get("queued_items") or len(prepared))
+            if self._sdk is not None:
+                body = await self._sdk.scan.request_batch(payload)
+            else:
+                url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.SCAN_PREFIX, "request_batch")
+                resp = await self._post_json_with_optional_hmac(url, payload)
+                resp.raise_for_status()
+                body = resp.json() if resp.content else {}
+            queued = int((body or {}).get("queued_items") or len(prepared))
             self.scan_request_count += queued
             return StatusResponse(
                 status=StatusResponseEnum.SUCCESS,
                 message=f"Batch scan queued ({queued} items)",
                 description=f"batch_size={payload.get('batch_size', 'default')} skipped={skipped}",
             )
-        except httpx.ConnectError as e:
-            dsx_logging.warning("dsx-connect unreachable during batch scan request: %s", e)
-            return StatusResponse(
-                status=StatusResponseEnum.ERROR,
-                description="dsx-connect unreachable",
-                message="Failed to deliver batch scan request; dsx-connect not reachable.",
-            )
-        except httpx.HTTPStatusError as e:
-            dsx_logging.error("HTTP error during batch scan request", exc_info=True)
-            return StatusResponse(
-                status=StatusResponseEnum.ERROR,
-                description="Failed to send batch scan request",
-                message=str(e),
-            )
         except Exception as e:
+            status_code = getattr(e, "status_code", None)
+            if status_code:
+                dsx_logging.error("HTTP error during batch scan request", exc_info=True)
+                return StatusResponse(
+                    status=StatusResponseEnum.ERROR,
+                    description="Failed to send batch scan request",
+                    message=f"HTTP {status_code}: {getattr(e, 'payload', e)}",
+                )
+            if isinstance(e, httpx.ConnectError):
+                dsx_logging.warning("dsx-connect unreachable during batch scan request: %s", e)
+                return StatusResponse(
+                    status=StatusResponseEnum.ERROR,
+                    description="dsx-connect unreachable",
+                    message="Failed to deliver batch scan request; dsx-connect not reachable.",
+                )
             dsx_logging.error("Unexpected error during batch scan request", exc_info=True)
             return StatusResponse(
                 status=StatusResponseEnum.ERROR,
@@ -636,12 +698,20 @@ class DSXConnector:
 
     async def register_connector(self, conn_model: ConnectorInstanceModel) -> StatusResponse:
         try:
-            async with httpx.AsyncClient(verify=self._httpx_verify) as client:
-                url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONNECTORS_PREFIX, ConnectorPath.REGISTER_CONNECTORS)
-                headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
-                resp = await client.post(url, json=jsonable_encoder(conn_model), headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            payload = jsonable_encoder(conn_model)
+            if self._sdk is not None:
+                data = await self._sdk.connectors.register(
+                    payload,
+                    enrollment_token=self._enrollment_token,
+                )
+            else:
+                async with httpx.AsyncClient(verify=self._httpx_verify) as client:
+                    url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONNECTORS_PREFIX, ConnectorPath.REGISTER_CONNECTORS)
+                    headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
+                    resp = await client.post(url, json=payload, headers=headers)
+                    resp.raise_for_status()
+                    data = resp.json()
+
             self._apply_access_token(data if isinstance(data, dict) else None)
             try:
                 if isinstance(data, dict):
@@ -658,8 +728,9 @@ class DSXConnector:
             except Exception:
                 pass
             return StatusResponse(**data)
-        except httpx.HTTPStatusError as e:
-            status_code = e.response.status_code if e.response is not None else None
+        except Exception as e:
+            status_code = getattr(e, "status_code", None)
+            payload = getattr(e, "payload", None)
             if status_code == 401:
                 msg = (
                     "Connector registration rejected (401 Unauthorized). "
@@ -667,18 +738,17 @@ class DSXConnector:
                     "token and restart this connector."
                 )
                 dsx_logging.error(msg)
-            else:
-                detail = e.response.text if e.response is not None else str(e)
-                msg = f"HTTP {status_code} during connector registration: {detail}"
+            elif status_code:
+                msg = f"HTTP {status_code} during connector registration: {payload if payload is not None else e}"
                 dsx_logging.error(msg)
+            elif isinstance(e, httpx.RequestError):
+                hint = "Verify dsx-connect URL, scheme and port, and that the service is reachable."
+                dsx_logging.warning(f"Connector registration request error: {e}. {hint}")
+                msg = str(e)
+            else:
+                dsx_logging.error("Unexpected error during connector registration", exc_info=True)
+                msg = str(e)
             return StatusResponse(status=StatusResponseEnum.ERROR, message="Registration failed", description=msg)
-        except httpx.RequestError as e:
-            hint = "Verify dsx-connect URL, scheme and port, and that the service is reachable."
-            dsx_logging.warning(f"Connector registration request error: {e}. {hint}")
-            return StatusResponse(status=StatusResponseEnum.ERROR, message="Registration failed", description=str(e))
-        except Exception as e:
-            dsx_logging.error("Unexpected error during connector registration", exc_info=True)
-            return StatusResponse(status=StatusResponseEnum.ERROR, message="Registration failed", description=str(e))
 
     async def _registration_retry_loop(self):
         """
@@ -713,11 +783,21 @@ class DSXConnector:
 
     async def unregister_connector(self) -> StatusResponse:
         uuid_str = str(self.connector_running_model.uuid)
-        url = service_url(self.dsx_connect_url,
-                          API_PREFIX_V1,
-                          DSXConnectAPI.CONNECTORS_PREFIX,
-                          format_route(ConnectorPath.UNREGISTER_CONNECTORS, connector_uuid=uuid_str))
         try:
+            if self._sdk is not None:
+                data = await self._sdk.connectors.unregister(uuid_str)
+                if not data:
+                    return StatusResponse(
+                        status=StatusResponseEnum.SUCCESS,
+                        message="Unregistered",
+                        description=f"Removed {self.connector_running_model.url} : {self.connector_running_model.uuid}",
+                    )
+                return StatusResponse(**data)
+
+            url = service_url(self.dsx_connect_url,
+                              API_PREFIX_V1,
+                              DSXConnectAPI.CONNECTORS_PREFIX,
+                              format_route(ConnectorPath.UNREGISTER_CONNECTORS, connector_uuid=uuid_str))
             async with httpx.AsyncClient(verify=self._httpx_verify) as client:
                 hdrs = self._dsx_hmac_headers("DELETE", url, None)
                 resp = await client.delete(url, headers=hdrs or None)
@@ -726,22 +806,24 @@ class DSXConnector:
                                       description=f"Removed {self.connector_running_model.url} : {self.connector_running_model.uuid}")
             resp.raise_for_status()
             return StatusResponse(**resp.json())
-        except httpx.HTTPStatusError as e:
-            msg = f"HTTP {e.response.status_code} during connector unregistration"
-            dsx_logging.error(msg)
-            return StatusResponse(status=StatusResponseEnum.ERROR, message="Unregistration failed", description=msg)
-        except httpx.RequestError as e:
-            # Do not emit a traceback here; provide a concise hint instead
-            hint = "Likely unreachable or timed out. Verify DSXCONNECTOR_DSX_CONNECT_URL, scheme/port, DNS, and service availability."
-            dsx_logging.error(f"Unregister connector failed: {e}. {hint}")
-            return StatusResponse(status=StatusResponseEnum.ERROR, message="Unregistration failed", description=str(e))
         except Exception as e:
-            # Unexpected error; still avoid traceback noise on shutdown
-            dsx_logging.error(f"Unregister connector failed: {e}")
-            return StatusResponse(status=StatusResponseEnum.ERROR, message="Unregistration failed", description=str(e))
+            status_code = getattr(e, "status_code", None)
+            if status_code:
+                msg = f"HTTP {status_code} during connector unregistration"
+                dsx_logging.error(msg)
+            elif isinstance(e, httpx.RequestError):
+                hint = "Likely unreachable or timed out. Verify DSXCONNECTOR_DSX_CONNECT_URL, scheme/port, DNS, and service availability."
+                dsx_logging.error(f"Unregister connector failed: {e}. {hint}")
+                msg = str(e)
+            else:
+                dsx_logging.error(f"Unregister connector failed: {e}")
+                msg = str(e)
+            return StatusResponse(status=StatusResponseEnum.ERROR, message="Unregistration failed", description=msg)
 
     async def test_dsx_connect(self) -> Optional[dict]:
         try:
+            if self._sdk is not None:
+                return await self._sdk.core.connection_test()
             async with httpx.AsyncClient(verify=self._httpx_verify) as client:
                 url = service_url(self.dsx_connect_url, API_PREFIX_V1, DSXConnectAPI.CONNECTION_TEST)
                 # no HMAC needed; public health
@@ -802,6 +884,10 @@ class DSXAConnectorRouter(APIRouter):
                  description="Connector configuration",
                  dependencies=[Depends(require_dsx_hmac)],
                  )(self.get_config)
+        self.put(route_path(ConnectorAPI.CONFIG.value),
+                 description="Update connector configuration",
+                 dependencies=[Depends(require_dsx_hmac)],
+                 )(self.put_config)
         # Register FastAPI events
         # self.on_event("startup")(self.on_startup_event)
         # self.on_event("shutdown")(self.on_shutdown_event)
@@ -873,20 +959,25 @@ class DSXAConnectorRouter(APIRouter):
             except Exception:
                 enq_total = -1
             try:
-                async with httpx.AsyncClient(verify=self._httpx_verify) as client:
-                    url = service_url(self.dsx_connect_url, API_PREFIX_V1,
-                                      DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, job_id, 'enqueue_done')
-                    payload: dict[str, Any] = {}
-                    if enq_total >= 0:
-                        payload = {"enqueued_total": enq_total}
-                    try:
-                        import json as _json
-                        content = _json.dumps(payload, separators=(",", ":")).encode() if payload else None
-                    except Exception:
-                        content = None
-                    hdrs = self._connector._dsx_hmac_headers("POST", url, content)
-                    resp = await client.post(url, json=payload, headers=hdrs or None)
-                    dsx_logging.info(f"enqueue_done posted job={job_id} enqueued_total={enq_total} status={resp.status_code}")
+                payload: dict[str, Any] = {}
+                if enq_total >= 0:
+                    payload = {"enqueued_total": enq_total}
+
+                if self._connector._sdk is not None:
+                    await self._connector._sdk.scan.enqueue_done(job_id, payload)
+                    dsx_logging.info(f"enqueue_done posted job={job_id} enqueued_total={enq_total} status=200")
+                else:
+                    async with httpx.AsyncClient(verify=self._connector._httpx_verify) as client:
+                        url = service_url(self._connector.dsx_connect_url, API_PREFIX_V1,
+                                          DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, job_id, 'enqueue_done')
+                        try:
+                            import json as _json
+                            content = _json.dumps(payload, separators=(",", ":")).encode() if payload else None
+                        except Exception:
+                            content = None
+                        hdrs = self._connector._dsx_hmac_headers("POST", url, content)
+                        resp = await client.post(url, json=payload, headers=hdrs or None)
+                        dsx_logging.info(f"enqueue_done posted job={job_id} enqueued_total={enq_total} status={resp.status_code}")
             except Exception:
                 pass
             try:
@@ -1030,4 +1121,91 @@ class DSXAConnectorRouter(APIRouter):
     async def get_config(self):
         if self._connector.config_handler:
             return await self._connector.config_handler(self._connector.connector_running_model)
-        return self._connector.connector_running_model
+
+        # Generic fallback: expose running model + common config fields when available.
+        try:
+            out = self._connector.connector_running_model.model_dump()
+        except Exception:
+            out = {}
+
+        cfg = getattr(self._connector, "connector_config", None)
+        if cfg is not None:
+            for k in ("asset", "asset_display_name", "filter", "item_action", "item_action_move_metainfo"):
+                try:
+                    v = getattr(cfg, k, None)
+                    if v is not None:
+                        out[k] = v
+                except Exception:
+                    pass
+            try:
+                if out.get("asset") is not None and out.get("resolved_asset_base") is None:
+                    out["resolved_asset_base"] = out.get("asset")
+            except Exception:
+                pass
+
+        return out if out else self._connector.connector_running_model
+
+    async def put_config(self, request: Request):
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid_json")
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=400, detail="invalid_payload")
+
+        if self._connector.config_update_handler:
+            return await self._connector.config_update_handler(payload)
+
+        changed = False
+        if "asset" in payload and isinstance(payload.get("asset"), str):
+            val = payload.get("asset", "").strip()
+            if val:
+                try:
+                    setattr(self._connector.connector_running_model, "asset", val)
+                    try:
+                        setattr(self._connector.connector_running_model, "asset_display_name", val)
+                    except Exception:
+                        pass
+                    if getattr(self._connector, "connector_config", None) is not None:
+                        setattr(self._connector.connector_config, "asset", val)
+                        try:
+                            if hasattr(self._connector.connector_config, "asset_display_name"):
+                                setattr(self._connector.connector_config, "asset_display_name", val)
+                        except Exception:
+                            pass
+                    changed = True
+                except Exception:
+                    pass
+        if "filter" in payload and isinstance(payload.get("filter"), str):
+            val = payload.get("filter", "")
+            try:
+                setattr(self._connector.connector_running_model, "filter", val)
+                if getattr(self._connector, "connector_config", None) is not None:
+                    setattr(self._connector.connector_config, "filter", val)
+                changed = True
+            except Exception:
+                pass
+        if "item_action" in payload and isinstance(payload.get("item_action"), str):
+            val = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+            if val:
+                try:
+                    setattr(self._connector.connector_running_model, "item_action", val)
+                    if getattr(self._connector, "connector_config", None) is not None:
+                        setattr(self._connector.connector_config, "item_action", val)
+                    changed = True
+                except Exception:
+                    pass
+        if "item_action_move_metainfo" in payload and isinstance(payload.get("item_action_move_metainfo"), str):
+            val = payload.get("item_action_move_metainfo", "").strip()
+            try:
+                setattr(self._connector.connector_running_model, "item_action_move_metainfo", val)
+                if getattr(self._connector, "connector_config", None) is not None:
+                    setattr(self._connector.connector_config, "item_action_move_metainfo", val)
+                changed = True
+            except Exception:
+                pass
+        if not changed:
+            raise HTTPException(status_code=400, detail="no_supported_fields")
+
+        # Return normalized config payload so UI can refresh without connector-specific handlers.
+        return await self.get_config()

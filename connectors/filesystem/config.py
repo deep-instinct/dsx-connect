@@ -1,10 +1,11 @@
-from pydantic import Field, HttpUrl
-
+from pathlib import Path
+import os
 from typing import Optional
+
+from pydantic import Field, HttpUrl
 
 from connectors.framework.base_config import BaseConnectorConfig
 from shared.models.connector_models import ItemActionEnum
-from pathlib import Path
 from shared.dev_env import load_devenv
 # from dsx_connect.utils.file_ops import _tokenize_filter
 
@@ -25,45 +26,45 @@ class FilesystemConnectorConfig(BaseConnectorConfig):
     You can also read in an optional .env file, which will be ignored is not available
     """
     name: str = 'filesystem-connector'
-    connector_url: HttpUrl = Field(default="http://0.0.0.0:8590",
-                                   description="Base URL (http(s)://ip.add.ddr.ess|URL:port) of this connector entry point")
-    dsx_connect_url: HttpUrl = Field(default="http://0.0.0.0:8586/",
-                                     description="Complete URL (http(s)://ip.add.ddr.ess|URL:port) of the dsxa entry point")
+    connector_url: HttpUrl = Field(
+        default="http://0.0.0.0:8590",
+        description="Base URL (http(s)://ip.add.ddr.ess|URL:port) of this connector entry point",
+    )
+    dsx_connect_url: HttpUrl = Field(
+        default="http://0.0.0.0:8586/",
+        description="Complete URL (http(s)://ip.add.ddr.ess|URL:port) of the dsxa entry point",
+    )
     item_action: ItemActionEnum = ItemActionEnum.MOVE
     item_action_move_metainfo: str = "dsxconnect-quarantine"
 
     # Host path to scan; this should be the bind-mount source. The container always operates on asset_mount.
-    asset: str = Field("/path/to/local/folder",
-                       title="Scan folder (host path)",
-                       description="Host/NAS directory to scan (bind-mounted into the container)")
+    asset: str = Field(
+        "/path/to/local/folder",
+        title="Scan folder (host path)",
+        description="Host/NAS directory to scan (bind-mounted into the container)",
+    )
     asset_mount: str = Field("/app/scan_folder", description="In-container path where the asset is mounted")
     filter: str = ""
     scan_by_path: bool = False
 
-    ## Config settings specific to this Connector
-    asset_display_name: str = "" # filessytem connector poses an issue for frontend since
-    # the asset is actually map to folder on the connector's running container/pod, which is mapped to a folder on the host.
-    # what we ant to display on the frontend, is the host folder, not the app/scan_folder.
-    monitor: bool = False # if true, Connector will monitor location for new or modified files.
-    monitor_force_polling: bool = False  # if true, force polling (useful on SMB/CIFS where inotify is unreliable)
-    monitor_poll_interval_ms: int = 1000  # polling interval when force polling is enabled
+    # Config settings specific to this connector
+    asset_display_name: str = ""
+    monitor: bool = False
+    monitor_force_polling: bool = False
+    monitor_poll_interval_ms: int = 1000
 
     # Quarantine handling
     quarantine_mount: str = Field("/app/quarantine", description="In-container path for quarantine/move destinations")
-    quarantine_host: Optional[str] = Field(default=None, description="Resolved host path for quarantine (derived from DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO)")
+    quarantine_host: Optional[str] = Field(
+        default=None,
+        description="Resolved host path for quarantine (derived from DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO)",
+    )
 
-    # @field_validator("filter")
-    # @classmethod
-    # def validate_filter(cls, v: str) -> str:
-    #     # cheap sanity (e.g., no unbalanced quotes, etc.)
-    #     # or even call _tokenize_filter(v) here to ensure it parses
-    #     try:
-    #         _tokenize_filter(v)
-    #         return v
-    #     except Exception as e:
-    #         # log a warning and return empty (scan all)
-    #         dsx_logging.warning(f"Ignoring malformed filter '{v}': {e}")
-    #         return ""
+    # Persist UI-driven config updates only for local runtimes by default.
+    config_persist_local_only: bool = Field(
+        default=True,
+        description="Persist runtime config updates only when DSXCONNECTOR_ENV_FILE is under ~/.dsx-connect-local",
+    )
 
     class Config:
         env_prefix = "DSXCONNECTOR_"
@@ -72,8 +73,9 @@ class FilesystemConnectorConfig(BaseConnectorConfig):
         extra = "forbid"
 
 
-# Singleton with reload capability
 class ConfigManager:
+    """Singleton with reload capability."""
+
     _config: FilesystemConnectorConfig = None
 
     @classmethod
@@ -126,9 +128,86 @@ class ConfigManager:
             else:
                 cfg.item_action_move_metainfo = quarantine_host_str
             cfg.quarantine_host = quarantine_host_str
-        return cfg
 
         return cfg
+
+    @classmethod
+    def _effective_env_file(cls) -> Path | None:
+        path_str = os.getenv("DSXCONNECTOR_ENV_FILE")
+        if not path_str:
+            return None
+        try:
+            return Path(path_str).expanduser().resolve()
+        except Exception:
+            try:
+                return Path(path_str).expanduser()
+            except Exception:
+                return None
+
+    @classmethod
+    def _is_local_env_file(cls, env_file: Path) -> bool:
+        try:
+            local_root = (Path.home() / ".dsx-connect-local").resolve()
+            env_resolved = env_file.resolve()
+            return env_resolved == local_root or local_root in env_resolved.parents
+        except Exception:
+            return False
+
+    @classmethod
+    def persist_runtime_overrides(cls, updates: dict[str, str]) -> tuple[bool, str]:
+        cfg = cls.get_config()
+        if not getattr(cfg, "config_persist_local_only", True):
+            return False, "disabled_by_config"
+
+        env_file = cls._effective_env_file()
+        if env_file is None:
+            return False, "no_env_file"
+        if not cls._is_local_env_file(env_file):
+            return False, "env_not_local"
+        if not env_file.exists():
+            return False, "env_file_missing"
+
+        cleaned: dict[str, str] = {}
+        for k, v in (updates or {}).items():
+            key = str(k or "").strip()
+            if not key.startswith("DSXCONNECTOR_"):
+                continue
+            val = str(v if v is not None else "")
+            if "\n" in val or "\r" in val:
+                val = val.replace("\r", " ").replace("\n", " ")
+            cleaned[key] = val
+
+        if not cleaned:
+            return False, "no_supported_updates"
+
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+        seen = set()
+        out: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in line:
+                out.append(line)
+                continue
+            key, _sep, _rest = line.partition("=")
+            k = key.strip()
+            if k in cleaned:
+                out.append(f"{k}={cleaned[k]}")
+                seen.add(k)
+            else:
+                out.append(line)
+
+        for k, v in cleaned.items():
+            if k not in seen:
+                out.append(f"{k}={v}")
+
+        env_file.write_text("\n".join(out) + "\n", encoding="utf-8")
+
+        # Keep process env aligned for subsequent reloads in this process.
+        for k, v in cleaned.items():
+            os.environ[k] = v
+
+        return True, str(env_file)
 
     @classmethod
     def get_config(cls) -> FilesystemConnectorConfig:

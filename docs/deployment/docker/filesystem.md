@@ -5,7 +5,7 @@ The Filesystem connector scans files from a directory on the Docker host.
 
 In the official Docker Compose bundles:
 
-- `DSXCONNECTOR_ASSET` defines the **host path** to scan.
+- `DSXCONNECTOR_ASSET` defines the **host path** to scan.  
 - Docker Compose bind-mounts that path into the container at `/app/scan_folder`.
 - The connector scans `/app/scan_folder` internally.
 
@@ -16,29 +16,30 @@ See [Storage Binding](storage-mounts.md) for more information.
 
 ## Quick Start (Single Instance – Recommended)
 
-The easiest way to deploy the Filesystem connector is by editing the `.env` file.
+The easiest way to deploy the Filesystem connector is by editing the supplied  `sample.filesystem.env` file
+and using it with the supplied `docker-compose-filesystem-connector.yaml` compose file.
 
 ### 1. Set scan and quarantine paths
-
+In this example, we will scan `/mnt/DESKTOP1/share` and quarantine files in `/var/lib/dsxconnect/quarantine-DESKTOP1`.  These are directories
+that already exist on the Docker's host filesystem.
 ```bash
+# sample.filesystem.env
 DSXCONNECTOR_ASSET=/mnt/DESKTOP1/share
 DSXCONNECTOR_ITEM_ACTION=move
 DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=/var/lib/dsxconnect/quarantine-DESKTOP1
-````
+```
 
 ### 2. Start the connector
 
 ```bash
-docker compose -f docker-compose-filesystem-connector.yaml up -d
+docker compose --env-file sample.filesystem.env -f docker-compose-filesystem-connector.yaml up -d
 ```
-Replace docker-compose-filesystem-connector.yaml with the appropriate compose file for your environment.
-
 That’s it.
 
 The compose bundle will:
 
-* Bind `${DSXCONNECTOR_ASSET}` → `/app/scan_folder`
-* Bind `${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO}` → `/app/quarantine`
+* Bind `${DSXCONNECTOR_ASSET}` → `/app/scan_folder` <-- internal to the filesystem connector container
+* Bind `${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO}` → `/app/quarantine` <-- internal to the filesystem connector container
 
 ---
 
@@ -104,16 +105,45 @@ If using `move`, also set:
 DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=/var/lib/dsxconnect/quarantine-DESKTOP1
 ```
 
-!!! important
-Keep quarantine **outside** the scan root to avoid re-scanning quarantined files.
+---
+
+## Monitoring
+
+The Filesystem connector uses the Python **`watchfiles`** library for file change detection.
+
+Depending on how your filesystem is mounted, you may be able to use native OS file events — or you may need to force polling mode.
 
 ---
 
-## Monitoring (Recommended)
+### ✅ When `DSXCONNECTOR_MONITOR=true` Is Enough
 
-The Filesystem connector supports continuous monitoring.
+Use the default setting:
 
-Recommended defaults:
+```bash
+DSXCONNECTOR_MONITOR=true
+```
+
+This works **without forcing polling** when the connector has access to:
+
+* Native Linux filesystems (ext4, xfs, etc.)
+* Local macOS filesystem (running directly on macOS)
+* Colima (when using virtiofs)
+* WSL2 with local filesystem
+* Docker on Linux host with bind-mounted local paths
+
+In these environments, `watchfiles` can use native OS event APIs:
+
+* Linux → inotify
+* macOS → FSEvents
+* Windows → ReadDirectoryChangesW
+
+These event systems are efficient and real-time.
+
+---
+
+### ⚠️ When You Must Force Polling
+
+Enable polling mode when filesystem events may **not propagate correctly** into containers:
 
 ```bash
 DSXCONNECTOR_MONITOR=true
@@ -126,9 +156,31 @@ Polling mode is recommended for:
 * Docker Desktop (macOS / Windows)
 * SMB / CIFS shares
 * NFS mounts
-* Remote filesystems where inotify events may not propagate
+* Kubernetes Persistent Volumes backed by NFS
+* Remote or network filesystems
+* Any scenario where file changes are not being detected reliably
+
+In these environments, native file system events often do **not cross VM or network boundaries**, so `watchfiles` must periodically scan for changes.
 
 ---
+
+### 🧠 Practical Rule of Thumb
+
+If the connector runs:
+
+* **On the same machine as the files →** `DSXCONNECTOR_MONITOR=true` is usually fine
+* **Across a VM boundary, container boundary, or network mount →** enable polling
+
+---
+
+### 🔍 Troubleshooting Tip
+
+If files are not being detected:
+
+1. Enable debug logging.
+2. Temporarily force polling.
+3. If polling fixes it → your filesystem does not propagate native events.
+
 
 ## Multiple Connector Instances (Advanced)
 
@@ -159,20 +211,7 @@ filesystem_connector_desktop1:
 ```
 
 Multi-instance deployments require editing the compose YAML.
-`.env` files alone are not sufficient for multiple services in the same project.
-
----
-
-## Asset vs Filter
-
-* **Asset** defines the coarse scan boundary (host path).
-* **Filters** apply include/exclude rules under that boundary.
-
-See:
-
-* Core Concepts → Connector Model
-* Reference → Filters
-* Concepts → Performance & Throughput
+`.env` files alone simply become unmanagable for multiple services in the same project.
 
 ---
 
@@ -186,14 +225,5 @@ Remote shares must be mounted on the **host first**, then bind-mounted into the 
 
 ---
 
-## TLS
+{% include-markdown "shared/_common_connector_docker.md" %}
 
-If DSX-Connect Core is using TLS, update:
-
-```bash
-DSXCONNECTOR_DSX_CONNECT_URL=https://dsx-connect-api:8586
-```
-
-See:
-
-> Deployment → Docker Compose → TLS

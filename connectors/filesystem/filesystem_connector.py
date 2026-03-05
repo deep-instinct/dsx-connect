@@ -469,6 +469,100 @@ async def repo_check_handler() -> StatusResponse:
             description="")
 
 
+@connector.config_update
+async def config_update_handler(payload: dict):
+    """Update runtime-editable connector config fields and persist for local runs when enabled."""
+    changed = False
+
+    if isinstance(payload.get("asset"), str):
+        asset_raw = payload.get("asset", "").strip()
+        if asset_raw:
+            asset_path = _normalize_path(asset_raw)
+            config.asset = str(asset_path)
+            config.asset_display_name = str(asset_path)
+            try:
+                connector.connector_running_model.asset = str(asset_path)
+                connector.connector_running_model.asset_display_name = str(asset_path)
+            except Exception:
+                pass
+            changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        try:
+            connector.connector_running_model.filter = config.filter
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                action_val = ItemActionEnum(action_raw)
+                config.item_action = action_val
+                try:
+                    connector.connector_running_model.item_action = action_val
+                except Exception:
+                    pass
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        move_raw = payload.get("item_action_move_metainfo", "").strip()
+        # allow empty string in case user wants to clear it
+        config.item_action_move_metainfo = move_raw
+        try:
+            connector.connector_running_model.item_action_move_metainfo = move_raw
+        except Exception:
+            pass
+        changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": ["asset", "filter", "item_action", "item_action_move_metainfo"],
+        }
+
+    # Keep singleton in sync for components that call ConfigManager.get_config()
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    # Persist only for local runtime envs (e.g., ~/.dsx-connect-local/*/.env.local)
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides({
+            "DSXCONNECTOR_ASSET": str(config.asset_display_name or config.asset),
+            "DSXCONNECTOR_ASSET_DISPLAY_NAME": str(config.asset_display_name or config.asset),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.quarantine_host or config.item_action_move_metainfo or ""),
+        })
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    persistence_message = (
+        f"persisted to {persist_detail}" if persisted else f"runtime-only ({persist_detail})"
+    )
+
+    return {
+        **connector.connector_running_model.model_dump(),
+        "resolved_asset_base": str(config.asset),
+        "asset_display_name": config.asset_display_name or str(config.asset),
+        "filter": config.filter,
+        "persistence": {
+            "applied": persisted,
+            "detail": persist_detail,
+        },
+        "note": f"monitor may need restart if asset path changed; {persistence_message}",
+    }
+
 # @connector.config
 # async def config_handler(connector_running_config: ConnectorInstanceModel):
 #     # override the connector_running_config with any specific configuration details you want to add

@@ -279,6 +279,37 @@
             background: transparent;
         }
         .job-id-copy:hover { opacity: 1; }
+        .cfg-row-editable {
+            transition: background-color 0.15s ease;
+        }
+        .cfg-row-editable:hover {
+            background: var(--bg-secondary);
+        }
+        .cfg-row-active {
+            outline: 1px solid var(--accent-color);
+            outline-offset: -1px;
+        }
+        .cfg-edit-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 1px 6px;
+            border-radius: 999px;
+            border: 1px solid var(--accent-color);
+            color: var(--accent-color);
+            font-size: 0.68rem;
+            font-family: var(--font-sans);
+        }
+        .cfg-inline-editor {
+            width: 100%;
+            box-sizing: border-box;
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+            padding: 4px 6px;
+            border: 1px solid var(--accent-color);
+            border-radius: 4px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -417,6 +448,7 @@
                 list:       () => api('connectors/list'),
                 readyz:     (uuid) => api(`connectors/readyz/${encodeURIComponent(uuid)}`),
                 config:     (uuid) => api(`connectors/config/${encodeURIComponent(uuid)}`),
+                configUpdate:(uuid) => api(`connectors/config/${encodeURIComponent(uuid)}`),
                 fullscan:   (uuid) => api(`connectors/full_scan/${encodeURIComponent(uuid)}`),
                 repocheck:  (uuid) => api(`connectors/repo_check/${encodeURIComponent(uuid)}`),
                 unregister: (uuid) => api(`connectors/unregister/${encodeURIComponent(uuid)}`),
@@ -847,11 +879,171 @@
         throw lastErr;
     }
 
+    function renderCoreReadonlySection(title, obj) {
+        const entries = Object.entries(obj || {});
+        if (!entries.length) return '';
+        const rows = entries.map(([k, v]) => `
+            <tr>
+              <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color:var(--text-secondary); width:40%;">${escHtml(k)}</td>
+              <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${escHtml(v == null ? 'null' : String(v))}</td>
+            </tr>
+        `).join('');
+        return `
+            <div style="margin-bottom:10px;">
+              <h4 style="margin:0 0 0.35rem 0; font-size:0.86rem;">${escHtml(title)}</h4>
+              <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden; background:var(--bg-primary);">
+                <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+                  <tbody>${rows}</tbody>
+                </table>
+              </div>
+            </div>
+        `;
+    }
+
+    function renderCoreWorkersDeployment(deployment) {
+        const workers = (deployment && deployment.workers) ? deployment.workers : {};
+        const order = ['scan_request', 'verdict_action', 'results', 'notification', 'dianna', 'scan_request_batch'];
+        const labels = {
+            scan_request: 'scan_request',
+            verdict_action: 'verdict_action',
+            results: 'results',
+            notification: 'notification',
+            dianna: 'dianna',
+            scan_request_batch: 'scan_request_batch',
+        };
+        const rows = order
+            .filter((k) => workers[k])
+            .map((k) => {
+                const w = workers[k] || {};
+                const enabled = !!w.enabled;
+                const conc = w.concurrency == null ? '' : String(w.concurrency);
+                return `
+                    <tr>
+                      <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color:var(--text-secondary);">${escHtml(labels[k])}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${enabled ? 'true' : 'false'}</td>
+                      <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${escHtml(conc)}</td>
+                    </tr>
+                `;
+            }).join('');
+
+        return `
+            <div style="margin-bottom:10px;">
+              <h4 style="margin:0 0 0.35rem 0; font-size:0.86rem;">Workers</h4>
+              <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:6px;">pool=${escHtml((deployment && deployment.worker_pool) || 'solo')}, global_concurrency=${escHtml(String((deployment && deployment.global_concurrency) ?? '1'))}</div>
+              <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden; background:var(--bg-primary);">
+                <table style="width:100%; border-collapse:collapse; font-size:0.8rem;">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border-color); color:var(--text-secondary);">worker</th>
+                      <th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border-color); color:var(--text-secondary);">enabled</th>
+                      <th style="text-align:left; padding:6px 8px; border-bottom:1px solid var(--border-color); color:var(--text-secondary);">concurrency</th>
+                    </tr>
+                  </thead>
+                  <tbody>${rows || '<tr><td colspan="3" style="padding:6px 8px; color:var(--text-secondary);">No worker deployment info</td></tr>'}</tbody>
+                </table>
+              </div>
+            </div>
+        `;
+    }
+
+    function renderCoreConfig(cfg) {
+        const scanner = (cfg && cfg.scanner) ? cfg.scanner : {};
+        const authEnabled = !!(cfg && cfg.auth && cfg.auth.enabled);
+        const readonly = {
+            app_env: cfg?.app_env,
+        };
+        return `
+            <div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:8px;">
+              Core configuration is deployment-managed. Only scanner endpoint is editable here.
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <h4 style="margin:0 0 0.35rem 0; font-size:0.86rem;">Authentication</h4>
+              <div style="border:1px solid var(--border-color); border-radius:6px; padding:8px; background:var(--bg-primary); font-size:0.8rem;">
+                DSX-Connect Authentication:
+                <span style="display:inline-block; margin-left:6px; padding:1px 8px; border-radius:999px; border:1px solid ${authEnabled ? 'var(--card-status-ok)' : 'var(--border-color)'}; color:${authEnabled ? 'var(--card-status-ok)' : 'var(--text-secondary)'}; font-family:var(--font-mono);">
+                  ${authEnabled ? 'enabled' : 'disabled'}
+                </span>
+              </div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+              <h4 style="margin:0 0 0.35rem 0; font-size:0.86rem;">Scanner</h4>
+              <div style="border:1px solid var(--border-color); border-radius:6px; padding:8px; background:var(--bg-primary);">
+                <label for="core-scan-binary-url" style="display:block; margin-bottom:4px; font-size:0.78rem; color:var(--text-secondary);">scan_binary_url</label>
+                <input id="core-scan-binary-url" value="${escHtml(scanner.scan_binary_url || '')}" style="width:100%; box-sizing:border-box; font-family:var(--font-mono); font-size:0.8rem; margin-bottom:8px;" />
+                <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:8px;">base_url: <span style="font-family:var(--font-mono);">${escHtml(scanner.base_url || '')}</span></div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <button id="btn-core-save-scanner" style="font-size:0.78rem;">Save Scanner URL</button>
+                  <span id="core-save-status" style="font-size:0.78rem; color:var(--text-secondary);"></span>
+                </div>
+              </div>
+            </div>
+
+            ${renderCoreWorkersDeployment(cfg?.deployment)}
+            ${renderCoreReadonlySection('Deployment (Read-only)', readonly)}
+        `;
+    }
+
+    function wireCoreConfigActions() {
+        const saveBtn = document.getElementById('btn-core-save-scanner');
+        const input = document.getElementById('core-scan-binary-url');
+        const statusEl = document.getElementById('core-save-status');
+        if (!saveBtn || !input || !statusEl) return;
+
+        saveBtn.addEventListener('click', async () => {
+            const nextUrl = (input.value || '').trim();
+            if (!nextUrl) {
+                showNotification('scan_binary_url cannot be empty', 'warning');
+                return;
+            }
+            statusEl.textContent = 'Saving...';
+            saveBtn.disabled = true;
+            try {
+                let res = await fetch(api('config'), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scan_binary_url: nextUrl }),
+                });
+                let body = await res.json().catch(() => ({}));
+                if (res.status === 405) {
+                    // Compatibility fallback for deployments that allow POST but not PUT.
+                    res = await fetch(api('config'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ scan_binary_url: nextUrl }),
+                    });
+                    body = await res.json().catch(() => ({}));
+                }
+                if (!res.ok) {
+                    throw new Error(body?.detail || `HTTP ${res.status}`);
+                }
+                const p = body?.persistence;
+                if (p?.applied) {
+                    showNotification(`Core scanner updated (persisted: ${p.detail})`, 'info');
+                } else if (p) {
+                    showNotification(`Core scanner updated (runtime only: ${p.detail})`, 'warning');
+                } else {
+                    showNotification('Core scanner updated', 'info');
+                }
+                statusEl.textContent = 'Saved';
+                fetchStatus();
+                fetchConfig();
+            } catch (e) {
+                statusEl.textContent = 'Save failed';
+                showNotification(`Failed to save scanner URL: ${e?.message || e}`, 'error');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+    }
+
     function fetchConfig() {
         fetch(api('config'))
             .then(res => res.json())
             .then(data => {
-                document.getElementById('configTree').innerHTML = renderConfigTree(data);
+                document.getElementById('configTree').innerHTML = renderCoreConfig(data);
+                wireCoreConfigActions();
             })
             .catch(() => {
                 document.getElementById('configTree').textContent = 'Error loading configuration.';
@@ -1247,6 +1439,11 @@
             document.getElementById('connectorsGrid').textContent = 'Error loading connectors.';
         }
     }
+
+    async function loadConnectors() {
+        return fetchConnectors();
+    }
+
 
 function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
         showNotification(`Starting full scan for ${connectorName}...`, 'info');
@@ -1683,8 +1880,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     // ===== CONNECTOR MANAGEMENT =====
     function renderConnectorCard(conn, cfg = {}, idx = 0, isReady = false) {
         const scanUrl   = r.connectors.fullscan(conn.uuid);
-        const readyzUrl = r.connectors.readyz(conn.uuid);
-        const configUrl = r.connectors.config(conn.uuid);
+        const displayName = (cfg && cfg.display_name) ? cfg.display_name : conn.name;
 
         const card = document.createElement('div');
         card.classList.add('connector-card');
@@ -1703,7 +1899,9 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     </i>
         ` : '';
 
-        const displayName = (cfg && cfg.display_name) ? cfg.display_name : conn.name;
+        const assetView = (cfg.asset_display_name || cfg.resolved_asset_base || cfg.asset || '');
+        const filterView = (cfg.filter || '');
+
         card.innerHTML = `
             <h4>
                 ${renderConnectorIcon(conn.name, (cfg && cfg.display_icon) ? cfg.display_icon : '')}
@@ -1735,8 +1933,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 </button>
             </div>
             ${cfg && (cfg.asset_display_name || cfg.asset || cfg.filter || cfg.resolved_asset_base) ? `
-                <div class="asset-line" title="${cfg.asset || cfg.resolved_asset_base || cfg.asset_display_name || ''}"><span class="kv">Asset:</span> ${cfg.asset_display_name || cfg.resolved_asset_base || cfg.asset || 'n/a'}</div>
-                <div class="filter-line" title="${cfg.filter || ''}"><span class="kv">Filter:</span> ${cfg.filter || 'n/a'}</div>
+                <div class="asset-line" title="${assetView}"><span class="kv">Asset:</span> <span id="asset-view-${conn.uuid}">${assetView || 'n/a'}</span></div>
+                <div class="filter-line" title="${filterView}"><span class="kv">Filter:</span> <span id="filter-view-${conn.uuid}">${filterView || 'n/a'}</span></div>
             ` : ''}
             <div id="actions-${conn.uuid}" data-scan-url="${scanUrl}" data-connector-name="${conn.name.replace(/'/g, "\'")}" data-connector-uuid="${conn.uuid}" style="display:flex; gap: 0.5rem; align-items: baseline; margin-top: 0.75rem; flex-wrap: wrap;">
                 <button onclick="invokeFullScanByUuid('${conn.uuid}', '${scanUrl}', '${conn.name.replace(/'/g, "\'")}')">Full Scan</button>
@@ -1745,6 +1943,33 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             <span class="scan-note" id="scan-note-${conn.uuid}"></span>
         `;
         return card;
+    }
+
+    async function saveConnectorConfig(uuid, values) {
+        const payload = {
+            asset: ((values && values.asset) || '').trim(),
+            filter: ((values && values.filter) || ''),
+            item_action: normalizeItemActionToApi(((values && values.item_action) || '').trim()),
+            item_action_move_metainfo: ((values && values.item_action_move_metainfo) || ''),
+        };
+
+        if (!payload.asset) {
+            throw new Error('Asset cannot be empty');
+        }
+        if (!payload.item_action) {
+            throw new Error('Item action cannot be empty');
+        }
+
+        const res = await fetch(r.connectors.configUpdate(uuid), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            const txt = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status}${txt ? `: ${txt}` : ''}`);
+        }
+        return res.json().catch(() => ({}));
     }
 
     // ===== STATS MODAL TOGGLE =====
@@ -2462,6 +2687,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             .replaceAll("'", '&#39;');
     }
 
+    function normalizeItemActionFromApi(v) {
+        const raw = String(v ?? 'nothing').trim().toLowerCase();
+        if (raw === 'movetag') return 'move_tag';
+        return raw;
+    }
+
+    function normalizeItemActionToApi(v) {
+        const raw = String(v ?? '').trim().toLowerCase();
+        if (raw === 'move_tag') return 'movetag';
+        return raw;
+    }
+
     async function showConnectorIssue(uuid, connectorName) {
         const modal = document.getElementById('configModal');
         const title = document.getElementById('configModalTitle');
@@ -2511,48 +2748,312 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const title = document.getElementById('configModalTitle');
         const content = document.getElementById('configModalContent');
 
-        // Set title and show modal
         title.textContent = `Configuration: ${connectorName}`;
         content.innerHTML = 'Loading configuration...';
         modal.style.display = 'block';
 
         try {
             const response = await fetch(r.connectors.config(uuid));
-
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             const config = await response.json();
+            const original = {
+                asset: config.asset_display_name || config.resolved_asset_base || config.asset || '',
+                filter: config.filter || '',
+                item_action: normalizeItemActionFromApi(config.item_action || 'nothing'),
+                item_action_move_metainfo: (config.item_action_move_metainfo || ''),
+            };
 
-            // Build config tree + preview actions
-            const cfgTree = `<div class="config-tree">${renderConfigTree(config)}</div>`;
-            const actions = `
-                <div style="margin-top: 12px; display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
-                  <button id="btn-sample-scan" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Sample Scan 5</button>
-                  <button id="btn-preview" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Show Preview 5</button>
+            const editable = new Set(['asset', 'filter', 'item_action', 'item_action_move_metainfo']);
+            const configKeys = ['asset', 'filter', 'item_action', 'item_action_move_metainfo'];
+            const runtimeKeys = ['name', 'display_name', 'display_icon', 'uuid', 'meta_info', 'url', 'status', 'asset_display_name', 'resolved_asset_base'];
+            const repoDiagKeys = ['last_repo_check_ts', 'last_repo_check_reason', 'last_repo_check_message'];
+
+            function rowValueHtml(v) {
+                if (v === null || v === undefined || v === "") return "<span style=\"color:var(--text-secondary)\">null</span>";
+                return escHtml(String(v));
+            }
+
+            function editableRowValue(key, v) {
+                if (key === "asset") return original.asset;
+                if (key === "filter") return original.filter;
+                if (key === "item_action") return original.item_action;
+                if (key === "item_action_move_metainfo") return original.item_action_move_metainfo;
+                return v;
+            }
+
+            function buildRows(keys) {
+                const rows = [];
+                for (const k of keys) {
+                    if (!(k in config)) continue;
+                    const v = config[k];
+                    const isEditable = editable.has(k);
+                    rows.push(`
+                      <tr class="cfg-row ${isEditable ? 'cfg-row-editable' : ''}" data-edit-key="${isEditable ? k : ''}" style="cursor:${isEditable ? 'pointer' : 'default'};">
+                        <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color: var(--text-secondary);">${k}</td>
+                        <td class="cfg-row-value-cell" style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${isEditable ? `<span class="cfg-row-value" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span><span class="cfg-edit-badge">Editable</span>` : rowValueHtml(v)}</td>
+                      </tr>
+                    `);
+                }
+                return rows;
+            }
+
+            const configRows = buildRows(configKeys);
+            const runtimeRows = buildRows(runtimeKeys);
+            const hasRepoDiag = repoDiagKeys.some((k) => (k in config) && config[k] !== null && String(config[k]).trim() !== '');
+            const repoDiagRows = hasRepoDiag ? buildRows(repoDiagKeys) : [];
+
+            const actionPanel = `
+                <div style="margin-top: 12px; padding: 0.75rem; border: 1px dashed var(--border-color); border-radius: 6px;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap; margin-bottom: 0.35rem;">
+                    <button id="btn-sample-scan" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Sample Scan 5</button>
+                    <button id="btn-preview" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Show Preview 5</button>
+                  </div>
+                  <div id="cfg-test-hint" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
+                  <div id="previewList" style="margin-bottom: 0.6rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
+
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
+                    <button id="btn-save-config" style="font-size:0.8rem;">Save Configuration</button>
+                    <span id="cfg-save-status" style="font-size:0.8rem; color: var(--text-secondary);"></span>
+                  </div>
                 </div>
-                <div id="previewList" style="margin-top: 8px; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
             `;
-            content.innerHTML = cfgTree + actions;
 
-            // Wire buttons
+            const tableView = `
+                <div style="margin-top: 12px;">
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Configuration</h4>
+                  <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${configRows.join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
+                <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px;">Tip: click editable rows in the Configuration section to edit values inline. Changes are staged until you click Save Configuration.</div>
+
+                ${actionPanel}
+
+                <div style="margin-top: 10px;">
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Runtime</h4>
+                  <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${runtimeRows.join('')}</tbody>
+                    </table>
+                  </div>
+                </div>
+
+                ${hasRepoDiag ? `<details style="margin-top:10px;"><summary style="cursor:pointer; color:var(--text-secondary); font-size:0.82rem;">Repo Diagnostics</summary><div style="margin-top:6px; border:1px solid var(--border-color); border-radius:6px; overflow:hidden;"><table style="width:100%; border-collapse: collapse;"><thead><tr><th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th><th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th></tr></thead><tbody>${repoDiagRows.join('')}</tbody></table></div></details>` : ''}
+            `;
+
+            content.innerHTML = tableView;
+
             const scanUrl = r.connectors.fullscan(uuid);
-            document.getElementById('btn-sample-scan').addEventListener('click', () => invokeSampleScanByUuid(uuid, scanUrl, connectorName, 5));
-            document.getElementById('btn-preview').addEventListener('click', async () => {
-                const target = document.getElementById('previewList');
-                target.textContent = 'Loading preview...';
+            const saveBtn = document.getElementById('btn-save-config');
+            const statusEl = document.getElementById('cfg-save-status');
+            const previewBtn = document.getElementById('btn-preview');
+            const sampleBtn = document.getElementById('btn-sample-scan');
+            const previewTarget = document.getElementById('previewList');
+            const testHint = document.getElementById('cfg-test-hint');
+            const configDraft = {
+                asset: String(original.asset || ''),
+                filter: String(original.filter || ''),
+                item_action: String(original.item_action || 'nothing').toLowerCase(),
+                item_action_move_metainfo: String(original.item_action_move_metainfo || ''),
+            };
+
+            function getCurrentValues() {
+                return {
+                    asset: String(configDraft.asset || '').trim(),
+                    filter: String(configDraft.filter || ''),
+                    item_action: String(configDraft.item_action || '').trim(),
+                    item_action_move_metainfo: String(configDraft.item_action_move_metainfo || ''),
+                };
+            }
+
+            function isDirty() {
+                const cur = getCurrentValues();
+                return cur.asset !== original.asset
+                    || cur.filter !== original.filter
+                    || String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()
+                    || cur.item_action_move_metainfo !== original.item_action_move_metainfo;
+            }
+
+            function setTestButtonsEnabled(enabled) {
+                previewBtn.disabled = !enabled;
+                sampleBtn.disabled = !enabled;
+                previewBtn.style.opacity = enabled ? '1' : '0.55';
+                sampleBtn.style.opacity = enabled ? '1' : '0.55';
+                previewBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+                sampleBtn.style.cursor = enabled ? 'pointer' : 'not-allowed';
+            }
+
+            function refreshDirtyUi() {
+                const dirty = isDirty();
+                setTestButtonsEnabled(!dirty);
+                testHint.textContent = dirty
+                    ? 'Save changes to test with current settings.'
+                    : 'Testing uses the currently saved settings.';
+            }
+
+            let activeInlineEditor = null;
+
+            function setRowDisplayValue(key, value) {
+                const valueEl = content.querySelector(`.cfg-row-value[data-key="${key}"]`);
+                if (!valueEl) return;
+                valueEl.innerHTML = rowValueHtml(value);
+            }
+
+            function syncEditableRows() {
+                const cur = getCurrentValues();
+                setRowDisplayValue('asset', cur.asset);
+                setRowDisplayValue('filter', cur.filter);
+                setRowDisplayValue('item_action', cur.item_action);
+                setRowDisplayValue('item_action_move_metainfo', cur.item_action_move_metainfo);
+            }
+
+            function closeInlineEditor(commit) {
+                if (!activeInlineEditor) return;
+                const { row, key, editor } = activeInlineEditor;
+                if (commit) {
+                    const nextValue = String(editor.value ?? '');
+                    if (key === 'asset') configDraft.asset = nextValue;
+                    if (key === 'filter') configDraft.filter = nextValue;
+                    if (key === 'item_action') configDraft.item_action = nextValue.toLowerCase();
+                    if (key === 'item_action_move_metainfo') configDraft.item_action_move_metainfo = nextValue;
+                }
+                try { editor.remove(); } catch {}
+                const valueEl = row.querySelector('.cfg-row-value');
+                const badgeEl = row.querySelector('.cfg-edit-badge');
+                if (valueEl) valueEl.style.display = '';
+                if (badgeEl) badgeEl.style.display = '';
+                activeInlineEditor = null;
+                syncEditableRows();
+                refreshDirtyUi();
+            }
+
+            function openInlineEditor(row, key) {
+                closeInlineEditor(false);
+                content.querySelectorAll('.cfg-row-active').forEach((activeRow) => activeRow.classList.remove('cfg-row-active'));
+                row.classList.add('cfg-row-active');
+
+                const valueCell = row.querySelector('.cfg-row-value-cell');
+                const valueEl = row.querySelector('.cfg-row-value');
+                const badgeEl = row.querySelector('.cfg-edit-badge');
+                if (!valueCell || !valueEl) return;
+
+                if (valueEl) valueEl.style.display = 'none';
+                if (badgeEl) badgeEl.style.display = 'none';
+
+                const currentValue = String(configDraft[key] ?? '');
+
+                let editor;
+                if (key === 'item_action') {
+                    editor = document.createElement('select');
+                    ['nothing', 'delete', 'tag', 'move', 'move_tag'].forEach((v) => {
+                        const opt = document.createElement('option');
+                        opt.value = v;
+                        opt.textContent = v;
+                        if (v === currentValue.toLowerCase()) opt.selected = true;
+                        editor.appendChild(opt);
+                    });
+                    editor.addEventListener('change', () => closeInlineEditor(true));
+                    editor.addEventListener('blur', () => closeInlineEditor(true));
+                } else {
+                    editor = document.createElement('input');
+                    editor.type = 'text';
+                    editor.value = currentValue;
+                    editor.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            closeInlineEditor(true);
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            closeInlineEditor(false);
+                        }
+                    });
+                    editor.addEventListener('blur', () => closeInlineEditor(true));
+                }
+
+                editor.className = 'cfg-inline-editor';
+                editor.addEventListener('click', (e) => e.stopPropagation());
+                valueCell.appendChild(editor);
+                activeInlineEditor = { row, key, editor };
+                editor.focus();
+                if (typeof editor.select === 'function') editor.select();
+            }
+
+            function refreshDirtyUiAndRows() {
+                refreshDirtyUi();
+                syncEditableRows();
+            }
+
+            refreshDirtyUiAndRows();
+
+            // Click editable rows to edit inline
+            content.querySelectorAll('.cfg-row-editable').forEach((row) => {
+                row.addEventListener('click', () => {
+                    const key = row.getAttribute('data-edit-key');
+                    if (!key) return;
+                    openInlineEditor(row, key);
+                });
+            });
+
+            sampleBtn.addEventListener('click', () => {
+                if (isDirty()) return;
+                invokeSampleScanByUuid(uuid, scanUrl, connectorName, 5);
+            });
+
+            previewBtn.addEventListener('click', async () => {
+                if (isDirty()) return;
+                previewTarget.textContent = 'Loading preview...';
                 try {
                     const res = await fetch(r.connectors.repocheck(uuid) + '?preview=5');
                     const data = await res.json();
                     const list = Array.isArray(data.preview) ? data.preview : [];
                     if (!list.length) {
-                        target.textContent = 'No preview items (check asset/filter).';
+                        previewTarget.textContent = 'No preview items (check asset/filter).';
                     } else {
-                        target.innerHTML = list.map(i => `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${i}</div>`).join('');
+                        previewTarget.innerHTML = list.map(i => `<div style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${i}</div>`).join('');
                     }
                 } catch (e) {
-                    target.textContent = 'Failed to load preview';
+                    previewTarget.textContent = 'Failed to load preview';
+                }
+            });
+
+            saveBtn.addEventListener('click', async () => {
+                statusEl.textContent = 'Saving...';
+                saveBtn.disabled = true;
+                try {
+                    const saveResp = await saveConnectorConfig(uuid, getCurrentValues());
+                    statusEl.textContent = 'Saved';
+                    const p = (saveResp && saveResp.persistence) ? saveResp.persistence : null;
+                    if (p && p.applied) {
+                        showNotification(`Connector configuration updated (persisted: ${p.detail})`, 'info');
+                    } else if (p) {
+                        showNotification(`Connector configuration updated (runtime only: ${p.detail})`, 'warning');
+                    } else {
+                        showNotification('Connector configuration updated', 'info');
+                    }
+                    await fetchConnectors();
+                    await showConnectorConfig(uuid, connectorName);
+                } catch (e) {
+                    statusEl.textContent = 'Save failed';
+                    showNotification(`Failed to update connector config: ${e?.message || e}`, 'error');
+                } finally {
+                    saveBtn.disabled = false;
                 }
             });
 

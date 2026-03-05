@@ -108,3 +108,32 @@ Other invoke options:
 * build - (runs bump, clean, prepare) and builds a Docker image tagged as {{ cookiecutter.__release_name }}:<version> from the prepared dist folder if it doesn’t already exist.
 * push - (runs build) tags the Docker image with the repository username ({{ cookiecutter.docker_repo }}/<name>:<version>) and pushes it to Docker Hub.
 * release - executes the full release cycle by running the following tasks in order: bump, clean, prepare, build, and push. Patch/build increments automatically; edit version.py manually for major/minor changes before release.
+
+## Local Runtime Manager (no Docker)
+
+Run the filesystem connector natively for local development/testing:
+
+```bash
+# 1) initialize state + env template
+python3 connectors/filesystem/local/filesystem_local.py init
+
+# 2) edit ~/.dsx-connect-local/filesystem-connector/.env.local
+#    - DSXCONNECTOR_DSX_CONNECT_URL
+#    - DSXCONNECTOR_ASSET
+#    - DSXCONNECTOR_ITEM_ACTION / DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO
+
+# 3) start connector
+python3 connectors/filesystem/local/filesystem_local.py start
+
+# status + logs
+python3 connectors/filesystem/local/filesystem_local.py status
+python3 connectors/filesystem/local/filesystem_local.py logs --lines 200
+
+# stop connector
+python3 connectors/filesystem/local/filesystem_local.py stop
+```
+
+Notes:
+- Default state dir: `~/.dsx-connect-local/filesystem-connector`
+- Default connector port: `8620`
+- The generated env uses local scan/quarantine folders under the state dir.

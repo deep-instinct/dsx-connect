@@ -24,7 +24,7 @@ In the extracted bundle, use `dsx-connect-<core_version>/sharepoint-connector-<c
 
 ### SharePoint-specific settings
 
-Define these values in your Compose environment (the sample file expects plain `SP_*` variables in the shell/`.env` file; the compose template expands them to the connector-ready `DSXCONNECTOR_SP_*` envs).
+Define these values in your Compose environment. The sample `.env` includes both `SP_*` auth variables and common connector/runtime overrides.
 
 | Variable | Description |
 | --- | --- |
@@ -37,6 +37,16 @@ Define these values in your Compose environment (the sample file expects plain `
 | `SP_WEBHOOK_URL` | Public HTTPS URL Graph calls for change notifications (required when webhooks enabled). |
 | `SP_WEBHOOK_CLIENT_STATE` | Optional shared secret Graph includes in webhook payloads. |
 | `SP_WEBHOOK_CHANGE_TYPES` | Optional override of Graph change types (default `updated`). |
+
+Additional optional Docker Compose overrides:
+
+| Variable | Description |
+| --- | --- |
+| `SHAREPOINT_PORT` | Host port mapped to container `8640` (default `8640`). |
+| `SHAREPOINT_WORKERS` | Connector worker count (default `1`). |
+| `DSX_DOCKER_NETWORK` | External Docker network name (default `dsx-connect-network`). |
+| `LOG_LEVEL` | Connector log level (default `debug`). |
+| `PYTHONUNBUFFERED` | Python unbuffered logging toggle (default `1`). |
 
 Copy the sample env file and edit it:
 ```bash
@@ -55,6 +65,10 @@ SP_CLIENT_SECRET=xxx
 # Optional overrides
 SP_VERIFY_TLS=true
 SP_CA_BUNDLE=
+SHAREPOINT_PORT=8640
+SHAREPOINT_WORKERS=1
+DSX_DOCKER_NETWORK=dsx-connect-network
+LOG_LEVEL=debug
 
 # Change notifications (optional)
 SP_WEBHOOK_ENABLED=false

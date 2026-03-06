@@ -137,3 +137,22 @@ Notes:
 - Default state dir: `~/.dsx-connect-local/filesystem-connector`
 - Default connector port: `8620`
 - The generated env uses local scan/quarantine folders under the state dir.
+
+## Native Binary Build (Nuitka)
+
+You can build this local connector manager as a native binary via:
+
+```bash
+pip install nuitka
+python3 dsx_connect/local/build_local_binaries.py build filesystem
+
+# macOS .app bundle
+python3 dsx_connect/local/build_local_binaries.py build-app filesystem
+```
+
+Then run:
+
+```bash
+./dist/local-binaries/filesystem_local init
+./dist/local-binaries/filesystem_local start
+```

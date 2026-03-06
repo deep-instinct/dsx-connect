@@ -10,6 +10,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
@@ -32,8 +33,101 @@ class ServiceSpec:
     cwd: Path
 
 
+def _is_core_repo_root(path: Path) -> bool:
+    return (path / "dsx_connect" / "dsx-connect-api-start.py").exists() and (
+        path / "dsx_connect" / "dsx-connect-workers-start.py"
+    ).exists()
+
+
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    override = os.getenv("DSXCONNECT_LOCAL_REPO_ROOT", "").strip()
+    if override:
+        p = Path(override).expanduser().resolve()
+        if _is_core_repo_root(p):
+            return p
+        raise RuntimeError(
+            f"DSXCONNECT_LOCAL_REPO_ROOT is set but invalid: {p}"
+        )
+
+    # Source-run path (python dsx_connect/local/dsx_connect_local.py)
+    source_guess = Path(__file__).resolve().parents[2]
+    if _is_core_repo_root(source_guess):
+        return source_guess
+
+    # Frozen app path fallback: derive repo from app binary location.
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.argv[0]).resolve()
+        # .../<repo>/dist/local-apps/<name>.app/Contents/MacOS/<binary>
+        if len(exe.parents) >= 6:
+            app_guess = exe.parents[5]
+            if _is_core_repo_root(app_guess):
+                return app_guess
+
+    # Fallback: discover from cwd upwards.
+    cwd = Path.cwd().resolve()
+    for candidate in (cwd, *cwd.parents):
+        if _is_core_repo_root(candidate):
+            return candidate
+
+    raise RuntimeError(
+        "Could not locate DSX-Connect repo root. Run from repo root or set "
+        "DSXCONNECT_LOCAL_REPO_ROOT=/path/to/dsx-connect"
+    )
+
+
+def _runtime_python(repo: Path) -> str:
+    override = os.getenv("DSXCONNECT_LOCAL_PYTHON", "").strip()
+    candidates = []
+    if override:
+        candidates.append(override)
+    candidates.append(str(repo / ".venv" / "bin" / "python"))
+
+    py3 = shutil.which("python3")
+    if py3:
+        candidates.append(py3)
+
+    for candidate in candidates:
+        if candidate and Path(candidate).exists() and os.access(candidate, os.X_OK):
+            return candidate
+
+    raise RuntimeError(
+        "No usable Python interpreter found for launching API/workers. "
+        "Set DSXCONNECT_LOCAL_PYTHON or ensure .venv/bin/python exists."
+    )
+
+
+def _redis_server_binary() -> str | None:
+    override = os.getenv("DSXCONNECT_LOCAL_REDIS_SERVER", "").strip()
+    candidates = []
+    if override:
+        candidates.append(override)
+
+    # Bundled redis in app mode (preferred for demo UX).
+    if getattr(sys, "frozen", False):
+        exe = Path(sys.argv[0]).resolve()
+        candidates.append(str(exe.parent / "redis-server"))
+
+    which = shutil.which("redis-server")
+    if which:
+        candidates.append(which)
+
+    # Common Homebrew/macOS locations used outside shell PATH (e.g., Finder launch).
+    candidates.extend([
+        "/opt/homebrew/bin/redis-server",
+        "/usr/local/bin/redis-server",
+        "/usr/bin/redis-server",
+    ])
+
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            # Ensure executable bit in case bundled data file lost mode.
+            try:
+                os.chmod(candidate, Path(candidate).stat().st_mode | 0o111)
+            except Exception:
+                pass
+            if os.access(candidate, os.X_OK):
+                return candidate
+    return None
 
 
 def _state_paths(state_dir: Path) -> Dict[str, Path]:
@@ -82,6 +176,7 @@ DSXCONNECT_AUTH__ENROLLMENT_TOKEN=abc123
 # Optional DIANNA
 DSXCONNECT_DIANNA__ENABLED=false
 DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS=false
+DSXCONNECT_DIANNA__INDEX_DATABASE_LOC=redis://127.0.0.1:{redis_port}/4
 
 # Persist UI-driven core config edits only for local runtime
 DSXCONNECT_CONFIG_PERSIST_LOCAL_ONLY=true
@@ -147,7 +242,7 @@ def _terminate_pid(pid: int, grace_seconds: float = 8.0) -> None:
 def _service_specs(state_dir: Path, redis_port: int) -> Dict[str, ServiceSpec]:
     paths = _state_paths(state_dir)
     repo = _repo_root()
-    python = sys.executable
+    python = _runtime_python(repo)
     redis_pidfile = paths["pids"] / "redis.pid"
     api_pidfile = paths["pids"] / "api.pid"
     workers_pidfile = paths["pids"] / "workers.pid"
@@ -162,7 +257,8 @@ pidfile {redis_pidfile}
 """
     paths["redis_conf"].write_text(redis_conf)
 
-    redis_cmd = ["redis-server", str(paths["redis_conf"])]
+    redis_bin = _redis_server_binary() or "redis-server"
+    redis_cmd = [redis_bin, str(paths["redis_conf"])]
     api_cmd = [python, str(repo / "dsx_connect" / "dsx-connect-api-start.py")]
     workers_cmd = [python, str(repo / "dsx_connect" / "dsx-connect-workers-start.py")]
 
@@ -261,7 +357,11 @@ def cmd_start(
         print("run: python dsx_connect/local/dsx_connect_local.py init")
         raise typer.Exit(code=1)
 
-    specs = _service_specs(state_dir, redis_port)
+    try:
+        specs = _service_specs(state_dir, redis_port)
+    except RuntimeError as exc:
+        print(str(exc))
+        raise typer.Exit(code=1)
     child_env = _child_env(env_path)
 
     for svc in SERVICE_ORDER:
@@ -270,8 +370,8 @@ def cmd_start(
         if _is_pid_alive(pid):
             print(f"{svc}: already running (pid={pid})")
             continue
-        if svc == "redis" and shutil.which("redis-server") is None:
-            print("redis-server not found in PATH. Install redis first (e.g., brew install redis).")
+        if svc == "redis" and _redis_server_binary() is None:
+            print("redis-server not found. Install redis or set DSXCONNECT_LOCAL_REDIS_SERVER=/path/to/redis-server.")
             raise typer.Exit(code=1)
 
         pid = _spawn(spec, child_env)
@@ -349,5 +449,33 @@ def cmd_logs(
         print(line)
 
 
+def _looks_like_app_binary() -> bool:
+    argv0 = sys.argv[0] if sys.argv else ""
+    return ".app/Contents/MacOS/" in argv0
+
+
+def _enable_launcher_log(state_dir: Path) -> None:
+    logs_dir = state_dir / "logs"
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    launcher_log = logs_dir / "launcher.log"
+
+    # Redirect stdout/stderr so Finder launches are observable post-mortem.
+    fp = launcher_log.open("a", buffering=1)
+    os.dup2(fp.fileno(), 1)
+    os.dup2(fp.fileno(), 2)
+
+    ts = datetime.now().isoformat(timespec="seconds")
+    print(f"[{ts}] app-launch argv={sys.argv} cwd={Path.cwd()}")
+
+
+
 if __name__ == "__main__":
+    app_launch = _looks_like_app_binary() or getattr(sys, "frozen", False)
+    if app_launch:
+        _enable_launcher_log(DEFAULT_STATE_DIR)
+
+    # App-bundle UX: double-clicking the .app runs with no args.
+    if app_launch and len(sys.argv) == 1:
+        sys.argv.append("start")
+
     app()

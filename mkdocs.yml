@@ -194,7 +194,8 @@ nav:
 plugins:
   - search
   - include-markdown
-    - rewrite_relative_urls: true
+      rewrite_relative_urls: true
+
 markdown_extensions:
   - admonition
   - toc:

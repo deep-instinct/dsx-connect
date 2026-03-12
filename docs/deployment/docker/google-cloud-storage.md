@@ -150,6 +150,4 @@ POST /webhook/event
 
 ---
 
-{% include-markdown "shared/_common_connector.md" %}
-
 {% include-markdown "shared/_common_connector_docker_tls.md" %}

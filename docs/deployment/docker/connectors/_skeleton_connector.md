@@ -2,13 +2,13 @@ Connector Deployment Page
 
 Intro
 
-Quick Deployment
+Minimal Deployment
     minimal steps
 
 Required Settings
     env vars required to function
 
-Monitoring
+Monitor Settings
     shared explanation
 
 Platform-specific Monitoring

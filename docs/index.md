@@ -83,7 +83,7 @@ So you can quickly find what you need.
 
 ### 🚀 Getting Started
 
-* [Overview](getting-started/overview.md)
+* [Overview](getting-started/index.md)
 * [Docker Compose Quickstart](getting-started/docker-quickstart.md)
 * [Kubernetes (Helm) Quickstart](getting-started/kubernetes-quickstart.md)
 
@@ -96,7 +96,7 @@ So you can quickly find what you need.
 
 ### ⚙️ Deployment
 
-* [Docker Compose Overview](deployment/docker/overview.md)
+* [Docker Compose Overview](deployment/docker/index.md)
 * [Kubernetes (Helm) Deployment](deployment/kubernetes/dsx-connect.md)
 * [Scaling & Performance (Kubernetes)](deployment/kubernetes/scaling.md)
 

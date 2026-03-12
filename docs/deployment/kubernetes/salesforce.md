@@ -9,7 +9,7 @@ Use this guide to deploy `salesforce-connector-chart` (under `connectors/salesfo
 - Salesforce Connected App & integration user (JWT bearer recommended).
 - Access to the Helm chart (local checkout or OCI: `oci://registry-1.docker.io/dsxconnect/salesforce-connector-chart`).
 - dsx-connect deployed and reachable from the connector namespace.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -128,3 +128,5 @@ kubectl logs deploy/salesforce-connector -f
 - Rotate Salesforce secrets by updating the Kubernetes Secret and restarting the connector deployment (`kubectl rollout restart deploy/salesforce-connector`).
 - To serve the connector over HTTPS, set `env.DSXCONNECTOR_USE_TLS=true` and provide TLS cert/key via extra secrets or volumes.
 - For dsx-connect auth, keep enrollment tokens short-lived and rotate DSX-HMAC credentials by re-registering the connector.
+
+{% include-markdown "shared/_common_connector.md" %}

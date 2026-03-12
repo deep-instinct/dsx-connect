@@ -126,3 +126,65 @@ The `release-local-apps.yml` workflow supports optional macOS signing/notarizati
 - `APPLE_TEAM_ID`: 10-char Apple team ID
 
 If signing/notary secrets are absent, the workflow still builds unsigned artifacts.
+
+SharePoint local manager:
+
+```bash
+python3 connectors/sharepoint/local/sharepoint_local.py init
+python3 connectors/sharepoint/local/sharepoint_local.py start
+python3 connectors/sharepoint/local/sharepoint_local.py status
+python3 connectors/sharepoint/local/sharepoint_local.py logs --lines 100
+python3 connectors/sharepoint/local/sharepoint_local.py stop
+```
+
+SharePoint GUI app:
+
+```bash
+./.venv/bin/python dsx_connect/local/build_local_binaries.py build-app sharepoint-gui
+open dist/local-apps/sharepoint_local_gui.app
+```
+
+SharePoint credential setup shortcuts:
+
+```bash
+# interactive prompt for tenant/client/secret
+python3 connectors/sharepoint/local/sharepoint_local.py init
+
+# non-interactive
+python3 connectors/sharepoint/local/sharepoint_local.py init \
+  --no-prompt-credentials \
+  --tenant-id "<tenant-id>" \
+  --client-id "<client-id>" \
+  --client-secret "<client-secret>"
+```
+
+The SharePoint GUI (`sharepoint_local_gui.app`) also loads/saves these values from:
+`~/.dsx-connect-local/sharepoint-connector/.env.local`
+via the **Save Config** button.
+
+## Cross-Platform Web Launcher (pywebview)
+
+A single HTML/JavaScript launcher UI for core + connectors:
+
+```bash
+pip install pywebview
+python3 dsx_connect/local/web_launcher.py
+```
+
+Profiles:
+- DSX Connect Core
+- Filesystem Connector
+- SharePoint Connector
+
+For SharePoint, the launcher can save `DSXCONNECTOR_SP_TENANT_ID`,
+`DSXCONNECTOR_SP_CLIENT_ID`, and `DSXCONNECTOR_SP_CLIENT_SECRET` into:
+`~/.dsx-connect-local/sharepoint-connector/.env.local`
+
+
+Web launcher app (HTML/JS via pywebview):
+
+```bash
+pip install pywebview
+./.venv/bin/python dsx_connect/local/build_local_binaries.py build-app web-launcher
+open dist/local-apps/web_launcher.app
+```

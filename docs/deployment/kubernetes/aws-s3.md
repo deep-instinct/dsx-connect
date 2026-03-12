@@ -7,7 +7,7 @@ Deploy the `aws-s3-connector-chart` (under `connectors/aws_s3/deploy/helm`) usin
 - Kubernetes 1.19+ cluster with `kubectl` access.
 - Helm 3.2+.
 - Access to `oci://registry-1.docker.io/dsxconnect/aws-s3-connector-chart`.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -73,3 +73,5 @@ kubectl logs deploy/aws-s3-connector -f
 - Keep AWS throttling in mind when increasing concurrency; adjust filters to limit scope.
 
 See `connectors/aws_s3/deploy/helm/values.yaml` for the exhaustive parameter reference.
+
+{% include-markdown "shared/_common_connector.md" %}

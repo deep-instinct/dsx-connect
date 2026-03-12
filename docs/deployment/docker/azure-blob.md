@@ -61,3 +61,7 @@ If you expose connector endpoints (e.g., for HTTP callbacks) outside Docker, tun
 - HNS (ADLS Gen2): hierarchical namespace affects path semantics; test your prefixes under HNS.
 - Listing costs: large containers can incur list costs; sharding by asset improves performance.
 - SAS Expiry: ensure long enough validity for ongoing scans.
+
+{% include-markdown "shared/_common_connector.md" %}
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}

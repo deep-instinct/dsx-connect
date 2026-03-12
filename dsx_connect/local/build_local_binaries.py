@@ -44,6 +44,18 @@ def _targets(repo: Path) -> dict[str, BuildTarget]:
             name="filesystem-gui",
             source=repo / "connectors" / "filesystem" / "local" / "filesystem_local_gui.py",
         ),
+        "sharepoint": BuildTarget(
+            name="sharepoint",
+            source=repo / "connectors" / "sharepoint" / "local" / "sharepoint_local.py",
+        ),
+        "sharepoint-gui": BuildTarget(
+            name="sharepoint-gui",
+            source=repo / "connectors" / "sharepoint" / "local" / "sharepoint_local_gui.py",
+        ),
+        "web-launcher": BuildTarget(
+            name="web-launcher",
+            source=repo / "dsx_connect" / "local" / "web_launcher.py",
+        ),
     }
 
 
@@ -55,10 +67,18 @@ def _nuitka_module_available() -> bool:
     return True
 
 
+def _pywebview_available() -> bool:
+    try:
+        import webview  # noqa: F401
+    except Exception:
+        return False
+    return True
+
+
 def _build_selected_targets(target: str) -> list[BuildTarget]:
     targets = _targets(_repo_root())
-    if target not in {"core", "filesystem", "core-gui", "filesystem-gui", "all"}:
-        raise typer.BadParameter("target must be one of: core, filesystem, core-gui, filesystem-gui, all")
+    if target not in {"core", "filesystem", "sharepoint", "core-gui", "filesystem-gui", "sharepoint-gui", "web-launcher", "all"}:
+        raise typer.BadParameter("target must be one of: core, filesystem, sharepoint, core-gui, filesystem-gui, sharepoint-gui, web-launcher, all")
     return list(targets.values()) if target == "all" else [targets[target]]
 
 
@@ -183,7 +203,7 @@ def _run_build(
     elif onefile:
         cmd.append("--onefile")
 
-    if target.name in {"core-gui", "filesystem-gui"}:
+    if target.name in {"core-gui", "filesystem-gui", "sharepoint-gui"}:
         cmd.append("--enable-plugin=tk-inter")
 
     if macos_sign_identity:
@@ -204,7 +224,7 @@ def main() -> None:
 
 @app.command("build")
 def cmd_build(
-    target: str = typer.Argument("all", help="target: core | filesystem | core-gui | filesystem-gui | all"),
+    target: str = typer.Argument("all", help="target: core | filesystem | sharepoint | core-gui | filesystem-gui | sharepoint-gui | web-launcher | all"),
     output_dir: str = typer.Option("dist/local-binaries", "--output-dir", help="output dir for built binaries"),
     onefile: bool = typer.Option(True, "--onefile/--no-onefile", help="build onefile binary"),
     macos_sign_identity: str | None = typer.Option(
@@ -223,6 +243,10 @@ def cmd_build(
     selected = _build_selected_targets(target)
     out = Path(output_dir)
     for item in selected:
+        if item.name == "web-launcher" and not _pywebview_available():
+            print("pywebview is required for web-launcher builds.")
+            print("Install with: pip install pywebview")
+            raise typer.Exit(code=1)
         print(f"building binary target={item.name} source={item.source}")
         _run_build(
             target=item,
@@ -240,7 +264,7 @@ def cmd_build(
 
 @app.command("build-app")
 def cmd_build_app(
-    target: str = typer.Argument("all", help="target: core | filesystem | core-gui | filesystem-gui | all"),
+    target: str = typer.Argument("all", help="target: core | filesystem | sharepoint | core-gui | filesystem-gui | sharepoint-gui | web-launcher | all"),
     output_dir: str = typer.Option("dist/local-apps", "--output-dir", help="output dir for app bundles"),
     app_name_prefix: str = typer.Option("DSXConnectLocal", "--app-name-prefix", help="prefix for .app bundle names"),
     app_icon: str | None = typer.Option(None, "--app-icon", help="optional .icns/.png/.svg path"),
@@ -266,6 +290,10 @@ def cmd_build_app(
     out = Path(output_dir)
     resolved_redis = _resolve_redis_binary(redis_binary)
     for item in selected:
+        if item.name == "web-launcher" and not _pywebview_available():
+            print("pywebview is required for web-launcher builds.")
+            print("Install with: pip install pywebview")
+            raise typer.Exit(code=1)
         print(f"building app target={item.name} source={item.source}")
         _run_build(
             target=item,
@@ -283,7 +311,7 @@ def cmd_build_app(
 
 @app.command("build-pkg")
 def cmd_build_pkg(
-    target: str = typer.Argument("core-gui", help="target: core | filesystem | core-gui | filesystem-gui | all"),
+    target: str = typer.Argument("core-gui", help="target: core | filesystem | sharepoint | core-gui | filesystem-gui | sharepoint-gui | web-launcher | all"),
     app_output_dir: str = typer.Option("dist/local-apps", "--app-output-dir", help="location of built .app bundles"),
     output_dir: str = typer.Option("dist/local-pkg", "--output-dir", help="where to write .pkg"),
     package_name: str = typer.Option("DSXConnectLocal", "--package-name", help="base package filename"),
@@ -326,6 +354,10 @@ def cmd_build_pkg(
             raise typer.Exit(code=1)
         resolved_redis = _resolve_redis_binary(redis_binary)
         for item in selected:
+            if item.name == "web-launcher" and not _pywebview_available():
+                print("pywebview is required for web-launcher builds.")
+                print("Install with: pip install pywebview")
+                raise typer.Exit(code=1)
             print(f"building app target={item.name} source={item.source}")
             _run_build(
                 target=item,

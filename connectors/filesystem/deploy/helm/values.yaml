@@ -59,18 +59,18 @@ envSecretRefs: []
 scanVolume:
   enabled: false
   mountPath: "/app/scan_folder"
-  existingClaim: ""
-  hostPath: ""
+  existingClaim: ""  # If set, chart mounts this PVC and ignores hostPath.
+  hostPath: ""       # Used only when existingClaim is empty.
   readOnly: false
-  subPath: ""
+  subPath: ""        # Optional subdirectory inside the mounted volume (PVC or hostPath).
 
 quarantineVolume:
   enabled: false
   mountPath: "/app/quarantine"
-  existingClaim: ""
-  hostPath: ""
+  existingClaim: ""  # If set, chart mounts this PVC and ignores hostPath.
+  hostPath: ""       # Used only when existingClaim is empty.
   readOnly: false
-  subPath: ""
+  subPath: ""        # Optional subdirectory inside the mounted volume (PVC or hostPath).
 
 auth_dsxconnect:
   enabled: false

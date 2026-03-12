@@ -95,3 +95,7 @@ See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + conne
 
 ## Webhook Exposure
 If you expose SharePoint webhook callbacks or other HTTP endpoints outside Docker, tunnel or publish the host port mapped to `8640` (compose default when ports are enabled). Keep `DSXCONNECTOR_CONNECTOR_URL` pointing to the Docker-network URL (e.g., `http://sharepoint-connector:8640`) so dsx-connect can reach the container internally.
+
+{% include-markdown "shared/_common_connector.md" %}
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}

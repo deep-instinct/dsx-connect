@@ -26,3 +26,7 @@ dsx_connect/deploy/helm/charts/*.tgz
 
 # Large artifacts
 **/data/connector_uuid.txt
+
+# Never include local GCS service account keys in build context
+connectors/google_cloud_storage/gcs-sa.json
+connectors/google_cloud_storage/*-sa.json

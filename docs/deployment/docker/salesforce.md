@@ -67,3 +67,7 @@ Key points:
 - Never commit Salesforce secrets to Git. Use Docker secrets, env files stored in password managers, or inject env vars via your orchestrator.
 - For TLS between dsx-connect and the connector, set `DSXCONNECTOR_USE_TLS=true` and point to cert/key files.
 - When auth is enabled on dsx-connect, set `DSXCONNECT_ENROLLMENT_TOKEN` before the connector registers.
+
+{% include-markdown "shared/_common_connector.md" %}
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}

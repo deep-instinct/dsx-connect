@@ -1,4 +1,4 @@
-# Kubernetes Deployment Getting Started
+# Kubernetes Deployment Overview
 
 Use this page as the single checklist before diving into the connector-specific guides. It covers the cluster requirements, where to fetch Helm charts, and the high-level deployment workflow shared by every dsx-connect component.
 

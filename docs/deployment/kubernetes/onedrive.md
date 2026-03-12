@@ -6,7 +6,7 @@ Deploy the `onedrive-connector-chart` (under `connectors/onedrive/deploy/helm`) 
 
 - Kubernetes 1.19+, Helm 3.2+, and `kubectl`.
 - Access to `oci://registry-1.docker.io/dsxconnect/onedrive-connector-chart`.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -75,3 +75,5 @@ kubectl logs deploy/onedrive-connector -f
 - Filters are relative to that asset path and follow rsync syntax (`?`, `*`, `**`, `+`, `-`).
 
 See `connectors/onedrive/deploy/helm/values.yaml` for the exhaustive option set.
+
+{% include-markdown "shared/_common_connector.md" %}

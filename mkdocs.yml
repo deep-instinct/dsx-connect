@@ -15,6 +15,10 @@ theme:
   logo: assets/dsx-connect-icon-white.svg
   favicon: assets/dsx-connect-icon-white.svg
   features:
+    - navigation.indexes
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.prune
     - navigation.instant
     - navigation.tracking
     - navigation.path
@@ -109,9 +113,12 @@ nav:
   - Home: index.md
 
   - Getting Started:
-      - Overview: getting-started/overview.md
+      - Overview: getting-started/index.md
       - Docker Compose Quickstart: getting-started/docker-quickstart.md
       - Kubernetes (Helm) Quickstart: getting-started/kubernetes-quickstart.md
+      - Tools:
+          - Docker: reference/installations/dockerinstalls.md
+          - Kubernetes: reference/installations/kubernetes.md
 
   - Core Concepts:
       - Architecture Overview: concepts/architecture.md
@@ -120,26 +127,28 @@ nav:
       - TLS / HTTPS Model: concepts/tls.md
       - Performance & Throughput: concepts/performance.md
       - Job Comparison Explained: concepts/job-comparison.md
-      - Choosing Your Deployment: concepts/deployment-models.md
-      - Choose Your Connector: concepts/choosing-the-right-connector.md
+      - Choose the Right Connector: concepts/choose-the-right-connector.md
 
   - Deployment:
+      - deployment/index.md
       - Docker Compose:
-          - Overview: deployment/docker/overview.md
+          - Overview: deployment/docker/index.md
           - Resource Recommendations: deployment/docker/resource-recommendations.md
           - Core Deployment: deployment/docker/dsx-connect.md
           - Connectors:
+#              - Overview: deployment/docker/connectors.md
               - Filesystem: deployment/docker/filesystem.md
               - Google Cloud Storage: deployment/docker/google-cloud-storage.md
               - OneDrive: deployment/docker/onedrive.md
               - M365 Mail: deployment/docker/m365-mail.md
               - Salesforce: deployment/docker/salesforce.md
               - SharePoint: deployment/docker/sharepoint.md
-              - AWS S3 (reference architecture): deployment/docker/aws-s3.md
-              - Azure Blob Storage (reference architecture): deployment/docker/azure-blob.md
+              - AWS S3 (reference): deployment/docker/aws-s3.md
+              - Azure Blob Storage (reference): deployment/docker/azure-blob.md
           - Storage & Mounts: deployment/docker/storage-mounts.md
 
       - Kubernetes (Helm):
+          - Overview: deployment/kubernetes/index.md
           - Resource Recommendations: deployment/kubernetes/resource-recommendations.md
           - Core Deployment: deployment/kubernetes/dsx-connect.md
           - Core Configuration Reference: deployment/kubernetes/configuration-reference.md
@@ -155,9 +164,12 @@ nav:
               - M365 Mail: deployment/kubernetes/m365-mail.md
               - Salesforce: deployment/kubernetes/salesforce.md
               - SharePoint: deployment/kubernetes/sharepoint.md
-              - AWS S3 (reference architecture): deployment/kubernetes/aws-s3.md
-              - Azure Blob Storage (reference architecture): deployment/kubernetes/azure-blob.md
+              - AWS S3 (reference): deployment/kubernetes/aws-s3.md
+              - Azure Blob Storage (reference): deployment/kubernetes/azure-blob.md
           - DIANNA Worker: deployment/kubernetes/dianna.md
+
+  - Connectors:
+      - connectors/index.md
 
   - Case-Studies/Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
@@ -177,9 +189,6 @@ nav:
 #      - Helm Values: reference/helm-values.md
 #      - API Reference: reference/api.md
       - Filter Syntax: reference/filters.md
-      - Tools:
-          - Docker: reference/installations/dockerinstalls.md
-          - Kubernetes: reference/installations/kubernetes.md
       - Concepts:
           - Containers vs VMs: reference/concepts/containers-vs-vms.md
           - Evolution of Containers: reference/concepts/evolutionofdocker.md
@@ -187,9 +196,12 @@ nav:
         - Azure Credentials: reference/azure-credentials.md
         - Google Cloud Credentials: reference/google-cloud-credentials.md
         - Salesforce Credentials: reference/salesforce-credentials.md
+      - Kubernetes:
+          - Storage: reference/kubernetes-storage.md
       - UI Display Icons: reference/display-icons.md
 
   - Resources:
+      - Overview: resources/index.md
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
       - GitHub: https://github.com/deep-instinct/dsx-connect
@@ -202,9 +214,13 @@ plugins:
 markdown_extensions:
   - admonition
   - attr_list
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - md_in_html
   - toc:
       permalink: "🔗"
+      toc_depth: 3
   - tables
   - pymdownx.details
   - pymdownx.snippets

@@ -7,7 +7,7 @@ Deploy the `sharepoint-connector-chart` (under `connectors/sharepoint/deploy/hel
 - Kubernetes 1.19+ cluster and `kubectl`.
 - Helm 3.2+.
 - Access to `oci://registry-1.docker.io/dsxconnect/sharepoint-connector-chart`.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -70,3 +70,5 @@ kubectl logs deploy/sharepoint-connector -f
 - Increase `replicaCount` for HA / throughput. Each replica registers independently with dsx-connect; replicas do not shard a single full scan.
 
 See `connectors/sharepoint/deploy/helm/values.yaml` for the full configuration surface.
+
+{% include-markdown "shared/_common_connector.md" %}

@@ -121,3 +121,7 @@ docker compose --env-file dsx-connect-<core_version>/m365-mail-connector-<connec
   -f dsx-connect-<core_version>/m365-mail-connector-<connector_version>/docker-compose-m365-mail-connector.yaml \
   -f dsx-connect-<core_version>/m365-mail-connector-<connector_version>/docker-compose.tls.override.yaml up -d
 ```
+
+{% include-markdown "shared/_common_connector.md" %}
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}

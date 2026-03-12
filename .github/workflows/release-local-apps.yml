@@ -1,8 +1,6 @@
 name: Local Apps - Build macOS artifacts
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -35,7 +33,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r dsx_connect/requirements.txt
           pip install -r connectors/filesystem/requirements.txt
-          pip install nuitka imageio
+          pip install nuitka imageio pywebview
 
       - name: Import Apple signing certificate
         if: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_CERT_PASSWORD != '' }}
@@ -78,6 +76,8 @@ jobs:
 
           python dsx_connect/local/build_local_binaries.py build-app core-gui --app-icon dsx_connect/app/static/images/dsx-connect-icon2.png "${build_app_args[@]}"
           python dsx_connect/local/build_local_binaries.py build-app filesystem-gui --app-icon dsx_connect/app/static/images/dsx-connect-icon2.png "${build_app_args[@]}"
+          python dsx_connect/local/build_local_binaries.py build-app sharepoint-gui --app-icon dsx_connect/app/static/images/dsx-connect-icon2.png "${build_app_args[@]}"
+          python dsx_connect/local/build_local_binaries.py build-app web-launcher --app-icon dsx_connect/app/static/images/dsx-connect-icon2.png "${build_app_args[@]}"
 
       - name: Build pkg installers
         run: |
@@ -92,13 +92,16 @@ jobs:
 
           python dsx_connect/local/build_local_binaries.py build-pkg core-gui --no-rebuild-apps --package-name DSXConnectLocalCore --version "${{ steps.corever.outputs.version }}" "${build_pkg_args[@]}"
           python dsx_connect/local/build_local_binaries.py build-pkg filesystem-gui --no-rebuild-apps --package-name DSXConnectLocalFilesystem --version "${{ steps.corever.outputs.version }}" "${build_pkg_args[@]}"
-          python dsx_connect/local/build_local_binaries.py build-pkg all --no-rebuild-apps --package-name DSXConnectLocalSuite --version "${{ steps.corever.outputs.version }}" "${build_pkg_args[@]}"
+          python dsx_connect/local/build_local_binaries.py build-pkg sharepoint-gui --no-rebuild-apps --package-name DSXConnectLocalSharePoint --version "${{ steps.corever.outputs.version }}" "${build_pkg_args[@]}"
+          python dsx_connect/local/build_local_binaries.py build-pkg web-launcher --no-rebuild-apps --package-name DSXConnectLocalLauncher --version "${{ steps.corever.outputs.version }}" "${build_pkg_args[@]}"
 
       - name: Collect release artifacts
         run: |
           mkdir -p dist/local-release
           ditto -c -k --sequesterRsrc --keepParent dist/local-apps/dsx_connect_local_gui.app dist/local-release/dsx_connect_local_gui-${{ steps.corever.outputs.version }}.zip
           ditto -c -k --sequesterRsrc --keepParent dist/local-apps/filesystem_local_gui.app dist/local-release/filesystem_local_gui-${{ steps.corever.outputs.version }}.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/local-apps/sharepoint_local_gui.app dist/local-release/sharepoint_local_gui-${{ steps.corever.outputs.version }}.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/local-apps/web_launcher.app dist/local-release/web_launcher-${{ steps.corever.outputs.version }}.zip
           cp dist/local-pkg/*.pkg dist/local-release/
 
       - name: Notarize and staple pkg installers
@@ -121,10 +124,10 @@ jobs:
           path: dist/local-release/*
 
       - name: Upload release assets
-        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ inputs.tag }}
           files: dist/local-release/*
           generate_release_notes: true
         env:
@@ -134,3 +137,62 @@ jobs:
         if: ${{ always() && secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_CERT_PASSWORD != '' }}
         run: |
           security delete-keychain build.keychain || true
+
+  build-local-web-launcher-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build/runtime dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r dsx_connect/requirements.txt
+          pip install -r connectors/filesystem/requirements.txt
+          pip install nuitka pywebview imageio
+
+      - name: Read dsx-connect version
+        id: corever
+        shell: bash
+        run: |
+          ver=$(python - <<'PY'
+          import pathlib, re
+          text = pathlib.Path("dsx_connect/version.py").read_text()
+          m = re.search(r"DSX_CONNECT_VERSION\s*=\s*'([^']+)'", text)
+          print(m.group(1) if m else "latest")
+          PY
+          )
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+
+      - name: Build Windows web launcher
+        shell: bash
+        run: |
+          python dsx_connect/local/build_local_binaries.py build web-launcher --output-dir dist/local-binaries --onefile
+
+      - name: Archive Windows artifact
+        shell: bash
+        run: |
+          mkdir -p dist/local-release-windows
+          cp dist/local-binaries/web_launcher.exe dist/local-release-windows/web_launcher-${{ steps.corever.outputs.version }}.exe
+
+      - name: Upload Windows workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: local_web_launcher_windows_${{ steps.corever.outputs.version }}
+          path: dist/local-release-windows/*
+
+      - name: Upload Windows release asset
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: dist/local-release-windows/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

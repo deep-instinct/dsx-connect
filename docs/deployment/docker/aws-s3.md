@@ -61,3 +61,7 @@ If you forward events into the connector’s HTTP endpoints (e.g., using tunnels
 - IAM Policies: least‑privilege for List/Get; add Put/Delete if actions are enabled.
 - SSE‑KMS: if objects are KMS‑encrypted, confirm key permissions for decryption.
 - Path‑style vs Virtual host: modern S3 endpoints default to virtual host; avoid path‑style unless required by your setup.
+
+{% include-markdown "shared/_common_connector.md" %}
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}

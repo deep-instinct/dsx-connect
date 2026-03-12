@@ -10,7 +10,7 @@ Each connector guide includes a quick “Method 1” install for fast validation
 ## Prerequisites
 - Helm 3.x and `kubectl`
 - Access to the connector charts in OCI (`oci://registry-1.docker.io/dsxconnect/...`)
-- Secrets created via Kubernetes-native approaches (see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials))
+- Secrets created via Kubernetes-native approaches (see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials))
 
 ## Method 2 — Pull the chart and edit values locally
 This is a good middle ground when you want to inspect defaults or customize resources before installing.

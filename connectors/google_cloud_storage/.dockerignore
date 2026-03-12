@@ -17,3 +17,7 @@ __pycache__
 dist/
 build/
 *.zip
+
+# Never include local GCS service account keys in build context
+gcs-sa.json
+*-sa.json

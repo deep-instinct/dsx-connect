@@ -8,7 +8,7 @@ Use this guide to deploy `azure-blob-storage-connector-chart` (found under `conn
 - Helm 3.2+.
 - Access to the connector chart in OCI: `oci://registry-1.docker.io/dsxconnect/azure-blob-connector-chart`.
 - Optional: `openssl` for validating TLS assets.
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -77,3 +77,5 @@ kubectl logs deploy/azure-blob-storage-connector -f
 - Each pod registers independently with dsx-connect; replicas do not parallelize a single full scan but do improve availability.
 
 See `connectors/azure_blob_storage/deploy/helm/values.yaml` for the complete parameter catalog.
+
+{% include-markdown "shared/_common_connector.md" %}

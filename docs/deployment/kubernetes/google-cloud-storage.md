@@ -8,7 +8,7 @@ Use this guide to deploy the `google-cloud-storage-connector-chart` for full sca
 - Helm 3.2+.
 - Access to `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart`.
 - A Google Cloud service account JSON key with the permissions listed in [Reference → Google Cloud Credentials](../../reference/google-cloud-credentials.md).
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Preflight Tasks
 
@@ -99,3 +99,5 @@ kubectl logs deploy/google-cloud-storage-connector -f
 - For Pub/Sub, ensure your subscription acknowledgement deadlines accommodate scan duration.
 
 Refer to `connectors/google_cloud_storage/deploy/helm/values.yaml` for the full option set.
+
+{% include-markdown "shared/_common_connector.md" %}

@@ -2,7 +2,7 @@
 
 The Helm chart under `connectors/m365_mail/deploy/helm/` packages the connector for Kubernetes. This guide focuses on the webhook ingress and environment settings needed when Microsoft Graph must reach the connector from outside the cluster.
 
-For secret-handling best practices, see [Kubernetes Secrets and Credentials](getting-started.md#kubernetes-secrets-and-credentials).
+For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
 ## Values Overview
 
@@ -101,3 +101,5 @@ ingressWebhook:
 3. Check logs for `Subscriptions reconciled` and `Delta runner` entries to ensure Graph notifications are flowing.
 
 For more on Graph credentials and permission setup, see the Reference → [Azure Credentials](../../reference/azure-credentials.md) page.
+
+{% include-markdown "shared/_common_connector.md" %}

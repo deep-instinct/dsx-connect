@@ -15,7 +15,7 @@ Monitoring can be triggered using:
 
 ---
 
-## Connector Prerequisites
+## Prerequisites
 
 Before deploying the connector you must create a **Google Cloud service account** with access to the target bucket.
 
@@ -36,7 +36,16 @@ See:
 
 ## Minimal Deployment
 
-The following steps will install the connector with minimal configuration changes.  Read the following section for specific configuration details.
+The following steps will install the connector with minimal configuration changes.  
+
+!!! tip "Using the Docker bundle"
+
+    All Docker connector deployments use the official **DSX-Connect Docker bundle**, which contains the compose files and sample environment files for each connector.
+    
+    [DSX-Connect Docker bundles](https://github.com/deep-instinct/dsx-connect/releases)
+
+Download the DSX-Connect Docker bundle and navigate to the Google Cloud Storage connector directory:
+`dsx-connect-<core_version>/google-cloud-storage-connector-<connector_version>/`
 
 The easiest way to deploy the GCS connector is by editing the supplied  `sample.gcs.env` file
 and using it with the supplied `docker-compose-google-cloud-storage-connector.yaml` compose file.
@@ -66,7 +75,7 @@ In this minimal deployment, the connector will scan the bucket `your-bucket` and
 DSXCONNECTOR_ASSET=your-bucket                              # Required: GCS bucket
 DSXCONNECTOR_FILTER=                                        # Optional: bucket filter to apply
 DSX_CONNECTOR_ITEM_ACTION=nothing                           # nothing, move, move_tag, delete
-DSX_CONNECTOR_ITEM_ACTION_METAINFO=""                       # if move, where to
+DSX_CONNECTOR_ITEM_ACTION_MOVE_METAINFO=""                       # if move, where to
 ```
 
 ### Deploy
@@ -85,6 +94,15 @@ That's it.  You should now be able to see the connector in the **DSX-Connect UI*
 {% include-markdown "shared/connectors/_objectstore_required_settings.md" %}
 
 ### Advanced Settings
+
+#### DSX_Connect Authentication
+
+{% include-markdown "shared/connectors/_common_connector_authentication.md" %}
+
+#### TLS
+
+{% include-markdown "shared/_common_connector_docker_tls.md" %}
+
 #### Google Cloud Authentication
 
 | Variable                         | Description                                                                     |
@@ -104,7 +122,7 @@ Monitoring enables **on-access scanning** when objects are created or modified.
 | `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription that receives bucket event notifications.              |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
-### Creating a Pub/Sub bucket notification
+### Pub/Sub Setup
 
 ```bash
 gsutil notification create -t gcs-object-events -f json gs://my-bucket
@@ -124,7 +142,7 @@ The connector listens for:
 
 ### Webhook Alternative
 
-You’d reach for the /webhook/event path instead of native Pub/Sub in a few scenarios:
+You’d reach for the connector's /webhook/event path instead of native Pub/Sub in a few scenarios:
 
 - Pub/Sub isn’t an option (restricted project, org policy, private cloud, or you’re already forwarding events through something else like Cloud Storage →
   Eventarc → Cloud Run).
@@ -139,15 +157,9 @@ You’d reach for the /webhook/event path instead of native Pub/Sub in a few sce
 Pub/Sub remains the simplest path when it’s available, but the webhook keeps things flexible if you’ve already standardized on HTTP callbacks or have
 compliance/runtime constraints around Pub/Sub.
 
-For external callbacks into the connector, expose or tunnel the host port mapped to `8630` (compose default). Upstream systems should hit that public address. Internally, set `DSXCONNECTOR_CONNECTOR_URL` to the Docker-service URL (e.g., `http://google-cloud-storage-connector:8630`) so dsx-connect can reach the container.
+For external callbacks into the connector, expose or tunnel the host port mapped to `8630` (compose default). 
+Upstream systems should hit that public address. Internally, set `DSXCONNECTOR_CONNECTOR_URL` to the Docker-service URL 
+(e.g., `http://google-cloud-storage-connector:8630`) so dsx-connect can reach the container.
 
 
-Instead of Pub/Sub, bucket events can be forwarded to the connector webhook endpoint:
 
-```
-POST /webhook/event
-```
-
----
-
-{% include-markdown "shared/_common_connector_docker_tls.md" %}

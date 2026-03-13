@@ -23,9 +23,27 @@ See [Storage Binding](storage-mounts.md) for more information.
 
 ---
 
+## Prerequisites
+
+The Filesystem connector requires access to the directory being scanned.
+
+Ensure the Docker host can access the filesystem path you intend to scan.
+Network storage (NFS, SMB, etc.) must be mounted on the host before starting the connector.
+
+---
+
 ## Minimal Deployment
 
 The following steps will install the connector with minimal configuration changes.  Read the following section for specific configuration details.
+
+!!! tip "Using the Docker bundle"
+
+    All Docker connector deployments use the official **DSX-Connect Docker bundle**, which contains the compose files and sample environment files for each connector.
+    
+    [DSX-Connect Docker bundles](https://github.com/deep-instinct/dsx-connect/releases)
+
+Download the DSX-Connect Docker bundle and navigate to the Filesystem connector directory:
+`dsx-connect-<core_version>/filesystem-connector-<connector_version>/`
 
 The easiest way to deploy the Filesystem connector is by editing the supplied  `sample.filesystem.env` file
 and using it with the supplied `docker-compose-filesystem-connector.yaml` compose file.

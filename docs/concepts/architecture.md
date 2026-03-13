@@ -186,10 +186,6 @@ Kubernetes enables:
 * High availability
 * Production-grade authentication and TLS management
 
-See:
-
-[Choosing Your Deployment: Docker Compose vs Kubernetes](deployment-models.md)
-
 ---
 
 ## Container Images

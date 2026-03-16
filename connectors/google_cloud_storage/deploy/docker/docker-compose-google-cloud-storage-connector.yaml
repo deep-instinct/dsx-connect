@@ -21,23 +21,23 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
-      DSXCONNECTOR_AUTH__ENABLED: "false"
-      DSXCONNECTOR_CONNECTOR_URL: http://google-cloud-storage-connector:8630 # see aliases below
-      DSXCONNECTOR_DSX_CONNECT_URL: http://dsx-connect-api:8586 # note, this works if running on the same internal network on Docker as the dsx_connect_core...
-      DSXCONNECTOR_ITEM_ACTION: nothing # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: dsxconnect-quarantine # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
+      DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
+      DSXCONNECTOR_CONNECTOR_URL: "${DSXCONNECTOR_CONNECTOR_URL:-http://google-cloud-storage-connector:8630}" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "${DSXCONNECTOR_DSX_CONNECT_URL:-http://dsx-connect-api:8586}" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
+      DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}" # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-dsxconnect-quarantine}" # if item action is move or move_tag, specify where to move (to be interpreted by the connector).
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector
-      DSXCONNECTOR_ASSET: "" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
-      DSXCONNECTOR_FILTER:   # rsync-like include/exclude patterns; leave empty to scan all
-      DSXCONNECTOR_MONITOR: "false"
-      GCS_PUBSUB_PROJECT_ID: ""
-      GCS_PUBSUB_SUBSCRIPTION: ""
+      DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-}" # identifies the asset this Connector can on demand full scan  - i.e., a bucket, blob container, etc.... To be interpreted by the Connector
+      DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}" # rsync-like include/exclude patterns; leave empty to scan all
+      DSXCONNECTOR_MONITOR: "${DSXCONNECTOR_MONITOR:-false}"
+      GCS_PUBSUB_PROJECT_ID: "${GCS_PUBSUB_PROJECT_ID:-}"
+      GCS_PUBSUB_SUBSCRIPTION: "${GCS_PUBSUB_SUBSCRIPTION:-}"
 
-      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_DATA_DIR: "${DSXCONNECTOR_DATA_DIR:-/app/data}"
         # These definitions are for simple docker compose deployments. Proper production
         # deployments should use deployment mechanisms such as helm charts/k8s and secret managers.
-      GOOGLE_APPLICATION_CREDENTIALS: /app/creds/gcp-sa.json
-      GOOGLE_CLOUD_PROJECT: your-project-id
+      GOOGLE_APPLICATION_CREDENTIALS: "${GOOGLE_APPLICATION_CREDENTIALS:-/app/creds/gcp-sa.json}"
+      GOOGLE_CLOUD_PROJECT: "${GOOGLE_CLOUD_PROJECT:-your-project-id}"
 
         # This is definition is for docker compose deployments for dev, demos, POVs, and testing. Proper production
         # deployments should use deployment mechanisms (helm charts/k8s) where API Keys can be defined as secrets

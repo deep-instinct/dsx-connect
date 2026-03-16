@@ -6,7 +6,7 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
-      DSXCONNECTOR_AUTH__ENABLED: "false"
+      DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
 
       # TLS for connector server
       # DSXCONNECTOR_USE_TLS: "false"
@@ -17,15 +17,15 @@ services:
       # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
 
       # Core connector URLs (internal docker networking)
-      DSXCONNECTOR_CONNECTOR_URL: "http://m365-mail-connector:8650"
-      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+      DSXCONNECTOR_CONNECTOR_URL: "${DSXCONNECTOR_CONNECTOR_URL:-http://m365-mail-connector:8650}"
+      DSXCONNECTOR_DSX_CONNECT_URL: "${DSXCONNECTOR_DSX_CONNECT_URL:-http://dsx-connect-api:8586}"
 
       # Mailbox scope + remediation defaults
-      DSXCONNECTOR_ASSET: ""
-      DSXCONNECTOR_FILTER: 
-      DSXCONNECTOR_ITEM_ACTION: "nothing"
-      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
-      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-}"
+      DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}"
+      DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}"
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-dsxconnect-quarantine}"
+      DSXCONNECTOR_DATA_DIR: "${DSXCONNECTOR_DATA_DIR:-/app/data}"
 
       # Graph auth (set via env exports or docker compose overrides)
       # M365_TENANT_ID: ""

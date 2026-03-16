@@ -10,8 +10,8 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
-      DSXCONNECTOR_AUTH__ENABLED: "false"
-      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
+      DSXCONNECTOR_DATA_DIR: "${DSXCONNECTOR_DATA_DIR:-/app/data}"
       DSXCONNECTOR_ASSET: "${DSXCONNECTOR_ASSET:-my-container}"
       DSXCONNECTOR_FILTER: "${DSXCONNECTOR_FILTER:-}"
       DSXCONNECTOR_ITEM_ACTION: "${DSXCONNECTOR_ITEM_ACTION:-nothing}"
@@ -20,8 +20,8 @@ services:
       AZURE_STORAGE_CONNECTION_STRING: "${AZURE_STORAGE_CONNECTION_STRING:-}"
       AZURE_STORAGE_ACCOUNT: "${AZURE_STORAGE_ACCOUNT:-}"
       AZURE_STORAGE_KEY: "${AZURE_STORAGE_KEY:-}"
-      DSXCONNECTOR_CONNECTOR_URL: "http://azure-blob-storage-connector:8610"
-      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
+      DSXCONNECTOR_CONNECTOR_URL: "${DSXCONNECTOR_CONNECTOR_URL:-http://azure-blob-storage-connector:8610}"
+      DSXCONNECTOR_DSX_CONNECT_URL: "${DSXCONNECTOR_DSX_CONNECT_URL:-http://dsx-connect-api:8586}"
     networks:
       dsx-network:
         aliases:

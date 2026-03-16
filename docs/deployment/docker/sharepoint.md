@@ -1,6 +1,6 @@
-# SharePoint Connector — Docker Compose
+# SharePoint Connector — Docker
 
-This guide shows how to deploy the SharePoint connector with Docker Compose for quick testing/POV.
+The **SharePoint connector** monitors and scans a Sharepoint site or doc library/folder for changes and sends them to dsx-connect for processing.
 
 ## Prerequisites
 - Docker installed locally (or a container VM)

@@ -115,6 +115,14 @@ That's it.  You should now be able to see the connector in the **DSX-Connect UI*
 
 Monitoring enables **on-access scanning** when objects are created or modified.
 
+
+### Google Notification via Pub/Sub
+
+First, set up notifications for the bucket you want to monitor.
+[Pub/Sub Setup](../../reference/google-cloud-pubsub.md)
+
+Next, set the project_id and subscription obtained from the Pub/Sub setup. 
+
 | Variable                  | Description                                                                 |
 | ------------------------- | --------------------------------------------------------------------------- |
 | `DSXCONNECTOR_MONITOR`    | Enable monitoring (`true` or `false`).                                      |
@@ -122,21 +130,6 @@ Monitoring enables **on-access scanning** when objects are created or modified.
 | `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription that receives bucket event notifications.              |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
-### Pub/Sub Setup
-
-```bash
-gsutil notification create -t gcs-object-events -f json gs://my-bucket
-```
-
-Required permissions:
-
-* `roles/storage.objectViewer`
-* `roles/pubsub.subscriber`
-
-The connector listens for:
-
-* `OBJECT_FINALIZE`
-* `OBJECT_METADATA_UPDATE`
 
 ---
 

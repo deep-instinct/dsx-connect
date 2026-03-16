@@ -20,15 +20,15 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
-      DSXCONNECTOR_AUTH__ENABLED: "false"
+      DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
       # Enable realtime monitoring of the asset path for new/modified files
       # Set to "true" to watch and enqueue on changes (default: false)
-      DSXCONNECTOR_MONITOR: "true"
+      DSXCONNECTOR_MONITOR: "${DSXCONNECTOR_MONITOR:-true}"
       # For SMB/CIFS or remote mounts where inotify doesn't fire,
       # force polling to detect changes reliably (default: false)
-      DSXCONNECTOR_MONITOR_FORCE_POLLING: "true"
+      DSXCONNECTOR_MONITOR_FORCE_POLLING: "${DSXCONNECTOR_MONITOR_FORCE_POLLING:-true}"
       # Polling interval in milliseconds (effective when force polling is enabled)
-      DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+      DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "${DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS:-1000}"
 
 
       # TLS for connector server
@@ -38,15 +38,15 @@ services:
       # Outbound TLS verification to dsx-connect
       # DSXCONNECTOR_VERIFY_TLS: "true"
       # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
-      DSXCONNECTOR_CONNECTOR_URL: "http://filesystem-connector:8620" # see aliases below
-      DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
+      DSXCONNECTOR_CONNECTOR_URL: "${DSXCONNECTOR_CONNECTOR_URL:-http://filesystem-connector:8620}" # see aliases below
+      DSXCONNECTOR_DSX_CONNECT_URL: "${DSXCONNECTOR_DSX_CONNECT_URL:-http://dsx-connect-api:8586}" # note, this works if running on the same internal network on Docker as the dsx_connect_core...
       DSXCONNECTOR_ASSET: ${DSXCONNECTOR_ASSET:-/tmp/dsxconnect-scan}
       DSXCONNECTOR_FILTER: ${DSXCONNECTOR_FILTER:-}
       DSXCONNECTOR_ITEM_ACTION: ${DSXCONNECTOR_ITEM_ACTION:-nothing} # defines what action, if any, for a connector to take on malicious files (nothing, delete, tag, move, move_tag)
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: ${DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO:-/tmp/dsxconnect-quarantine} # if item action is move or move_tag, specify where to move (host path; bind-mounted to /app/quarantine).
         # This could be a folder on storage, a quarantine bucket, or other instructions, again, to be interpreted by the connector. this directory should have been created in the Dockerfile
-      DSXCONNECTOR_SCAN_BY_PATH: "False"
-      DSXCONNECTOR_DATA_DIR: "/app/data"
+      DSXCONNECTOR_SCAN_BY_PATH: "${DSXCONNECTOR_SCAN_BY_PATH:-False}"
+      DSXCONNECTOR_DATA_DIR: "${DSXCONNECTOR_DATA_DIR:-/app/data}"
 
       DSXCONNECTOR_ASSET_DISPLAY_NAME: ${DSXCONNECTOR_ASSET:-/tmp/dsxconnect-scan}
     networks:

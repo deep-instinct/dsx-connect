@@ -36,7 +36,7 @@ COPY shared/deploy/certs/ certs/
 RUN chown -R appuser:appuser certs \
     && chmod 0644 certs/*.crt || true \
     && chmod 0600 certs/*.key || true
-COPY connectors/salesforce/start.py .
+COPY connectors/salesforce/start.py connectors/salesforce/
 
 ENV PYTHONPATH=/app
 RUN mkdir -p data && chown appuser:appuser data

@@ -33,7 +33,7 @@ COPY shared/deploy/certs/ certs/
 RUN chown -R appuser:appuser certs \
     && chmod 0644 certs/*.crt || true \
     && chmod 0600 certs/*.key || true
-COPY connectors/onedrive/start.py ./start.py
+COPY connectors/onedrive/start.py connectors/onedrive/
 
 ENV PYTHONPATH=/app
 RUN mkdir -p data && chown appuser:appuser data

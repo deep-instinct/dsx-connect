@@ -38,7 +38,7 @@ COPY shared/deploy/certs/ certs/
 RUN chown -R appuser:appuser certs \
     && chmod 0644 certs/*.crt || true \
     && chmod 0600 certs/*.key || true
-COPY connectors/aws_s3/start.py .
+COPY connectors/aws_s3/start.py connectors/aws_s3/
 
 ENV PYTHONPATH=/app
 RUN mkdir -p data && chown appuser:appuser data

@@ -9,6 +9,10 @@ __pycache__
 *.dev.env
 .dev.env
 .env.*
+**/*.dev.env
+**/.dev.env
+**/.env
+**/.env.*
 .DS_Store
 .git
 .gitignore

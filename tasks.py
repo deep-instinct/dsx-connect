@@ -2,6 +2,8 @@ import os
 import re
 import json
 import shutil
+import tarfile
+import tempfile
 from pathlib import Path
 from invoke import task, Exit
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -255,6 +257,116 @@ def _build_core_cmd(extra: str = "") -> str:
     return f"invoke release{(' ' + extra) if extra else ''}"
 
 
+def _is_forbidden_env_file(path: str) -> bool:
+    """
+    Return True when a path in an image layer looks like a secret-bearing local
+    config file that should never be baked into container layers.
+    """
+    name = Path(path).name
+    if name == ".dev.env":
+        return True
+    if name.endswith(".dev.env"):
+        return True
+    if name == ".env":
+        return True
+    if name.startswith(".env."):
+        return True
+    # GCP/GCS service-account key file conventions used in local setups.
+    if name in {"gcp-sa.json", "gcs-sa.json"}:
+        return True
+    if name.endswith("-sa.json"):
+        return True
+    return False
+
+
+def _audit_image_layers_for_env_files(image_ref: str) -> list[str]:
+    """
+    Save an image and inspect all layer tar entries for forbidden env file names.
+    Returns matching paths (deduplicated, sorted).
+    """
+    import subprocess
+
+    hits: set[str] = set()
+    with tempfile.TemporaryDirectory(prefix="img-audit-") as td:
+        save_tar = Path(td) / "image.tar"
+        subprocess.run(["docker", "save", image_ref, "-o", str(save_tar)], check=True)
+
+        with tarfile.open(save_tar, "r") as img_tf:
+            manifest_member = img_tf.extractfile("manifest.json")
+            if manifest_member is None:
+                raise RuntimeError(f"manifest.json missing in docker save tar for {image_ref}")
+            manifest = json.loads(manifest_member.read().decode("utf-8"))
+
+            # docker save format: manifest is a list; each item has Layers[]
+            layer_paths: list[str] = []
+            for item in manifest:
+                layer_paths.extend(item.get("Layers", []))
+
+            for layer_path in layer_paths:
+                layer_member = img_tf.extractfile(layer_path)
+                if layer_member is None:
+                    continue
+                with tarfile.open(fileobj=layer_member, mode="r:*") as layer_tf:
+                    for member in layer_tf.getmembers():
+                        if not member.isfile():
+                            continue
+                        p = member.name.lstrip("./")
+                        if _is_forbidden_env_file(p):
+                            hits.add(p)
+    return sorted(hits)
+
+
+@task(help={
+    "repo": "Image repository/namespace prefix (e.g. dsxconnect). Use empty string for local-only names.",
+    "tag": "Image tag to audit (default: latest).",
+    "pull": "Pull images before audit (true/false).",
+})
+def audit_connector_images(c, repo: str = "dsxconnect", tag: str = "latest", pull: bool = True):
+    """
+    Audit ALL enabled connector images for baked env secret files in any image layer.
+    Fails if any forbidden env files (e.g. .dev.env, .env, .env.*, *.dev.env) are found.
+    """
+    selected = _configured_names(include_disabled=False)
+    if not selected:
+        print("[audit] No enabled connectors configured.")
+        return
+
+    pull_bool = str(pull).strip().lower() in {"1", "true", "yes", "y"}
+    failures: list[tuple[str, list[str]]] = []
+
+    for slug in selected:
+        image_name = slug.replace("_", "-") + "-connector"
+        image_ref = f"{repo}/{image_name}:{tag}" if repo else f"{image_name}:{tag}"
+        print(f"[audit] Checking {image_ref}")
+
+        if pull_bool:
+            pull_res = c.run(f"docker pull {image_ref}", warn=True, hide=True)
+            if pull_res.exited != 0:
+                raise Exit(f"[audit] Unable to pull image: {image_ref}", code=pull_res.exited)
+        else:
+            has_local = c.run(f"docker image inspect {image_ref}", warn=True, hide=True).exited == 0
+            if not has_local:
+                raise Exit(f"[audit] Local image not found: {image_ref}", code=2)
+
+        try:
+            hits = _audit_image_layers_for_env_files(image_ref)
+        except Exception as e:
+            raise Exit(f"[audit] Failed scanning {image_ref}: {e}", code=3)
+
+        if hits:
+            failures.append((image_ref, hits))
+            print(f"[audit] FAIL {image_ref}: found forbidden files in layers -> {hits}")
+        else:
+            print(f"[audit] PASS {image_ref}")
+
+    if failures:
+        lines = ["[audit] Secret file leak detected in image layers:"]
+        for ref, hits in failures:
+            lines.append(f"  - {ref}: {', '.join(hits)}")
+        raise Exit("\n".join(lines), code=1)
+    print("[audit] All connector images passed.")
+
+
 
 def _connector_cmd(name: str, extra: str = "") -> str:
     # Connectors run "invoke release" from within their folder (they each define a 'release' task).
@@ -432,12 +544,8 @@ def build_all(
     Pass extra args to underlying build via --extra-core/--extra-connectors.
     """
     print("=== Building core (dsx_connect) ===")
-    code = _run(
-        c,
-        _build_core_cmd(extra=extra_core.replace("release", "build").strip() or "invoke build"),
-        cwd=PROJECT_ROOT / "dsx_connect",
-        dry_run=dry_run,
-    )
+    core_cmd = f"invoke build{(' ' + extra_core) if extra_core else ''}"
+    code = _run(c, core_cmd, cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
     if code != 0:
         raise Exit(code)
 

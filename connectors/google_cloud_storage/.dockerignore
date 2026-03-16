@@ -9,6 +9,10 @@ __pycache__
 *.dev.env
 .dev.env
 .env.*
+**/*.dev.env
+**/.dev.env
+**/.env
+**/.env.*
 .DS_Store
 .git
 .gitignore
@@ -21,3 +25,5 @@ build/
 # Never include local GCS service account keys in build context
 gcs-sa.json
 *-sa.json
+**/gcs-sa.json
+**/*-sa.json

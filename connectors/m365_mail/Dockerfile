@@ -24,9 +24,13 @@ COPY connectors/m365_mail/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY connectors/framework connectors/framework
-COPY connectors/m365_mail connectors/m365_mail
+COPY connectors/m365_mail/__init__.py connectors/m365_mail/
+COPY connectors/m365_mail/config.py connectors/m365_mail/
+COPY connectors/m365_mail/graph_client.py connectors/m365_mail/
+COPY connectors/m365_mail/m365_mail_connector.py connectors/m365_mail/
+COPY connectors/m365_mail/subscriptions.py connectors/m365_mail/
+COPY connectors/m365_mail/version.py connectors/m365_mail/
 COPY shared/ shared/
-RUN rm -f /app/connectors/m365_mail/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

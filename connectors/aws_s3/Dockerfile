@@ -24,9 +24,14 @@ COPY connectors/aws_s3/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY connectors/framework connectors/framework
-COPY connectors/aws_s3 connectors/aws_s3
+COPY connectors/aws_s3/__init__.py connectors/aws_s3/
+COPY connectors/aws_s3/aws_s3_async_client.py connectors/aws_s3/
+COPY connectors/aws_s3/aws_s3_client.py connectors/aws_s3/
+COPY connectors/aws_s3/aws_s3_connector.py connectors/aws_s3/
+COPY connectors/aws_s3/config.py connectors/aws_s3/
+COPY connectors/aws_s3/version.py connectors/aws_s3/
+COPY connectors/aws_s3/webhook connectors/aws_s3/webhook
 COPY shared/ shared/
-RUN rm -f /app/connectors/aws_s3/.dev.env
 # Optional dev/demo certs live under shared/deploy/certs; copy to /app/certs if present
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

@@ -27,9 +27,12 @@ RUN mkdir quarantine
 RUN mkdir scan_folder
 
 COPY connectors/framework connectors/framework
-COPY connectors/filesystem connectors/filesystem
+COPY connectors/filesystem/__init__.py connectors/filesystem/
+COPY connectors/filesystem/config.py connectors/filesystem/
+COPY connectors/filesystem/filesystem_connector.py connectors/filesystem/
+COPY connectors/filesystem/filesystem_monitor.py connectors/filesystem/
+COPY connectors/filesystem/version.py connectors/filesystem/
 COPY shared/ shared/
-RUN rm -f /app/connectors/filesystem/.dev.env
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

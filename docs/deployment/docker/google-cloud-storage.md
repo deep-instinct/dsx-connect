@@ -130,6 +130,7 @@ Next, set the project_id and subscription obtained from the Pub/Sub setup.
 | `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription that receives bucket event notifications.              |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
+Google's client SDK handles the Pub/Sub connection and handling - under the covers, it calls the connector's /webhook/event endpoint.
 
 ---
 

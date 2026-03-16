@@ -24,9 +24,12 @@ COPY connectors/azure_blob_storage/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY connectors/framework connectors/framework
-COPY connectors/azure_blob_storage connectors/azure_blob_storage
+COPY connectors/azure_blob_storage/__init__.py connectors/azure_blob_storage/
+COPY connectors/azure_blob_storage/azure_blob_storage_client.py connectors/azure_blob_storage/
+COPY connectors/azure_blob_storage/azure_blob_storage_connector.py connectors/azure_blob_storage/
+COPY connectors/azure_blob_storage/config.py connectors/azure_blob_storage/
+COPY connectors/azure_blob_storage/version.py connectors/azure_blob_storage/
 COPY shared/ shared/
-RUN rm -f /app/connectors/azure_blob_storage/.dev.env
 # Optional certs (dev/demo) live under shared/deploy/certs; copy to /app/certs if present
 COPY shared/deploy/certs/ certs/
 # Ensure certs are readable by appuser (private key restricted to owner)

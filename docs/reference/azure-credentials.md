@@ -2,7 +2,12 @@
 
 The following guidance is for adding a connector as an app in Azure, retrieving credentials, and assigning permissions. The workflow is identical for the M365 Mail (Outlook), SharePoint, and OneDrive connectors; only the Microsoft Graph permissions differ.
 
-> Guidance current as of 2025-10-27. Azure portal labels occasionally change; adjust as needed if the UI differs.
+> Guidance current as of 2025-10-27. Azure portal labels occasionally change; adjust as needed if the UI differs.  Official doc for add/manage credentials: https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-credentials
+
+- Prefer one app registration per connector.
+- Move to cert/federated creds when possible (Microsoft recommends against long-term client secrets):
+  https://learn.microsoft.com/en-us/entra/identity-platform/security-best-practices-for-app-registration
+
 
 ## Portal Workflow
 

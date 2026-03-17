@@ -17,6 +17,7 @@ from connectors.framework.auth_hmac import build_outbound_auth_header
 from shared.models.connector_models import ConnectorInstanceModel, ConnectorStatusEnum, ScanRequestModel, ItemActionEnum
 from shared.models.status_responses import StatusResponse, StatusResponseEnum
 from shared.routes import service_url, API_PREFIX_V1, DSXConnectAPI
+from shared.log_sanitizer import maybe_mask_identifier
 
 
 connector = DSXConnector(config)
@@ -228,12 +229,17 @@ def _kick_delta_for_upns(upns: list[str]) -> None:
 
 @connector.startup
 async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
-    dsx_logging.info(f"{base.name} startup. tenant={config.tenant_id} client_id={config.client_id}")
+    dsx_logging.info(
+        f"{base.name} startup. "
+        f"tenant={maybe_mask_identifier(config.tenant_id)} "
+        f"client_id={maybe_mask_identifier(config.client_id)}"
+    )
     # Initialize Graph client
     global _graph
     try:
-        if config.tenant_id and config.client_id and config.client_secret:
-            _graph = GraphClient(config.tenant_id, config.client_id, config.client_secret, config.authority)
+        secret = config.client_secret.get_secret_value() if config.client_secret else None
+        if config.tenant_id and config.client_id and secret:
+            _graph = GraphClient(config.tenant_id, config.client_id, secret, config.authority)
         else:
             _graph = None
     except Exception as e:
@@ -323,8 +329,10 @@ async def webhook_handler(event: dict | ScanRequestModel) -> StatusResponse:
         values = payload.get("value", []) if isinstance(payload, dict) else []
         # Verify clientState if configured
         try:
-            if getattr(config, 'client_state', None):
-                values = [v for v in values if v.get('clientState') == config.client_state]
+            client_state_secret = getattr(config, 'client_state', None)
+            client_state = client_state_secret.get_secret_value() if client_state_secret else None
+            if client_state:
+                values = [v for v in values if v.get('clientState') == client_state]
         except Exception:
             pass
         if getattr(config, "trigger_delta_on_notification", False) and values:

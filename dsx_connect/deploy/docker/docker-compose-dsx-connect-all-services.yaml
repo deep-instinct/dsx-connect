@@ -1,4 +1,6 @@
 x-common-env: &common-env
+  # Environment mode for core behavior/policies: dev | stg | prod
+  DSXCONNECT_APP_ENV: ${DSXCONNECT_APP_ENV:-dev}
   DSXCONNECT_SCANNER__SCAN_BINARY_URL: ${DSXCONNECT_SCANNER__SCAN_BINARY_URL:-http://dsxa_scanner:5000/scan/binary/v2}
   DSXCONNECT_SCANNER__AUTH_TOKEN: ${DSXCONNECT_SCANNER__AUTH_TOKEN:-}
   DSXCONNECT_WORKERS__BROKER: "redis://redis:6379/5"

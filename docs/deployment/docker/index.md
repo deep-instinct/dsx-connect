@@ -18,6 +18,26 @@ For environment settings and worker retry policies see:
 
 ➡️ [Deployment Advanced Settings](../advanced.md)
 
+### Environment mode (`APP_ENV`)
+
+Set environment mode explicitly for both core and connectors:
+
+- Core: `DSXCONNECT_APP_ENV=dev|stg|prod`
+- Connectors: `DSXCONNECTOR_APP_ENV=dev|stg|prod`
+- `APP_ENV` is also accepted as a fallback.
+
+Why set it:
+
+- Controls DSX-Connect core environment policy (retry/backoff behavior).
+- Controls connector log sanitization policy. In `stg` and `prod`, connector startup logs mask identifier fields such as tenant/client IDs.
+
+Example (`.env` / compose env):
+
+```env
+DSXCONNECT_APP_ENV=prod
+DSXCONNECTOR_APP_ENV=prod
+```
+
 ---
 
 ## Environment Configuration
@@ -183,4 +203,3 @@ For large-scale or production environments, consider the Kubernetes deployment m
 * Run your first scan and verify results through the DSX-Connect UI
 
 Once the platform and at least one connector are running, you can monitor scans, adjust concurrency, and experiment with throughput before moving to Kubernetes for production-scale workloads.
-

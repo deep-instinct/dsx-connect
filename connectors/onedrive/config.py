@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field, HttpUrl, AliasChoices
+from pydantic import Field, HttpUrl, AliasChoices, SecretStr
 
 from connectors.framework.base_config import BaseConnectorConfig
 from shared.dev_env import load_devenv
@@ -56,8 +56,8 @@ class OneDriveConnectorConfig(BaseConnectorConfig):
             "OD_CLIENT_ID",
         ),
     )
-    client_secret: str = Field(
-        default="",
+    client_secret: SecretStr = Field(
+        default=SecretStr(""),
         description="Azure AD app client secret",
         validation_alias=AliasChoices(
             "DSXCONNECTOR_ONEDRIVE_CLIENT_SECRET",
@@ -130,7 +130,7 @@ class OneDriveConnectorConfig(BaseConnectorConfig):
             "OD_WEBHOOK_REFRESH_SECONDS",
         ),
     )
-    webhook_client_state: Optional[str] = Field(
+    webhook_client_state: Optional[SecretStr] = Field(
         default=None,
         description="Optional shared secret for webhook validation",
         validation_alias=AliasChoices(

@@ -32,7 +32,7 @@ class SharePointClient(MSGraphClientBase):
         super().__init__(
             tenant_id=cfg.sp_tenant_id,
             client_id=cfg.sp_client_id,
-            client_secret=cfg.sp_client_secret,
+            client_secret=cfg.sp_client_secret.get_secret_value(),
             verify=verify,
             log_token_claims=cfg.sp_log_token_claims,
         )

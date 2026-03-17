@@ -367,6 +367,60 @@ def audit_connector_images(c, repo: str = "dsxconnect", tag: str = "latest", pul
     print("[audit] All connector images passed.")
 
 
+@task(help={
+    "move": "Remove original repo-local .dev.env files after successful copy (true/false).",
+    "overwrite": "Overwrite target ~/.dsx-connect-local/<name>/.env.local if it exists (true/false).",
+    "include_core": "Also migrate dsx_connect/.dev.env (true/false).",
+})
+def migrate_dev_envs(c, move: bool = True, overwrite: bool = False, include_core: bool = True):
+    """
+    Migrate repo-local .dev.env files to ~/.dsx-connect-local/<name>/.env.local.
+    """
+    move_bool = str(move).strip().lower() in {"1", "true", "yes", "y"}
+    overwrite_bool = str(overwrite).strip().lower() in {"1", "true", "yes", "y"}
+    include_core_bool = str(include_core).strip().lower() in {"1", "true", "yes", "y"}
+
+    sources: list[tuple[str, Path]] = []
+    for cfg in CONNECTORS_CONFIG:
+        slug = cfg["name"]
+        src = PROJECT_ROOT / "connectors" / slug / ".dev.env"
+        if src.exists():
+            sources.append((slug, src))
+    if include_core_bool:
+        core_src = PROJECT_ROOT / "dsx_connect" / ".dev.env"
+        if core_src.exists():
+            sources.append(("dsx_connect", core_src))
+
+    if not sources:
+        print("[migrate_dev_envs] No repo-local .dev.env files found.")
+        return
+
+    moved = 0
+    copied = 0
+    skipped = 0
+    for name, src in sources:
+        dst_dir = Path.home() / ".dsx-connect-local" / name
+        dst = dst_dir / ".env.local"
+        dst_dir.mkdir(parents=True, exist_ok=True)
+
+        if dst.exists() and not overwrite_bool:
+            print(f"[migrate_dev_envs] SKIP {src} -> {dst} (target exists)")
+            skipped += 1
+            continue
+
+        content = src.read_text(encoding="utf-8")
+        dst.write_text(content, encoding="utf-8")
+        copied += 1
+        if move_bool:
+            src.unlink()
+            moved += 1
+            print(f"[migrate_dev_envs] MOVED {src} -> {dst}")
+        else:
+            print(f"[migrate_dev_envs] COPIED {src} -> {dst}")
+
+    print(f"[migrate_dev_envs] done: copied={copied}, moved={moved}, skipped={skipped}")
+
+
 
 def _connector_cmd(name: str, extra: str = "") -> str:
     # Connectors run "invoke release" from within their folder (they each define a 'release' task).

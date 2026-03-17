@@ -29,6 +29,8 @@ networkPolicy:
 
 env:
   LOG_LEVEL: "debug"
+  # Connector environment mode: dev | stg | prod
+  DSXCONNECTOR_APP_ENV: "dev"
   # Optional friendly display name shown in the dsx-connect UI card
   # DSXCONNECTOR_DISPLAY_NAME: "SharePoint Connector"
   DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"

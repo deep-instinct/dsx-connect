@@ -6,6 +6,8 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
+      # Environment mode for connector logging behavior: dev | stg | prod
+      DSXCONNECTOR_APP_ENV: "${DSXCONNECTOR_APP_ENV:-dev}"
       DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
 
       # TLS for connector server

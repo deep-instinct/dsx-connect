@@ -35,6 +35,8 @@ webhook:
 
 env:
   LOG_LEVEL: "debug"
+  # Connector environment mode: dev | stg | prod
+  DSXCONNECTOR_APP_ENV: "dev"
   DSXCONNECTOR_ASSET: ""
   DSXCONNECTOR_FILTER: ""  # See docs/reference/dsxconnector_filter.md
   DSXCONNECTOR_DATA_DIR: "/app/data"

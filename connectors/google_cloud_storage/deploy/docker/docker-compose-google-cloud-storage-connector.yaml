@@ -21,6 +21,8 @@ services:
     environment:
       PYTHONUNBUFFERED: 1
       LOG_LEVEL: debug
+      # Environment mode for connector logging behavior: dev | stg | prod
+      DSXCONNECTOR_APP_ENV: "${DSXCONNECTOR_APP_ENV:-dev}"
       DSXCONNECTOR_AUTH__ENABLED: "${DSXCONNECTOR_AUTH__ENABLED:-false}"
       DSXCONNECTOR_CONNECTOR_URL: "${DSXCONNECTOR_CONNECTOR_URL:-http://google-cloud-storage-connector:8630}" # see aliases below
       DSXCONNECTOR_DSX_CONNECT_URL: "${DSXCONNECTOR_DSX_CONNECT_URL:-http://dsx-connect-api:8586}" # note, this works if running on the same internal network on Docker as the dsx_connect_core...

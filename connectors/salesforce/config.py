@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field, HttpUrl, model_validator
+from pydantic import Field, HttpUrl, model_validator, SecretStr
 
 from connectors.framework.base_config import BaseConnectorConfig
 from shared.dev_env import load_devenv
@@ -47,19 +47,19 @@ class SalesforceConnectorConfig(BaseConnectorConfig):
         description="Salesforce REST API version (e.g., v60.0).",
     )
     sf_client_id: str = Field(default="", description="Connected App consumer key.")
-    sf_client_secret: str = Field(default="", description="Connected App consumer secret.")
+    sf_client_secret: SecretStr = Field(default=SecretStr(""), description="Connected App consumer secret.")
     sf_username: str = Field(default="", description="Salesforce user name granted access to the Connected App.")
-    sf_password: str = Field(default="", description="Salesforce user password.")
-    sf_security_token: str = Field(
-        default="",
+    sf_password: SecretStr = Field(default=SecretStr(""), description="Salesforce user password.")
+    sf_security_token: SecretStr = Field(
+        default=SecretStr(""),
         description="Optional Salesforce security token appended to the password for username-password OAuth flow.",
     )
     sf_auth_method: str = Field(
         default="auto",
         description="Salesforce auth method: auto | jwt | password (auto prefers jwt when keys are present).",
     )
-    sf_jwt_private_key: str = Field(
-        default="",
+    sf_jwt_private_key: SecretStr = Field(
+        default=SecretStr(""),
         description="PEM or base64-encoded private key for JWT Bearer flow.",
     )
     sf_jwt_private_key_file: Optional[str] = Field(

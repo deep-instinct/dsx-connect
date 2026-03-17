@@ -17,6 +17,7 @@ from shared.graph.subscriptions import GraphDriveSubscriptionManager
 from shared.graph.drive import process_drive_delta_items
 from shared.file_ops import relpath_matches_filter
 from connectors.framework.auth_hmac import build_outbound_auth_header
+from shared.log_sanitizer import config_for_log
 from shared.routes import service_url, API_PREFIX_V1, DSXConnectAPI
 from urllib.parse import quote
 
@@ -293,7 +294,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     """
     dsx_logging.info(f"Starting up connector {base.name}")
     dsx_logging.info(f"{connector.connector_id} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     dsx_logging.info(f"{base.name} startup completed.")
 
     # Derive SharePoint connection details from ASSET (URL) once at startup, and
@@ -385,7 +386,8 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
             route_base = config.name.strip('/') if config.name else "sharepoint-connector"
             webhook_url = f"{connector_base}/{route_base}/webhook/event"
             change_types = (getattr(config, "sp_webhook_change_types", "updated") or "updated")
-            client_state = getattr(config, "sp_webhook_client_state", None)
+            client_state_secret = getattr(config, "sp_webhook_client_state", None)
+            client_state = client_state_secret.get_secret_value() if client_state_secret else None
             expire_minutes = max(15, int(getattr(config, "sp_webhook_expire_minutes", 60) or 60))
             refresh_seconds = max(300, int(getattr(config, "sp_webhook_refresh_seconds", 900) or 900))
 
@@ -754,7 +756,8 @@ async def webhook_handler(event: dict):
     payload = event if isinstance(event, dict) else {}
     notifications = payload.get("value") if isinstance(payload, dict) else None
     if isinstance(notifications, list) and notifications:
-        expected_state = getattr(config, "sp_webhook_client_state", None)
+        expected_state_secret = getattr(config, "sp_webhook_client_state", None)
+        expected_state = expected_state_secret.get_secret_value() if expected_state_secret else None
         if expected_state:
             notifications = [n for n in notifications if n.get("clientState") == expected_state]
         enqueued = 0

@@ -9,6 +9,7 @@ from connectors.salesforce.config import ConfigManager, SalesforceConnectorConfi
 from connectors.salesforce.salesforce_client import SalesforceClient
 from connectors.salesforce.version import CONNECTOR_VERSION
 from shared.dsx_logging import dsx_logging
+from shared.log_sanitizer import config_for_log
 from shared.models.connector_models import ConnectorInstanceModel, ItemActionEnum, ScanRequestModel
 from shared.models.status_responses import ItemActionStatusResponse, StatusResponse, StatusResponseEnum
 
@@ -32,7 +33,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     """
     dsx_logging.info(f"Starting up connector {base.name}")
     dsx_logging.info(f"{connector.connector_id} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     dsx_logging.info(f"{base.name} startup completed.")
 
     # Sanity check credentials on boot if possible

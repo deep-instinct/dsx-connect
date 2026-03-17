@@ -27,6 +27,8 @@ networkPolicy:
 
 env:
   LOG_LEVEL: "info"
+  # Connector environment mode: dev | stg | prod
+  DSXCONNECTOR_APP_ENV: "dev"
   DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
   DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
   DSXCONNECTOR_ITEM_ACTION: "nothing"

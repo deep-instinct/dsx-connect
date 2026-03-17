@@ -12,6 +12,7 @@ from connectors.google_cloud_storage.config import ConfigManager
 from connectors.google_cloud_storage.version import CONNECTOR_VERSION
 from shared.async_ops import run_async
 from shared.file_ops import relpath_matches_filter
+from shared.log_sanitizer import config_for_log
 from shared.streaming import stream_blob
 
 # Reload config to pick up environment variables
@@ -169,7 +170,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     dsx_logging.info(f"Starting up connector {base.name}")
 
     dsx_logging.info(f"{base.name} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     dsx_logging.info(f"{base.name} startup completed.")
 
     base.status = ConnectorStatusEnum.READY

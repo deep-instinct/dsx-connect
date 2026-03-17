@@ -1,4 +1,4 @@
-from pydantic import Field, AliasChoices
+from pydantic import Field, AliasChoices, SecretStr
 from pathlib import Path
 
 from connectors.framework.base_config import BaseConnectorConfig
@@ -15,7 +15,7 @@ class M365MailConnectorConfig(BaseConnectorConfig):
     client_id: str | None = Field(default=None,
                                   validation_alias=AliasChoices("M365_CLIENT_ID"),
                                   description="App registration (client ID)")
-    client_secret: str | None = Field(default=None,
+    client_secret: SecretStr | None = Field(default=None,
                                       validation_alias=AliasChoices("M365_CLIENT_SECRET"),
                                       description="Client secret (do not persist)")
     authority: str = Field(default="https://login.microsoftonline.com", description="OAuth authority")
@@ -39,7 +39,7 @@ class M365MailConnectorConfig(BaseConnectorConfig):
         validation_alias=AliasChoices("DSXCONNECTOR_ENABLE_ACTIONS"),
         description="Legacy remediation toggle (deprecated; actions enable automatically when item_action != nothing)"
     )
-    client_state: str | None = Field(default=None,
+    client_state: SecretStr | None = Field(default=None,
                                      validation_alias=AliasChoices("M365_CLIENT_STATE"),
                                      description="Optional clientState to verify on webhook deliveries")
     delta_run_interval_seconds: int = Field(default=600, description="Interval for delta query backfill (seconds)")

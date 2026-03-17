@@ -32,6 +32,8 @@ networkPolicy:
 
 env:
   LOG_LEVEL: "info"
+  # Connector environment mode: dev | stg | prod
+  DSXCONNECTOR_APP_ENV: "dev"
   DSXCONNECTOR_CONNECTOR_URL: "http://salesforce-connector:80"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
   DSXCONNECTOR_ITEM_ACTION: "nothing"

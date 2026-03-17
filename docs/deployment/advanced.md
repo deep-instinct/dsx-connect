@@ -7,6 +7,12 @@ This page documents environment selection and worker retry policy behavior.
 The app environment is controlled by `DSXCONNECT_APP_ENV`, which maps to `AppEnv` in `dsx_connect/config.py`.
 This value directly influences behavior across the DSX-Connect core (including worker retry policy defaults and other environment-specific logic).
 
+For connector runtime logging behavior (identifier masking in `stg/prod`), connectors read:
+
+- `DSXCONNECTOR_APP_ENV` (preferred for connectors)
+- `DSXCONNECT_APP_ENV` (accepted fallback)
+- `APP_ENV` (compatibility fallback)
+
 Supported values:
 
 - `dev`

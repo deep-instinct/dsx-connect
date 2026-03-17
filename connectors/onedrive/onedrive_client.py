@@ -25,7 +25,7 @@ class OneDriveClient(MSGraphClientBase):
         super().__init__(
             tenant_id=cfg.tenant_id,
             client_id=cfg.client_id,
-            client_secret=cfg.client_secret,
+            client_secret=cfg.client_secret.get_secret_value(),
             verify=verify,
         )
         self._cfg = cfg

@@ -1,6 +1,6 @@
 from typing import Optional
 
-from pydantic import HttpUrl, Field, AliasChoices
+from pydantic import HttpUrl, Field, AliasChoices, SecretStr
 from pydantic_settings import BaseSettings
 from shared.models.connector_models import ItemActionEnum
 from connectors.framework.base_config import BaseConnectorConfig
@@ -41,7 +41,7 @@ class SharepointConnectorConfig(BaseConnectorConfig):
     # SharePoint / Graph settings (client-credentials)
     sp_tenant_id: str = Field(default="", description="Azure AD Tenant ID")
     sp_client_id: str = Field(default="", description="Azure AD App (client) ID")
-    sp_client_secret: str = Field(default="", description="Azure AD App client secret")
+    sp_client_secret: SecretStr = Field(default=SecretStr(""), description="Azure AD App client secret")
     sp_hostname: str = Field(default="", description="SharePoint hostname, e.g., contoso.sharepoint.com")
     sp_site_path: str = Field(default="", description="SharePoint site path, e.g., MySiteOrCollection")
     sp_drive_name: Optional[str] = Field(default=None, description="Optional drive name; default drive if omitted")
@@ -81,7 +81,7 @@ class SharepointConnectorConfig(BaseConnectorConfig):
         description="How often to reconcile/renew the Graph subscription (seconds)",
         validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_REFRESH_SECONDS", "SP_WEBHOOK_REFRESH_SECONDS", "WEBHOOK_REFRESH_SECONDS"),
     )
-    sp_webhook_client_state: Optional[str] = Field(
+    sp_webhook_client_state: Optional[SecretStr] = Field(
         default=None,
         description="Optional clientState to require on inbound notifications from Graph",
         validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_CLIENT_STATE", "SP_WEBHOOK_CLIENT_STATE", "WEBHOOK_CLIENT_STATE"),

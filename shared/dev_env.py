@@ -5,6 +5,35 @@ from typing import Optional
 _DEVEVN_LOGGED = False
 
 
+def _default_external_env_path(default_path: Optional[Path]) -> Optional[Path]:
+    """
+    For a repo-local default like connectors/<slug>/.dev.env, prefer a local-state
+    path under ~/.dsx-connect-local/<slug>/.env.local when it exists.
+    """
+    if not default_path:
+        return None
+    try:
+        p = default_path.expanduser()
+    except Exception:
+        p = default_path
+
+    if p.name != ".dev.env":
+        return None
+
+    slug = p.parent.name
+    if not slug:
+        return None
+
+    local_dir = Path.home() / ".dsx-connect-local" / slug
+    preferred = local_dir / ".env.local"
+    fallback = local_dir / ".dev.env"
+    if preferred.exists():
+        return preferred
+    if fallback.exists():
+        return fallback
+    return None
+
+
 def load_devenv(default_path: Optional[Path] = None,
                 env_var: str = "DSXCONNECTOR_ENV_FILE") -> None:
     """
@@ -16,7 +45,13 @@ def load_devenv(default_path: Optional[Path] = None,
     - Populates os.environ ONLY for keys that are not already set.
     """
     path_str = os.getenv(env_var)
-    path: Optional[Path] = Path(path_str) if path_str else (default_path if default_path else None)
+    if path_str:
+        try:
+            path = Path(path_str).expanduser()
+        except Exception:
+            path = Path(path_str)
+    else:
+        path = _default_external_env_path(default_path) or (default_path if default_path else None)
     if not path:
         return
     try:

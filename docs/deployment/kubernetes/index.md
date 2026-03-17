@@ -10,6 +10,32 @@ Use this page as the single checklist before diving into the connector-specific 
 - Connector-specific credentials (for example: AWS IAM keys, Azure AD app secrets, GCP service-account JSON; see Reference pages for each provider)
 - For environment settings and worker retry policies, see [Deployment Advanced Settings](../advanced.md).
 
+## Environment mode (`APP_ENV`)
+
+Set environment mode explicitly in Helm values (or equivalent env injection):
+
+- Core: `global.env.DSXCONNECT_APP_ENV=dev|stg|prod`
+- Connectors: `env.DSXCONNECTOR_APP_ENV=dev|stg|prod`
+- `APP_ENV` is accepted as fallback when the explicit vars are not set.
+
+Why set it:
+
+- Controls DSX-Connect core environment policy (retry/backoff behavior).
+- Controls connector log sanitization policy. In `stg` and `prod`, connector startup logs mask identifier fields such as tenant/client IDs.
+
+Example:
+
+```yaml
+global:
+  env:
+    DSXCONNECT_APP_ENV: prod
+```
+
+```yaml
+env:
+  DSXCONNECTOR_APP_ENV: prod
+```
+
 ## Kubernetes Secrets and Credentials
 Prefer Kubernetes-native secret handling over `.env` files or committing credentials to `values.yaml`.
 

@@ -4,6 +4,7 @@ import logging
 import pathlib
 import hashlib
 import os
+import re
 from functools import partial
 
 from azure.storage.blob import BlobServiceClient
@@ -25,6 +26,18 @@ CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
 def _clean(s: str) -> str:
     # Undo common IDE artifacts
     return s.strip().strip('"').strip("'").replace("\\;", ";")
+
+
+def _redact_azure_secret_text(msg: str) -> str:
+    """
+    Redact common Azure connection string secret segments if they appear in error text.
+    """
+    if not msg:
+        return msg
+    redacted = msg
+    for key in ("AccountKey", "SharedAccessSignature", "Sig"):
+        redacted = re.sub(rf"(?i)({key}\s*=\s*)([^;\\s]+)", rf"\1***", redacted)
+    return redacted
 
 def _maybe_b64_decode(s: str) -> str:
     try:
@@ -82,7 +95,9 @@ class AzureBlobClient:
             dsx_logging.info("Initialized AzureBlobClient with given connection string")
         except Exception as exc:
             self.init_error = str(exc)
-            dsx_logging.error(f"AzureBlobClient initialization failed: {exc}")
+            dsx_logging.error(
+                f"AzureBlobClient initialization failed: {_redact_azure_secret_text(str(exc))}"
+            )
 
     def is_configured(self) -> bool:
         return self.service_client is not None

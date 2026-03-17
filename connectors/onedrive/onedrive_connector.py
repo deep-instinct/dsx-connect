@@ -16,6 +16,7 @@ from shared.graph.subscriptions import GraphDriveSubscriptionManager
 from shared.graph.drive import build_drive_item_path, process_drive_delta_items
 from shared.models.connector_models import ConnectorInstanceModel, ItemActionEnum, ScanRequestModel
 from shared.models.status_responses import ItemActionStatusResponse, StatusResponse, StatusResponseEnum
+from shared.log_sanitizer import config_for_log, maybe_mask_identifier
 from connectors.onedrive.config import config
 from connectors.onedrive.onedrive_client import OneDriveClient
 from connectors.onedrive.version import CONNECTOR_VERSION
@@ -202,7 +203,7 @@ async def _run_delta_sync(reason: str = "webhook", exclude_ids: Optional[Set[str
 async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     dsx_logging.info(f"Starting up connector {base.name}")
     dsx_logging.info(f"{connector.connector_id} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
 
     resolved_base = (config.asset or "").strip()
     config.resolved_asset_base = resolved_base.strip("/") or None
@@ -213,7 +214,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
 
     try:
         await client._ensure_drive()
-        base.meta_info = f"OneDrive user={config.user_id}"
+        base.meta_info = f"OneDrive user={maybe_mask_identifier(config.user_id)}"
     except Exception as exc:
         dsx_logging.warning(f"OneDrive discovery failed on startup: {exc}")
         base.meta_info = "OneDrive discovery pending"
@@ -228,7 +229,8 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
             route_base = config.name.strip('/') if config.name else "onedrive-connector"
             webhook_url = f"{connector_base}/{route_base}/webhook/event"
             change_types = (getattr(config, "webhook_change_types", "updated") or "updated")
-            client_state = getattr(config, "webhook_client_state", None)
+            client_state_secret = getattr(config, "webhook_client_state", None)
+            client_state = client_state_secret.get_secret_value() if client_state_secret else None
             expire_minutes = max(15, int(getattr(config, "webhook_expire_minutes", 60) or 60))
             refresh_seconds = max(300, int(getattr(config, "webhook_refresh_seconds", 900) or 900))
 
@@ -426,7 +428,8 @@ async def webhook_handler(event: dict):
     payload = event if isinstance(event, dict) else {}
     notifications = payload.get("value") if isinstance(payload, dict) else None
     if isinstance(notifications, list) and notifications:
-        expected_state = getattr(config, "webhook_client_state", None)
+        expected_state_secret = getattr(config, "webhook_client_state", None)
+        expected_state = expected_state_secret.get_secret_value() if expected_state_secret else None
         if expected_state:
             notifications = [n for n in notifications if n.get("clientState") == expected_state]
         seen_ids: Set[str] = set()

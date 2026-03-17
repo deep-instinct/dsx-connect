@@ -2,6 +2,7 @@ import hashlib
 import io
 import logging
 import pathlib
+import re
 
 import aioboto3
 import tenacity
@@ -17,6 +18,21 @@ import asyncio
 # Initialize the S3 client outside the handler to reuse it across invocations
 # s3_client = boto3.client('s3')
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
+
+
+def _redact_aws_secret_text(msg: str) -> str:
+    if not msg:
+        return msg
+    redacted = msg
+    for key in (
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SESSION_TOKEN",
+        "X-Amz-Security-Token",
+        "x-amz-security-token",
+    ):
+        redacted = re.sub(rf"(?i)({key}\s*[:=]\s*)([^,;\\s]+)", rf"\1***", redacted)
+    return redacted
 
 
 class AWSS3AsyncClient:
@@ -91,13 +107,15 @@ class AWSS3AsyncClient:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 dsx_logging.error(f'Object {key} not found in bucket {bucket_name}.')
             else:
-                dsx_logging.error(f"ClientError in get_object for {bucket_name}/{key}: {e}")
+                dsx_logging.error(
+                    f"ClientError in get_object for {bucket_name}/{key}: {_redact_aws_secret_text(str(e))}"
+                )
             raise e
         except ValueError as ve:
-            dsx_logging.error(f'Validation error for object {key}: {ve}')
+            dsx_logging.error(f"Validation error for object {key}: {_redact_aws_secret_text(str(ve))}")
             raise
         except Exception as e:
-            dsx_logging.error(f'Unexpected error retrieving object {key}: {e}')
+            dsx_logging.error(f"Unexpected error retrieving object {key}: {_redact_aws_secret_text(str(e))}")
             raise
 
     async def key_size(self, bucket_name: str, key: str) -> int:
@@ -137,7 +155,9 @@ class AWSS3AsyncClient:
             content = await file_ops.read_file_async(filepath, chunk_size=CHUNK_SIZE)
             await self.upload_bytes_async(content, file_key, dest_bucket_name)
         except Exception as e:
-            dsx_logging.error(f'Error uploading to {dest_bucket_name}. Cause: {e}')
+            dsx_logging.error(
+                f"Error uploading to {dest_bucket_name}. Cause: {_redact_aws_secret_text(str(e))}"
+            )
             raise
 
     async def upload_folder_async(self, folder: pathlib.Path, dest_bucket_name: str, recursive: bool = True):
@@ -162,7 +182,7 @@ class AWSS3AsyncClient:
             return sha256_hash
         except Exception as e:
             msg = f'Error retrieving {key} from {bucket_name} and calculating hash'
-            dsx_logging.error(f"{msg}: {e}")
+            dsx_logging.error(f"{msg}: {_redact_aws_secret_text(str(e))}")
             raise FileNotFoundError(msg)
 
     async def test_s3_connection(self, bucket_name) -> bool:
@@ -173,5 +193,5 @@ class AWSS3AsyncClient:
             buckets = await self.buckets()
             return bucket_name in buckets
         except Exception as e:
-            dsx_logging.error(f"Error testing connection: {e}")
+            dsx_logging.error(f"Error testing connection: {_redact_aws_secret_text(str(e))}")
             raise

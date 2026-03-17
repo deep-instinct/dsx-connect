@@ -3,6 +3,7 @@ import io
 import logging
 import pathlib
 import os
+import re
 
 import boto3
 from botocore.config import Config
@@ -14,6 +15,21 @@ from shared.dsx_logging import dsx_logging
 import tenacity
 
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
+
+
+def _redact_aws_secret_text(msg: str) -> str:
+    if not msg:
+        return msg
+    redacted = msg
+    for key in (
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SESSION_TOKEN",
+        "X-Amz-Security-Token",
+        "x-amz-security-token",
+    ):
+        redacted = re.sub(rf"(?i)({key}\s*[:=]\s*)([^,;\\s]+)", rf"\1***", redacted)
+    return redacted
 
 
 class AWSS3Client:
@@ -53,7 +69,9 @@ class AWSS3Client:
         except ClientError as e:
             if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
                 return False
-            dsx_logging.error(f"Error deleting object {key} from bucket {bucket}: {e}")
+            dsx_logging.error(
+                f"Error deleting object {key} from bucket {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
             raise
 
     @tenacity.retry(
@@ -71,10 +89,12 @@ class AWSS3Client:
             content.seek(0)
             return content
         except ClientError as e:
-            dsx_logging.error(f"ClientError getting object {key} from {bucket}: {e}")
+            dsx_logging.error(
+                f"ClientError getting object {key} from {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
             raise
         except Exception as e:
-            dsx_logging.error(f"Unexpected error: {e}")
+            dsx_logging.error(f"Unexpected error: {_redact_aws_secret_text(str(e))}")
             raise
 
     def key_exists(self, bucket: str, key: str) -> bool:
@@ -94,7 +114,9 @@ class AWSS3Client:
         except ClientError as e:
             if e.response["Error"]["Code"] in ("404", "NoSuchKey"):
                 return False
-            dsx_logging.error(f"Error checking key existence for {key} in bucket {bucket}: {e}")
+            dsx_logging.error(
+                f"Error checking key existence for {key} in bucket {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
             raise
 
     def key_size(self, bucket: str, key: str) -> int:
@@ -175,7 +197,9 @@ class AWSS3Client:
             self.delete_object(src_bucket, src_key)
             return True
         except ClientError as e:
-            dsx_logging.error(f"Failed to move {src_key} from {src_bucket} to {dest_bucket}/{dest_key}: {e}")
+            dsx_logging.error(
+                f"Failed to move {src_key} from {src_bucket} to {dest_bucket}/{dest_key}: {_redact_aws_secret_text(str(e))}"
+            )
             return False
 
     def tag_object(self, bucket: str, key: str, tags: dict = None) -> bool:
@@ -199,7 +223,9 @@ class AWSS3Client:
             )
             return True
         except ClientError as e:
-            dsx_logging.error(f"Failed to tag object {key} in bucket {bucket}: {e}")
+            dsx_logging.error(
+                f"Failed to tag object {key} in bucket {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
             return False
 
     def upload_bytes(self, content: io.BytesIO, file_key: str, bucket: str):
@@ -210,7 +236,9 @@ class AWSS3Client:
             content = file_ops.read_file(filepath)
             self.upload_bytes(content, file_key, bucket)
         except Exception as e:
-            dsx_logging.error(f"Error uploading file {filepath} to {bucket}: {e}")
+            dsx_logging.error(
+                f"Error uploading file {filepath} to {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
             raise
 
     def upload_folder(self, folder: pathlib.Path, bucket: str):
@@ -227,7 +255,7 @@ class AWSS3Client:
                 sh.update(chunk)
             return sh.hexdigest()
         except Exception as e:
-            msg = f"Error retrieving {key} from {bucket} and calculating hash: {e}"
+            msg = f"Error retrieving {key} from {bucket} and calculating hash: {_redact_aws_secret_text(str(e))}"
             dsx_logging.error(msg)
             raise FileNotFoundError(msg)
 
@@ -235,5 +263,5 @@ class AWSS3Client:
         try:
             return bucket in self.buckets()
         except Exception as e:
-            dsx_logging.error(f"Error testing S3 connection: {e}")
+            dsx_logging.error(f"Error testing S3 connection: {_redact_aws_secret_text(str(e))}")
             raise

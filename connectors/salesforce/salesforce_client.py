@@ -56,9 +56,12 @@ class SalesforceClient:
                 payload = {
                     "grant_type": "password",
                     "client_id": self._cfg.sf_client_id,
-                    "client_secret": self._cfg.sf_client_secret,
+                    "client_secret": self._cfg.sf_client_secret.get_secret_value(),
                     "username": self._cfg.sf_username,
-                    "password": f"{self._cfg.sf_password}{self._cfg.sf_security_token or ''}",
+                    "password": (
+                        f"{self._cfg.sf_password.get_secret_value()}"
+                        f"{self._cfg.sf_security_token.get_secret_value() or ''}"
+                    ),
                 }
             token_url = f"{self._cfg.sf_login_url.rstrip('/')}/services/oauth2/token"
             resp = await self._http.post(token_url, data=payload)
@@ -76,13 +79,13 @@ class SalesforceClient:
             dsx_logging.info("Obtained Salesforce access token.")
 
     def _has_jwt_config(self) -> bool:
-        return bool(self._cfg.sf_jwt_private_key or self._cfg.sf_jwt_private_key_file)
+        return bool(self._cfg.sf_jwt_private_key.get_secret_value() or self._cfg.sf_jwt_private_key_file)
 
     def _load_jwt_private_key(self) -> str:
         if self._cfg.sf_jwt_private_key_file:
             with open(self._cfg.sf_jwt_private_key_file, "r", encoding="utf-8") as handle:
                 return handle.read()
-        key = self._cfg.sf_jwt_private_key or ""
+        key = self._cfg.sf_jwt_private_key.get_secret_value() or ""
         if "BEGIN" in key:
             return key
         try:

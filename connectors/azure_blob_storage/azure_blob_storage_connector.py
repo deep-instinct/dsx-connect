@@ -10,6 +10,7 @@ from connectors.azure_blob_storage.config import ConfigManager
 from connectors.azure_blob_storage.version import CONNECTOR_VERSION
 from shared.streaming import stream_blob
 from shared.file_ops import relpath_matches_filter
+from shared.log_sanitizer import config_for_log
 
 # Reload config to pick up environment variables
 config = ConfigManager.reload_config()
@@ -50,7 +51,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     dsx_logging.info(f"Starting up connector {base.name}")
     # await abs_client.init()
     dsx_logging.info(f"{base.name} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     if not abs_client.is_configured():
         dsx_logging.error(
             f"{base.name} missing Azure credentials; connector will start but cannot read/list blobs."

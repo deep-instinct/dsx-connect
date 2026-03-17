@@ -37,6 +37,7 @@ except Exception:
 from shared.async_ops import run_async
 from connectors.filesystem.config import ConfigManager
 from connectors.filesystem.version import CONNECTOR_VERSION
+from shared.log_sanitizer import config_for_log
 
 # Reload config to pick up environment variables
 config = ConfigManager.reload_config()
@@ -164,7 +165,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     """
 
     dsx_logging.info(f"{base.name} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     dsx_logging.info(f"{base.name} startup completed.")
 
     if not config.monitor:

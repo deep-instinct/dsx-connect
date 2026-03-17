@@ -9,6 +9,8 @@ from connectors.aws_s3.config import ConfigManager
 from connectors.aws_s3.version import CONNECTOR_VERSION
 from shared.streaming import stream_blob
 from shared.file_ops import relpath_matches_filter
+from shared.log_sanitizer import config_for_log
+import re
 
 # Reload config to pick up environment variables
 config = ConfigManager.reload_config()
@@ -31,6 +33,21 @@ connector = DSXConnector(config)
 aws_s3_client = AWSS3Client(s3_endpoint_url=config.s3_endpoint_url, s3_endpoint_verify=config.s3_endpoint_verify)
 
 
+def _redact_aws_secret_text(msg: str) -> str:
+    if not msg:
+        return msg
+    redacted = msg
+    for key in (
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SESSION_TOKEN",
+        "X-Amz-Security-Token",
+        "x-amz-security-token",
+    ):
+        redacted = re.sub(rf"(?i)({key}\s*[:=]\s*)([^,;\\s]+)", rf"\1***", redacted)
+    return redacted
+
+
 @connector.startup
 async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     """
@@ -46,7 +63,7 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     dsx_logging.info(f"Starting up connector {base.name}")
 
     dsx_logging.info(f"{base.name} version: {CONNECTOR_VERSION}.")
-    dsx_logging.info(f"{base.name} configuration: {config}.")
+    dsx_logging.info(f"{base.name} configuration: {config_for_log(config)}.")
     dsx_logging.info(f"{base.name} startup completed.")
 
     base.status = ConnectorStatusEnum.READY
@@ -345,8 +362,9 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
         bytes_obj = aws_s3_client.get_object(bucket=config.asset_bucket, key=scan_event_queue_info.location)
         return StreamingResponse(stream_blob(bytes_obj), media_type="application/octet-stream")  # Stream file
     except Exception as e:
+        err = _redact_aws_secret_text(str(e))
         return StatusResponse(status=StatusResponseEnum.ERROR,
-                              message=f"Failed to read file: {str(e)}")
+                              message=f"Failed to read file: {err}")
 
 
 @connector.repo_check
@@ -439,18 +457,19 @@ async def webhook_handler(event: dict):
             description=f"Scan request sent for {location}"
         )
     except (KeyError, IndexError, TypeError) as parse_err:
-        dsx_logging.error(f"Malformed S3 event payload: {parse_err}")
+        dsx_logging.error(f"Malformed S3 event payload: {_redact_aws_secret_text(str(parse_err))}")
         return StatusResponse(
             status=StatusResponseEnum.ERROR,
             message="Invalid S3 event format",
-            description=str(parse_err)
+            description=_redact_aws_secret_text(str(parse_err))
         )
     except Exception as e:
-        dsx_logging.error(f"Unexpected error in webhook handler: {e}", exc_info=True)
+        redacted = _redact_aws_secret_text(str(e))
+        dsx_logging.error(f"Unexpected error in webhook handler: {redacted}", exc_info=True)
         return StatusResponse(
             status=StatusResponseEnum.ERROR,
             message="Internal error during webhook handling",
-            description=str(e)
+            description=redacted
         )
 
 

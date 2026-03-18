@@ -1,18 +1,18 @@
 # Google Cloud Storage Connector — Helm Deployment
 
-Use this guide to deploy the `google-cloud-storage-connector-chart` for full scans, monitoring scans, and remediation actions.
+Use this guide to deploy the `google-cloud-storage-connector-chart` for full scans, monitoring, and remediation actions.
 
 ## Prerequisites
 
 - Kubernetes 1.19+ and `kubectl`.
 - Helm 3.2+.
 - Access to `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart`.
-- A Google Cloud service account JSON key with the permissions listed in [Reference → Google Cloud Credentials](../../reference/google-cloud-credentials.md).
+- A Google Cloud service account JSON key with permissions listed in [Google Cloud Credentials](../../reference/google-cloud-credentials.md).
 - For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
-## Preflight Tasks
+## Minimal Deployment
 
-Create the service-account Secret before installing:
+1. Create the GCP service-account Secret:
 
 ```yaml
 # connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
@@ -30,49 +30,7 @@ stringData:
 kubectl apply -f connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
 ```
 
-The chart references `gcp-sa` by default; set `serviceAccount.secretName` if you use a different name.
-
-## Configuration
-
-### Required settings
-
-| Key | Description |
-| --- | --- |
-| `env.DSXCONNECTOR_ASSET` | Bucket or `bucket/prefix` root to scan. |
-| `env.DSXCONNECTOR_FILTER` | Optional rsync-style include/exclude list relative to the asset root (see [Filter reference](../../reference/filters.md)). |
-| `env.DSXCONNECTOR_ITEM_ACTION` / `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Remediation rules (`nothing`, `delete`, `move`, `move_tag`, `tag`). |
-| `env.DSXCONNECTOR_MONITOR` | `"true"` to enable on-access scanning via Pub/Sub. |
-| `workers`, `replicaCount` | Concurrency and HA knobs. |
-
-### Monitoring inputs
-
-When `env.DSXCONNECTOR_MONITOR=true`, populate the Pub/Sub settings:
-
-| Key | Description |
-| --- | --- |
-| `env.GCS_PUBSUB_PROJECT_ID` | Project that owns the Pub/Sub subscription. |
-| `env.GCS_PUBSUB_SUBSCRIPTION` | Subscription name or full path (`projects/<proj>/subscriptions/<sub>`). |
-| `env.GCS_PUBSUB_ENDPOINT` | Optional override (useful for local emulators). Leave blank for production. |
-
-Pub/Sub is the recommended trigger path. You can also drive the connector via `/webhook/event` from Cloud Functions/Run; in that case leave `env.DSXCONNECTOR_MONITOR=false` and expose the webhook ingress.
-
-### dsx-connect endpoint
-
-Defaults to the in-cluster service (`http://dsx-connect-api`). Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` for external deployments.
-
-### Authentication (Optional)
-See [Using DSX-Connect Authentication](authentication.md).
-
-### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](tls.md).
-
-### Webhook ingress (optional)
-
-Enable `ingressWebhook` to expose `/google-cloud-storage-connector/webhook/event` if you rely on Cloud Functions/Run instead of Pub/Sub. Lock ingress down via annotations or NetworkPolicy so only trusted sources can reach it.
-
-## Deployment
-
-### Method 1 – OCI chart with CLI overrides (fastest)
+2. Install with minimal values:
 
 ```bash
 helm install gcs-dev oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -82,9 +40,7 @@ helm install gcs-dev oci://registry-1.docker.io/dsxconnect/google-cloud-storage-
   --set-string image.tag=<connector-version>
 ```
 
-For pulled-chart installs and GitOps/production patterns (values files, Flux/Argo), see [Advanced Connector Deployment](advanced-connector-deployment.md).
-
-## Verification
+3. Verify:
 
 ```bash
 helm list
@@ -92,12 +48,51 @@ kubectl get pods
 kubectl logs deploy/google-cloud-storage-connector -f
 ```
 
-## Scaling
+For pulled-chart installs and GitOps/production patterns, see [Advanced Connector Deployment](advanced-connector-deployment.md).
 
-- Increase `workers` for additional in-pod concurrency.
-- Raise `replicaCount` for HA or more `read_file` throughput; each pod registers separately with dsx-connect.
-- For Pub/Sub, ensure your subscription acknowledgement deadlines accommodate scan duration.
+## Required Settings
 
-Refer to `connectors/google_cloud_storage/deploy/helm/values.yaml` for the full option set.
+| Key | Description |
+| --- | --- |
+| `env.DSXCONNECTOR_ASSET` | Bucket or `bucket/prefix` root to scan. |
+| `env.DSXCONNECTOR_FILTER` | Optional rsync-style include/exclude list relative to the asset root (see [Filter reference](../../reference/filters.md)). |
+| `env.DSXCONNECTOR_ITEM_ACTION` / `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Remediation rules (`nothing`, `delete`, `move`, `move_tag`, `tag`). |
+| `workers`, `replicaCount` | Concurrency and HA knobs. |
+
+### Connector-specific
+
+| Key | Description |
+| --- | --- |
+| `gcp.credentialsSecretName` | Secret name containing `service-account.json` (default `gcp-sa`). |
+| `env.DSXCONNECTOR_DSX_CONNECT_URL` | Override dsx-connect endpoint when not using in-cluster default (`http://dsx-connect-api`). |
+
+## Advanced Settings
+
+### Auth
+
+See [Using DSX-Connect Authentication](authentication.md).
+
+### TLS
+
+See [Deploying with SSL/TLS](tls.md).
+
+## Monitoring Settings
+
+Monitoring is typically Pub/Sub-based.
+
+Enable monitoring:
+
+| Key | Description |
+| --- | --- |
+| `env.DSXCONNECTOR_MONITOR` | `"true"` to enable on-access scanning via Pub/Sub. |
+| `env.GCS_PUBSUB_PROJECT_ID` | Project that owns the subscription. |
+| `env.GCS_PUBSUB_SUBSCRIPTION` | Subscription name or full path (`projects/<proj>/subscriptions/<sub>`). |
+| `env.GCS_PUBSUB_ENDPOINT` | Optional endpoint override (for local emulators). |
+
+Notes:
+
+- Pub/Sub is the recommended trigger path.
+- Webhook alternative is supported via `/webhook/event` if you route events from Cloud Run/Functions or middleware.
+- For webhook mode, keep `env.DSXCONNECTOR_MONITOR=false` and expose `ingressWebhook`.
 
 {% include-markdown "shared/_common_connector.md" %}

@@ -93,6 +93,17 @@ That's it.  You should now be able to see the connector in the **DSX-Connect UI*
 
 {% include-markdown "shared/connectors/_objectstore_required_settings.md" %}
 
+### Connector-specific Settings
+
+#### Google Cloud Authentication
+
+| Variable                         | Description                                                                     |
+| -------------------------------- |---------------------------------------------------------------------------------|
+| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the mounted service account JSON file, if somewhere other than defaults |
+| `GOOGLE_CLOUD_PROJECT`           | Optional project ID if not included in the credential file.                     |
+
+
+
 ### Advanced Settings
 
 #### DSX_Connect Authentication
@@ -102,13 +113,6 @@ That's it.  You should now be able to see the connector in the **DSX-Connect UI*
 #### TLS
 
 {% include-markdown "shared/_common_connector_docker_tls.md" %}
-
-#### Google Cloud Authentication
-
-| Variable                         | Description                                                                     |
-| -------------------------------- |---------------------------------------------------------------------------------|
-| `GOOGLE_APPLICATION_CREDENTIALS` | Path to the mounted service account JSON file, if somewhere other than defaults |
-| `GOOGLE_CLOUD_PROJECT`           | Optional project ID if not included in the credential file.                     |
 
 
 ## Monitor Settings

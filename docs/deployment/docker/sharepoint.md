@@ -1,101 +1,260 @@
 # SharePoint Connector — Docker
 
-The **SharePoint connector** monitors and scans a Sharepoint site or doc library/folder for changes and sends them to dsx-connect for processing.
+The **SharePoint connector** scans SharePoint Online document libraries/folders and sends files to DSX-Connect for scanning.
+
+It supports:
+
+* **Full scans** of a site/library/folder scope
+* **Continuous monitoring** via Microsoft Graph change notifications
+* **Remediation actions** such as delete, move, or tag after malicious verdicts
+
+Monitoring uses a **subscription callback model**: the connector creates a Graph subscription, and Microsoft Graph calls the connector webhook URL when changes occur.
+
+---
 
 ## Prerequisites
-- Docker installed locally (or a container VM)
-- The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
-- SharePoint app registration credentials (tenant ID, client ID, client secret). See Reference → [Azure Credentials](../../reference/azure-credentials.md) for a step-by-step walkthrough.
-- A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
-## Compose File
-In the extracted bundle, use `dsx-connect-<core_version>/sharepoint-connector-<connector_version>/docker-compose-sharepoint-connector.yaml`.
+Before deploying the connector, prepare an Entra app registration for SharePoint/Graph access.
 
-### Core connector env (common across connectors)
+Required:
+
+* Tenant ID, Client ID, Client Secret
+* Microsoft Graph **Application** permissions (not Delegated), with admin consent
+* SharePoint asset URL (`DSXCONNECTOR_ASSET`) pointing to the site/library/folder you want to scan
+
+For credential setup details:
+
+➡️ [Azure Credentials (M365 / SharePoint / OneDrive)](../../reference/azure-credentials.md)
+
+---
+
+## Minimal Deployment
+
+The following steps install the connector with minimal changes, supporting full scan only.
+
+!!! tip "Using the Docker bundle"
+
+    All Docker connector deployments use the official **DSX-Connect Docker bundle**, which contains compose files and sample env files.
+
+    [DSX-Connect Docker bundles](https://github.com/deep-instinct/dsx-connect/releases)
+
+From the extracted bundle, navigate to:
+`dsx-connect-<core_version>/sharepoint-connector-<connector_version>/`
+
+The easiest path is to edit `sample.sharepoint.env` and deploy with `docker-compose-sharepoint-connector.yaml`.
+
+### Set scan parameters
+
+Minimal example:
+
+```dotenv
+# SharePoint auth
+SP_TENANT_ID=...
+SP_CLIENT_ID=...
+SP_CLIENT_SECRET=...
+
+# Required scan scope (full SharePoint URL to site/library/folder)
+DSXCONNECTOR_ASSET=https://contoso.sharepoint.com/sites/MySite/Shared%20Documents
+DSXCONNECTOR_FILTER=
+
+# Optional remediation
+DSXCONNECTOR_ITEM_ACTION=nothing
+DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=dsxconnect-quarantine
+```
+
+### Deploy
+
+```bash
+docker compose --env-file sample.sharepoint.env -f docker-compose-sharepoint-connector.yaml up -d
+```
+
+You should now see the connector in the DSX-Connect UI.
+
+---
+
+## Required Settings
+
+{% include-markdown "shared/connectors/_required_settings_env_table.md" %}
+
+### `DSXCONNECT_ASSET`
+
+`DSXCONNECTOR_ASSET` defines the **SharePoint site, document library, or folder scope** to scan.
+
+#### Finding the SharePoint Asset URL
+
+The easiest way to obtain this value is from the SharePoint UI.
+
+Step 1: Navigate to your content
+
+In SharePoint:
+
+1. Open the target site
+2. Click **Documents** (or your target library)
+3. Navigate to the folder you want to scan (optional)
+
+Step 2: Copy the browser URL
+
+Example (library view):
+
+```text
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/Forms/AllItems.aspx
+```
+
+Step 3: Remove SharePoint UI components
+
+Remove:
+
+* `/Forms/AllItems.aspx`
+* Any query parameters (`?id=...&viewid=...`)
+
+Result: Use the clean content path
+
+```text
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents
+```
+
+---
+
+#### Subfolder example
+
+SharePoint folder view URL:
+
+```text
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/Forms/AllItems.aspx?id=%2Fsites%2Fdsx%2DconnectTest%2FShared%20Documents%2Fsub1&viewid=...
+```
+
+Decoded path:
+
+```text
+/sites/dsx-connectTest/Shared Documents/sub1
+```
+
+Asset URL to use:
+
+```text
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/sub1
+```
+
+---
+
+#### Key rule
+
+`DSXCONNECTOR_ASSET` should always represent the **actual SharePoint content path**, not the browser UI page.
+
+---
+
+#### Sharding / Multiple Scopes
+
+To scan large environments or segment workloads, deploy multiple connectors with different asset scopes.
+
+Example:
+
+```text
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/Finance
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/HR
+https://ndbuildings.sharepoint.com/sites/dsx-connectTest/Shared%20Documents/Engineering
+```
+
+Each connector instance will independently scan its assigned scope.
+
+---
+
+### `DSXCONNECT_FILTER`
+
+Defines a rsync-like filter to apply to files and folders, such as bucket prefixes or file filters.  
+
+* [Reference → Filter Syntax](../../reference/filters.md)
+
+---
+
+### `DSXCONNECTOR_ITEM_ACTION`
+
+Defines what happens to malicious files.
+
+Common values:
+
+* `nothing` (report only)
+* `move` (quarantine)
+* `move_tag` (quarantine and tag - moves the file and adds metadata tag)`
+* `delete`
+
+If using `move`, also set:
+
+### `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`
+
+Defines an object store resource and prefix to move quarantined files to.
+
+Using our example above:
+```bash
+DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO=dsx-quarantine
+```
+would move quarantined files to `dsx-quarantine` under the same bucket or container specified in `DSXCONNECTOR_ASSET`.
+
+---
+
+### Connector-specific Settings
+
+#### SharePoint / Graph Authentication
 
 | Variable | Description |
 | --- | --- |
-| `DSXCONNECTOR_DSX_CONNECT_URL` | dsx-connect base URL (use `http://dsx-connect-api:8586` on the shared Docker network). |
-| `DSXCONNECTOR_CONNECTOR_URL` | Callback URL dsx-connect uses to reach the connector (defaults to the service name inside the Docker network). |
-| `DSXCONNECTOR_ASSET` | SharePoint scope, e.g., full site URL or doc library/folder path. |
-| `DSXCONNECTOR_FILTER` | Optional rsync‑style include/exclude rules relative to the asset. |
-| `DSXCONNECTOR_ITEM_ACTION` | What to do on malicious verdicts (`nothing`, `delete`, `move`, `move_tag`). Set to `move`/`move_tag` to relocate files after verdict. |
-| `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO` | Destination (site/doc lib/folder path or label) for moved items when using `move`/`move_tag`. |
+| `SP_TENANT_ID` | Entra tenant ID. |
+| `SP_CLIENT_ID` | Entra app (client) ID. |
+| `SP_CLIENT_SECRET` | Entra app client secret. |
+| `SP_VERIFY_TLS` | Verify Graph TLS certificates (`true`/`false`, default `true`). |
+| `SP_CA_BUNDLE` | Optional CA bundle path for outbound Graph TLS verification. |
 
-### SharePoint-specific settings
+---
 
-Define these values in your Compose environment. The sample `.env` includes both `SP_*` auth variables and common connector/runtime overrides.
+### Advanced Settings
 
-| Variable | Description |
-| --- | --- |
-| `SP_TENANT_ID` | Azure AD tenant ID for the SharePoint app registration. |
-| `SP_CLIENT_ID` | Client ID for the SharePoint app registration. |
-| `SP_CLIENT_SECRET` | Client secret for the SharePoint app registration (store securely). |
-| `SP_VERIFY_TLS` | Optional override (`true`/`false`) for Graph TLS verification (defaults to `true`). |
-| `SP_CA_BUNDLE` | Optional CA bundle path for Graph TLS verification. |
-| `SP_WEBHOOK_ENABLED` | Set to `true` to enable Microsoft Graph change notifications (optional). |
-| `SP_WEBHOOK_URL` | Public HTTPS URL Graph calls for change notifications (required when webhooks enabled). |
-| `SP_WEBHOOK_CLIENT_STATE` | Optional shared secret Graph includes in webhook payloads. |
-| `SP_WEBHOOK_CHANGE_TYPES` | Optional override of Graph change types (default `updated`). |
+#### DSX-Connect Authentication
 
-Additional optional Docker Compose overrides:
+{% include-markdown "shared/connectors/_common_connector_authentication.md" %}
 
-| Variable | Description |
-| --- | --- |
-| `SHAREPOINT_PORT` | Host port mapped to container `8640` (default `8640`). |
-| `SHAREPOINT_WORKERS` | Connector worker count (default `1`). |
-| `DSX_DOCKER_NETWORK` | External Docker network name (default `dsx-connect-network`). |
-| `LOG_LEVEL` | Connector log level (default `debug`). |
-| `PYTHONUNBUFFERED` | Python unbuffered logging toggle (default `1`). |
-
-Copy the sample env file and edit it:
-```bash
-cp dsx-connect-<core_version>/sharepoint-connector-<connector_version>/sample.sharepoint.env \
-  dsx-connect-<core_version>/sharepoint-connector-<connector_version>/.env
-```
-
-Example `.env` values:
-
-```bash
-# SharePoint credentials
-SP_TENANT_ID=xxx
-SP_CLIENT_ID=xxx
-SP_CLIENT_SECRET=xxx
-
-# Optional overrides
-SP_VERIFY_TLS=true
-SP_CA_BUNDLE=
-SHAREPOINT_PORT=8640
-SHAREPOINT_WORKERS=1
-DSX_DOCKER_NETWORK=dsx-connect-network
-LOG_LEVEL=debug
-
-# Change notifications (optional)
-SP_WEBHOOK_ENABLED=false
-SP_WEBHOOK_URL=
-SP_WEBHOOK_CLIENT_STATE=
-```
-
-Launch with:
-```bash
-docker compose --env-file dsx-connect-<core_version>/sharepoint-connector-<connector_version>/.env \
-  -f dsx-connect-<core_version>/sharepoint-connector-<connector_version>/docker-compose-sharepoint-connector.yaml up -d
-```
-
-## Assets and Filters
-- `DSXCONNECTOR_ASSET` should be set to your SharePoint scope (site/doc lib/folder). Navigate to the exact folder in SharePoint Online, grab the full URL (e.g., `https://contoso.sharepoint.com/sites/Site/Shared%20Documents/dsx-connect/scantest`), and paste it here.
-- Filters are evaluated relative to that scope (children).
-- See Reference → [Assets & Filters](../../reference/assets.md) for sharding/partition guidance.
-
-## Notes
-- Use `DSXCONNECTOR_ASSET` to configure the SharePoint URL scope (site/doc lib/folder).
-
-## TLS Options
-See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + connectors), including runtime-mounted certs and local-dev self-signed cert generation.
-
-## Webhook Exposure
-If you expose SharePoint webhook callbacks or other HTTP endpoints outside Docker, tunnel or publish the host port mapped to `8640` (compose default when ports are enabled). Keep `DSXCONNECTOR_CONNECTOR_URL` pointing to the Docker-network URL (e.g., `http://sharepoint-connector:8640`) so dsx-connect can reach the container internally.
-
-{% include-markdown "shared/_common_connector.md" %}
+#### TLS
 
 {% include-markdown "shared/_common_connector_docker_tls.md" %}
+
+
+---
+
+## Monitor Settings
+
+Monitoring enables **on-access scanning** for new/updated SharePoint content.
+
+### Microsoft Graph Subscription Callback Model
+
+When monitoring is enabled:
+
+1. Connector creates/refreshes a Microsoft Graph subscription.
+2. Graph posts notifications to the connector webhook callback URL.
+3. Connector validates notification state (optional) and enqueues scans.
+4. Connector performs delta reconciliation to avoid missed events.
+
+Required for monitoring:
+
+| Variable | Description |
+| --- | --- |
+| `SP_WEBHOOK_ENABLED` | Enable Graph notification subscriptions (`true`/`false`). |
+| `SP_WEBHOOK_URL` | Public **HTTPS** base URL Graph can call (required when webhooks enabled). |
+| `SP_WEBHOOK_CLIENT_STATE` | Optional shared secret echoed by Graph for validation. |
+| `SP_WEBHOOK_CHANGE_TYPES` | Optional change types (default `updated`). |
+
+Notes:
+
+* `SP_WEBHOOK_URL` must be reachable from Microsoft Graph (not localhost-only).
+* Keep `DSXCONNECTOR_CONNECTOR_URL` as the internal Docker network URL for dsx-connect-to-connector traffic.
+* If monitoring is disabled, full scan/manual workflows still work.
+
+### Webhook Exposure
+
+For external callbacks into the connector, expose or tunnel the host port mapped to `8640` (compose default).
+Use that public address for `SP_WEBHOOK_URL`.
+
+Internally, keep:
+
+`DSXCONNECTOR_CONNECTOR_URL=http://sharepoint-connector:8640`
+
+so DSX-Connect can reach the container over the Docker network.
+

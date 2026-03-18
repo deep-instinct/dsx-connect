@@ -7,11 +7,12 @@ Deploy the `sharepoint-connector-chart` (under `connectors/sharepoint/deploy/hel
 - Kubernetes 1.19+ cluster and `kubectl`.
 - Helm 3.2+.
 - Access to `oci://registry-1.docker.io/dsxconnect/sharepoint-connector-chart`.
+- Microsoft Entra app credentials and Graph application permissions (see [Azure Credentials](../../reference/azure-credentials.md)).
 - For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
-## Preflight Tasks
+## Minimal Deployment
 
-Create a Secret containing the Microsoft Entra (Azure AD) app credentials:
+1. Create the SharePoint credentials Secret:
 
 ```bash
 kubectl create secret generic sharepoint-credentials \
@@ -22,29 +23,7 @@ kubectl create secret generic sharepoint-credentials \
 
 (`connectors/sharepoint/deploy/helm/examples/sp-secret.yaml` provides a template if you prefer editing a manifest.)
 
-## Configuration
-
-### Required settings
-
-- `env.DSXCONNECTOR_ASSET`: full SharePoint library URL (e.g., `https://contoso.sharepoint.com/sites/Site/Shared%20Documents/dsx-connect`).
-- `env.DSXCONNECTOR_FILTER`: rsync-style include/exclude paths relative to the asset root (see [Filter reference](../../reference/filters.md)).
-- `env.DSXCONNECTOR_DISPLAY_NAME`: optional UI label.
-- `env.DSXCONNECTOR_ITEM_ACTION` / `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`: remediation behavior.
-- `workers` / `replicaCount`: concurrency and HA knobs.
-
-### dsx-connect endpoint
-
-Defaults to the in-cluster dsx-connect service. Override via `env.DSXCONNECTOR_DSX_CONNECT_URL` if dsx-connect is exposed through another hostname.
-
-### Authentication (Optional)
-See [Using DSX-Connect Authentication](authentication.md).
-
-### SSL/TLS (Optional)
-See [Deploying with SSL/TLS](tls.md).
-
-## Deployment
-
-### Method 1 – OCI chart with CLI overrides (fastest)
+2. Install with minimal values:
 
 ```bash
 helm install sp-docs-dev oci://registry-1.docker.io/dsxconnect/sharepoint-connector-chart \
@@ -54,9 +33,7 @@ helm install sp-docs-dev oci://registry-1.docker.io/dsxconnect/sharepoint-connec
   --set-string image.tag=<connector-version>
 ```
 
-For pulled-chart installs and GitOps/production patterns (values files, Flux/Argo), see [Advanced Connector Deployment](advanced-connector-deployment.md).
-
-## Verification
+3. Verify:
 
 ```bash
 helm list
@@ -64,7 +41,54 @@ kubectl get pods
 kubectl logs deploy/sharepoint-connector -f
 ```
 
-## Scaling guidance
+For pulled-chart installs and GitOps/production patterns, see [Advanced Connector Deployment](advanced-connector-deployment.md).
+
+## Required Settings
+
+- `env.DSXCONNECTOR_ASSET`: full SharePoint library URL (e.g., `https://contoso.sharepoint.com/sites/Site/Shared%20Documents/dsx-connect`).
+- `env.DSXCONNECTOR_FILTER`: rsync-style include/exclude paths relative to the asset root (see [Filter reference](../../reference/filters.md)).
+- `env.DSXCONNECTOR_ITEM_ACTION` / `env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`: remediation behavior.
+- `workers` / `replicaCount`: concurrency and HA knobs.
+
+### Connector-specific
+
+- `env.DSXCONNECTOR_SP_VERIFY_TLS`: Graph TLS verification (`true`/`false`).
+- `env.DSXCONNECTOR_SP_CA_BUNDLE`: optional CA bundle path for outbound Graph TLS.
+- `env.DSXCONNECTOR_DSX_CONNECT_URL`: override dsx-connect endpoint when not using in-cluster default.
+
+## Advanced Settings
+
+### Auth
+
+See [Using DSX-Connect Authentication](authentication.md).
+
+### TLS
+
+See [Deploying with SSL/TLS](tls.md).
+
+## Monitoring Settings
+
+SharePoint monitoring uses a **Microsoft Graph subscription callback model**:
+
+1. Connector creates/refreshes Graph subscriptions.
+2. Graph calls the connector webhook URL with change notifications.
+3. Connector validates optional client state and enqueues scans.
+4. Connector performs delta reconciliation to avoid missed events.
+
+Monitoring keys:
+
+- `env.DSXCONNECTOR_SP_WEBHOOK_ENABLED`
+- `env.DSXCONNECTOR_WEBHOOK_URL` (public HTTPS callback base URL)
+- `env.DSXCONNECTOR_SP_WEBHOOK_CLIENT_STATE` (optional shared secret)
+- `env.DSXCONNECTOR_SP_WEBHOOK_CHANGE_TYPES`
+- `env.DSXCONNECTOR_SP_WEBHOOK_EXPIRE_MINUTES`
+- `env.DSXCONNECTOR_SP_WEBHOOK_REFRESH_SECONDS`
+
+Notes:
+
+- Webhook callback must be reachable by Microsoft Graph (not cluster-private only).
+- If monitoring is disabled, full-scan/manual scan still works.
+- If using `Sites.Selected`, grant site-level access to the app in addition to Graph permissions.
 
 - Increase `workers` for additional in-pod concurrency.
 - Increase `replicaCount` for HA / throughput. Each replica registers independently with dsx-connect; replicas do not shard a single full scan.

@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish to when enabled (e.g., dsxa-desktop-0.1.0). Leave blank to build artifacts only."
+        description: "Version or release tag when publishing (e.g., 0.1.0 or dsxa-desktop-0.1.0). Leave blank to build artifacts only."
         required: false
       publish_release:
-        description: "Publish artifacts to a GitHub Release (requires tag in dsxa-desktop-<version> format)."
+        description: "Publish artifacts to a GitHub Release."
         required: true
         type: boolean
         default: false
@@ -177,12 +177,20 @@ jobs:
       - build-windows
     runs-on: ubuntu-latest
     steps:
-      - name: Validate release tag format
+      - name: Normalize release tag
+        id: normalize_tag
         run: |
-          if [[ ! "${{ inputs.tag }}" =~ ^dsxa-desktop-[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
-            echo "Invalid tag '${{ inputs.tag }}'. Expected format: dsxa-desktop-<version> (e.g., dsxa-desktop-0.1.0)."
+          RAW_TAG="${{ inputs.tag }}"
+          if [[ "$RAW_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            RELEASE_TAG="dsxa-desktop-$RAW_TAG"
+          elif [[ "$RAW_TAG" =~ ^dsxa-desktop-[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            RELEASE_TAG="$RAW_TAG"
+          else
+            echo "Invalid tag '$RAW_TAG'. Use 0.1.0 or dsxa-desktop-0.1.0."
             exit 1
           fi
+          echo "Using release tag: $RELEASE_TAG"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
@@ -205,7 +213,7 @@ jobs:
       - name: Upload release assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ steps.normalize_tag.outputs.release_tag }}
           files: dist/release/*
           generate_release_notes: true
         env:

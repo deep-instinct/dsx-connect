@@ -188,3 +188,15 @@ pip install pywebview
 ./.venv/bin/python dsx_connect/local/build_local_binaries.py build-app web-launcher
 open dist/local-apps/web_launcher.app
 ```
+
+## Electron Launcher (existing DSX Connect UI)
+
+Electron shell that starts local core and loads the existing UI at `http://127.0.0.1:8586/`.
+
+```bash
+cd dsx_connect/local/electron_launcher
+npm install
+npm start
+```
+
+Optional: set `DSXCONNECT_STOP_ON_EXIT=1` to stop local core when closing Electron.

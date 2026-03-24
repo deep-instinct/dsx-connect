@@ -33,7 +33,16 @@ jobs:
           cache-dependency-path: dsxa_tauri/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          else
+            rustup toolchain install stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup default stable
+          rustc --version
+          cargo --version
 
       - name: Install frontend dependencies
         run: npm ci
@@ -69,7 +78,18 @@ jobs:
           cache-dependency-path: dsxa_tauri/package-lock.json
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        shell: pwsh
+        run: |
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+            Start-Process -FilePath ".\rustup-init.exe" -ArgumentList "-y --default-toolchain stable" -Wait -NoNewWindow
+          } else {
+            rustup toolchain install stable
+          }
+          "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          rustup default stable
+          rustc --version
+          cargo --version
 
       - name: Install frontend dependencies
         run: npm ci

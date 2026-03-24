@@ -13,6 +13,7 @@ dependencies = [
     "typer>=0.12.3",
     "click>=8.1.7",
     "python-dotenv>=1.0",
+    "textual>=0.76.0",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ build-backend = "setuptools.build_meta"
 dsxa = "dsxa_sdk_py.cli:app"
 dsxa-gui = "dsxa_sdk_py.gui:main"
 dsxa-gui-qt = "dsxa_sdk_py.gui_qt:main"
+dsxa-tui = "dsxa_sdk_py.tui:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

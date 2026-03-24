@@ -227,7 +227,7 @@ fn install_app_menu<R: tauri::Runtime>(
     let close_window = PredefinedMenuItem::close_window(app, None)?;
     let window_menu = Submenu::with_items(app, "Window", true, &[&minimize, &maximize, &close_window])?;
 
-    let help_item = MenuItem::with_id(app, "help", "DSXA Client and SDK", true, None::<&str>)?;
+    let help_item = MenuItem::with_id(app, "help", "DSXA Desktop and SDK", true, None::<&str>)?;
     let help_menu = Submenu::with_items(app, "Help", true, &[&help_item])?;
 
     let menu = Menu::with_items(app, &[&file_menu, &contexts_menu, &edit_menu, &view_menu, &window_menu, &help_menu])?;
@@ -1404,7 +1404,7 @@ pub fn run() {
                 let _ = app.emit("save-context", ());
             }
             "help" => {
-                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/DSXA%20Client%20and%20SDK");
+                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/DSXA%20Desktop%20and%20SDK");
             }
             menu_id if menu_id.starts_with("ctx-select-item-") => {
                 if let Some(runtime) = app.try_state::<RuntimeState>() {
@@ -1431,5 +1431,5 @@ pub fn run() {
             scan_folder_stop
         ])
         .run(tauri::generate_context!())
-        .expect("error while running DSXA Tauri app");
+        .expect("error while running DSXA Desktop app");
 }

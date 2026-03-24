@@ -1,5 +1,21 @@
 # DSX-Connect Local Runtime
 
+## Recommended Desktop Launcher (Electron)
+
+Use the Electron launcher as the primary local desktop app:
+
+```bash
+cd dsx_connect/local/electron_launcher
+npm install
+npm start
+```
+
+This launches local core and embeds the existing DSX Connect web UI.
+
+Note:
+- Legacy local GUI/pywebview launchers are still present for compatibility, but Electron is the preferred path.
+- Legacy CI workflow is now gated and must be explicitly enabled (`confirm_legacy_build=true`) to run.
+
 ## Local Runtime Manager (macOS MVP)
 
 Run DSX-Connect core + workers + Redis locally (no Docker/K8s):
@@ -162,7 +178,7 @@ The SharePoint GUI (`sharepoint_local_gui.app`) also loads/saves these values fr
 `~/.dsx-connect-local/sharepoint-connector/.env.local`
 via the **Save Config** button.
 
-## Cross-Platform Web Launcher (pywebview)
+## Legacy: Cross-Platform Web Launcher (pywebview)
 
 A single HTML/JavaScript launcher UI for core + connectors:
 

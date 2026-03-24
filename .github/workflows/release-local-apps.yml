@@ -1,8 +1,13 @@
-name: Local Apps - Build macOS artifacts
+name: LEGACY Local Apps - Build macOS artifacts
 
 on:
   workflow_dispatch:
     inputs:
+      confirm_legacy_build:
+        description: "Legacy pipeline. Set true only if you intentionally need old local app bundles."
+        required: true
+        type: boolean
+        default: false
       tag:
         description: "Tag name to create/update release for (e.g., local-apps-0.3.77). Leave blank to upload artifacts only."
         required: false
@@ -20,6 +25,7 @@ env:
 
 jobs:
   build-local-apps:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_legacy_build
     runs-on: macos-latest
     env:
       APPLE_CODESIGN_IDENTITY: ${{ secrets.APPLE_CODESIGN_IDENTITY }}
@@ -146,6 +152,7 @@ jobs:
           security delete-keychain build.keychain || true
 
   build-local-web-launcher-windows:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_legacy_build
     runs-on: windows-latest
     steps:
       - name: Checkout

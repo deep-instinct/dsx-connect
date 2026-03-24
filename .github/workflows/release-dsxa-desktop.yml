@@ -1,13 +1,13 @@
-name: DSXA Client - Build macOS, Linux, and Windows desktop artifacts
+name: Release DSXA Desktop (Tauri)
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to publish to when enabled (e.g., dsxa-client-0.1.0). Leave blank to build artifacts only."
+        description: "Release tag to publish to when enabled (e.g., dsxa-desktop-0.1.0). Leave blank to build artifacts only."
         required: false
       publish_release:
-        description: "Publish artifacts to a GitHub Release (requires tag in dsxa-client-<version> format)."
+        description: "Publish artifacts to a GitHub Release (requires tag in dsxa-desktop-<version> format)."
         required: true
         type: boolean
         default: false
@@ -56,13 +56,13 @@ jobs:
       - name: Collect macOS artifacts
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Client.app" "dist/DSXA-Client-macos-app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Desktop.app" "dist/dsxa-desktop-macos-app.zip"
 
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsxa_tauri_macos
-          path: dsxa_tauri/dist/DSXA-Client-macos-app.zip
+          name: dsxa_desktop_macos
+          path: dsxa_tauri/dist/dsxa-desktop-macos-app.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -117,7 +117,7 @@ jobs:
       - name: Upload Linux workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsxa_tauri_linux
+          name: dsxa_desktop_linux
           path: dsxa_tauri/dist/*
 
   build-windows:
@@ -166,7 +166,7 @@ jobs:
       - name: Upload Windows workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsxa_tauri_windows
+          name: dsxa_desktop_windows
           path: dsxa_tauri/dist/*
 
   publish-release:
@@ -179,27 +179,27 @@ jobs:
     steps:
       - name: Validate release tag format
         run: |
-          if [[ ! "${{ inputs.tag }}" =~ ^dsxa-client-[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
-            echo "Invalid tag '${{ inputs.tag }}'. Expected format: dsxa-client-<version> (e.g., dsxa-client-0.1.0)."
+          if [[ ! "${{ inputs.tag }}" =~ ^dsxa-desktop-[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            echo "Invalid tag '${{ inputs.tag }}'. Expected format: dsxa-desktop-<version> (e.g., dsxa-desktop-0.1.0)."
             exit 1
           fi
 
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsxa_tauri_macos
+          name: dsxa_desktop_macos
           path: dist/release
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsxa_tauri_windows
+          name: dsxa_desktop_windows
           path: dist/release
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsxa_tauri_linux
+          name: dsxa_desktop_linux
           path: dist/release
 
       - name: Upload release assets

@@ -6,6 +6,11 @@ on:
       tag:
         description: "Optional release tag to upload assets to (e.g., dsxa-tauri-0.1.0)"
         required: false
+      publish_release:
+        description: "Upload artifacts to a GitHub Release (requires tag)."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -86,7 +91,7 @@ jobs:
           path: dsxa_tauri/dist/*
 
   publish-release:
-    if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.tag != ''
     needs:
       - build-macos
       - build-windows

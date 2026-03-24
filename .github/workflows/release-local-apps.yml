@@ -6,6 +6,11 @@ on:
       tag:
         description: "Tag name to create/update release for (e.g., local-apps-0.3.77). Leave blank to upload artifacts only."
         required: false
+      publish_release:
+        description: "Upload assets to a GitHub Release (requires tag)."
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -19,6 +24,8 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,10 +43,7 @@ jobs:
           pip install nuitka imageio pywebview
 
       - name: Import Apple signing certificate
-        if: ${{ secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_CERT_PASSWORD != '' }}
-        env:
-          APPLE_CERT_P12_BASE64: ${{ secrets.APPLE_CERT_P12_BASE64 }}
-          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        if: ${{ env.APPLE_CERT_P12_BASE64 != '' && env.APPLE_CERT_PASSWORD != '' }}
         run: |
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
           echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> "$GITHUB_ENV"
@@ -105,7 +109,7 @@ jobs:
           cp dist/local-pkg/*.pkg dist/local-release/
 
       - name: Notarize and staple pkg installers
-        if: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+        if: ${{ env.APPLE_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != '' && env.APPLE_TEAM_ID != '' }}
         run: |
           set -euo pipefail
           for pkg in dist/local-release/*.pkg; do
@@ -124,7 +128,7 @@ jobs:
           path: dist/local-release/*
 
       - name: Upload release assets
-        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}
@@ -134,7 +138,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Cleanup temporary keychain
-        if: ${{ always() && secrets.APPLE_CERT_P12_BASE64 != '' && secrets.APPLE_CERT_PASSWORD != '' }}
+        if: ${{ always() && env.APPLE_CERT_P12_BASE64 != '' && env.APPLE_CERT_PASSWORD != '' }}
         run: |
           security delete-keychain build.keychain || true
 
@@ -188,7 +192,7 @@ jobs:
           path: dist/local-release-windows/*
 
       - name: Upload Windows release asset
-        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag }}

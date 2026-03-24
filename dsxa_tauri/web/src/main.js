@@ -365,6 +365,17 @@ function renderScanHashResult(result) {
   renderOutputBlock("Scan Hash Result", lines);
 }
 
+function renderEicarResult(result) {
+  const lines = [
+    "Payload: EICAR test string (base64)",
+    `Endpoint: ${result?.endpoint || "/scan/base64/v2"}`,
+    `Elapsed: ${formatSeconds(result?.elapsed_seconds)}s`,
+    "",
+    JSON.stringify(result?.result || {}, null, 2)
+  ];
+  renderOutputBlock("EICAR Test Result", lines);
+}
+
 function renderOperationFailure(title, details) {
   const lines = [details || "Unknown error"];
   renderOutputBlock(title, lines);
@@ -409,6 +420,8 @@ function updateScanButtonsEnabledState() {
   el("scanFile").disabled = !canScan;
   el("scanHash").disabled = !canScan;
   el("scanFolder").disabled = !!activeFolderJobId || !canScan;
+  const eicarBtn = el("eicarTest");
+  if (eicarBtn) eicarBtn.disabled = !canScan;
 }
 
 function normalizeConcurrencyInput() {
@@ -952,6 +965,22 @@ function bindHandlers() {
     } catch (error) {
       renderOperationFailure("Scan Hash Result", `Error: ${String(error)}`);
       setStatus("Scan hash failed");
+    }
+  });
+
+  el("eicarTest").addEventListener("click", async () => {
+    setStatus("Running EICAR test...");
+    try {
+      const result = await invoke("scan_eicar_test", {
+        req: {
+          context: currentContext()
+        }
+      });
+      renderEicarResult(result);
+      setStatus("EICAR test complete");
+    } catch (error) {
+      renderOperationFailure("EICAR Test Result", `Error: ${String(error)}`);
+      setStatus("EICAR test failed");
     }
   });
 

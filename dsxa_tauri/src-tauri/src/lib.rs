@@ -105,6 +105,11 @@ struct ConnectivityRequest {
     context: ContextConfig,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScanEicarRequest {
+    context: ContextConfig,
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct ConnectivityResponse {
     reachable: bool,
@@ -637,6 +642,27 @@ async fn scan_hash(req: ScanHashRequest) -> Result<Value, String> {
     Ok(json!({
         "operation": "scan-hash",
         "hash": req.file_hash,
+        "elapsed_seconds": started.elapsed().as_secs_f64(),
+        "result": result
+    }))
+}
+
+#[tauri::command]
+async fn scan_eicar_test(req: ScanEicarRequest) -> Result<Value, String> {
+    let started = Instant::now();
+    let base = req.context.base_url.trim_end_matches('/');
+    let endpoint = "/scan/base64/v2";
+    let url = format!("{base}{endpoint}");
+    let eicar = r#"X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*"#;
+    let payload = base64_encode(eicar).into_bytes();
+    let headers = build_headers(&req.context, None, None, false)?;
+
+    let client = build_http_client(&req.context)?;
+    let result = request_json(&client, reqwest::Method::POST, url, headers, Some(payload)).await?;
+
+    Ok(json!({
+        "operation": "scan-eicar-test",
+        "endpoint": endpoint,
         "elapsed_seconds": started.elapsed().as_secs_f64(),
         "result": result
     }))
@@ -1427,6 +1453,7 @@ pub fn run() {
             preview_folder_file_count,
             scan_file,
             scan_hash,
+            scan_eicar_test,
             scan_folder_start,
             scan_folder_stop
         ])

@@ -7,7 +7,7 @@ import threading
 import time
 import resource
 
-from dsxa_sdk import DSXAClient
+from dsxa_sdk_py import DSXAClient
 
 
 def iter_file_chunks(path: str, chunk_size: int) -> bytes:

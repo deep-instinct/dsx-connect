@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-from dsxa_sdk import DSXAClient, VerdictEnum
+from dsxa_sdk_py import DSXAClient, VerdictEnum
 
 BASE_URL = os.getenv("DSXA_BASE_URL")
 AUTH_TOKEN = os.getenv("DSXA_AUTH_TOKEN")

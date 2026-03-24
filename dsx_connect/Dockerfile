@@ -23,11 +23,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code + shared libs
 COPY dsx_connect/ dsx_connect/
 COPY shared/ shared/
-COPY dsxa_sdk/ dsxa_sdk/
+COPY dsxa_sdk_py/ dsxa_sdk_py/
 
 RUN rm -f /app/dsx_connect/.dev.env
 
-RUN pip install --no-cache-dir ./dsxa_sdk
+RUN pip install --no-cache-dir ./dsxa_sdk_py
 
 # Dev certificates (optional, safe to include)
 COPY shared/deploy/certs/ certs/

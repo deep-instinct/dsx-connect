@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 import pytest
 
-from dsxa_sdk import DSXAClient, ScanMode
+from dsxa_sdk_py import DSXAClient, ScanMode
 
 
 class MockTransport(httpx.BaseTransport):
@@ -36,7 +36,7 @@ def transport():
 @pytest.fixture()
 def client(monkeypatch, transport):
     httpx_client = httpx.Client(transport=transport)
-    monkeypatch.setattr("dsxa_sdk.client.httpx.Client", lambda **kwargs: httpx_client)
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
     sdk = DSXAClient(base_url="https://scanner.example.com", auth_token="token")
     yield sdk
     sdk.close()
@@ -74,7 +74,7 @@ def test_scan_by_path_sets_stream_header(client, transport):
 
 def test_scan_binary_without_token(monkeypatch, transport):
     httpx_client = httpx.Client(transport=transport)
-    monkeypatch.setattr("dsxa_sdk.client.httpx.Client", lambda **kwargs: httpx_client)
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
     client = DSXAClient(base_url="https://scanner.example.com", auth_token=None)
     resp = client.scan_binary(b"data")
     assert resp.scan_guid == "guid-123"
@@ -86,7 +86,7 @@ def test_scan_binary_without_token(monkeypatch, transport):
 
 def test_default_protected_entity(monkeypatch, transport):
     httpx_client = httpx.Client(transport=transport)
-    monkeypatch.setattr("dsxa_sdk.client.httpx.Client", lambda **kwargs: httpx_client)
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
     client = DSXAClient(base_url="https://scanner.example.com")
     client.scan_binary(b"data")
     call = transport.calls[-1]
@@ -105,6 +105,6 @@ def test_poll_by_path_breaks_on_scanning(monkeypatch, client, transport):
         payload = responses.pop(0)
         return payload
 
-    monkeypatch.setattr("dsxa_sdk.client.DSXAClient._request", fake_request)
+    monkeypatch.setattr("dsxa_sdk_py.client.DSXAClient._request", fake_request)
     resp = client.poll_scan_by_path("guid-123", interval_seconds=0.01, timeout_seconds=1)
     assert resp.verdict.value == "Benign"

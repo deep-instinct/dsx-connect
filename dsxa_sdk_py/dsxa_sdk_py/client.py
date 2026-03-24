@@ -19,6 +19,16 @@ from .models import (
 )
 
 
+def _format_http_error(response: httpx.Response) -> str:
+    reason = response.reason_phrase or "Unknown"
+    body = (response.text or "").strip()
+    if len(body) > 2000:
+        body = body[:2000] + "... [truncated]"
+    if body and body != reason:
+        return f"HTTP {response.status_code} {reason}: {body}"
+    return f"HTTP {response.status_code} {reason}"
+
+
 class ScanMode(str, Enum):
     BINARY = "binary"
     BASE64 = "base64"
@@ -339,7 +349,7 @@ class DSXAClient(_BaseDSXAClient):
             raise DSXAError(str(exc)) from exc
 
         if response.status_code >= 400:
-            raise map_http_status(response.status_code, response.text or response.reason_phrase)
+            raise map_http_status(response.status_code, _format_http_error(response))
         if not response.content:
             return {}
         return response.json()
@@ -581,7 +591,7 @@ class AsyncDSXAClient(_BaseDSXAClient):
             raise DSXAError(str(exc)) from exc
 
         if response.status_code >= 400:
-            raise map_http_status(response.status_code, response.text or response.reason_phrase)
+            raise map_http_status(response.status_code, _format_http_error(response))
         if not response.content:
             return {}
         return response.json()

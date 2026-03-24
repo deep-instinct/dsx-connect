@@ -31,6 +31,7 @@ from connectors.framework.auth_hmac import (
     auth_enabled as connector_auth_enabled,
 )
 from connectors.framework.dsx_connect_sdk_loader import load_sdk
+from pydantic import SecretStr
 
 # Context variable to propagate a scan job id during full_scan
 _SCAN_JOB_ID: contextvars.ContextVar[str | None] = contextvars.ContextVar("scan_job_id", default=None)
@@ -1130,10 +1131,23 @@ class DSXAConnectorRouter(APIRouter):
 
         cfg = getattr(self._connector, "connector_config", None)
         if cfg is not None:
-            for k in ("asset", "asset_display_name", "filter", "item_action", "item_action_move_metainfo"):
+            for k in (
+                "asset",
+                "asset_display_name",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "sp_tenant_id",
+                "sp_client_id",
+                "sp_client_secret",
+                "sp_webhook_enabled",
+                "webhook_base_url",
+            ):
                 try:
                     v = getattr(cfg, k, None)
                     if v is not None:
+                        if isinstance(v, SecretStr):
+                            v = "**********" if v.get_secret_value() else ""
                         out[k] = v
                 except Exception:
                     pass
@@ -1155,6 +1169,35 @@ class DSXAConnectorRouter(APIRouter):
 
         if self._connector.config_update_handler:
             return await self._connector.config_update_handler(payload)
+
+        def _parse_bool(value):
+            if isinstance(value, bool):
+                return value
+            if isinstance(value, str):
+                txt = value.strip().lower()
+                if txt in ("1", "true", "yes", "y", "on"):
+                    return True
+                if txt in ("0", "false", "no", "n", "off"):
+                    return False
+            raise ValueError("invalid_bool")
+
+        def _set_if_hasattr(target, key, value):
+            if target is None or not hasattr(target, key):
+                return False
+            try:
+                cur = getattr(target, key)
+                if isinstance(cur, bool):
+                    setattr(target, key, _parse_bool(value))
+                elif isinstance(cur, SecretStr):
+                    if isinstance(value, str):
+                        setattr(target, key, SecretStr(value))
+                    else:
+                        setattr(target, key, SecretStr(str(value)))
+                else:
+                    setattr(target, key, value)
+                return True
+            except Exception:
+                return False
 
         changed = False
         if "asset" in payload and isinstance(payload.get("asset"), str):
@@ -1204,6 +1247,23 @@ class DSXAConnectorRouter(APIRouter):
                 changed = True
             except Exception:
                 pass
+
+        # SharePoint/common extra fields supported by the generic fallback path.
+        cfg = getattr(self._connector, "connector_config", None)
+        for key in ("sp_tenant_id", "sp_client_id", "sp_client_secret", "sp_webhook_enabled", "webhook_base_url"):
+            if key not in payload:
+                continue
+            val = payload.get(key)
+            # Do not overwrite existing secret with masked value.
+            if key == "sp_client_secret" and isinstance(val, str) and (not val.strip() or val.strip("*") == ""):
+                continue
+            set_any = False
+            if _set_if_hasattr(cfg, key, val):
+                set_any = True
+            if _set_if_hasattr(self._connector.connector_running_model, key, val):
+                set_any = True
+            changed = changed or set_any
+
         if not changed:
             raise HTTPException(status_code=400, detail="no_supported_fields")
 

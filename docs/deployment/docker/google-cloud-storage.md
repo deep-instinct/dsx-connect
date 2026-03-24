@@ -1,42 +1,18 @@
 # Google Cloud Storage Connector — Docker
 
-The **Google Cloud Storage connector** monitors a GCS bucket and sends objects to DSX for scanning.
-
-It supports:
-
-* **Full scans** of an entire bucket or prefix
-* **Continuous monitoring** of new objects
-* **Remediation actions** such as delete, move, or tag after malicious verdicts
-
-Monitoring can be triggered using:
-
-* **Google Cloud Pub/Sub notifications (recommended)**
-* **Webhook events** from Cloud Run, Cloud Functions, or other middleware
+{% include-markdown "shared/connectors/google-cloud-storage/_intro.md" %}
 
 ---
 
 ## Prerequisites
 
-Before deploying the connector you must create a **Google Cloud service account** with access to the target bucket.
-
-Required:
-
-* A **service account JSON credential**
-* Permission to list and read objects
-
-Optional (for remediation actions):
-
-* Permission to move or delete objects
-
-See:
-
-➡️ [Google Cloud Credentials](../../reference/google-cloud-credentials.md)
+{% include-markdown "shared/connectors/google-cloud-storage/_prerequisites.md" %}
 
 ---
 
 ## Minimal Deployment
 
-The following steps will install the connector with minimal configuration changes.  
+The following steps will install the connector with minimal configuration changes, supporting full-scan only. 
 
 !!! tip "Using the Docker bundle"
 

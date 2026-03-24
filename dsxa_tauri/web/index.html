@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DSXA Client</title>
+  <link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel connection-panel" id="connectionPanel">
+      <div class="section-header">
+        <div class="section-title">Scanner Connection</div>
+        <div class="connection-header-right">
+          <button type="button" id="currentContextName" class="profile-button profile-inline"></button>
+          <span id="baseUrlHealth" class="connection-status"></span>
+          <a id="headerBaseUrl" class="connection-link compact-only" href="#" target="_blank" rel="noopener noreferrer"></a>
+          <button type="button" id="toggleConnectionPanel" class="panel-toggle" aria-expanded="true">Collapse</button>
+        </div>
+      </div>
+      <div id="connectionPanelBody">
+        <div class="row base-auth-row" style="margin-top:8px;">
+          <div class="field">
+            <label>Scanner URL</label>
+            <div class="input-with-button">
+              <input id="baseUrl" />
+            </div>
+          </div>
+          <div class="field" style="max-width:420px;"><label>Auth Token (optional)</label><input id="authToken" type="password" /></div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="max-width:220px;"><label>Protected Entity ID</label><input id="protectedEntity" type="text" value="1" /></div>
+          <label class="checkbox-field"><input id="verifyTls" type="checkbox" /> Verify TLS</label>
+          <label class="checkbox-field"><input id="base64Mode" type="checkbox" /> Send files as Base64</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="tabs">
+        <button type="button" id="tabScanFile" class="tab-btn active" data-tab="scanFilePane">Scan File</button>
+        <button type="button" id="tabScanFolder" class="tab-btn" data-tab="scanFolderPane">Scan Folder</button>
+        <button type="button" id="tabScanHash" class="tab-btn" data-tab="scanHashPane">Scan Hash</button>
+      </div>
+
+      <div id="scanFilePane" class="tab-pane active">
+        <div class="row">
+          <button type="button" id="pickFile">Select File</button>
+          <div class="field">
+            <label>File to scan</label>
+            <div class="path-with-icon">
+              <span class="path-icon">📄</span>
+              <div id="filePath" class="path" title="">No file selected yet</div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field"><label>Password (optional)</label><input id="filePassword" type="password" /></div>
+          <div class="field">
+            <label class="label-with-help">
+              <span>Metadata (optional)</span>
+              <button
+                type="button"
+                class="info-hint"
+                aria-label="Metadata override help"
+                data-help="Optional metadata string sent with the scan request. Override applies only to this scan action. Same token support: {file_name}, {file_path}, {base_name}, {file_basename}, {file_hash}, {hash}."
+              >i</button>
+            </label>
+            <input id="fileMetadata" placeholder="e.g. {file_name},source:dsxaclient" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;"><button type="button" id="scanFile" class="primary scan-btn">Run Scan</button></div>
+      </div>
+
+      <div id="scanFolderPane" class="tab-pane">
+        <div class="row">
+          <button type="button" id="pickFolder">Select Folder</button>
+          <div class="field">
+            <label>Folder to scan <span id="folderMeta" class="folder-meta"></span></label>
+            <div class="path-with-icon">
+              <span class="path-icon">📁</span>
+              <div id="folderPath" class="path" title="">No folder selected yet</div>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field" style="max-width:180px;"><label>Max Concurrent Scans</label><input id="folderConcurrency" type="number" min="1" value="4" /></div>
+          <div class="field"><label>Password (optional)</label><input id="folderPassword" type="password" /></div>
+          <div class="field">
+            <label class="label-with-help">
+              <span>Metadata (optional)</span>
+              <button
+                type="button"
+                class="info-hint"
+                aria-label="Metadata override help"
+                data-help="Optional metadata string sent with the scan request. Override applies only to this folder scan. Tokens are resolved per file: {file_name} is each file path during the run."
+              >i</button>
+            </label>
+            <input id="folderMetadata" placeholder="e.g. {file_name},source:dsxaclient" />
+          </div>
+        </div>
+          <div class="section-label">Post-scan actions</div>
+
+          <div class="scan-output-container">
+              <div class="scan-output-grid">
+
+                  <div class="grid-row">
+                      <label class="checkbox-field">
+                          <input id="logAllResults" type="checkbox" />
+                          Log all scan results (JSONL)
+                      </label>
+                      <input id="logAllResultsPath" class="path-input" placeholder="results.jsonl" />
+                      <button type="button" id="pickLogAllResultsPath">Browse...</button>
+                  </div>
+
+                  <div class="grid-row">
+                      <label class="checkbox-field">
+                          <input id="logMaliciousCsv" type="checkbox" />
+                          Export malicious-only summary (CSV)
+                      </label>
+                      <input id="logMaliciousCsvPath" class="path-input" placeholder="malicious.csv" />
+                      <button type="button" id="pickLogMaliciousCsvPath">Browse...</button>
+                  </div>
+
+                  <div class="grid-row">
+                      <label class="checkbox-field">
+                          <input id="quarantineEnabled" type="checkbox" />
+                          Quarantine malicious files
+                      </label>
+                      <input id="quarantineDir" class="path-input" placeholder="/path/to/quarantine" />
+                      <button type="button" id="pickQuarantineDir">Browse...</button>
+                  </div>
+
+              </div>
+          </div>
+
+<!--        <div class="row" style="margin-top:10px;">-->
+<!--          <label class="checkbox-field"><input id="logAllResults" type="checkbox" /> Log all scan results (JSONL)</label>-->
+<!--          <input id="logAllResultsPath" class="path-input" placeholder="results.jsonl" />-->
+<!--          <button type="button" id="pickLogAllResultsPath">Browse...</button>-->
+<!--        </div>-->
+<!--        <div class="row" style="margin-top:10px;">-->
+<!--          <label class="checkbox-field"><input id="logMaliciousCsv" type="checkbox" /> Export malicious-only summary (CSV)</label>-->
+<!--          <input id="logMaliciousCsvPath" class="path-input" placeholder="malicious.csv" />-->
+<!--          <button type="button" id="pickLogMaliciousCsvPath">Browse...</button>-->
+<!--        </div>-->
+<!--        <div class="row" style="margin-top:10px;">-->
+<!--          <label class="checkbox-field"><input id="quarantineEnabled" type="checkbox" /> Quarantine malicious files</label>-->
+<!--          <input id="quarantineDir" class="path-input" placeholder="/path/to/quarantine" />-->
+<!--          <button type="button" id="pickQuarantineDir">Browse...</button>-->
+<!--        </div>-->
+        <div class="row" style="margin-top:10px;">
+          <button type="button" id="scanFolder" class="primary scan-btn">Run Scan</button>
+        </div>
+<!--        <div class="row" style="margin-top:10px; width:100%;">-->
+<!--          <div class="field" style="width:100%;">-->
+<!--            <label id="folderProgressLabel">Progress</label>-->
+<!--            <progress id="folderProgress" max="100" value="0"></progress>-->
+<!--          </div>-->
+<!--          <button type="button" id="stopFolder" class="danger stop-inline" hidden>Stop</button>-->
+<!--        </div>-->
+        <div class="row" style="margin-top:10px; width:100%;">
+          <div class="field" style="width:100%;">
+              <div id="folderProgressPlaceholder" class="folder-progress-placeholder">Progress will appear here after scan starts.</div>
+              <label id="folderProgressLabel" hidden>Progress</label>
+              <div id="folderStats" class="folder-stats" hidden></div>
+              <progress id="folderProgress" max="100" value="0" hidden></progress>
+          </div>
+          <button type="button" id="stopFolder" class="danger stop-inline" hidden>Stop</button>
+        </div>
+      </div>
+
+      <div id="scanHashPane" class="tab-pane">
+        <div class="row">
+          <div class="field">
+            <label>SHA-256 Hash</label>
+            <input id="hashValue" placeholder="64-char hex hash" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <div class="field">
+            <label class="label-with-help">
+              <span>Metadata (optional)</span>
+              <button
+                type="button"
+                class="info-hint"
+                aria-label="Metadata override help"
+                data-help="Optional metadata string sent with the scan request. Override applies only to this hash scan. Use {hash} or {file_hash} for the submitted hash value."
+              >i</button>
+            </label>
+            <input id="hashMetadata" placeholder="e.g. {hash},source:dsxaclient" />
+          </div>
+        </div>
+        <div class="row" style="margin-top:10px;"><button type="button" id="scanHash" class="primary scan-btn">Run Scan</button></div>
+      </div>
+    </div>
+
+    <div class="panel output-panel">
+      <div id="status" style="color:var(--warn); margin-bottom:8px;"></div>
+      <textarea id="output" readonly></textarea>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button type="button" id="closeSettings" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <label>Max File Size (MB)</label>
+        <input id="maxFileSizeMb" type="number" min="1" step="1" value="2048" />
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" id="saveSettings" class="primary">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextSelectModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Select Profile</h3>
+        <button type="button" id="closeContextSelect" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <label>Available Profiles</label>
+        <select id="contextPicker"></select>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" id="applyContextSelection" class="primary">Use Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextCreateModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>New Profile</h3>
+        <button type="button" id="closeContextCreate" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <label>Profile Name</label>
+        <input id="contextCreateName" type="text" placeholder="profile-name" />
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" id="applyContextCreate" class="primary">Create Profile</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="contextDeleteModal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Delete Profiles</h3>
+        <button type="button" id="closeContextDelete" class="modal-close" aria-label="Close">✕</button>
+      </div>
+      <div class="field">
+        <label>Select one or more profiles to delete</label>
+        <div id="contextDeleteList" class="profile-delete-list"></div>
+      </div>
+      <div class="row" style="margin-top:12px;">
+        <button type="button" id="applyContextDelete" class="danger">Delete Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

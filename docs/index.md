@@ -105,6 +105,11 @@ So you can quickly find what you need.
 * [Performance Tuning](operations/performance-tuning-job-comparisons.md)
 * [Syslog Forwarding](operations/syslog.md)
 
+### 👩‍💻 Developer's Guide
+
+* [Developer Overview](developer/index.md)
+* [DSXA SDK](developer/dsxa-sdk.md)
+
 ### 📚 Reference
 
 * [Configuration Reference](deployment/kubernetes/configuration-reference.md)

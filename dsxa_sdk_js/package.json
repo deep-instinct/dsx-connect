@@ -1,0 +1,22 @@
+{
+  "name": "@deep-instinct/dsxa-sdk-js",
+  "version": "0.1.0",
+  "description": "JavaScript SDK for Deep Instinct DSXA APIs (Node + Browser)",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.cjs",
+  "module": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.js",
+      "require": "./src/index.cjs"
+    },
+    "./node": {
+      "types": "./src/node.d.ts",
+      "import": "./src/node.js",
+      "require": "./src/node.cjs"
+    }
+  }
+}

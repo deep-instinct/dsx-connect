@@ -473,9 +473,157 @@ async def config_handler(base: ConnectorInstanceModel):
         "asset": config.asset,
         "filter": config.filter,
         "resolved_asset_base": config.resolved_asset_base,
+        "sp_tenant_id": config.sp_tenant_id,
+        "sp_client_id": config.sp_client_id,
+        "sp_client_secret": "**********" if config.sp_client_secret.get_secret_value() else "",
+        "sp_webhook_enabled": config.sp_webhook_enabled,
+        "webhook_base_url": config.webhook_base_url or "",
     }
     payload.update({k: v for k, v in extra.items() if v is not None})
     return payload
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    """Update runtime-editable SharePoint config and persist for local runtime when enabled."""
+    global sp_client
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        config.asset = payload.get("asset", "").strip()
+        try:
+            connector.connector_running_model.asset = config.asset
+            connector.connector_running_model.asset_display_name = config.asset
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        try:
+            connector.connector_running_model.filter = config.filter
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                action_val = ItemActionEnum(action_raw)
+                config.item_action = action_val
+                try:
+                    connector.connector_running_model.item_action = action_val
+                except Exception:
+                    pass
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        try:
+            connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("sp_tenant_id"), str):
+        config.sp_tenant_id = payload.get("sp_tenant_id", "").strip()
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("sp_client_id"), str):
+        config.sp_client_id = payload.get("sp_client_id", "").strip()
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("sp_client_secret"), str):
+        secret = payload.get("sp_client_secret", "")
+        # Empty means "keep existing secret" for UI workflows.
+        if secret:
+            from pydantic import SecretStr
+            config.sp_client_secret = SecretStr(secret)
+            changed = True
+            creds_changed = True
+
+    if "sp_webhook_enabled" in payload:
+        raw = payload.get("sp_webhook_enabled")
+        if isinstance(raw, bool):
+            config.sp_webhook_enabled = raw
+            changed = True
+        elif isinstance(raw, str):
+            v = raw.strip().lower()
+            if v in ("true", "1", "yes", "on"):
+                config.sp_webhook_enabled = True
+                changed = True
+            elif v in ("false", "0", "no", "off"):
+                config.sp_webhook_enabled = False
+                changed = True
+
+    if isinstance(payload.get("webhook_base_url"), str):
+        config.webhook_base_url = payload.get("webhook_base_url", "").strip() or None
+        changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "sp_tenant_id",
+                "sp_client_id",
+                "sp_client_secret",
+                "sp_webhook_enabled",
+                "webhook_base_url",
+            ],
+        }
+
+    # Ensure singleton references stay in sync.
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    # Recreate client when credentials/settings changed.
+    if creds_changed:
+        try:
+            await sp_client.aclose()
+        except Exception:
+            pass
+        sp_client = SharePointClient(config)
+
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "SP_TENANT_ID": str(config.sp_tenant_id or ""),
+            "SP_CLIENT_ID": str(config.sp_client_id or ""),
+            "SP_WEBHOOK_ENABLED": "true" if bool(config.sp_webhook_enabled) else "false",
+            "SP_WEBHOOK_URL": str(config.webhook_base_url or ""),
+        }
+        # Only write secret when user explicitly provided one.
+        if isinstance(payload.get("sp_client_secret"), str) and payload.get("sp_client_secret"):
+            persist_updates["SP_CLIENT_SECRET"] = payload.get("sp_client_secret")
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    cfg = await config_handler(connector.connector_running_model)
+    cfg["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return cfg
 
 
 @connector.full_scan

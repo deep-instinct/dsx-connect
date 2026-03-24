@@ -6,7 +6,7 @@ This repository houses the full DSX-Connect stack: the core orchestration servic
 
 - **dsx-connect (core)** – FastAPI-based control plane that brokers scan requests between enterprise data sources and the Deep Instinct Scanner (DSXA). It exposes the UI/API, stores connector registry state in Redis, dispatches long-running jobs through Celery workers, and enforces connector authentication (enrollment tokens + DSX-HMAC).
 - **Connectors** – Service-specific adapters (AWS S3, Azure Blob, SharePoint, FileSystem, etc.) that register with dsx-connect, enumerate their assets, forward files to DSXA, and act on verdicts. Each connector is a FastAPI app built on the shared connector framework.
-- **DSXA SDK** – `dsxa_sdk` provides a typed Python client (sync + async) and CLI for submitting binaries/paths/hashes to DSXA. dsx-connect workers and connectors share the same client library for DSXA calls.
+- **DSXA SDK (Python)** – `dsxa_sdk_py` provides a typed Python client (sync + async) and CLI for submitting binaries/paths/hashes to DSXA. dsx-connect workers and connectors share the same client library for DSXA calls.
 - **Shared utilities** – Common helpers (logging, dev env loader, auth shared code, schemas) live under `shared/` so both dsx-connect and connectors can import them without duplicating logic.
 - **Docs** – `docs/` contains the MkDocs site with deployment guides, connector references, and operational runbooks.
 - **Cookiecutter** – `cookiecutter-dsx-connectors/` scaffolds new connectors (code, Helm chart, tasks, README) with the repo’s default conventions.
@@ -17,13 +17,13 @@ This repository houses the full DSX-Connect stack: the core orchestration servic
 | --- | --- |
 | `dsx_connect/` | Core API, Celery workers, Helm chart, and web UI assets. |
 | `connectors/` | Each connector lives in its own subdirectory with code, tests, Helm/Docker artifacts, and a README specific to that connector. |
-| `dsxa_sdk/` | Python package + CLI for DSXA integrations (`README.md` and tests inside). |
+| `dsxa_sdk_py/` | Python package + CLI for DSXA integrations (`README.md` and tests inside). |
 | `shared/` | Cross-cutting modules (e.g., `shared/dev_env.py`, models). |
 | `cookiecutter-dsx-connectors/` | Template used by `cookiecutter` to bootstrap new connectors. |
 | `docs/` | MkDocs content (deployment guides, references, diagrams). |
 | `tests/` | Cross-project tests (integration/contract style) that don’t belong to a single component. |
 
-See each directory’s README for component-specific details (e.g., `dsx_connect/README.md`, `connectors/<name>/README.md`, `dsxa_sdk/README.md`).
+See each directory’s README for component-specific details (e.g., `dsx_connect/README.md`, `connectors/<name>/README.md`, `dsxa_sdk_py/README.md`).
 
 ## Getting Started
 

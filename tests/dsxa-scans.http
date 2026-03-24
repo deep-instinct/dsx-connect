@@ -9,6 +9,6 @@ Content-Type: application/octet-stream
 POST http://localhost:5000/scan/binary/v2
 Content-Type: application/octet-stream
 
-< ../dsxa_sdk/tests/assets/samples/BUPA_Resume_pdf
+< ../dsxa_sdk_py/tests/assets/samples/BUPA_Resume_pdf
 
 ###

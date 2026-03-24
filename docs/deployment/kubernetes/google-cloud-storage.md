@@ -1,21 +1,22 @@
 # Google Cloud Storage Connector — Helm Deployment
 
-Use this guide to deploy the `google-cloud-storage-connector-chart` for full scans, monitoring, and remediation actions.
+{% include-markdown "shared/connectors/google-cloud-storage/_intro.md" %}
+
+--- 
 
 ## Prerequisites
 
-- Kubernetes 1.19+ and `kubectl`.
-- Helm 3.2+.
-- Access to `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart`.
-- A Google Cloud service account JSON key with permissions listed in [Google Cloud Credentials](../../reference/google-cloud-credentials.md).
-- For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
+{% include-markdown "shared/connectors/google-cloud-storage/_prerequisites.md" %}
+
+---
 
 ## Minimal Deployment
 
-1. Create the GCP service-account Secret:
+The following steps will install the connector with minimal configuration changes, supporting full-scan only.
+
+### Create the GCP service-account Secret:
 
 ```yaml
-# connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -30,25 +31,94 @@ stringData:
 kubectl apply -f connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
 ```
 
-2. Install with minimal values:
+### Deploy
 
-```bash
-helm install gcs-dev oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
-  --version <chart-version> \
-  --set env.DSXCONNECTOR_ASSET=my-bucket/prefix \
-  --set-string env.DSXCONNECTOR_FILTER="" \
-  --set-string image.tag=<connector-version>
-```
+=== "Quick Install"
 
-3. Verify:
+    Minimal install using Helm CLI overrides.
 
-```bash
-helm list
-kubectl get pods
-kubectl logs deploy/google-cloud-storage-connector -f
-```
+    ```bash
+    helm install gcs-dev oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
+    --version <chart-version> \
+    --set env.DSXCONNECTOR_ASSET=my-bucket/prefix \
+    --set-string env.DSXCONNECTOR_FILTER="" 
+    ```
 
-For pulled-chart installs and GitOps/production patterns, see [Advanced Connector Deployment](advanced-connector-deployment.md).
+    !!! note "--version"
+        The version number is the chart version; removing it installs the latest chart version.
+
+=== "values.yaml Install"
+
+    Use a values file when deploying in production or GitOps workflows.
+
+    First, pull the chart:
+    
+    ```bash 
+    helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart --version <connector_version> --untar
+    ```
+    !!! note "--version"
+        The version number is the chart version; removing it uses the latest chart version.
+
+
+    Edit the `values.yaml` within the untarred chart directory. Start by setting the storage and path alignment:
+
+    > excerpt of relevant values.yaml env settings:
+
+    ```yaml
+    env:
+      DSXCONNECTOR_ASSET: my-bucket/prefix
+      DSXCONNECTOR_FILTER: ""  # no filter set here
+      DSXCONNECTOR_ITEM_ACTION: nothing
+    ```
+
+    **Relevant env settings:**
+    
+    ```yaml
+    env:
+      DSXCONNECTOR_ASSET: my-bucket/prefix
+      DSXCONNECTOR_FILTER: ""  # no filter set
+      DSXCONNECTOR_ITEM_ACTION: nothing
+    ```
+
+    ??? note "Full example (env section)"
+        ```yaml
+        env:
+            LOG_LEVEL: "debug"
+            # Connector environment mode: dev | stg | prod
+            DSXCONNECTOR_APP_ENV: "dev"
+            # Optional friendly display name shown in the dsx-connect UI card
+            # DSXCONNECTOR_DISPLAY_NAME: "Google Cloud Storage Connector"
+            DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
+            DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
+            # DSXCONNECTOR_VERIFY_TLS: "true"
+            # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
+            # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
+            DSXCONNECTOR_ITEM_ACTION: "nothing"
+            DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+            DSXCONNECTOR_ASSET: ""          # bucket name
+            DSXCONNECTOR_FILTER: ""
+            DSXCONNECTOR_DATA_DIR: "/app/data"
+            GCS_PUBSUB_PROJECT_ID: ""
+            GCS_PUBSUB_SUBSCRIPTION: ""
+        ```
+
+    If you use `DSXCONNECTOR_ITEM_ACTION=move`, also configure where you want to move files too
+
+    > excerpt of item action env settings:
+ 
+    ```yaml
+    env:
+      DSXCONNECTOR_ITEM_ACTION: move
+      DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: /app/quarantine
+    ```
+
+    Then install with your values file (from the chart directory):
+
+    ```bash
+    helm install gcs . -f values.yaml
+    ```
+
+---
 
 ## Required Settings
 

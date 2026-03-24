@@ -320,7 +320,7 @@ def scan_files(
     """
     Scan one or more explicit file paths concurrently using the async client.
     Example:
-        dsxa scan-files dsxa_sdk/tests/assets/samples/* --concurrency 4
+        dsxa scan-files dsxa_sdk_py/tests/assets/samples/* --concurrency 4
     """
     if not files:
         typer.echo("No files specified", err=True)
@@ -354,7 +354,7 @@ def scan_folder(
     """
     Scan all files under a folder (matching the given glob pattern) using the async client.
     Examples:
-        dsxa scan-folder dsxa_sdk/tests/assets/samples --pattern "**/*"
+        dsxa scan-folder dsxa_sdk_py/tests/assets/samples --pattern "**/*"
         dsxa scan-folder ./samples --pattern "**/*.pdf" --concurrency 8
     """
     if not folder.is_dir():

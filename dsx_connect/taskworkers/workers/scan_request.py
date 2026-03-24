@@ -15,8 +15,8 @@ from dsx_connect.dsxa_sdk_import import ensure_sdk_on_path
 
 ensure_sdk_on_path()
 
-from dsxa_sdk import DSXAClient
-from dsxa_sdk.exceptions import DSXAError, AuthenticationError, BadRequestError, ServerError
+from dsxa_sdk_py import DSXAClient
+from dsxa_sdk_py.exceptions import DSXAError, AuthenticationError, BadRequestError, ServerError
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryDecision, RetryGroups
 from dsx_connect.config import get_config
 from dsx_connect.taskworkers.dlq_store import enqueue_scan_request_dlq_sync, make_scan_request_dlq_item

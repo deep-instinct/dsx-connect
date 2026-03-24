@@ -43,16 +43,27 @@ if RUN_INTEGRATION and load_devenv is not None:
         # Non-fatal: keep going; skip will trigger if envs missing
         pass
 REQUIRED_ENVS = [
-    "DSXCONNECTOR_SP_TENANT_ID",
-    "DSXCONNECTOR_SP_CLIENT_ID",
-    "DSXCONNECTOR_SP_CLIENT_SECRET",
+    "SP_TENANT_ID | DSXCONNECTOR_SP_TENANT_ID",
+    "SP_CLIENT_ID | DSXCONNECTOR_SP_CLIENT_ID",
+    "SP_CLIENT_SECRET | DSXCONNECTOR_SP_CLIENT_SECRET",
     "DSXCONNECTOR_SP_HOSTNAME",
     "DSXCONNECTOR_SP_SITE_PATH",
 ]
 
 
 def _missing_envs() -> list[str]:
-    return [k for k in REQUIRED_ENVS if not _env(k)]
+    missing: list[str] = []
+    if not _env_alias("SP_TENANT_ID", "DSXCONNECTOR_SP_TENANT_ID"):
+        missing.append("SP_TENANT_ID | DSXCONNECTOR_SP_TENANT_ID")
+    if not _env_alias("SP_CLIENT_ID", "DSXCONNECTOR_SP_CLIENT_ID"):
+        missing.append("SP_CLIENT_ID | DSXCONNECTOR_SP_CLIENT_ID")
+    if not _env_alias("SP_CLIENT_SECRET", "DSXCONNECTOR_SP_CLIENT_SECRET"):
+        missing.append("SP_CLIENT_SECRET | DSXCONNECTOR_SP_CLIENT_SECRET")
+    if not _env("DSXCONNECTOR_SP_HOSTNAME"):
+        missing.append("DSXCONNECTOR_SP_HOSTNAME")
+    if not _env("DSXCONNECTOR_SP_SITE_PATH"):
+        missing.append("DSXCONNECTOR_SP_SITE_PATH")
+    return missing
 
 
 pytestmark = pytest.mark.skipif(
@@ -89,9 +100,9 @@ async def test_sharepoint_live_roundtrip(tmp_path, capsys):
         )
 
     cfg = SharepointConnectorConfig(
-        sp_tenant_id=_env("DSXCONNECTOR_SP_TENANT_ID"),
-        sp_client_id=_env("DSXCONNECTOR_SP_CLIENT_ID"),
-        sp_client_secret=_env("DSXCONNECTOR_SP_CLIENT_SECRET"),
+        sp_tenant_id=_env_alias("SP_TENANT_ID", "DSXCONNECTOR_SP_TENANT_ID"),
+        sp_client_id=_env_alias("SP_CLIENT_ID", "DSXCONNECTOR_SP_CLIENT_ID"),
+        sp_client_secret=_env_alias("SP_CLIENT_SECRET", "DSXCONNECTOR_SP_CLIENT_SECRET"),
         sp_hostname=_env("DSXCONNECTOR_SP_HOSTNAME"),
         sp_site_path=_env("DSXCONNECTOR_SP_SITE_PATH"),
         sp_drive_name=_env("DSXCONNECTOR_SP_DRIVE_NAME"),
@@ -109,9 +120,9 @@ async def test_sharepoint_live_roundtrip(tmp_path, capsys):
                 s += '=' * (-len(s) % 4)
                 return base64.urlsafe_b64decode(s.encode('utf-8'))
             app = msal.ConfidentialClientApplication(
-                _env("DSXCONNECTOR_SP_CLIENT_ID"),
-                authority=f"https://login.microsoftonline.com/{_env('DSXCONNECTOR_SP_TENANT_ID')}",
-                client_credential=_env("DSXCONNECTOR_SP_CLIENT_SECRET"),
+                _env_alias("SP_CLIENT_ID", "DSXCONNECTOR_SP_CLIENT_ID"),
+                authority=f"https://login.microsoftonline.com/{_env_alias('SP_TENANT_ID', 'DSXCONNECTOR_SP_TENANT_ID')}",
+                client_credential=_env_alias("SP_CLIENT_SECRET", "DSXCONNECTOR_SP_CLIENT_SECRET"),
             )
             res = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
             token = res.get("access_token")

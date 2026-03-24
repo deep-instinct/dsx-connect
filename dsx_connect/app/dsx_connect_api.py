@@ -380,8 +380,8 @@ def get_dsxa_test_connection():
     from dsx_connect.dsxa_sdk_import import ensure_sdk_on_path
 
     ensure_sdk_on_path()
-    from dsxa_sdk import DSXAClient
-    from dsxa_sdk.exceptions import DSXAError
+    from dsxa_sdk_py import DSXAClient
+    from dsxa_sdk_py.exceptions import DSXAError
     from shared.models.status_responses import StatusResponse, StatusResponseEnum
 
     cfg = get_config()

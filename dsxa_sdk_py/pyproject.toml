@@ -1,5 +1,5 @@
 [project]
-name = "dsxa-sdk"
+name = "dsxa-sdk-py"
 version = "0.1.7"
 description = "Python SDK/CLI for Deep Instinct DSX Application Scanner (DSXA) REST APIs"
 authors = [
@@ -25,8 +25,10 @@ requires = ["setuptools>=67", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-dsxa = "dsxa_sdk.cli:app"
+dsxa = "dsxa_sdk_py.cli:app"
+dsxa-gui = "dsxa_sdk_py.gui:main"
+dsxa-gui-qt = "dsxa_sdk_py.gui_qt:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["dsxa_sdk*"]
+include = ["dsxa_sdk_py*", "dsxa_sdk*"]

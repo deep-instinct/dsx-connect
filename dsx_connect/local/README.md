@@ -176,8 +176,8 @@ Profiles:
 - Filesystem Connector
 - SharePoint Connector
 
-For SharePoint, the launcher can save `DSXCONNECTOR_SP_TENANT_ID`,
-`DSXCONNECTOR_SP_CLIENT_ID`, and `DSXCONNECTOR_SP_CLIENT_SECRET` into:
+For SharePoint, the launcher saves `SP_TENANT_ID`,
+`SP_CLIENT_ID`, and `SP_CLIENT_SECRET` (with legacy fallback support) into:
 `~/.dsx-connect-local/sharepoint-connector/.env.local`
 
 

@@ -205,6 +205,19 @@ def _run_build(
 
     if target.name in {"core-gui", "filesystem-gui", "sharepoint-gui"}:
         cmd.append("--enable-plugin=tk-inter")
+    elif target.name == "web-launcher":
+        # pywebview is imported as "webview"; bundle only macOS backend to avoid
+        # platform-backend import conflicts (android/gtk/qt/winforms).
+        cmd.extend([
+            "--include-module=webview",
+            "--include-module=webview.platforms",
+            "--include-module=webview.platforms.cocoa",
+            "--nofollow-import-to=webview.platforms.android",
+            "--nofollow-import-to=webview.platforms.gtk",
+            "--nofollow-import-to=webview.platforms.qt",
+            "--nofollow-import-to=webview.platforms.edgechromium",
+            "--nofollow-import-to=webview.platforms.winforms",
+        ])
 
     if macos_sign_identity:
         cmd.append(f"--macos-sign-identity={macos_sign_identity}")

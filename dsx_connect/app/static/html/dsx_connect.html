@@ -501,6 +501,7 @@
     let currentMaliciousOnly = localStorage.getItem('resultsMaliciousOnly') === '1';
     let jobFocusJobId = '';
     let jobMeta = {};
+    let currentAppEnv = 'unknown';
     try { jobMeta = JSON.parse(localStorage.getItem('jobMeta') || '{}'); } catch { jobMeta = {}; }
     // Note: No polling-based summary; progress updates come via scan-result SSE.
 
@@ -513,6 +514,10 @@
         themeToggle.classList.toggle('fa-moon', !isDark);
         themeToggle.title = `Switch to ${isDark ? 'light' : 'dark'} mode`;
         fetchStatus(); // Re-run to update colors
+    }
+
+    function isDevAppEnv() {
+        return String(currentAppEnv || '').trim().toLowerCase() === 'dev';
     }
 
     // UUID-based action button updater
@@ -1042,10 +1047,12 @@
         fetch(api('config'))
             .then(res => res.json())
             .then(data => {
+                currentAppEnv = (data && data.app_env) ? String(data.app_env) : 'unknown';
                 document.getElementById('configTree').innerHTML = renderCoreConfig(data);
                 wireCoreConfigActions();
             })
             .catch(() => {
+                currentAppEnv = 'unknown';
                 document.getElementById('configTree').textContent = 'Error loading configuration.';
             });
     }
@@ -1946,18 +1953,37 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     }
 
     async function saveConnectorConfig(uuid, values) {
-        const payload = {
-            asset: ((values && values.asset) || '').trim(),
-            filter: ((values && values.filter) || ''),
-            item_action: normalizeItemActionToApi(((values && values.item_action) || '').trim()),
-            item_action_move_metainfo: ((values && values.item_action_move_metainfo) || ''),
-        };
-
-        if (!payload.asset) {
-            throw new Error('Asset cannot be empty');
+        const payload = { ...(values || {}) };
+        if (Object.prototype.hasOwnProperty.call(payload, 'asset')) {
+            payload.asset = String(payload.asset || '').trim();
         }
-        if (!payload.item_action) {
-            throw new Error('Item action cannot be empty');
+        if (Object.prototype.hasOwnProperty.call(payload, 'filter')) {
+            payload.filter = String(payload.filter || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'item_action')) {
+            payload.item_action = normalizeItemActionToApi(String(payload.item_action || '').trim());
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'item_action_move_metainfo')) {
+            payload.item_action_move_metainfo = String(payload.item_action_move_metainfo || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'sp_tenant_id')) {
+            payload.sp_tenant_id = String(payload.sp_tenant_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'sp_client_id')) {
+            payload.sp_client_id = String(payload.sp_client_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'sp_client_secret')) {
+            payload.sp_client_secret = String(payload.sp_client_secret || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'sp_webhook_enabled')) {
+            if (typeof payload.sp_webhook_enabled === 'string') {
+                payload.sp_webhook_enabled = payload.sp_webhook_enabled.trim().toLowerCase() === 'true';
+            } else {
+                payload.sp_webhook_enabled = !!payload.sp_webhook_enabled;
+            }
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'webhook_base_url')) {
+            payload.webhook_base_url = String(payload.webhook_base_url || '').trim();
         }
 
         const res = await fetch(r.connectors.configUpdate(uuid), {
@@ -2747,32 +2773,60 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const modal = document.getElementById('configModal');
         const title = document.getElementById('configModalTitle');
         const content = document.getElementById('configModalContent');
+        const devBadgeHtml = isDevAppEnv()
+            ? ' <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">DEV</span>'
+            : '';
 
-        title.textContent = `Configuration: ${connectorName}`;
+        title.innerHTML = `Configuration: ${escHtml(connectorName)}${devBadgeHtml}`;
         content.innerHTML = 'Loading configuration...';
         modal.style.display = 'block';
 
         try {
+            if (!currentAppEnv || currentAppEnv === 'unknown') {
+                try {
+                    const coreRes = await fetch(api('config'));
+                    if (coreRes.ok) {
+                        const coreCfg = await coreRes.json();
+                        currentAppEnv = (coreCfg && coreCfg.app_env) ? String(coreCfg.app_env) : currentAppEnv;
+                    }
+                } catch {}
+            }
             const response = await fetch(r.connectors.config(uuid));
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             const config = await response.json();
+            const devMode = isDevAppEnv();
+            const maskedSecret = String(config.sp_client_secret || '').trim() === '**********';
+            let spClientSecretPresent = maskedSecret;
             const original = {
                 asset: config.asset_display_name || config.resolved_asset_base || config.asset || '',
                 filter: config.filter || '',
                 item_action: normalizeItemActionFromApi(config.item_action || 'nothing'),
                 item_action_move_metainfo: (config.item_action_move_metainfo || ''),
+                sp_tenant_id: String(config.sp_tenant_id || ''),
+                sp_client_id: String(config.sp_client_id || ''),
+                sp_client_secret: maskedSecret ? '' : String(config.sp_client_secret || ''),
+                sp_webhook_enabled: !!config.sp_webhook_enabled,
+                webhook_base_url: String(config.webhook_base_url || ''),
             };
 
-            const editable = new Set(['asset', 'filter', 'item_action', 'item_action_move_metainfo']);
-            const configKeys = ['asset', 'filter', 'item_action', 'item_action_move_metainfo'];
+            const sharepointKeys = ['sp_tenant_id', 'sp_client_id', 'sp_client_secret', 'sp_webhook_enabled', 'webhook_base_url'];
+            const isSharepointConnector = String(connectorName || '').toLowerCase().includes('sharepoint') || ('sp_tenant_id' in config);
+            const configKeys = [
+                'asset',
+                'filter',
+                'item_action',
+                'item_action_move_metainfo',
+                ...(isSharepointConnector ? sharepointKeys : []),
+            ].filter((k) => (k in config) || (k in original));
+            const editable = devMode ? new Set(configKeys) : new Set();
             const runtimeKeys = ['name', 'display_name', 'display_icon', 'uuid', 'meta_info', 'url', 'status', 'asset_display_name', 'resolved_asset_base'];
             const repoDiagKeys = ['last_repo_check_ts', 'last_repo_check_reason', 'last_repo_check_message'];
 
             function rowValueHtml(v) {
-                if (v === null || v === undefined || v === "") return "<span style=\"color:var(--text-secondary)\">null</span>";
+                if (v === null || v === undefined) return "<span style=\"color:var(--text-secondary)\">null</span>";
                 return escHtml(String(v));
             }
 
@@ -2781,6 +2835,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 if (key === "filter") return original.filter;
                 if (key === "item_action") return original.item_action;
                 if (key === "item_action_move_metainfo") return original.item_action_move_metainfo;
+                if (key === "sp_tenant_id") return original.sp_tenant_id;
+                if (key === "sp_client_id") return original.sp_client_id;
+                if (key === "sp_client_secret") return maskedSecret ? "**********" : original.sp_client_secret;
+                if (key === "sp_webhook_enabled") return original.sp_webhook_enabled ? "true" : "false";
+                if (key === "webhook_base_url") return original.webhook_base_url;
                 return v;
             }
 
@@ -2815,9 +2874,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                   <div id="previewList" style="margin-bottom: 0.6rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
 
                   <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
-                    <button id="btn-save-config" style="font-size:0.8rem;">Save Configuration</button>
+                    <button id="btn-save-config" style="font-size:0.8rem;" ${devMode ? '' : 'disabled'}>Save Configuration</button>
                     <span id="cfg-save-status" style="font-size:0.8rem; color: var(--text-secondary);"></span>
                   </div>
+                  ${devMode ? '' : '<div style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.45rem;">Config editing is available only when AppEnv is set to <code>dev</code>.</div>'}
                 </div>
             `;
 
@@ -2836,7 +2896,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     </table>
                   </div>
                 </div>
-                <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px;">Tip: click editable rows in the Configuration section to edit values inline. Changes are staged until you click Save Configuration.</div>
+                <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px;">${devMode ? 'Tip: click editable rows in the Configuration section to edit values inline. Changes are staged until you click Save Configuration.' : 'Configuration is read-only in this environment.'}</div>
 
                 ${actionPanel}
 
@@ -2872,7 +2932,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 filter: String(original.filter || ''),
                 item_action: String(original.item_action || 'nothing').toLowerCase(),
                 item_action_move_metainfo: String(original.item_action_move_metainfo || ''),
+                sp_tenant_id: String(original.sp_tenant_id || ''),
+                sp_client_id: String(original.sp_client_id || ''),
+                sp_client_secret: String(original.sp_client_secret || ''),
+                sp_webhook_enabled: !!original.sp_webhook_enabled,
+                webhook_base_url: String(original.webhook_base_url || ''),
             };
+            const editableKeys = Array.from(editable);
 
             function getCurrentValues() {
                 return {
@@ -2880,15 +2946,28 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     filter: String(configDraft.filter || ''),
                     item_action: String(configDraft.item_action || '').trim(),
                     item_action_move_metainfo: String(configDraft.item_action_move_metainfo || ''),
+                    sp_tenant_id: String(configDraft.sp_tenant_id || '').trim(),
+                    sp_client_id: String(configDraft.sp_client_id || '').trim(),
+                    sp_client_secret: String(configDraft.sp_client_secret || ''),
+                    sp_webhook_enabled: !!configDraft.sp_webhook_enabled,
+                    webhook_base_url: String(configDraft.webhook_base_url || '').trim(),
                 };
             }
 
             function isDirty() {
                 const cur = getCurrentValues();
-                return cur.asset !== original.asset
-                    || cur.filter !== original.filter
-                    || String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()
-                    || cur.item_action_move_metainfo !== original.item_action_move_metainfo;
+                for (const key of editableKeys) {
+                    if (key === 'item_action') {
+                        if (String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()) return true;
+                        continue;
+                    }
+                    if (key === 'sp_webhook_enabled') {
+                        if (!!cur.sp_webhook_enabled !== !!original.sp_webhook_enabled) return true;
+                        continue;
+                    }
+                    if (String(cur[key] ?? '') !== String(original[key] ?? '')) return true;
+                }
+                return false;
             }
 
             function setTestButtonsEnabled(enabled) {
@@ -2903,6 +2982,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             function refreshDirtyUi() {
                 const dirty = isDirty();
                 setTestButtonsEnabled(!dirty);
+                if (!devMode) {
+                    testHint.textContent = 'Testing uses currently saved settings. Editing is disabled outside AppEnv=dev.';
+                    return;
+                }
                 testHint.textContent = dirty
                     ? 'Save changes to test with current settings.'
                     : 'Testing uses the currently saved settings.';
@@ -2918,21 +3001,32 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
             function syncEditableRows() {
                 const cur = getCurrentValues();
-                setRowDisplayValue('asset', cur.asset);
-                setRowDisplayValue('filter', cur.filter);
-                setRowDisplayValue('item_action', cur.item_action);
-                setRowDisplayValue('item_action_move_metainfo', cur.item_action_move_metainfo);
+                for (const key of editableKeys) {
+                    if (key === 'sp_client_secret') {
+                        setRowDisplayValue(key, (cur.sp_client_secret || spClientSecretPresent) ? '**********' : '');
+                    } else if (key === 'sp_webhook_enabled') {
+                        setRowDisplayValue(key, cur.sp_webhook_enabled ? 'true' : 'false');
+                    } else {
+                        setRowDisplayValue(key, cur[key]);
+                    }
+                }
             }
 
             function closeInlineEditor(commit) {
                 if (!activeInlineEditor) return;
                 const { row, key, editor } = activeInlineEditor;
                 if (commit) {
-                    const nextValue = String(editor.value ?? '');
-                    if (key === 'asset') configDraft.asset = nextValue;
-                    if (key === 'filter') configDraft.filter = nextValue;
-                    if (key === 'item_action') configDraft.item_action = nextValue.toLowerCase();
-                    if (key === 'item_action_move_metainfo') configDraft.item_action_move_metainfo = nextValue;
+                    let nextValue = editor.value;
+                    if (key === 'sp_webhook_enabled') {
+                        configDraft.sp_webhook_enabled = String(nextValue).toLowerCase() === 'true';
+                    } else if (key === 'item_action') {
+                        configDraft.item_action = String(nextValue ?? '').toLowerCase();
+                    } else {
+                        configDraft[key] = String(nextValue ?? '');
+                        if (key === 'sp_client_secret' && String(nextValue ?? '').length > 0) {
+                            spClientSecretPresent = true;
+                        }
+                    }
                 }
                 try { editor.remove(); } catch {}
                 const valueEl = row.querySelector('.cfg-row-value');
@@ -2971,10 +3065,24 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     });
                     editor.addEventListener('change', () => closeInlineEditor(true));
                     editor.addEventListener('blur', () => closeInlineEditor(true));
+                } else if (key === 'sp_webhook_enabled') {
+                    editor = document.createElement('select');
+                    ['true', 'false'].forEach((v) => {
+                        const opt = document.createElement('option');
+                        opt.value = v;
+                        opt.textContent = v;
+                        if (v === String(currentValue).toLowerCase()) opt.selected = true;
+                        editor.appendChild(opt);
+                    });
+                    editor.addEventListener('change', () => closeInlineEditor(true));
+                    editor.addEventListener('blur', () => closeInlineEditor(true));
                 } else {
                     editor = document.createElement('input');
-                    editor.type = 'text';
-                    editor.value = currentValue;
+                    editor.type = key === 'sp_client_secret' ? 'password' : 'text';
+                    editor.value = key === 'sp_client_secret' ? '' : currentValue;
+                    if (key === 'sp_client_secret') {
+                        editor.placeholder = maskedSecret ? 'leave blank to keep existing secret' : '';
+                    }
                     editor.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') {
                             e.preventDefault();
@@ -3034,10 +3142,46 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             });
 
             saveBtn.addEventListener('click', async () => {
+                if (!devMode) {
+                    showNotification('Connector configuration is read-only unless AppEnv=dev', 'warning');
+                    return;
+                }
+                // Ensure any in-place editor value (including password fields) is captured.
+                closeInlineEditor(true);
                 statusEl.textContent = 'Saving...';
                 saveBtn.disabled = true;
                 try {
-                    const saveResp = await saveConnectorConfig(uuid, getCurrentValues());
+                    const cur = getCurrentValues();
+                    const payload = {};
+                    for (const key of editableKeys) {
+                        if (key === 'item_action') {
+                            if (String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()) {
+                                payload.item_action = cur.item_action;
+                            }
+                            continue;
+                        }
+                        if (key === 'sp_webhook_enabled') {
+                            if (!!cur.sp_webhook_enabled !== !!original.sp_webhook_enabled) {
+                                payload.sp_webhook_enabled = !!cur.sp_webhook_enabled;
+                            }
+                            continue;
+                        }
+                        if (key === 'sp_client_secret') {
+                            // Secret is write-only here; blank means "unchanged".
+                            if (String(cur.sp_client_secret || '').length > 0) {
+                                payload.sp_client_secret = cur.sp_client_secret;
+                            }
+                            continue;
+                        }
+                        if (String(cur[key] ?? '') !== String(original[key] ?? '')) {
+                            payload[key] = cur[key];
+                        }
+                    }
+                    if (Object.keys(payload).length === 0) {
+                        statusEl.textContent = 'No changes';
+                        return;
+                    }
+                    const saveResp = await saveConnectorConfig(uuid, payload);
                     statusEl.textContent = 'Saved';
                     const p = (saveResp && saveResp.persistence) ? saveResp.persistence : null;
                     if (p && p.applied) {

@@ -1,10 +1,10 @@
+import os
+from pathlib import Path
 from typing import Optional
 
 from pydantic import HttpUrl, Field, AliasChoices, SecretStr
-from pydantic_settings import BaseSettings
 from shared.models.connector_models import ItemActionEnum
 from connectors.framework.base_config import BaseConnectorConfig
-from pathlib import Path
 from shared.dev_env import load_devenv
 
 class SharepointConnectorConfig(BaseConnectorConfig):
@@ -39,9 +39,21 @@ class SharepointConnectorConfig(BaseConnectorConfig):
     resolved_asset_base: Optional[str] = None
 
     # SharePoint / Graph settings (client-credentials)
-    sp_tenant_id: str = Field(default="", description="Azure AD Tenant ID")
-    sp_client_id: str = Field(default="", description="Azure AD App (client) ID")
-    sp_client_secret: SecretStr = Field(default=SecretStr(""), description="Azure AD App client secret")
+    sp_tenant_id: str = Field(
+        default="",
+        description="Azure AD Tenant ID",
+        validation_alias=AliasChoices("SP_TENANT_ID", "DSXCONNECTOR_SP_TENANT_ID"),
+    )
+    sp_client_id: str = Field(
+        default="",
+        description="Azure AD App (client) ID",
+        validation_alias=AliasChoices("SP_CLIENT_ID", "DSXCONNECTOR_SP_CLIENT_ID"),
+    )
+    sp_client_secret: SecretStr = Field(
+        default=SecretStr(""),
+        description="Azure AD App client secret",
+        validation_alias=AliasChoices("SP_CLIENT_SECRET", "DSXCONNECTOR_SP_CLIENT_SECRET"),
+    )
     sp_hostname: str = Field(default="", description="SharePoint hostname, e.g., contoso.sharepoint.com")
     sp_site_path: str = Field(default="", description="SharePoint site path, e.g., MySiteOrCollection")
     sp_drive_name: Optional[str] = Field(default=None, description="Optional drive name; default drive if omitted")
@@ -64,32 +76,36 @@ class SharepointConnectorConfig(BaseConnectorConfig):
     sp_webhook_enabled: bool = Field(
         default=False,
         description="Enable Microsoft Graph change notifications to auto-trigger scans for new/updated files",
-        validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_ENABLED", "SP_WEBHOOK_ENABLED", "WEBHOOK_ENABLED"),
+        validation_alias=AliasChoices("SP_WEBHOOK_ENABLED", "DSXCONNECTOR_SP_WEBHOOK_ENABLED", "WEBHOOK_ENABLED"),
     )
     sp_webhook_change_types: str = Field(
         default="updated",
         description="Comma-separated Graph change types to subscribe to (e.g., 'created,updated')",
-        validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_CHANGE_TYPES", "SP_WEBHOOK_CHANGE_TYPES", "WEBHOOK_CHANGE_TYPES"),
+        validation_alias=AliasChoices("SP_WEBHOOK_CHANGE_TYPES", "DSXCONNECTOR_SP_WEBHOOK_CHANGE_TYPES", "WEBHOOK_CHANGE_TYPES"),
     )
     sp_webhook_expire_minutes: int = Field(
         default=60,
         description="Subscription expiration window in minutes (Graph max varies by resource; renew happens automatically)",
-        validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_EXPIRE_MINUTES", "SP_WEBHOOK_EXPIRE_MINUTES", "WEBHOOK_EXPIRE_MINUTES"),
+        validation_alias=AliasChoices("SP_WEBHOOK_EXPIRE_MINUTES", "DSXCONNECTOR_SP_WEBHOOK_EXPIRE_MINUTES", "WEBHOOK_EXPIRE_MINUTES"),
     )
     sp_webhook_refresh_seconds: int = Field(
         default=900,
         description="How often to reconcile/renew the Graph subscription (seconds)",
-        validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_REFRESH_SECONDS", "SP_WEBHOOK_REFRESH_SECONDS", "WEBHOOK_REFRESH_SECONDS"),
+        validation_alias=AliasChoices("SP_WEBHOOK_REFRESH_SECONDS", "DSXCONNECTOR_SP_WEBHOOK_REFRESH_SECONDS", "WEBHOOK_REFRESH_SECONDS"),
     )
     sp_webhook_client_state: Optional[SecretStr] = Field(
         default=None,
         description="Optional clientState to require on inbound notifications from Graph",
-        validation_alias=AliasChoices("DSXCONNECTOR_SP_WEBHOOK_CLIENT_STATE", "SP_WEBHOOK_CLIENT_STATE", "WEBHOOK_CLIENT_STATE"),
+        validation_alias=AliasChoices("SP_WEBHOOK_CLIENT_STATE", "DSXCONNECTOR_SP_WEBHOOK_CLIENT_STATE", "WEBHOOK_CLIENT_STATE"),
     )
     webhook_base_url: Optional[str] = Field(
         default=None,
         description="Public HTTPS base URL Graph should call for webhook events (defaults to connector_url)",
         validation_alias=AliasChoices("SP_WEBHOOK_URL", "WEBHOOK_URL", "DSXCONNECTOR_WEBHOOK_URL"),
+    )
+    config_persist_local_only: bool = Field(
+        default=True,
+        description="Persist runtime config updates only when DSXCONNECTOR_ENV_FILE is under ~/.dsx-connect-local",
     )
 
     ### Connector specific configuration
@@ -103,6 +119,112 @@ class SharepointConnectorConfig(BaseConnectorConfig):
 # Singleton with reload capability
 class ConfigManager:
     _config: SharepointConnectorConfig = None
+
+    @classmethod
+    def _effective_env_file(cls) -> Path | None:
+        path_str = os.getenv("DSXCONNECTOR_ENV_FILE")
+        if not path_str:
+            return None
+        try:
+            return Path(path_str).expanduser().resolve()
+        except Exception:
+            try:
+                return Path(path_str).expanduser()
+            except Exception:
+                return None
+
+    @classmethod
+    def _is_local_env_file(cls, env_file: Path) -> bool:
+        try:
+            local_root = (Path.home() / ".dsx-connect-local").resolve()
+            env_resolved = env_file.resolve()
+            return env_resolved == local_root or local_root in env_resolved.parents
+        except Exception:
+            return False
+
+    @classmethod
+    def persist_runtime_overrides(cls, updates: dict[str, str]) -> tuple[bool, str]:
+        cfg = cls.get_config()
+        if not getattr(cfg, "config_persist_local_only", True):
+            return False, "disabled_by_config"
+
+        env_file = cls._effective_env_file()
+        if env_file is None:
+            return False, "no_env_file"
+        if not cls._is_local_env_file(env_file):
+            return False, "env_not_local"
+        if not env_file.exists():
+            return False, "env_file_missing"
+
+        cleaned: dict[str, str] = {}
+        allowed = {
+            "DSXCONNECTOR_ASSET",
+            "DSXCONNECTOR_FILTER",
+            "DSXCONNECTOR_ITEM_ACTION",
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO",
+            "SP_TENANT_ID",
+            "SP_CLIENT_ID",
+            "SP_CLIENT_SECRET",
+            "SP_WEBHOOK_ENABLED",
+            "SP_WEBHOOK_URL",
+        }
+        for k, v in (updates or {}).items():
+            key = str(k or "").strip()
+            if key not in allowed:
+                continue
+            val = str(v if v is not None else "")
+            if "\n" in val or "\r" in val:
+                val = val.replace("\r", " ").replace("\n", " ")
+            cleaned[key] = val
+
+        if not cleaned:
+            return False, "no_supported_updates"
+
+        legacy_aliases = {
+            "SP_TENANT_ID": "DSXCONNECTOR_SP_TENANT_ID",
+            "SP_CLIENT_ID": "DSXCONNECTOR_SP_CLIENT_ID",
+            "SP_CLIENT_SECRET": "DSXCONNECTOR_SP_CLIENT_SECRET",
+            "SP_WEBHOOK_ENABLED": "DSXCONNECTOR_SP_WEBHOOK_ENABLED",
+            "SP_WEBHOOK_URL": "DSXCONNECTOR_WEBHOOK_URL",
+        }
+        # If legacy keys already exist in file, keep them in sync with SP_* values.
+        lines = env_file.read_text(encoding="utf-8").splitlines()
+        existing_keys = set()
+        for line in lines:
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in line:
+                continue
+            k, _sep, _rest = line.partition("=")
+            existing_keys.add(k.strip())
+        for modern, legacy in legacy_aliases.items():
+            if modern in cleaned and legacy in existing_keys:
+                cleaned[legacy] = cleaned[modern]
+
+        seen = set()
+        out: list[str] = []
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in line:
+                out.append(line)
+                continue
+            key, _sep, _rest = line.partition("=")
+            k = key.strip()
+            if k in cleaned:
+                out.append(f"{k}={cleaned[k]}")
+                seen.add(k)
+            else:
+                out.append(line)
+
+        for k, v in cleaned.items():
+            if k not in seen:
+                out.append(f"{k}={v}")
+
+        env_file.write_text("\n".join(out) + "\n", encoding="utf-8")
+        for k, v in cleaned.items():
+            os.environ[k] = v
+
+        return True, str(env_file)
 
     @classmethod
     def get_config(cls) -> SharepointConnectorConfig:

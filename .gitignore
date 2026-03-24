@@ -25,3 +25,5 @@ shared/deploy/certs/*.key
 /connectors/filesystem/data/
 /connectors/filesystem/data/
 /connectors/onedrive/data/
+/dsxa_swift/.build/
+/dsxa_swift/.build/

@@ -5,7 +5,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Request, Path, HTTPException, Depends, status
 from starlette.responses import JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from dsx_connect.connectors import registration
 from dsx_connect.connectors.client import get_connector_client, \
@@ -49,6 +49,8 @@ def get_redis(request: Request):
 
 
 class ConnectorConfigUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     asset: str | None = None
     filter: str | None = None
     item_action: str | None = None

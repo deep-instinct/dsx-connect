@@ -69,7 +69,7 @@ def load_devenv(default_path: Optional[Path] = None,
             key, val = s.split("=", 1)
             key = key.strip()
             val = val.strip().strip('"').strip("'")
-            if key and key not in os.environ:
+            if key and (key not in os.environ or os.environ.get(key, "") == ""):
                 os.environ[key] = val
                 applied += 1
 

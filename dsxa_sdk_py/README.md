@@ -5,13 +5,13 @@ Lightweight Python client for Deep Instinct DSX Application Scanner (DSXA) REST 
 ## Installation
 
 ```bash
-pip install dsxa-sdk
+pip install dsxa-sdk-py
 ```
 
 _Until this package is published to PyPI or an internal index, install via git/path:_
 
 ```bash
-pip install /path/to/dsx-connect/dsxa_sdk
+pip install /path/to/dsx-connect/dsxa_sdk_py
 ```
 
 ## License
@@ -36,7 +36,7 @@ These tests submit the EICAR string and assert a valid scan GUID/verdict.
 ## Quick start
 
 ```python
-from dsxa_sdk import DSXAClient, ScanMode
+from dsxa_sdk_py import DSXAClient, ScanMode
 
 client = DSXAClient(
     base_url="https://scanner.example.com",
@@ -72,7 +72,7 @@ print(verdict.verdict, verdict.verdict_details.reason)
 
 ```python
 import asyncio
-from dsxa_sdk import AsyncDSXAClient
+from dsxa_sdk_py import AsyncDSXAClient
 
 async def main():
     async with AsyncDSXAClient(
@@ -146,16 +146,91 @@ Install the package (e.g., `pip install -e .`) and use the Typer-based CLI for a
 dsxa --help
 
 # Binary scan (single file, sync client)
-dsxa --base-url https://scanner --token $TOKEN scan-binary --file dsxa_sdk/tests/assets/samples/BadMojoResume.pdf --metadata App123 --protected-entity 3
+dsxa --base-url https://scanner --token $TOKEN scan-binary --file dsxa_sdk_py/tests/assets/samples/BadMojoResume.pdf --metadata App123 --protected-entity 3
 
 # Hash scan
 dsxa --base-url https://scanner --token $TOKEN scan-hash --hash e3c8ebdf74e4b7a5...
 
 # Batch scan multiple files (async client, concurrent)
-dsxa --base-url https://scanner scan-files dsxa_sdk/tests/assets/samples/* --concurrency 4
+dsxa --base-url https://scanner scan-files dsxa_sdk_py/tests/assets/samples/* --concurrency 4
 
 # Recursively scan a folder
 dsxa --base-url https://scanner scan-folder ./samples --pattern "**/*.pdf" --concurrency 8
+```
+
+## GUI (macOS first pass)
+
+The SDK now includes a lightweight desktop GUI for:
+- `scan-file`
+- `scan-folder` (folder + glob pattern + concurrency)
+- `scan-hash`
+- `scan-by-path` (submit)
+
+Run from an installed package:
+
+```bash
+dsxa-gui
+```
+
+Run from this repo:
+
+```bash
+cd dsxa_sdk_py
+python -m dsxa_sdk_py.gui
+```
+
+Double-click launcher on macOS:
+
+1. Open `dsxa_sdk_py/scripts/` in Finder.
+2. Double-click `dsxa-gui.command`.
+3. If macOS blocks it initially, allow it in `System Settings -> Privacy & Security`, then run again.
+
+Build a native macOS `.app` bundle with Nuitka:
+
+```bash
+cd dsxa_sdk_py
+pip install nuitka
+python build_macos_app.py --app-name DSXASDK --bundle-name dsxa
+```
+
+`build_macos_app.py` now defaults to the PySide6 backend.  
+Use `--gui-backend tk` only if you explicitly want the legacy Tkinter bundle.
+
+Output defaults to:
+
+```text
+dsxa_sdk_py/dist/macos-apps/
+```
+
+### PySide6 Variant (preview)
+
+A PySide6 implementation is now available at:
+
+```text
+dsxa_sdk_py/dsxa_sdk_py/gui_qt.py
+```
+
+Run it (after installing dependencies):
+
+```bash
+cd dsxa_sdk_py
+pip install PySide6
+python -m dsxa_sdk_py.gui_qt
+```
+
+Build a PySide6 macOS app bundle with Nuitka:
+
+```bash
+cd dsxa_sdk_py
+pip install nuitka PySide6
+python build_macos_app.py --gui-backend qt --app-name DSXASDK-Qt --bundle-name dsxa-qt
+```
+
+Size comparison (once both are built):
+
+```bash
+du -sh dist/macos-apps/dsxa.app
+du -sh dist/macos-apps/dsxa-qt.app
 ```
 
 Environment variables (`DSXA_BASE_URL`, optional `DSXA_AUTH_TOKEN`, optional `DSXA_PROTECTED_ENTITY` which defaults to `1`, `DSXA_VERIFY_TLS`) may be used instead of flags. If DSXA auth is disabled, simply omit `--token` / `DSXA_AUTH_TOKEN`.
@@ -186,10 +261,10 @@ dsxa --context default scan-binary --file sample.pdf
 
 ## Distribution (PyPI or direct)
 
-- Build artifacts: from `dsxa_sdk/` run `python -m build` to produce `dist/dsxa_sdk-<ver>-py3-none-any.whl` and `dist/dsxa_sdk-<ver>.tar.gz`.
+- Build artifacts: from `dsxa_sdk_py/` run `python -m build` to produce `dist/dsxa_sdk_py-<ver>-py3-none-any.whl` and `dist/dsxa_sdk_py-<ver>.tar.gz`.
 - Publish to PyPI/TestPyPI with `python -m twine upload dist/*` (adjust repository URL for TestPyPI or private index).
-- Direct/offline install: share the wheel (or both files) and install with `pip install /path/to/dsxa_sdk-<ver>-py3-none-any.whl`. For fully offline installs (including deps), pre-download deps via `pip download --dest vendor dsxa-sdk` and then install with `pip install --no-index --find-links vendor dsxa-sdk`.
-- GitHub Releases (optional): when you publish a GitHub release, the workflow in `.github/workflows/release-dsxa-sdk.yml` builds the wheel/sdist and attaches them to the release. You can also trigger it manually via the `workflow_dispatch` action; if you omit a tag it will default to `dsxa-sdk-<version from pyproject.toml>`.
+- Direct/offline install: share the wheel (or both files) and install with `pip install /path/to/dsxa_sdk_py-<ver>-py3-none-any.whl`. For fully offline installs (including deps), pre-download deps via `pip download --dest vendor dsxa-sdk-py` and then install with `pip install --no-index --find-links vendor dsxa-sdk-py`.
+- GitHub Releases (optional): when you publish a GitHub release, the workflow in `.github/workflows/release-dsxa-sdk.yml` builds the wheel/sdist and attaches them to the release. You can also trigger it manually via the `workflow_dispatch` action; if you omit a tag it will default to `dsxa-sdk-py-<version from pyproject.toml>`.
 - Docker bundle (manual): use `.github/workflows/bundle-docker-compose.yml` to package `docker_bundle/` as a tar.gz. Trigger via workflow_dispatch; optionally provide a tag to attach it to a GitHub Release, or leave blank to just download the artifact from the run.
 
 ## Features

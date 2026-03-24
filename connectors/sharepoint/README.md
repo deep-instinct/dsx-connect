@@ -50,9 +50,9 @@ Leave `config.py` alone — it contains sane defaults. During development, overr
     - `DSXCONNECTOR_CONNECTOR_URL=https://sharepoint-connector:8620`
     - `DSXCONNECTOR_DSX_CONNECT_URL=https://dsx-connect-api:8586`
     - `DSXCONNECTOR_VERIFY_TLS=false`
-    - `DSXCONNECTOR_SP_TENANT_ID=...`
-    - `DSXCONNECTOR_SP_CLIENT_ID=...`
-    - `DSXCONNECTOR_SP_CLIENT_SECRET=...`
+    - `SP_TENANT_ID=...` (preferred; `DSXCONNECTOR_SP_TENANT_ID` also accepted)
+    - `SP_CLIENT_ID=...` (preferred; `DSXCONNECTOR_SP_CLIENT_ID` also accepted)
+    - `SP_CLIENT_SECRET=...` (preferred; `DSXCONNECTOR_SP_CLIENT_SECRET` also accepted)
     - `DSXCONNECTOR_SP_HOSTNAME=contoso.sharepoint.com`
     - `DSXCONNECTOR_SP_SITE_PATH=MySite`
     - `DSXCONNECTOR_SP_DRIVE_NAME=Documents`
@@ -80,9 +80,9 @@ Artifacts land in `dist/`. The patch/build increments automatically during `rele
 ### Configuration
 
 - Required env vars (can be set via `.env` or compose):
-  - `DSXCONNECTOR_SP_TENANT_ID`: Azure AD Tenant ID
-  - `DSXCONNECTOR_SP_CLIENT_ID`: App (client) ID
-  - `DSXCONNECTOR_SP_CLIENT_SECRET`: App client secret
+  - `SP_TENANT_ID` (preferred): Azure AD Tenant ID (`DSXCONNECTOR_SP_TENANT_ID` also accepted)
+  - `SP_CLIENT_ID` (preferred): App (client) ID (`DSXCONNECTOR_SP_CLIENT_ID` also accepted)
+  - `SP_CLIENT_SECRET` (preferred): App client secret (`DSXCONNECTOR_SP_CLIENT_SECRET` also accepted)
   - `DSXCONNECTOR_ASSET`: SharePoint URL to the library or folder to scan (see below)
   - Optional (auto‑derived from ASSET if omitted):
     - `DSXCONNECTOR_SP_HOSTNAME`: e.g., `contoso.sharepoint.com`

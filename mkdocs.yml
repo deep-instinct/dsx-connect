@@ -183,6 +183,14 @@ nav:
 #      - Troubleshooting: operations/troubleshooting.md
 #      - Upgrades: operations/upgrades.md
 
+  - Developer's Guide:
+      - Overview: developer/index.md
+      - DSXA SDK:
+          - Overview: developer/dsxa-sdk.md
+          - Python Calls: developer/sdk/python.md
+          - Swift Calls: developer/sdk/swift.md
+          - JavaScript SDK (planned): developer/sdk/javascript.md
+
   - Reference:
 #      - Configuration Reference: reference/configuration.md
 #      - Environment Variables: reference/environment.md

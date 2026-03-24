@@ -4,11 +4,11 @@ from pathlib import Path
 
 def ensure_sdk_on_path() -> None:
     """
-    Add the repo root to sys.path so the in-repo dsxa_sdk package can be imported
+    Add the repo root to sys.path so the in-repo dsxa_sdk_py package can be imported
     without installing from PyPI.
     """
     root = Path(__file__).resolve().parents[1]
-    sdk_pkg = root / "dsxa_sdk"
+    sdk_pkg = root / "dsxa_sdk_py"
 
     for path in (sdk_pkg, root):
         path_str = str(path)

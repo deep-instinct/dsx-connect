@@ -1,13 +1,13 @@
-name: DSXA Tauri - Build Desktop Artifacts
+name: DSXA Client
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Optional release tag to upload assets to (e.g., dsxa-tauri-0.1.0)"
+        description: "Release tag to publish to when enabled (e.g., dsxa-client-0.1.0). Leave blank to build artifacts only."
         required: false
       publish_release:
-        description: "Upload artifacts to a GitHub Release (requires tag)."
+        description: "Publish artifacts to a GitHub Release (requires tag in dsxa-client-<version> format)."
         required: true
         type: boolean
         default: false
@@ -97,6 +97,13 @@ jobs:
       - build-windows
     runs-on: ubuntu-latest
     steps:
+      - name: Validate release tag format
+        run: |
+          if [[ ! "${{ inputs.tag }}" =~ ^dsxa-client-[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]]; then
+            echo "Invalid tag '${{ inputs.tag }}'. Expected format: dsxa-client-<version> (e.g., dsxa-client-0.1.0)."
+            exit 1
+          fi
+
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:

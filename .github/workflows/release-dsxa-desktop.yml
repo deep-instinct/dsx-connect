@@ -73,7 +73,14 @@ jobs:
           exit-code: "1"
 
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            arch: intel
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
     needs: security-compliance
     defaults:
       run:
@@ -110,16 +117,16 @@ jobs:
       - name: Collect macOS artifacts
         run: |
           mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Desktop.app" "dist/dsxa-desktop-macos-app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Desktop.app" "dist/dsxa-desktop-macos-${{ matrix.arch }}-app.zip"
           cp ../LICENSE dist/LICENSE
           cp ../NOTICE.md dist/NOTICE.md
 
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsxa_desktop_macos
+          name: dsxa_desktop_macos_${{ matrix.arch }}
           path: |
-            dsxa_tauri/dist/dsxa-desktop-macos-app.zip
+            dsxa_tauri/dist/dsxa-desktop-macos-${{ matrix.arch }}-app.zip
             dsxa_tauri/dist/LICENSE
             dsxa_tauri/dist/NOTICE.md
 
@@ -257,10 +264,16 @@ jobs:
           echo "Using release tag: $RELEASE_TAG"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Download macOS artifact
+      - name: Download macOS Intel artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsxa_desktop_macos
+          name: dsxa_desktop_macos_intel
+          path: dist/release
+
+      - name: Download macOS Apple Silicon artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dsxa_desktop_macos_arm64
           path: dist/release
 
       - name: Download Windows artifact

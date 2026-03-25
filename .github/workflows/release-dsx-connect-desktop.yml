@@ -89,7 +89,6 @@ jobs:
           path: |
             dsx_connect/local/electron_launcher/dist/*.dmg
             dsx_connect/local/electron_launcher/dist/*.zip
-            dsx_connect/local/electron_launcher/dist/mac*/**
             dsx_connect/local/electron_launcher/dist/LICENSE
             dsx_connect/local/electron_launcher/dist/NOTICE.md
 

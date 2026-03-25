@@ -59,7 +59,7 @@ jobs:
       - name: Cargo vulnerability audit
         run: |
           cd src-tauri
-          cargo audit --deny warnings
+          ./scripts/cargo_audit_check.sh
 
       - name: Trivy filesystem scan (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@master

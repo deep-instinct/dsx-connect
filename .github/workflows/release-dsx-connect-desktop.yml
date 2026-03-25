@@ -40,7 +40,7 @@ jobs:
         run: npm ci
 
       - name: NPM vulnerability audit (prod deps)
-        run: npm audit --omit=dev --audit-level=high
+        run: ./scripts/npm_audit_check.sh
 
       - name: Trivy filesystem scan (HIGH/CRITICAL)
         uses: aquasecurity/trivy-action@master

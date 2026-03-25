@@ -111,6 +111,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Verify macOS icon inputs
+        run: |
+          ls -la src-tauri/icons
+          file src-tauri/icons/icon.icns
+          test -f src-tauri/tauri.macos.conf.json
+          cat src-tauri/tauri.macos.conf.json
+
       - name: Build macOS app bundle
         run: npm run tauri:build -- --bundles app
 

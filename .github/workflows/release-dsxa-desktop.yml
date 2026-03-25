@@ -19,8 +19,62 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  security-compliance:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dsxa_tauri
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dsxa_tauri/package-lock.json
+
+      - name: Set up Rust
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          else
+            rustup toolchain install stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: NPM vulnerability audit (prod deps)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo vulnerability audit
+        run: |
+          cd src-tauri
+          cargo audit --deny warnings
+
+      - name: Trivy filesystem scan (HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: dsxa_tauri
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
   build-macos:
     runs-on: macos-latest
+    needs: security-compliance
     defaults:
       run:
         working-directory: dsxa_tauri
@@ -57,15 +111,21 @@ jobs:
         run: |
           mkdir -p dist
           ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Desktop.app" "dist/dsxa-desktop-macos-app.zip"
+          cp ../LICENSE dist/LICENSE
+          cp ../NOTICE.md dist/NOTICE.md
 
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsxa_desktop_macos
-          path: dsxa_tauri/dist/dsxa-desktop-macos-app.zip
+          path: |
+            dsxa_tauri/dist/dsxa-desktop-macos-app.zip
+            dsxa_tauri/dist/LICENSE
+            dsxa_tauri/dist/NOTICE.md
 
   build-linux:
     runs-on: ubuntu-latest
+    needs: security-compliance
     defaults:
       run:
         working-directory: dsxa_tauri
@@ -113,6 +173,8 @@ jobs:
           mkdir -p dist
           cp src-tauri/target/release/bundle/appimage/*.AppImage dist/
           cp src-tauri/target/release/bundle/deb/*.deb dist/
+          cp ../LICENSE dist/LICENSE
+          cp ../NOTICE.md dist/NOTICE.md
 
       - name: Upload Linux workflow artifact
         uses: actions/upload-artifact@v4
@@ -122,6 +184,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    needs: security-compliance
     defaults:
       run:
         working-directory: dsxa_tauri
@@ -162,6 +225,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Copy-Item "src-tauri/target/release/bundle/nsis/*.exe" -Destination dist -Force
           Copy-Item "src-tauri/target/release/bundle/msi/*.msi" -Destination dist -Force
+          Copy-Item "..\\LICENSE" -Destination "dist\\LICENSE" -Force
+          Copy-Item "..\\NOTICE.md" -Destination "dist\\NOTICE.md" -Force
 
       - name: Upload Windows workflow artifact
         uses: actions/upload-artifact@v4

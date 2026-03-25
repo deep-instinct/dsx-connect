@@ -94,8 +94,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: macos-13
-            arch: intel
           - os: macos-latest
             arch: arm64
     runs-on: ${{ matrix.os }}
@@ -288,12 +286,6 @@ jobs:
           fi
           echo "Using release tag: $RELEASE_TAG"
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Download macOS Intel artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dsxa_desktop_macos_intel
-          path: dist/release
 
       - name: Download macOS Apple Silicon artifact
         uses: actions/download-artifact@v4

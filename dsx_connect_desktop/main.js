@@ -335,19 +335,86 @@ async function cleanupConnectorRegistry() {
 
   const connectors = list.data;
   let removed = 0;
+  const failed = [];
   for (const item of connectors) {
     const uuid = item && item.uuid ? String(item.uuid) : '';
     if (!uuid) continue;
     const del = await httpJson('DELETE', `${API_URL}dsx-connect/api/v1/connectors/unregister/${uuid}`);
-    if (del.ok) removed += 1;
+    if (del.ok) {
+      removed += 1;
+    } else {
+      failed.push({
+        uuid,
+        status: del.statusCode,
+        detail: del.data,
+      });
+    }
   }
+
+  // Refresh UI cards after cleanup attempts.
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.reloadIgnoringCache();
+  }
+
+  const failedSummary = failed
+    .slice(0, 5)
+    .map((f) => `- ${f.uuid}: HTTP ${f.status} ${JSON.stringify(f.detail)}`)
+    .join('\n');
+  const more = failed.length > 5 ? `\n...and ${failed.length - 5} more failures` : '';
+  const detail = [
+    `Unregister requests succeeded for ${removed} connector(s).`,
+    `Failed for ${failed.length} connector(s).`,
+    failed.length ? `\nFailure details:\n${failedSummary}${more}` : '',
+  ].join('\n');
 
   dialog.showMessageBox({
     type: 'info',
     title: 'Cleanup Connector Registry',
     message: `Attempted cleanup for ${connectors.length} connector(s).`,
-    detail: `Unregister requests succeeded for ${removed} connector(s).`
+    detail,
   });
+}
+
+async function stopAllLaunchedConnectors() {
+  const items = [...launchedConnectors];
+  let stopped = 0;
+  const failed = [];
+
+  for (const item of items) {
+    const result = await runPythonCommand(item.script, 'stop', [], [
+      '--state-dir',
+      item.stateDir,
+      '--port',
+      String(item.port),
+    ]);
+    if (result.ok) {
+      stopped += 1;
+    } else {
+      failed.push({
+        id: item.id,
+        detail: [result.stdout, result.stderr].filter(Boolean).join('\n'),
+      });
+    }
+  }
+
+  const failedSummary = failed
+    .slice(0, 5)
+    .map((f) => `- ${f.id}: ${f.detail || 'unknown error'}`)
+    .join('\n');
+  const more = failed.length > 5 ? `\n...and ${failed.length - 5} more failures` : '';
+
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Stop All Launched Connectors',
+    message: `Stopped ${stopped}/${items.length} connector(s).`,
+    detail: failed.length ? `Failures:\n${failedSummary}${more}` : 'All connectors stopped successfully.',
+  });
+}
+
+function forgetAllLaunchedConnectors() {
+  launchedConnectors.length = 0;
+  saveLaunchedConnectors();
+  buildAppMenu();
 }
 
 function isPortFree(port, host = '127.0.0.1') {
@@ -576,6 +643,20 @@ function buildAppMenu() {
             cleanupConnectorRegistry().catch((err) => {
               dialog.showErrorBox('Cleanup Connector Registry', String(err && err.message ? err.message : err));
             });
+          }
+        },
+        {
+          label: 'Stop All Launched',
+          click: () => {
+            stopAllLaunchedConnectors().catch((err) => {
+              dialog.showErrorBox('Stop All Launched Connectors', String(err && err.message ? err.message : err));
+            });
+          }
+        },
+        {
+          label: 'Forget All Launched',
+          click: () => {
+            forgetAllLaunchedConnectors();
           }
         },
         { type: 'separator' },

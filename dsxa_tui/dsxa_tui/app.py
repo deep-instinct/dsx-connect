@@ -95,6 +95,7 @@ class DSXATuiApp(App[None]):
         min-width: 40;
         padding: 1;
         border: solid $panel;
+        overflow-y: auto;
     }
 
     #right {

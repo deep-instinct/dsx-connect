@@ -1,14 +1,83 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Optional
 
 from dsxa_sdk_py import DSXAClient
+from textual import events
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Button, Footer, Header, Input, Label, Static, TextArea
+from textual.screen import ModalScreen
+from textual.widgets import Button, DirectoryTree, Footer, Header, Input, Label, Static, TextArea
+
+
+class PathPickerScreen(ModalScreen[Optional[str]]):
+    CSS = """
+    PathPickerScreen {
+        align: center middle;
+    }
+
+    #picker {
+        width: 90%;
+        height: 85%;
+        border: round $accent;
+        background: $surface;
+        padding: 1;
+    }
+
+    #picker_title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+
+    #picker_tree {
+        height: 1fr;
+        border: solid $panel;
+    }
+
+    #picker_help {
+        margin-top: 1;
+        color: $text-muted;
+    }
+    """
+
+    def __init__(self, mode: str = "file", start_path: Optional[str] = None) -> None:
+        super().__init__()
+        self.mode = mode
+        if start_path:
+            expanded = Path(start_path).expanduser()
+            if expanded.exists():
+                root = expanded if expanded.is_dir() else expanded.parent
+            else:
+                root = Path.home()
+        else:
+            root = Path.home()
+        self.root_path = root
+
+    def compose(self) -> ComposeResult:
+        title = "Pick File" if self.mode == "file" else "Pick Folder"
+        with Vertical(id="picker"):
+            yield Label(title, id="picker_title")
+            yield DirectoryTree(str(self.root_path), id="picker_tree")
+            yield Label("Enter: select  Esc: cancel", id="picker_help")
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key == "escape":
+            self.dismiss(None)
+            event.stop()
+
+    def on_directory_tree_file_selected(self, event: DirectoryTree.FileSelected) -> None:
+        if self.mode != "file":
+            return
+        self.dismiss(str(event.path))
+
+    def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
+        if self.mode != "dir":
+            return
+        self.dismiss(str(event.path))
 
 
 class DSXATuiApp(App[None]):
@@ -85,6 +154,9 @@ class DSXATuiApp(App[None]):
 
                 yield Label("File Path")
                 yield Input(placeholder="/path/to/file", id="file_path")
+                with Horizontal():
+                    yield Button("Pick File", id="pick_file")
+                    yield Button("Pick Folder", id="pick_folder")
 
                 yield Label("SHA256 Hash")
                 yield Input(placeholder="hash value", id="hash_value")
@@ -117,6 +189,54 @@ class DSXATuiApp(App[None]):
         else:
             output.text = text
 
+    def _shorten_home(self, p: Path) -> str:
+        try:
+            home = Path.home().resolve()
+            resolved = p.resolve()
+            if resolved == home or home in resolved.parents:
+                rel = resolved.relative_to(home)
+                return f"~/{rel}" if str(rel) != "." else "~"
+        except Exception:
+            pass
+        return str(p)
+
+    def _complete_path(self, raw_value: str) -> tuple[str | None, str]:
+        value = raw_value.strip()
+        if not value:
+            value = "."
+
+        expanded = Path(value).expanduser()
+        has_trailing_sep = raw_value.endswith(os.sep)
+        parent = expanded if has_trailing_sep else (expanded.parent if str(expanded.parent) else Path("."))
+        prefix = "" if has_trailing_sep else expanded.name
+
+        try:
+            if not parent.exists() or not parent.is_dir():
+                return None, "Path parent does not exist"
+            matches = sorted(parent.glob(f"{prefix}*"), key=lambda p: p.name.lower())
+        except Exception as exc:
+            return None, f"Completion error: {exc}"
+
+        if not matches:
+            return None, "No completion matches"
+
+        if len(matches) == 1:
+            target = matches[0]
+            completed = self._shorten_home(target)
+            if target.is_dir() and not completed.endswith(os.sep):
+                completed += os.sep
+            return completed, f"Completed: {target.name}"
+
+        names = [m.name for m in matches]
+        common = os.path.commonprefix(names)
+        if common and common != prefix:
+            completed = parent / common
+            return self._shorten_home(completed), f"Matched {len(matches)} paths"
+
+        preview = ", ".join(names[:5])
+        more = " ..." if len(names) > 5 else ""
+        return None, f"Matches: {preview}{more}"
+
     def _client(self) -> DSXAClient:
         base_url = self.query_one("#base_url", Input).value.strip()
         auth_token = self.query_one("#auth_token", Input).value.strip() or None
@@ -141,6 +261,41 @@ class DSXATuiApp(App[None]):
             self.scan_file()
         elif event.button.id == "scan_hash":
             self.scan_hash()
+        elif event.button.id == "pick_file":
+            self._open_path_picker("file")
+        elif event.button.id == "pick_folder":
+            self._open_path_picker("dir")
+
+    def _open_path_picker(self, mode: str) -> None:
+        current = self.query_one("#file_path", Input).value.strip()
+
+        def _on_pick(result: Optional[str]) -> None:
+            if not result:
+                self._set_status("Path selection canceled", error=False)
+                return
+            value = result
+            if mode == "dir" and not value.endswith(os.sep):
+                value = f"{value}{os.sep}"
+            self.query_one("#file_path", Input).value = value
+            self._set_status(f"Selected: {value}", error=False)
+
+        self.push_screen(PathPickerScreen(mode=mode, start_path=current), _on_pick)
+
+    def on_key(self, event: events.Key) -> None:
+        if event.key != "tab":
+            return
+        focused = self.focused
+        if not isinstance(focused, Input):
+            return
+        if focused.id != "file_path":
+            return
+
+        completed, message = self._complete_path(focused.value)
+        if completed is not None:
+            focused.value = completed
+        self._set_status(message, error=completed is None)
+        event.stop()
+        event.prevent_default()
 
     @work(thread=True)
     def scan_file(self) -> None:

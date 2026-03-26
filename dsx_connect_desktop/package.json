@@ -16,7 +16,7 @@
     "build:linux": "electron-builder --linux AppImage deb --publish never"
   },
   "devDependencies": {
-    "electron": "^31.7.7",
+    "electron": "28.3.3",
     "electron-builder": "^24.13.3"
   },
   "build": {

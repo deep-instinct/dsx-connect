@@ -113,6 +113,7 @@ async function ensureCoreDesktopState() {
     throw new Error(`Failed to initialize core state dir.\n${detail || 'Unknown error'}`);
   }
   upsertEnvValues(CORE_ENV_FILE, {
+    DSXCONNECT_APP_ENV: 'app',
     DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS: 'false'
   });
 }
@@ -206,7 +207,8 @@ function ensureConnectorIdentityEnv(stateDir) {
   const envPath = path.join(stateDir, '.env.local');
   const connectorDataDir = path.join(stateDir, 'data');
   upsertEnvValues(envPath, {
-    DSXCONNECTOR_DATA_DIR: connectorDataDir
+    DSXCONNECTOR_DATA_DIR: connectorDataDir,
+    DSXCONNECTOR_APP_ENV: 'app'
   });
 }
 
@@ -306,6 +308,7 @@ function loadLaunchedConnectors() {
       if (typeof item.stateDir !== 'string' || !item.stateDir) continue;
       const port = Number(item.port);
       if (!Number.isInteger(port) || port <= 0) continue;
+      if (!exists(item.stateDir)) continue;
 
       launchedConnectors.push({
         id: item.id,
@@ -319,6 +322,31 @@ function loadLaunchedConnectors() {
   } catch (err) {
     console.error('Failed to load launched connectors:', err);
   }
+}
+
+async function cleanupConnectorRegistry() {
+  const list = await httpJson('GET', `${API_URL}dsx-connect/api/v1/connectors/list`);
+  if (!list.ok || !Array.isArray(list.data)) {
+    const detail = JSON.stringify(list.data, null, 2);
+    dialog.showErrorBox('Cleanup Connector Registry', `Failed to list connectors.\n\n${detail}`);
+    return;
+  }
+
+  const connectors = list.data;
+  let removed = 0;
+  for (const item of connectors) {
+    const uuid = item && item.uuid ? String(item.uuid) : '';
+    if (!uuid) continue;
+    const del = await httpJson('DELETE', `${API_URL}dsx-connect/api/v1/connectors/unregister/${uuid}`);
+    if (del.ok) removed += 1;
+  }
+
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Cleanup Connector Registry',
+    message: `Attempted cleanup for ${connectors.length} connector(s).`,
+    detail: `Unregister requests succeeded for ${removed} connector(s).`
+  });
 }
 
 function isPortFree(port, host = '127.0.0.1') {
@@ -525,13 +553,29 @@ function buildAppMenu() {
           submenu: [
             {
               label: 'Filesystem',
-              click: () => launchConnectorInstance('filesystem')
+              click: () => {
+                launchConnectorInstance('filesystem').catch((err) => {
+                  dialog.showErrorBox('Launch Filesystem Connector', String(err && err.message ? err.message : err));
+                });
+              }
             },
             {
               label: 'SharePoint',
-              click: () => launchConnectorInstance('sharepoint')
+              click: () => {
+                launchConnectorInstance('sharepoint').catch((err) => {
+                  dialog.showErrorBox('Launch SharePoint Connector', String(err && err.message ? err.message : err));
+                });
+              }
             }
           ]
+        },
+        {
+          label: 'Cleanup Registry (stale)',
+          click: () => {
+            cleanupConnectorRegistry().catch((err) => {
+              dialog.showErrorBox('Cleanup Connector Registry', String(err && err.message ? err.message : err));
+            });
+          }
         },
         { type: 'separator' },
         {
@@ -600,7 +644,7 @@ function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     backgroundColor: '#0f1720',
-    title: 'DSX Connect Local',
+    title: 'DSX-Connect Desktop',
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

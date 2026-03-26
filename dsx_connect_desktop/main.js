@@ -18,8 +18,9 @@ const CORE_STATE_DIR = path.join(os.homedir(), '.dsx-connect-local', 'dsx-connec
 const CORE_ENV_FILE = path.join(CORE_STATE_DIR, '.env.local');
 const LAUNCHER_STATE_DIR = path.join(CORE_STATE_DIR, 'launcher');
 const LAUNCHED_CONNECTORS_FILE = path.join(LAUNCHER_STATE_DIR, 'launched-connectors.json');
+const APP_DISPLAY_NAME = 'DSX-Connect Desktop';
 
-app.setName('DSX-Connect Desktop');
+app.setName(APP_DISPLAY_NAME);
 
 let mainWindow = null;
 let coreProcess = null;
@@ -510,7 +511,7 @@ function buildAppMenu() {
 
   const template = [
     {
-      label: app.name,
+      label: APP_DISPLAY_NAME,
       submenu: [
         { role: 'about' },
         { type: 'separator' },
@@ -521,7 +522,7 @@ function buildAppMenu() {
         { role: 'unhide' },
         { type: 'separator' },
         {
-          label: `Quit ${app.name}`,
+          label: `Quit ${APP_DISPLAY_NAME}`,
           role: 'quit'
         }
       ]

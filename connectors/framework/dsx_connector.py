@@ -787,7 +787,9 @@ class DSXConnector:
         try:
             if self._sdk is not None:
                 data = await self._sdk.connectors.unregister(uuid_str)
-                if not data:
+                # Unregister endpoint commonly returns 204 No Content.
+                # Some SDK wrappers normalize that as {}, None, or {"raw": ""}.
+                if not data or (isinstance(data, dict) and not data.get("status") and str(data.get("raw", "")).strip() == ""):
                     return StatusResponse(
                         status=StatusResponseEnum.SUCCESS,
                         message="Unregistered",
@@ -806,7 +808,14 @@ class DSXConnector:
                 return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Unregistered",
                                       description=f"Removed {self.connector_running_model.url} : {self.connector_running_model.uuid}")
             resp.raise_for_status()
-            return StatusResponse(**resp.json())
+            payload = resp.json()
+            if not payload or (isinstance(payload, dict) and not payload.get("status") and str(payload.get("raw", "")).strip() == ""):
+                return StatusResponse(
+                    status=StatusResponseEnum.SUCCESS,
+                    message="Unregistered",
+                    description=f"Removed {self.connector_running_model.url} : {self.connector_running_model.uuid}",
+                )
+            return StatusResponse(**payload)
         except Exception as e:
             status_code = getattr(e, "status_code", None)
             if status_code:

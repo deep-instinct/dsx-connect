@@ -122,6 +122,12 @@ nav:
 
   - Core Concepts:
       - Architecture Overview: concepts/architecture.md
+      - Scope Engine RFC: architecture/scope-engine-rfc.md
+      - Job Model RFC: architecture/job-model-rfc.md
+      - PostgreSQL Control-Plane Schema RFC: architecture/control-plane-schema-rfc.md
+      - Outcome Taxonomy RFC: architecture/outcome-taxonomy-rfc.md
+      - Full Scan Pipeline: architecture/full-scan-pipeline.md
+      - Scope Engine Migration Checklist: architecture/scope-engine-migration-checklist.md
       - Connector Model: concepts/connectors.md
       - Authentication Model: concepts/authentication.md
       - TLS / HTTPS Model: concepts/tls.md
@@ -183,13 +189,13 @@ nav:
 #      - Troubleshooting: operations/troubleshooting.md
 #      - Upgrades: operations/upgrades.md
 
-  - Developer's Guide:
-      - Overview: developer/index.md
-      - DSXA SDK:
-          - Overview: developer/dsxa-sdk.md
-          - Python Calls: developer/sdk/python.md
-          - Swift Calls: developer/sdk/swift.md
-          - JavaScript SDK (planned): developer/sdk/javascript.md
+#  - Developer's Guide:
+#      - Overview: developer/index.md
+#      - DSXA SDK:
+#          - Overview: developer/dsxa-sdk.md
+#          - Python Calls: developer/sdk/python.md
+#          - Swift Calls: developer/sdk/swift.md
+#          - JavaScript SDK (planned): developer/sdk/javascript.md
 
   - Reference:
 #      - Configuration Reference: reference/configuration.md

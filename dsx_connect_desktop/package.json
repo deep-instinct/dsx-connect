@@ -8,6 +8,8 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
+    "build:mac:dir": "electron-builder --mac dir --publish never",
+    "start:mac:app": "open \"dist/mac/DSX-Connect Desktop.app\"",
     "security:audit": "./scripts/npm_audit_check.sh",
     "build:mac": "electron-builder --mac --publish never",
     "build:win": "electron-builder --win nsis --publish never",

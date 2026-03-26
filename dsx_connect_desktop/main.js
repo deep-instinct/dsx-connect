@@ -26,6 +26,27 @@ let mainWindow = null;
 let coreProcess = null;
 const launchedConnectors = [];
 
+function refreshEmbeddedUi() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.reloadIgnoringCache();
+}
+
+async function resetEmbeddedUiState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    await mainWindow.webContents.executeJavaScript(`
+      try { localStorage.removeItem('lastScansByConnector'); } catch {}
+      try { localStorage.removeItem('activeJobs'); } catch {}
+      true;
+    `, true);
+  } catch {}
+  try {
+    const ses = mainWindow.webContents.session;
+    await ses.clearCache();
+  } catch {}
+  refreshEmbeddedUi();
+}
+
 function exists(p) {
   try {
     return fs.existsSync(p);
@@ -353,7 +374,7 @@ async function cleanupConnectorRegistry() {
 
   // Refresh UI cards after cleanup attempts.
   if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.reloadIgnoringCache();
+    refreshEmbeddedUi();
   }
 
   const failedSummary = failed
@@ -415,6 +436,7 @@ function forgetAllLaunchedConnectors() {
   launchedConnectors.length = 0;
   saveLaunchedConnectors();
   buildAppMenu();
+  refreshEmbeddedUi();
 }
 
 function isPortFree(port, host = '127.0.0.1') {
@@ -563,6 +585,7 @@ function buildConnectorItemSubmenu(item) {
         if (idx >= 0) launchedConnectors.splice(idx, 1);
         saveLaunchedConnectors();
         buildAppMenu();
+        refreshEmbeddedUi();
       }
     }
   ];
@@ -657,6 +680,14 @@ function buildAppMenu() {
           label: 'Forget All Launched',
           click: () => {
             forgetAllLaunchedConnectors();
+          }
+        },
+        {
+          label: 'Reset UI State',
+          click: () => {
+            resetEmbeddedUiState().catch((err) => {
+              dialog.showErrorBox('Reset UI State', String(err && err.message ? err.message : err));
+            });
           }
         },
         { type: 'separator' },

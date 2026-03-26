@@ -14,7 +14,9 @@ const CORE_MANAGER = path.join(REPO_ROOT, 'dsx_connect', 'local', 'dsx_connect_l
 const FS_MANAGER = path.join(REPO_ROOT, 'connectors', 'filesystem', 'local', 'filesystem_local.py');
 const SP_MANAGER = path.join(REPO_ROOT, 'connectors', 'sharepoint', 'local', 'sharepoint_local.py');
 
-const LAUNCHER_STATE_DIR = path.join(os.homedir(), '.dsx-connect-local', 'electron-launcher');
+const CORE_STATE_DIR = path.join(os.homedir(), '.dsx-connect-local', 'dsx-connect-desktop');
+const CORE_ENV_FILE = path.join(CORE_STATE_DIR, '.env.local');
+const LAUNCHER_STATE_DIR = path.join(CORE_STATE_DIR, 'launcher');
 const LAUNCHED_CONNECTORS_FILE = path.join(LAUNCHER_STATE_DIR, 'launched-connectors.json');
 
 app.setName('DSX-Connect Desktop');
@@ -89,7 +91,7 @@ function waitForHttpReady(url, timeoutMs = 45000, intervalMs = 500) {
 
 function startCore() {
   const python = resolvePython();
-  const args = [CORE_MANAGER, 'start'];
+  const args = [CORE_MANAGER, '--state-dir', CORE_STATE_DIR, 'start'];
 
   coreProcess = spawn(python, args, {
     cwd: REPO_ROOT,
@@ -100,6 +102,18 @@ function startCore() {
 
   coreProcess.on('error', (err) => {
     console.error('Failed to start dsx_connect_local:', err);
+  });
+}
+
+async function ensureCoreDesktopState() {
+  fs.mkdirSync(CORE_STATE_DIR, { recursive: true });
+  const init = await runPythonCommand(CORE_MANAGER, 'init', [], ['--state-dir', CORE_STATE_DIR]);
+  if (!init.ok) {
+    const detail = [init.stdout, init.stderr].filter(Boolean).join('\n');
+    throw new Error(`Failed to initialize core state dir.\n${detail || 'Unknown error'}`);
+  }
+  upsertEnvValues(CORE_ENV_FILE, {
+    DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS: 'false'
   });
 }
 
@@ -568,7 +582,7 @@ function buildAppMenu() {
 function stopCore() {
   return new Promise((resolve) => {
     const python = resolvePython();
-    const args = [CORE_MANAGER, 'stop'];
+    const args = [CORE_MANAGER, '--state-dir', CORE_STATE_DIR, 'stop'];
     const proc = spawn(python, args, {
       cwd: REPO_ROOT,
       env: process.env,
@@ -604,6 +618,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   loadLaunchedConnectors();
   buildAppMenu();
+  await ensureCoreDesktopState();
   startCore();
 
   try {

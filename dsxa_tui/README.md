@@ -24,7 +24,7 @@ pip install -e .
 - Scan a SHA256 hash
 - Show raw DSXA JSON response in the output pane
 - `Tab` completion in the `File Path` field
-- In-app `Pick File` / `Pick Folder` modal selector
+- In-app `Select File` / `Select Folder` modal selector
 
 ## Next
 

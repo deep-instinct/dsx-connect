@@ -58,7 +58,7 @@ class PathPickerScreen(ModalScreen[Optional[str]]):
         self.root_path = root
 
     def compose(self) -> ComposeResult:
-        title = "Pick File" if self.mode == "file" else "Pick Folder"
+        title = "Select File" if self.mode == "file" else "Select Folder"
         with Vertical(id="picker"):
             yield Label(title, id="picker_title")
             yield DirectoryTree(str(self.root_path), id="picker_tree")
@@ -155,8 +155,8 @@ class DSXATuiApp(App[None]):
                 yield Label("File Path")
                 yield Input(placeholder="/path/to/file", id="file_path")
                 with Horizontal():
-                    yield Button("Pick File", id="pick_file")
-                    yield Button("Pick Folder", id="pick_folder")
+                    yield Button("Select File", id="select_file")
+                    yield Button("Select Folder", id="select_folder")
 
                 yield Label("SHA256 Hash")
                 yield Input(placeholder="hash value", id="hash_value")
@@ -261,9 +261,9 @@ class DSXATuiApp(App[None]):
             self.scan_file()
         elif event.button.id == "scan_hash":
             self.scan_hash()
-        elif event.button.id == "pick_file":
+        elif event.button.id == "select_file":
             self._open_path_picker("file")
-        elif event.button.id == "pick_folder":
+        elif event.button.id == "select_folder":
             self._open_path_picker("dir")
 
     def _open_path_picker(self, mode: str) -> None:
@@ -293,6 +293,7 @@ class DSXATuiApp(App[None]):
         completed, message = self._complete_path(focused.value)
         if completed is not None:
             focused.value = completed
+            focused.cursor_position = len(completed)
         self._set_status(message, error=completed is None)
         event.stop()
         event.prevent_default()

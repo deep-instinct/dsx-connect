@@ -1,0 +1,21 @@
+[project]
+name = "dsxa-tui"
+version = "0.1.0"
+description = "Terminal UI for DSXA using dsxa-sdk-py"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "textual>=0.76.0",
+  "dsxa-sdk-py>=0.1.7",
+]
+
+[project.scripts]
+dsxa-tui = "dsxa_tui.app:run"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dsxa_tui*"]

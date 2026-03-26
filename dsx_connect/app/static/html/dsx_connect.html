@@ -310,6 +310,45 @@
             background: var(--bg-primary);
             color: var(--text-primary);
         }
+        .arch-preview-panel {
+            margin-top: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-primary);
+            padding: 0.9rem;
+        }
+        .arch-preview-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .arch-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+        .arch-preview-grid button {
+            width: 100%;
+            font-size: 0.78rem;
+            padding: 0.4rem 0.5rem;
+        }
+        .arch-preview-output {
+            margin: 0;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 0.6rem;
+            max-height: 260px;
+            overflow: auto;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
     </style>
 </head>
 <body>
@@ -346,6 +385,26 @@
 <div class="main-content">
     <h2>Connectors</h2>
     <div id="connectorsGrid" class="grid">Loading connectors...</div>
+    <section id="archPreviewPanel" class="arch-preview-panel" style="display:none;">
+        <div class="arch-preview-head">
+            <h3 style="font-size: 1rem; margin: 0;">Architecture Preview</h3>
+            <span id="archPreviewEnv" style="font-size:0.78rem; color:var(--text-secondary);">app_env=unknown</span>
+        </div>
+        <div class="arch-preview-grid">
+            <button id="archScopeStatusBtn" type="button">Scope Preview Status</button>
+            <button id="archScopeCreateBtn" type="button">Create Sample Scope</button>
+            <button id="archScopeListBtn" type="button">List Scopes</button>
+            <button id="archScopeMatchBtn" type="button">Match Sample Resource</button>
+            <button id="archJobStatusBtn" type="button">Job Preview Status</button>
+            <button id="archJobEnvelopeBtn" type="button">Sample Job Envelope</button>
+            <button id="archJobStartBtn" type="button">Start Sample Full Scan</button>
+            <button id="archJobEnumBtn" type="button">Enumerate Sample Page</button>
+            <button id="archJobMonitorBtn" type="button">Ingest Monitor Event</button>
+            <button id="archJobFinalizeBtn" type="button">Finalize Last Scan Job</button>
+            <button id="archJobListBtn" type="button">List Preview Jobs</button>
+        </div>
+        <pre id="archPreviewOutput" class="arch-preview-output">Preview output will appear here.</pre>
+    </section>
 
     <div style="margin-top: 1.5rem;"></div>
 
@@ -469,6 +528,19 @@
             meta: {
                 info: () => api('meta'),
             },
+            preview: {
+                scopeStatus: () => api('scope-engine/preview'),
+                scopeList: () => api('scope-engine/preview/scopes'),
+                scopeCreate: () => api('scope-engine/preview/scopes'),
+                scopeMatch: () => api('scope-engine/preview/match'),
+                jobStatus: () => api('job-model/preview'),
+                jobEnvelopeSample: () => api('job-model/preview/envelope/sample'),
+                jobList: () => api('job-model/preview/jobs'),
+                jobStartFullScan: () => api('job-model/preview/full-scan/start'),
+                jobEnumerate: () => api('job-model/preview/full-scan/enumerate'),
+                jobMonitorIngest: () => api('job-model/preview/monitor/ingest'),
+                jobFinalize: () => api('job-model/preview/scan/finalize'),
+            },
     };
 
     // ===== GLOBAL VARIABLES =====
@@ -502,6 +574,11 @@
     let jobFocusJobId = '';
     let jobMeta = {};
     let currentAppEnv = 'unknown';
+    let currentUiCaps = {};
+    let archPreviewWired = false;
+    let archPreviewScopeSample = null;
+    let archPreviewFullScanJobId = '';
+    let archPreviewLastScanObjectJobId = '';
     try { jobMeta = JSON.parse(localStorage.getItem('jobMeta') || '{}'); } catch { jobMeta = {}; }
     // Note: No polling-based summary; progress updates come via scan-result SSE.
 
@@ -518,6 +595,236 @@
 
     function isDevAppEnv() {
         return String(currentAppEnv || '').trim().toLowerCase() === 'dev';
+    }
+    function isExpAppEnv() {
+        return String(currentAppEnv || '').trim().toLowerCase() === 'exp';
+    }
+    function uiCap(name, fallback = false) {
+        if (!currentUiCaps || typeof currentUiCaps !== 'object') return fallback;
+        const v = currentUiCaps[name];
+        return typeof v === 'boolean' ? v : fallback;
+    }
+    function isFilesystemConnectorName(name) {
+        return String(name || '').trim().toLowerCase().includes('filesystem');
+    }
+    function canEditConnectorConfig(connectorName) {
+        if (!uiCap('allow_connector_config_edit', false)) return false;
+        const scope = String((currentUiCaps && currentUiCaps.connector_config_edit_scope) || 'none').toLowerCase();
+        if (scope === 'all') return true;
+        if (scope === 'filesystem_only') return isFilesystemConnectorName(connectorName);
+        return false;
+    }
+
+    function setArchPreviewVisibility() {
+        const panel = document.getElementById('archPreviewPanel');
+        const env = document.getElementById('archPreviewEnv');
+        if (!panel || !env) return;
+        env.textContent = `app_env=${String(currentAppEnv || 'unknown')}`;
+        panel.style.display = uiCap('show_arch_preview', false) ? '' : 'none';
+    }
+
+    function setArchPreviewOutput(data, replace = false) {
+        const out = document.getElementById('archPreviewOutput');
+        if (!out) return;
+        const rendered = (typeof data === 'string') ? data : JSON.stringify(data, null, 2);
+        if (replace) {
+            out.textContent = rendered;
+        } else {
+            const prefix = out.textContent && out.textContent !== 'Preview output will appear here.' ? '\n\n' : '';
+            out.textContent = `${out.textContent === 'Preview output will appear here.' ? '' : out.textContent}${prefix}${rendered}`;
+        }
+        out.scrollTop = out.scrollHeight;
+    }
+
+    async function callArchPreview(url, method = 'GET', body = null) {
+        const opts = { method, headers: {} };
+        if (body !== null) {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = JSON.stringify(body);
+        }
+        const res = await fetch(url, opts);
+        const text = await res.text();
+        let parsed = {};
+        try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = { raw: text || '' }; }
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}: ${typeof parsed?.detail === 'string' ? parsed.detail : JSON.stringify(parsed)}`);
+        }
+        return parsed;
+    }
+
+    function wireArchitecturePreviewPanel() {
+        if (archPreviewWired) return;
+        const panel = document.getElementById('archPreviewPanel');
+        if (!panel) return;
+
+        const bind = (id, fn) => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('click', fn);
+        };
+
+        bind('archScopeStatusBtn', async () => {
+            try {
+                const data = await callArchPreview(r.preview.scopeStatus());
+                setArchPreviewOutput(data, true);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'scope_status', error: e.message }, true);
+            }
+        });
+
+        bind('archScopeCreateBtn', async () => {
+            const sample = {
+                integration_id: 'preview-integration',
+                platform: 'filesystem',
+                container: 'local',
+                scope_type: 'path',
+                resource: `/preview/${Date.now()}`,
+                filter: '**/*',
+                mode: 'monitor',
+                remediation_action: 'nothing',
+                enabled: true,
+                display_name: 'preview-scope',
+            };
+            try {
+                const data = await callArchPreview(r.preview.scopeCreate(), 'POST', sample);
+                archPreviewScopeSample = data?.scope || null;
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'scope_create', sample, error: e.message });
+            }
+        });
+
+        bind('archScopeListBtn', async () => {
+            try {
+                const data = await callArchPreview(r.preview.scopeList());
+                setArchPreviewOutput(data, true);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'scope_list', error: e.message }, true);
+            }
+        });
+
+        bind('archScopeMatchBtn', async () => {
+            const probe = archPreviewScopeSample ? {
+                integration_id: archPreviewScopeSample.integration_id,
+                platform: archPreviewScopeSample.platform,
+                container: archPreviewScopeSample.container,
+                scope_type: archPreviewScopeSample.scope_type,
+                resource: archPreviewScopeSample.resource,
+            } : {
+                integration_id: 'preview-integration',
+                platform: 'filesystem',
+                container: 'local',
+                scope_type: 'path',
+                resource: '/preview/default',
+            };
+            try {
+                const data = await callArchPreview(r.preview.scopeMatch(), 'POST', probe);
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'scope_match', probe, error: e.message });
+            }
+        });
+
+        bind('archJobStatusBtn', async () => {
+            try {
+                const data = await callArchPreview(r.preview.jobStatus());
+                setArchPreviewOutput(data, true);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_status', error: e.message }, true);
+            }
+        });
+
+        bind('archJobEnvelopeBtn', async () => {
+            try {
+                const data = await callArchPreview(r.preview.jobEnvelopeSample());
+                setArchPreviewOutput(data, true);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_envelope_sample', error: e.message }, true);
+            }
+        });
+
+        bind('archJobStartBtn', async () => {
+            const scopeId = (archPreviewScopeSample && archPreviewScopeSample.scope_id) ? archPreviewScopeSample.scope_id : 'preview-scope';
+            const body = {
+                integration_id: 'preview-integration',
+                scope_id: scopeId,
+                requested_by: 'ui-dev-preview',
+            };
+            try {
+                const data = await callArchPreview(r.preview.jobStartFullScan(), 'POST', body);
+                archPreviewFullScanJobId = data?.job?.job_id || data?.active_job_id || '';
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_start_full_scan', body, error: e.message });
+            }
+        });
+
+        bind('archJobEnumBtn', async () => {
+            const body = {
+                full_scan_job_id: archPreviewFullScanJobId || '',
+                discovered_object_ids: [`file-${Date.now()}`, `file-${Date.now() + 1}`],
+                continuation_token: null,
+            };
+            if (!body.full_scan_job_id) {
+                setArchPreviewOutput({ action: 'job_enumerate', error: 'Start sample full scan first.' });
+                return;
+            }
+            try {
+                const data = await callArchPreview(r.preview.jobEnumerate(), 'POST', body);
+                const firstScan = Array.isArray(data?.scan_jobs) && data.scan_jobs.length ? data.scan_jobs[0] : null;
+                archPreviewLastScanObjectJobId = firstScan?.job_id || archPreviewLastScanObjectJobId;
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_enumerate', body, error: e.message });
+            }
+        });
+
+        bind('archJobMonitorBtn', async () => {
+            const body = {
+                integration_id: 'preview-integration',
+                scope_id: (archPreviewScopeSample && archPreviewScopeSample.scope_id) ? archPreviewScopeSample.scope_id : null,
+                resource_identity: `/preview/monitor/${Date.now()}`,
+                should_scan: true,
+                reason: 'monitoring',
+            };
+            try {
+                const data = await callArchPreview(r.preview.jobMonitorIngest(), 'POST', body);
+                const scanJob = data?.scan_job;
+                if (scanJob?.job_id) archPreviewLastScanObjectJobId = scanJob.job_id;
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_monitor_ingest', body, error: e.message });
+            }
+        });
+
+        bind('archJobFinalizeBtn', async () => {
+            const body = {
+                scan_object_job_id: archPreviewLastScanObjectJobId || '',
+                verdict: 'malicious',
+                remediation_required: true,
+                notifications_required: true,
+            };
+            if (!body.scan_object_job_id) {
+                setArchPreviewOutput({ action: 'job_finalize', error: 'Create or ingest a scan object job first.' });
+                return;
+            }
+            try {
+                const data = await callArchPreview(r.preview.jobFinalize(), 'POST', body);
+                setArchPreviewOutput(data);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_finalize', body, error: e.message });
+            }
+        });
+
+        bind('archJobListBtn', async () => {
+            try {
+                const data = await callArchPreview(r.preview.jobList());
+                setArchPreviewOutput(data, true);
+            } catch (e) {
+                setArchPreviewOutput({ action: 'job_list', error: e.message }, true);
+            }
+        });
+
+        archPreviewWired = true;
     }
 
     // UUID-based action button updater
@@ -1048,12 +1355,18 @@
             .then(res => res.json())
             .then(data => {
                 currentAppEnv = (data && data.app_env) ? String(data.app_env) : 'unknown';
+                currentUiCaps = (data && data.ui_capabilities && typeof data.ui_capabilities === 'object')
+                    ? data.ui_capabilities
+                    : {};
                 document.getElementById('configTree').innerHTML = renderCoreConfig(data);
                 wireCoreConfigActions();
+                setArchPreviewVisibility();
             })
             .catch(() => {
                 currentAppEnv = 'unknown';
+                currentUiCaps = {};
                 document.getElementById('configTree').textContent = 'Error loading configuration.';
+                setArchPreviewVisibility();
             });
     }
 
@@ -2773,11 +3086,12 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const modal = document.getElementById('configModal');
         const title = document.getElementById('configModalTitle');
         const content = document.getElementById('configModalContent');
-        const devBadgeHtml = isDevAppEnv()
-            ? ' <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">DEV</span>'
+        const editScope = String((currentUiCaps && currentUiCaps.connector_config_edit_scope) || '').toLowerCase();
+        const capBadgeHtml = uiCap('allow_connector_config_edit', false)
+            ? ` <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">EDIT:${escHtml(editScope || 'all')}</span>`
             : '';
 
-        title.innerHTML = `Configuration: ${escHtml(connectorName)}${devBadgeHtml}`;
+        title.innerHTML = `Configuration: ${escHtml(connectorName)}${capBadgeHtml}`;
         content.innerHTML = 'Loading configuration...';
         modal.style.display = 'block';
 
@@ -2797,7 +3111,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             }
 
             const config = await response.json();
-            const devMode = isDevAppEnv();
+            const devMode = canEditConnectorConfig(connectorName);
             const maskedSecret = String(config.sp_client_secret || '').trim() === '**********';
             let spClientSecretPresent = maskedSecret;
             const original = {
@@ -2877,7 +3191,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     <button id="btn-save-config" style="font-size:0.8rem;" ${devMode ? '' : 'disabled'}>Save Configuration</button>
                     <span id="cfg-save-status" style="font-size:0.8rem; color: var(--text-secondary);"></span>
                   </div>
-                  ${devMode ? '' : '<div style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.45rem;">Config editing is available only when AppEnv is set to <code>dev</code>.</div>'}
+                  ${devMode ? '' : '<div style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.45rem;">Config editing is disabled for this connector in the current environment.</div>'}
                 </div>
             `;
 
@@ -2983,7 +3297,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 const dirty = isDirty();
                 setTestButtonsEnabled(!dirty);
                 if (!devMode) {
-                    testHint.textContent = 'Testing uses currently saved settings. Editing is disabled outside AppEnv=dev.';
+                    testHint.textContent = 'Testing uses currently saved settings. Editing is disabled in current mode.';
                     return;
                 }
                 testHint.textContent = dirty
@@ -3143,7 +3457,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
             saveBtn.addEventListener('click', async () => {
                 if (!devMode) {
-                    showNotification('Connector configuration is read-only unless AppEnv=dev', 'warning');
+                    showNotification('Connector configuration is read-only for this connector in current mode', 'warning');
                     return;
                 }
                 // Ensure any in-place editor value (including password fields) is captured.
@@ -3293,6 +3607,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         setTheme(savedTheme);
 
         initializeModals();
+        wireArchitecturePreviewPanel();
         fetchConfig();
         fetchConnectors();
         initializeSSEConnections();

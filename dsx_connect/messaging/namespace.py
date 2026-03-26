@@ -4,7 +4,7 @@ from typing import Final
 
 try:
     from dsx_connect.config import get_config
-    ENV: Final = str(get_config().app_env.value) # "dev" | "stg" | "prod"
+    ENV: Final = str(get_config().app_env.value) # "exp" | "dev" | "app" | "stg" | "prod"
 except Exception: # during unit tests, scripts, etc.
     ENV: Final = "dev"
 

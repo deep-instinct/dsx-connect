@@ -146,7 +146,11 @@ def load_policy(env: Optional[AppEnv] = None) -> RetryPolicy:
 
     base = load_base_policy()
 
-    if env == AppEnv.dev:
+    if env == AppEnv.exp:
+        return create_dev_policy(base)
+    elif env == AppEnv.dev:
+        return create_dev_policy(base)
+    elif env == AppEnv.app:
         return create_dev_policy(base)
     elif env == AppEnv.stg:
         return create_staging_policy(base)

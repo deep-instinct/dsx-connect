@@ -21,6 +21,7 @@ from dsx_connect.messaging.bus import Bus
 from dsx_connect.messaging.channels import Channel
 from dsx_connect.messaging.notifiers import Notifiers
 from dsx_connect.messaging.state_keys import job_key
+from dsx_connect.database.control_plane_postgres import ControlPlanePostgresRepo
 
 
 from shared.routes import (
@@ -34,7 +35,7 @@ from dsx_connect.dsxa_client.dsxa_client import DSXAClient
 from shared.dsx_logging import dsx_logging
 
 from dsx_connect.app.dependencies import static_path
-from dsx_connect.app.routers import scan_request, scan_results, connectors, dead_letter, dianna
+from dsx_connect.app.routers import scan_request, scan_results, connectors, dead_letter, dianna, scope_engine_preview, job_model_preview
 from dsx_connect import version
 
 # ---- Helper functions ----
@@ -42,6 +43,46 @@ from dsx_connect import version
 
 class CoreConfigUpdateRequest(BaseModel):
     scan_binary_url: str | None = None
+
+
+def _ui_capabilities(cfg) -> dict:
+    env = str(getattr(getattr(cfg, "app_env", None), "value", getattr(cfg, "app_env", "dev"))).lower()
+    # Capability map keeps UI behavior explicit and avoids hard-coding env checks all over the frontend.
+    if env == "exp":
+        return {
+            "show_arch_preview": True,
+            "allow_connector_config_edit": True,
+            "connector_config_edit_scope": "all",
+            "show_advanced_debug": True,
+        }
+    if env == "dev":
+        return {
+            "show_arch_preview": False,
+            "allow_connector_config_edit": True,
+            "connector_config_edit_scope": "all",
+            "show_advanced_debug": True,
+        }
+    if env == "app":
+        return {
+            "show_arch_preview": False,
+            "allow_connector_config_edit": True,
+            "connector_config_edit_scope": "filesystem_only",
+            "show_advanced_debug": False,
+        }
+    if env == "stg":
+        return {
+            "show_arch_preview": False,
+            "allow_connector_config_edit": False,
+            "connector_config_edit_scope": "none",
+            "show_advanced_debug": False,
+        }
+    # prod default
+    return {
+        "show_arch_preview": False,
+        "allow_connector_config_edit": False,
+        "connector_config_edit_scope": "none",
+        "show_advanced_debug": False,
+    }
 
 
 def _normalize_scanner_base_url(scan_binary_url: str) -> str:
@@ -150,11 +191,32 @@ async def _start_services(app: FastAPI, cfg):
         app.state.notifier = None
         dsx_logging.error(f"Messaging notifier bus startup failed: {e.__class__.__name__}: {e}")
 
+    # 4) Optional PostgreSQL control-plane preview mirror
+    app.state.control_plane_repo = None
+    try:
+        if bool(getattr(getattr(cfg, "features", None), "enable_preview_postgres_mirror", False)):
+            cp_cfg = getattr(cfg, "control_plane_database", None)
+            cp_url = str(getattr(cp_cfg, "url", "") or "").strip()
+            if not cp_url:
+                dsx_logging.warning("Preview PostgreSQL mirror enabled but control-plane database URL is empty.")
+            else:
+                repo = ControlPlanePostgresRepo(
+                    url=cp_url,
+                    auto_apply_schema=bool(getattr(cp_cfg, "auto_apply_schema", False)),
+                )
+                await asyncio.to_thread(repo.initialize)
+                app.state.control_plane_repo = repo
+                dsx_logging.info("Control-plane PostgreSQL preview mirror initialized.")
+    except Exception as e:
+        app.state.control_plane_repo = None
+        dsx_logging.warning(f"Control-plane PostgreSQL preview mirror disabled: {e.__class__.__name__}: {e}")
+
 async def _stop_services(app):
     if getattr(app.state, "registry", None):
         await app.state.registry.stop()
     if getattr(app.state, "redis", None):
         await app.state.redis.aclose()
+    # control_plane_repo is stateless per-operation; no close required.
     # cancel reconnect loop if running
     task = getattr(app.state, "redis_reconnect_task", None)
     if task:
@@ -286,6 +348,7 @@ api = APIRouter(prefix=route_path(API_PREFIX_V1), tags=["core"])
 def get_config_all():
     cfg = get_config()
     payload = cfg.model_dump()
+    payload["ui_capabilities"] = _ui_capabilities(cfg)
     payload["deployment"] = _worker_deployment_summary(cfg)
     try:
         auth_cfg = get_auth_config()
@@ -688,6 +751,8 @@ app.include_router(scan_results.router, tags=["results"])
 app.include_router(connectors.router, tags=["connectors"])
 app.include_router(dianna.router, tags=["dianna"])
 app.include_router(dead_letter.router, tags=["dead-letter"])
+app.include_router(scope_engine_preview.router, tags=["scope-engine-preview"])
+app.include_router(job_model_preview.router, tags=["job-model-preview"])
 
 
 @app.get("/")

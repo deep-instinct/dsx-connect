@@ -23,7 +23,7 @@ def _effective_ttl(default_ttl: int | None = None) -> int:
     try:
         from dsx_connect.config import get_config, AppEnv  # local import to avoid circulars at import time
         cfg = get_config()
-        if getattr(cfg, "app_env", None) == AppEnv.dev:
+        if getattr(cfg, "app_env", None) in (AppEnv.exp, AppEnv.dev, AppEnv.app):
             return 600
     except Exception:
         pass

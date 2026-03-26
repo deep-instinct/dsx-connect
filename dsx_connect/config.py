@@ -11,7 +11,9 @@ from shared.dev_env import load_devenv
 
 
 class AppEnv(str, Enum):
+    exp = "exp"
     dev = "dev"
+    app = "app"
     stg = "stg"
     prod = "prod"
 
@@ -178,6 +180,12 @@ class DiannaConfig(BaseSettings):
         return self
 
 
+class ControlPlaneDatabaseConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_nested_delimiter="__")
+    url: str | None = None
+    auto_apply_schema: bool = False
+
+
 class CeleryTaskConfig(BaseSettings):
     model_config = SettingsConfigDict(env_nested_delimiter="__")
     broker: AnyUrl = "redis://redis:6379/5"
@@ -213,12 +221,16 @@ class DSXConnectConfig(BaseSettings):
     results_database: DatabaseConfig = DatabaseConfig()
     scanner: ScannerConfig = ScannerConfig()
     workers: CeleryTaskConfig = CeleryTaskConfig()
+    control_plane_database: ControlPlaneDatabaseConfig = ControlPlaneDatabaseConfig()
 
     # Feature flags
     class FeatureFlags(BaseSettings):
         model_config = SettingsConfigDict(env_nested_delimiter="__")
         enable_estimate_preflight: bool = False
         enable_approximate_estimates: bool = False
+        enable_scope_engine_preview: bool = False
+        enable_job_model_preview: bool = False
+        enable_preview_postgres_mirror: bool = False
 
     features: FeatureFlags = FeatureFlags()
 
@@ -276,6 +288,9 @@ class DSXConnectConfig(BaseSettings):
             env_auth = os.getenv("DSXCONNECT_SCANNER__AUTH_TOKEN")
             if env_auth is not None:
                 self.scanner.auth_token = env_auth
+            env_cp = os.getenv("DSXCONNECT_CONTROL_PLANE_DB_URL")
+            if env_cp:
+                self.control_plane_database.url = env_cp
         except Exception:
             pass
         return self

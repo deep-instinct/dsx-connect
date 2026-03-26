@@ -15,9 +15,19 @@ For connector runtime logging behavior (identifier masking in `stg/prod`), conne
 
 Supported values:
 
+- `exp`
 - `dev`
+- `app`
 - `stg`
 - `prod`
+
+Recommended intent:
+
+- `exp`: feature exploration / pre-release mode. Use for experimental or in-progress capabilities (for example, architecture preview surfaces and new control-plane prototypes).
+- `dev`: exploratory/demo/playground mode for normal product usage and local ops.
+- `app`: end-user desktop application mode with guided UX and scoped configuration edits (for example, filesystem-focused configuration surfaces).
+- `stg`: pre-production validation in a real environment. Use this to verify deployment behavior and operational posture before production.
+- `prod`: production runtime with strict/default-safe behavior.
 
 Defaults:
 

@@ -1,0 +1,55 @@
+{
+  "name": "dsx-connect-desktop",
+  "productName": "DSX-Connect Desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron launcher that hosts the existing DSX Connect web UI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "security:audit": "./scripts/npm_audit_check.sh",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:win": "electron-builder --win nsis --publish never",
+    "build:linux": "electron-builder --linux AppImage deb --publish never"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.deepinstinct.dsxconnect.desktop",
+    "productName": "DSX-Connect Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    }
+  }
+}

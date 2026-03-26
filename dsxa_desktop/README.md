@@ -17,7 +17,7 @@ Cross-platform Tauri desktop client for DSXA with:
 ## Install
 
 ```bash
-cd dsxa_tauri
+cd dsxa_desktop
 npm install
 ```
 
@@ -38,7 +38,7 @@ npm run tauri:build
 If GitHub Actions cannot produce an Intel mac build in your org, you can build it locally on an Intel Mac:
 
 ```bash
-cd dsxa_tauri
+cd dsxa_desktop
 npm ci
 npm run tauri:build -- --bundles app
 ```

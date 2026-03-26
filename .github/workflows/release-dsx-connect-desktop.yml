@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: dsx_connect/local/electron_launcher
+        working-directory: dsx_connect_desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: dsx_connect/local/electron_launcher/package-lock.json
+          cache-dependency-path: dsx_connect_desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -46,7 +46,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          scan-ref: dsx_connect/local/electron_launcher
+          scan-ref: dsx_connect_desktop
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -58,7 +58,7 @@ jobs:
     needs: security-compliance
     defaults:
       run:
-        working-directory: dsx_connect/local/electron_launcher
+        working-directory: dsx_connect_desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,7 +68,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: dsx_connect/local/electron_launcher/package-lock.json
+          cache-dependency-path: dsx_connect_desktop/package-lock.json
 
       - name: Install dependencies
         run: npm install
@@ -85,19 +85,19 @@ jobs:
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsx_connect_desktop_macos
+          name: dsx-connect-desktop-macos
           path: |
-            dsx_connect/local/electron_launcher/dist/*.dmg
-            dsx_connect/local/electron_launcher/dist/*.zip
-            dsx_connect/local/electron_launcher/dist/LICENSE
-            dsx_connect/local/electron_launcher/dist/NOTICE.md
+            dsx_connect_desktop/dist/*.dmg
+            dsx_connect_desktop/dist/*.zip
+            dsx_connect_desktop/dist/LICENSE
+            dsx_connect_desktop/dist/NOTICE.md
 
   build-linux:
     runs-on: ubuntu-latest
     needs: security-compliance
     defaults:
       run:
-        working-directory: dsx_connect/local/electron_launcher
+        working-directory: dsx_connect_desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -131,7 +131,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: dsx_connect/local/electron_launcher/package-lock.json
+          cache-dependency-path: dsx_connect_desktop/package-lock.json
 
       - name: Install dependencies
         run: npm install
@@ -148,19 +148,19 @@ jobs:
       - name: Upload Linux workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsx_connect_desktop_linux
+          name: dsx-connect-desktop-linux
           path: |
-            dsx_connect/local/electron_launcher/dist/*.AppImage
-            dsx_connect/local/electron_launcher/dist/*.deb
-            dsx_connect/local/electron_launcher/dist/LICENSE
-            dsx_connect/local/electron_launcher/dist/NOTICE.md
+            dsx_connect_desktop/dist/*.AppImage
+            dsx_connect_desktop/dist/*.deb
+            dsx_connect_desktop/dist/LICENSE
+            dsx_connect_desktop/dist/NOTICE.md
 
   build-windows:
     runs-on: windows-latest
     needs: security-compliance
     defaults:
       run:
-        working-directory: dsx_connect/local/electron_launcher
+        working-directory: dsx_connect_desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -170,7 +170,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: dsx_connect/local/electron_launcher/package-lock.json
+          cache-dependency-path: dsx_connect_desktop/package-lock.json
 
       - name: Install dependencies
         run: npm install
@@ -188,12 +188,12 @@ jobs:
       - name: Upload Windows workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsx_connect_desktop_windows
+          name: dsx-connect-desktop-windows
           path: |
-            dsx_connect/local/electron_launcher/dist/*.exe
-            dsx_connect/local/electron_launcher/dist/*.msi
-            dsx_connect/local/electron_launcher/dist/LICENSE
-            dsx_connect/local/electron_launcher/dist/NOTICE.md
+            dsx_connect_desktop/dist/*.exe
+            dsx_connect_desktop/dist/*.msi
+            dsx_connect_desktop/dist/LICENSE
+            dsx_connect_desktop/dist/NOTICE.md
 
   publish-release:
     if: github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.tag != ''
@@ -213,19 +213,19 @@ jobs:
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsx_connect_desktop_macos
+          name: dsx-connect-desktop-macos
           path: dist/release
 
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsx_connect_desktop_linux
+          name: dsx-connect-desktop-linux
           path: dist/release
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: dsx_connect_desktop_windows
+          name: dsx-connect-desktop-windows
           path: dist/release
 
       - name: Upload release assets

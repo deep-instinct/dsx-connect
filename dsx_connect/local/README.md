@@ -5,7 +5,7 @@
 Use the Electron launcher as the primary local desktop app:
 
 ```bash
-cd dsx_connect/local/electron_launcher
+cd dsx_connect_desktop
 npm install
 npm start
 ```
@@ -205,12 +205,12 @@ pip install pywebview
 open dist/local-apps/web_launcher.app
 ```
 
-## Electron Launcher (existing DSX Connect UI)
+## DSX-Connect Desktop (existing DSX Connect UI)
 
 Electron shell that starts local core and loads the existing UI at `http://127.0.0.1:8586/`.
 
 ```bash
-cd dsx_connect/local/electron_launcher
+cd dsx_connect_desktop
 npm install
 npm start
 ```

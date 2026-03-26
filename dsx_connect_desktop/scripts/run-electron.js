@@ -7,14 +7,31 @@ const isMacIntel = process.platform === 'darwin' && process.arch === 'x64';
 const forceIntel = args.includes('--intel');
 const forceModern = args.includes('--modern');
 const useIntel = forceIntel || (!forceModern && isMacIntel);
-const moduleName = useIntel ? 'electron-intel' : 'electron';
 
-let electronPath;
-try {
-  electronPath = require(moduleName);
-} catch (err) {
+function resolveElectronPath(name) {
+  try {
+    return require(name);
+  } catch {
+    return null;
+  }
+}
+
+let moduleName = useIntel ? 'electron-intel' : 'electron';
+let electronPath = resolveElectronPath(moduleName);
+
+if (!electronPath && moduleName === 'electron-intel') {
+  if (forceIntel) {
+    console.error('electron-intel is not installed.');
+    console.error('Install locally (without committing):');
+    console.error('  npm install --save-dev --no-save electron-intel@npm:electron@28.3.3');
+    process.exit(1);
+  }
+  moduleName = 'electron';
+  electronPath = resolveElectronPath(moduleName);
+}
+
+if (!electronPath) {
   console.error(`Failed to resolve ${moduleName}. Did you run npm install?`);
-  console.error(err && err.message ? err.message : String(err));
   process.exit(1);
 }
 

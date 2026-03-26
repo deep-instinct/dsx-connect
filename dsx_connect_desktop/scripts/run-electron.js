@@ -2,11 +2,23 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
+const args = process.argv.slice(2);
 const isMacIntel = process.platform === 'darwin' && process.arch === 'x64';
-const bin = isMacIntel ? 'electron-intel' : 'electron';
+const forceIntel = args.includes('--intel');
+const forceModern = args.includes('--modern');
+const useIntel = forceIntel || (!forceModern && isMacIntel);
+const moduleName = useIntel ? 'electron-intel' : 'electron';
 
-const binPath = path.join(__dirname, '..', 'node_modules', '.bin', bin);
-const child = spawn(binPath, ['.'], {
+let electronPath;
+try {
+  electronPath = require(moduleName);
+} catch (err) {
+  console.error(`Failed to resolve ${moduleName}. Did you run npm install?`);
+  console.error(err && err.message ? err.message : String(err));
+  process.exit(1);
+}
+
+const child = spawn(electronPath, ['.'], {
   cwd: path.join(__dirname, '..'),
   stdio: 'inherit',
   shell: false,
@@ -21,6 +33,6 @@ child.on('exit', (code, signal) => {
 });
 
 child.on('error', (err) => {
-  console.error(`Failed to launch ${bin}:`, err.message || err);
+  console.error(`Failed to launch ${moduleName}:`, err.message || err);
   process.exit(1);
 });

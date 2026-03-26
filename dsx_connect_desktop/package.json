@@ -8,8 +8,8 @@
   "scripts": {
     "start": "node ./scripts/run-electron.js",
     "dev": "node ./scripts/run-electron.js",
-    "start:modern": "electron .",
-    "start:intel": "electron-intel .",
+    "start:modern": "node ./scripts/run-electron.js --modern",
+    "start:intel": "node ./scripts/run-electron.js --intel",
     "build:mac:dir": "electron-builder --mac dir --publish never",
     "start:mac:app": "open \"dist/mac/DSX-Connect Desktop.app\"",
     "security:audit": "./scripts/npm_audit_check.sh",

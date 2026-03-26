@@ -135,6 +135,8 @@ class DSXATuiApp(App[None]):
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("ctrl+l", "clear_output", "Clear Output"),
+        ("ctrl+f", "select_file", "Select File"),
+        ("ctrl+g", "select_folder", "Select Folder"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -176,6 +178,12 @@ class DSXATuiApp(App[None]):
 
     def action_clear_output(self) -> None:
         self.query_one("#output", TextArea).text = ""
+
+    def action_select_file(self) -> None:
+        self._open_path_picker("file")
+
+    def action_select_folder(self) -> None:
+        self._open_path_picker("dir")
 
     def _set_status(self, message: str, error: bool = False) -> None:
         status = self.query_one("#status", Static)

@@ -25,6 +25,7 @@ pip install -e .
 - Show raw DSXA JSON response in the output pane
 - `Tab` completion in the `File Path` field
 - In-app `Select File` / `Select Folder` modal selector
+- Keyboard shortcuts: `Ctrl+F` (Select File), `Ctrl+G` (Select Folder)
 
 ## Next
 

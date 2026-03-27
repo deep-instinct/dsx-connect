@@ -229,23 +229,32 @@ def _terminate_pid(pid: int, grace_seconds: float = 10.0) -> None:
         pass
 
 
-def _child_env(env_file: Path) -> Dict[str, str]:
+def _child_env(env_file: Path, extra: Dict[str, str] | None = None) -> Dict[str, str]:
     env = os.environ.copy()
     env["DSXCONNECT_ENV_FILE"] = str(env_file)
 
     repo = str(_repo_root())
     existing = env.get("PYTHONPATH", "")
     env["PYTHONPATH"] = repo if not existing else f"{repo}:{existing}"
+    if extra:
+        env.update(extra)
     return env
 
 
-def _service_specs(state_dir: Path) -> list[ServiceSpec]:
+def _service_specs(state_dir: Path, worker_pool: str, worker_concurrency: int) -> list[ServiceSpec]:
     paths = _state_paths(state_dir)
     repo = _repo_root()
     python = _runtime_python(repo)
     redis_server = _redis_server_binary()
     redis_port = _redis_port_from_env(paths["env"])
     child_env = _child_env(paths["env"])
+    workers_env = _child_env(
+        paths["env"],
+        {
+            "DSXCONNECT_WORKER_POOL": worker_pool,
+            "DSXCONNECT_WORKER_CONCURRENCY": str(worker_concurrency),
+        },
+    )
 
     return [
         ServiceSpec(
@@ -280,7 +289,7 @@ def _service_specs(state_dir: Path) -> list[ServiceSpec]:
             logfile=paths["logs"] / "workers.log",
             pidfile=paths["run"] / "workers.pid",
             cwd=repo,
-            env=child_env,
+            env=workers_env,
         ),
     ]
 
@@ -325,6 +334,24 @@ def _stop_one(spec: ServiceSpec) -> tuple[bool, str]:
 
 def _ctx_state_dir(ctx: typer.Context) -> Path:
     return Path(ctx.obj["state_dir"]).expanduser()
+
+
+def _ctx_worker_options(ctx: typer.Context) -> tuple[str, int]:
+    return str(ctx.obj["worker_pool"]), int(ctx.obj["worker_concurrency"])
+
+
+def _worker_defaults_from_env_file(state_dir: Path) -> tuple[str, int]:
+    env_file = _state_paths(state_dir)["env"]
+    env = _read_env_file(env_file)
+    pool = str(env.get("DSXCONNECT_WORKER_POOL", "solo") or "solo").strip()
+    raw_conc = str(
+        env.get("DSXCONNECT_WORKER_CONCURRENCY", env.get("DSXCONNECT_SCAN_REQUEST_WORKER_CONCURRENCY", "1"))
+    ).strip()
+    try:
+        conc = max(1, int(raw_conc))
+    except Exception:
+        conc = 1
+    return pool, conc
 
 
 def _inject_default_command(argv: list[str], default_command: str = "foreground") -> list[str]:
@@ -395,8 +422,29 @@ def _attach_to_running_logs(specs: list[ServiceSpec]) -> None:
 def main(
     ctx: typer.Context,
     state_dir: str = typer.Option(str(DEFAULT_STATE_DIR), "--state-dir", help="runtime state dir"),
+    worker_pool: str | None = typer.Option(
+        None,
+        "--worker-pool",
+        help="celery worker pool (e.g. solo, prefork, threads)",
+    ),
+    worker_concurrency: int | None = typer.Option(
+        None,
+        "--worker-concurrency",
+        help="celery worker concurrency",
+    ),
 ) -> None:
-    ctx.obj = {"state_dir": state_dir}
+    resolved_state_dir = Path(state_dir).expanduser()
+    env_pool, env_conc = _worker_defaults_from_env_file(resolved_state_dir)
+    resolved_pool = str(worker_pool or env_pool or "solo").strip() or "solo"
+    resolved_concurrency = int(worker_concurrency if worker_concurrency is not None else env_conc)
+    if resolved_concurrency < 1:
+        raise typer.BadParameter("--worker-concurrency must be >= 1")
+
+    ctx.obj = {
+        "state_dir": str(resolved_state_dir),
+        "worker_pool": resolved_pool,
+        "worker_concurrency": resolved_concurrency,
+    }
 
 
 @app.command("init")
@@ -418,12 +466,13 @@ def cmd_init(
 @app.command("start")
 def cmd_start(ctx: typer.Context) -> None:
     state_dir = _ctx_state_dir(ctx)
+    worker_pool, worker_concurrency = _ctx_worker_options(ctx)
     paths = _ensure_dirs(state_dir)
     if not paths["env"].exists():
         raise typer.BadParameter(
             f"env file not found: {paths['env']} (run `init` first)"
         )
-    for spec in _service_specs(state_dir):
+    for spec in _service_specs(state_dir, worker_pool, worker_concurrency):
         ok, msg = _start_one(spec)
         print(msg)
         if not ok:
@@ -433,12 +482,13 @@ def cmd_start(ctx: typer.Context) -> None:
 @app.command("foreground")
 def cmd_foreground(ctx: typer.Context) -> None:
     state_dir = _ctx_state_dir(ctx)
+    worker_pool, worker_concurrency = _ctx_worker_options(ctx)
     paths = _ensure_dirs(state_dir)
     if not paths["env"].exists():
         raise typer.BadParameter(
             f"env file not found: {paths['env']} (run `init` first)"
         )
-    specs = _service_specs(state_dir)
+    specs = _service_specs(state_dir, worker_pool, worker_concurrency)
     running = [s.name for s in specs if _is_pid_alive(_pid_from_file(s.pidfile))]
     if running:
         _attach_to_running_logs(specs)
@@ -509,9 +559,10 @@ def cmd_foreground(ctx: typer.Context) -> None:
 @app.command("stop")
 def cmd_stop(ctx: typer.Context) -> None:
     state_dir = _ctx_state_dir(ctx)
+    worker_pool, worker_concurrency = _ctx_worker_options(ctx)
     _ensure_dirs(state_dir)
     # Stop in reverse dependency order.
-    specs = list(reversed(_service_specs(state_dir)))
+    specs = list(reversed(_service_specs(state_dir, worker_pool, worker_concurrency)))
     exit_code = 0
     for spec in specs:
         ok, msg = _stop_one(spec)
@@ -525,8 +576,9 @@ def cmd_stop(ctx: typer.Context) -> None:
 @app.command("status")
 def cmd_status(ctx: typer.Context) -> None:
     state_dir = _ctx_state_dir(ctx)
+    worker_pool, worker_concurrency = _ctx_worker_options(ctx)
     _ensure_dirs(state_dir)
-    for spec in _service_specs(state_dir):
+    for spec in _service_specs(state_dir, worker_pool, worker_concurrency):
         pid = _pid_from_file(spec.pidfile)
         alive = _is_pid_alive(pid)
         status = "running" if alive else "stopped"

@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
-"""Run DSX-Connect core + workers + redis locally without Docker/K8s."""
+"""Run DSX-Connect core services locally without Docker/K8s."""
 
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import signal
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Dict
 
 import typer
 
 
-SERVICE_ORDER = ["redis", "api", "workers"]
-DEFAULT_STATE_DIR = Path.home() / ".dsx-connect-local"
-DEFAULT_REDIS_PORT = 6380
+DEFAULT_STATE_DIR = Path.home() / ".dsx-connect-local" / "dsx-connect-desktop"
 
-app = typer.Typer(help="DSX-Connect local runtime manager (macOS-first MVP)")
+app = typer.Typer(help="DSX-Connect core local runtime manager")
 
 
 @dataclass
@@ -31,42 +29,28 @@ class ServiceSpec:
     logfile: Path
     pidfile: Path
     cwd: Path
+    env: Dict[str, str]
 
 
-def _is_core_repo_root(path: Path) -> bool:
-    return (path / "dsx_connect" / "dsx-connect-api-start.py").exists() and (
-        path / "dsx_connect" / "dsx-connect-workers-start.py"
-    ).exists()
+def _is_repo_root(path: Path) -> bool:
+    return (path / "dsx_connect" / "dsx-connect-api-start.py").exists()
 
 
 def _repo_root() -> Path:
     override = os.getenv("DSXCONNECT_LOCAL_REPO_ROOT", "").strip()
     if override:
         p = Path(override).expanduser().resolve()
-        if _is_core_repo_root(p):
+        if _is_repo_root(p):
             return p
-        raise RuntimeError(
-            f"DSXCONNECT_LOCAL_REPO_ROOT is set but invalid: {p}"
-        )
+        raise RuntimeError(f"DSXCONNECT_LOCAL_REPO_ROOT is set but invalid: {p}")
 
-    # Source-run path (python dsx_connect/local/dsx_connect_local.py)
     source_guess = Path(__file__).resolve().parents[2]
-    if _is_core_repo_root(source_guess):
+    if _is_repo_root(source_guess):
         return source_guess
 
-    # Frozen app path fallback: derive repo from app binary location.
-    if getattr(sys, "frozen", False):
-        exe = Path(sys.argv[0]).resolve()
-        # .../<repo>/dist/local-apps/<name>.app/Contents/MacOS/<binary>
-        if len(exe.parents) >= 6:
-            app_guess = exe.parents[5]
-            if _is_core_repo_root(app_guess):
-                return app_guess
-
-    # Fallback: discover from cwd upwards.
     cwd = Path.cwd().resolve()
     for candidate in (cwd, *cwd.parents):
-        if _is_core_repo_root(candidate):
+        if _is_repo_root(candidate):
             return candidate
 
     raise RuntimeError(
@@ -81,76 +65,58 @@ def _runtime_python(repo: Path) -> str:
     if override:
         candidates.append(override)
     candidates.append(str(repo / ".venv" / "bin" / "python"))
+    candidates.append(str(repo / ".venv" / "Scripts" / "python.exe"))
 
     py3 = shutil.which("python3")
     if py3:
         candidates.append(py3)
+    py = shutil.which("python")
+    if py:
+        candidates.append(py)
 
     for candidate in candidates:
         if candidate and Path(candidate).exists() and os.access(candidate, os.X_OK):
             return candidate
 
     raise RuntimeError(
-        "No usable Python interpreter found for launching API/workers. "
+        "No usable Python interpreter found for launching core services. "
         "Set DSXCONNECT_LOCAL_PYTHON or ensure .venv/bin/python exists."
     )
 
 
-def _redis_server_binary() -> str | None:
+def _redis_server_binary() -> str:
     override = os.getenv("DSXCONNECT_LOCAL_REDIS_SERVER", "").strip()
-    candidates = []
     if override:
-        candidates.append(override)
-
-    # Bundled redis in app mode (preferred for demo UX).
-    if getattr(sys, "frozen", False):
-        exe = Path(sys.argv[0]).resolve()
-        candidates.append(str(exe.parent / "redis-server"))
-
-    which = shutil.which("redis-server")
-    if which:
-        candidates.append(which)
-
-    # Common Homebrew/macOS locations used outside shell PATH (e.g., Finder launch).
-    candidates.extend([
-        "/opt/homebrew/bin/redis-server",
-        "/usr/local/bin/redis-server",
-        "/usr/bin/redis-server",
-    ])
-
-    for candidate in candidates:
-        if candidate and Path(candidate).exists():
-            # Ensure executable bit in case bundled data file lost mode.
-            try:
-                os.chmod(candidate, Path(candidate).stat().st_mode | 0o111)
-            except Exception:
-                pass
-            if os.access(candidate, os.X_OK):
-                return candidate
-    return None
+        if Path(override).exists() and os.access(override, os.X_OK):
+            return override
+        raise RuntimeError(f"DSXCONNECT_LOCAL_REDIS_SERVER is set but invalid: {override}")
+    found = shutil.which("redis-server")
+    if found:
+        return found
+    raise RuntimeError(
+        "redis-server was not found on PATH. Install Redis locally or set "
+        "DSXCONNECT_LOCAL_REDIS_SERVER=/path/to/redis-server"
+    )
 
 
 def _state_paths(state_dir: Path) -> Dict[str, Path]:
     return {
         "root": state_dir,
         "logs": state_dir / "logs",
-        "pids": state_dir / "run",
-        "data": state_dir / "data",
-        "redis": state_dir / "data" / "redis",
+        "run": state_dir / "run",
         "env": state_dir / ".env.local",
-        "redis_conf": state_dir / "redis.conf",
     }
 
 
 def _ensure_dirs(state_dir: Path) -> Dict[str, Path]:
     paths = _state_paths(state_dir)
-    for key in ("root", "logs", "pids", "data", "redis"):
+    for key in ("root", "logs", "run"):
         paths[key].mkdir(parents=True, exist_ok=True)
     return paths
 
 
-def _default_env_template(redis_port: int) -> str:
-    return f"""# DSX-Connect local runtime env (generated)
+def _default_env_template() -> str:
+    return """# DSX-Connect local runtime env (generated)
 # Edit scanner URL/token and optional DIANNA settings as needed.
 
 LOG_LEVEL=debug
@@ -160,11 +126,11 @@ DSXCONNECT_SCANNER__SCAN_BINARY_URL=http://127.0.0.1:15000/scan/binary/v2
 DSXCONNECT_SCANNER__AUTH_TOKEN=
 
 # Local Redis layout (single redis process, separate DB indexes)
-DSXCONNECT_REDIS_URL=redis://127.0.0.1:{redis_port}/3
-DSXCONNECT_RESULTS_DB=redis://127.0.0.1:{redis_port}/3
+DSXCONNECT_REDIS_URL=redis://127.0.0.1:6380/3
+DSXCONNECT_RESULTS_DB=redis://127.0.0.1:6380/3
 DSXCONNECT_RESULTS_DB__RETAIN=1000
-DSXCONNECT_WORKERS__BROKER=redis://127.0.0.1:{redis_port}/5
-DSXCONNECT_WORKERS__BACKEND=redis://127.0.0.1:{redis_port}/6
+DSXCONNECT_WORKERS__BROKER=redis://127.0.0.1:6380/5
+DSXCONNECT_WORKERS__BACKEND=redis://127.0.0.1:6380/6
 
 # Local API transport
 DSXCONNECT_USE_TLS=false
@@ -176,11 +142,35 @@ DSXCONNECT_AUTH__ENROLLMENT_TOKEN=abc123
 # Optional DIANNA
 DSXCONNECT_DIANNA__ENABLED=false
 DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS=false
-DSXCONNECT_DIANNA__INDEX_DATABASE_LOC=redis://127.0.0.1:{redis_port}/4
+DSXCONNECT_DIANNA__INDEX_DATABASE_LOC=redis://127.0.0.1:6380/4
 
 # Persist UI-driven core config edits only for local runtime
 DSXCONNECT_CONFIG_PERSIST_LOCAL_ONLY=true
+
+DSXCONNECT_APP_ENV=app
 """
+
+
+def _read_env_file(env_path: Path) -> Dict[str, str]:
+    env: Dict[str, str] = {}
+    if not env_path.exists():
+        return env
+    for line in env_path.read_text().splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#") or "=" not in raw:
+            continue
+        key, val = raw.split("=", 1)
+        env[key.strip()] = val.strip()
+    return env
+
+
+def _redis_port_from_env(env_path: Path) -> int:
+    env = _read_env_file(env_path)
+    redis_url = env.get("DSXCONNECT_REDIS_URL", "")
+    m = re.match(r"^redis://[^:/]+:(\d+)(?:/.*)?$", redis_url)
+    if m:
+        return int(m.group(1))
+    return 6380
 
 
 def _pid_from_file(path: Path) -> int | None:
@@ -214,7 +204,7 @@ def _remove_pid(path: Path) -> None:
         pass
 
 
-def _wait_for_pid(pid: int, timeout: float = 8.0) -> bool:
+def _wait_for_pid(pid: int, timeout: float = 10.0) -> bool:
     deadline = time.time() + timeout
     while time.time() < deadline:
         if _is_pid_alive(pid):
@@ -223,7 +213,7 @@ def _wait_for_pid(pid: int, timeout: float = 8.0) -> bool:
     return _is_pid_alive(pid)
 
 
-def _terminate_pid(pid: int, grace_seconds: float = 8.0) -> None:
+def _terminate_pid(pid: int, grace_seconds: float = 10.0) -> None:
     try:
         os.kill(pid, signal.SIGTERM)
     except OSError:
@@ -239,70 +229,9 @@ def _terminate_pid(pid: int, grace_seconds: float = 8.0) -> None:
         pass
 
 
-def _service_specs(state_dir: Path, redis_port: int) -> Dict[str, ServiceSpec]:
-    paths = _state_paths(state_dir)
-    repo = _repo_root()
-    python = _runtime_python(repo)
-    redis_pidfile = paths["pids"] / "redis.pid"
-    api_pidfile = paths["pids"] / "api.pid"
-    workers_pidfile = paths["pids"] / "workers.pid"
-
-    redis_conf = f"""bind 127.0.0.1
-port {redis_port}
-dir {paths['redis']}
-dbfilename dump.rdb
-save ""
-appendonly no
-pidfile {redis_pidfile}
-"""
-    paths["redis_conf"].write_text(redis_conf)
-
-    redis_bin = _redis_server_binary() or "redis-server"
-    redis_cmd = [redis_bin, str(paths["redis_conf"])]
-    api_cmd = [python, str(repo / "dsx_connect" / "dsx-connect-api-start.py")]
-    workers_cmd = [python, str(repo / "dsx_connect" / "dsx-connect-workers-start.py")]
-
-    return {
-        "redis": ServiceSpec(
-            name="redis",
-            command=redis_cmd,
-            logfile=paths["logs"] / "redis.log",
-            pidfile=redis_pidfile,
-            cwd=repo,
-        ),
-        "api": ServiceSpec(
-            name="api",
-            command=api_cmd,
-            logfile=paths["logs"] / "api.log",
-            pidfile=api_pidfile,
-            cwd=repo,
-        ),
-        "workers": ServiceSpec(
-            name="workers",
-            command=workers_cmd,
-            logfile=paths["logs"] / "workers.log",
-            pidfile=workers_pidfile,
-            cwd=repo,
-        ),
-    }
-
-
-def _spawn(spec: ServiceSpec, child_env: Dict[str, str]) -> int:
-    with spec.logfile.open("ab") as log_fp:
-        proc = subprocess.Popen(
-            spec.command,
-            cwd=spec.cwd,
-            env=child_env,
-            stdout=log_fp,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-    return proc.pid
-
-
 def _child_env(env_file: Path) -> Dict[str, str]:
     env = os.environ.copy()
-    env["DSXCONNECTOR_ENV_FILE"] = str(env_file)
+    env["DSXCONNECT_ENV_FILE"] = str(env_file)
 
     repo = str(_repo_root())
     existing = env.get("PYTHONPATH", "")
@@ -310,22 +239,100 @@ def _child_env(env_file: Path) -> Dict[str, str]:
     return env
 
 
-def _ctx_values(ctx: typer.Context) -> tuple[Path, int]:
-    state_dir = Path(ctx.obj["state_dir"]).expanduser()
-    redis_port = int(ctx.obj["redis_port"])
-    return state_dir, redis_port
+def _service_specs(state_dir: Path) -> list[ServiceSpec]:
+    paths = _state_paths(state_dir)
+    repo = _repo_root()
+    python = _runtime_python(repo)
+    redis_server = _redis_server_binary()
+    redis_port = _redis_port_from_env(paths["env"])
+    child_env = _child_env(paths["env"])
+
+    return [
+        ServiceSpec(
+            name="redis",
+            command=[
+                redis_server,
+                "--bind",
+                "127.0.0.1",
+                "--port",
+                str(redis_port),
+                "--save",
+                "",
+                "--appendonly",
+                "no",
+            ],
+            logfile=paths["logs"] / "redis.log",
+            pidfile=paths["run"] / "redis.pid",
+            cwd=repo,
+            env=os.environ.copy(),
+        ),
+        ServiceSpec(
+            name="api",
+            command=[python, str(repo / "dsx_connect" / "dsx-connect-api-start.py")],
+            logfile=paths["logs"] / "api.log",
+            pidfile=paths["run"] / "api.pid",
+            cwd=repo,
+            env=child_env,
+        ),
+        ServiceSpec(
+            name="workers",
+            command=[python, str(repo / "dsx_connect" / "dsx-connect-workers-start.py")],
+            logfile=paths["logs"] / "workers.log",
+            pidfile=paths["run"] / "workers.pid",
+            cwd=repo,
+            env=child_env,
+        ),
+    ]
+
+
+def _start_one(spec: ServiceSpec) -> tuple[bool, str]:
+    existing = _pid_from_file(spec.pidfile)
+    if _is_pid_alive(existing):
+        return True, f"{spec.name}: already running pid={existing}"
+    if existing:
+        _remove_pid(spec.pidfile)
+
+    spec.logfile.parent.mkdir(parents=True, exist_ok=True)
+    with spec.logfile.open("ab") as logf:
+        proc = subprocess.Popen(
+            spec.command,
+            cwd=str(spec.cwd),
+            env=spec.env,
+            stdout=logf,
+            stderr=logf,
+            start_new_session=True,
+        )
+
+    if not _wait_for_pid(proc.pid):
+        return False, f"{spec.name}: failed to start (pid did not become alive)"
+    _write_pid(spec.pidfile, proc.pid)
+    return True, f"{spec.name}: started pid={proc.pid} log={spec.logfile}"
+
+
+def _stop_one(spec: ServiceSpec) -> tuple[bool, str]:
+    pid = _pid_from_file(spec.pidfile)
+    if not pid:
+        return True, f"{spec.name}: not running"
+    if not _is_pid_alive(pid):
+        _remove_pid(spec.pidfile)
+        return True, f"{spec.name}: stale pid file removed"
+    _terminate_pid(pid)
+    if _is_pid_alive(pid):
+        return False, f"{spec.name}: failed to stop pid={pid}"
+    _remove_pid(spec.pidfile)
+    return True, f"{spec.name}: stopped pid={pid}"
+
+
+def _ctx_state_dir(ctx: typer.Context) -> Path:
+    return Path(ctx.obj["state_dir"]).expanduser()
 
 
 @app.callback()
 def main(
     ctx: typer.Context,
     state_dir: str = typer.Option(str(DEFAULT_STATE_DIR), "--state-dir", help="runtime state dir"),
-    redis_port: int = typer.Option(DEFAULT_REDIS_PORT, "--redis-port", help="local redis port"),
 ) -> None:
-    ctx.obj = {
-        "state_dir": state_dir,
-        "redis_port": redis_port,
-    }
+    ctx.obj = {"state_dir": state_dir}
 
 
 @app.command("init")
@@ -333,149 +340,62 @@ def cmd_init(
     ctx: typer.Context,
     force: bool = typer.Option(False, "--force", help="overwrite existing .env.local"),
 ) -> None:
-    state_dir, redis_port = _ctx_values(ctx)
+    state_dir = _ctx_state_dir(ctx)
     paths = _ensure_dirs(state_dir)
     env_file = paths["env"]
     if env_file.exists() and not force:
         print(f"env exists: {env_file}")
     else:
-        env_file.write_text(_default_env_template(redis_port))
+        env_file.write_text(_default_env_template())
         print(f"wrote env template: {env_file}")
     print(f"state dir ready: {state_dir}")
 
 
 @app.command("start")
-def cmd_start(
-    ctx: typer.Context,
-    env_file: str | None = typer.Option(None, "--env-file", help="override env file path"),
-) -> None:
-    state_dir, redis_port = _ctx_values(ctx)
+def cmd_start(ctx: typer.Context) -> None:
+    state_dir = _ctx_state_dir(ctx)
     paths = _ensure_dirs(state_dir)
-    env_path = Path(env_file).expanduser() if env_file else paths["env"]
-    if not env_path.exists():
-        print(f"missing env file: {env_path}")
-        print("run: python dsx_connect/local/dsx_connect_local.py init")
-        raise typer.Exit(code=1)
-
-    try:
-        specs = _service_specs(state_dir, redis_port)
-    except RuntimeError as exc:
-        print(str(exc))
-        raise typer.Exit(code=1)
-    child_env = _child_env(env_path)
-
-    for svc in SERVICE_ORDER:
-        spec = specs[svc]
-        pid = _pid_from_file(spec.pidfile)
-        if _is_pid_alive(pid):
-            print(f"{svc}: already running (pid={pid})")
-            continue
-        if svc == "redis" and _redis_server_binary() is None:
-            print("redis-server not found. Install redis or set DSXCONNECT_LOCAL_REDIS_SERVER=/path/to/redis-server.")
+    if not paths["env"].exists():
+        raise typer.BadParameter(
+            f"env file not found: {paths['env']} (run `init` first)"
+        )
+    for spec in _service_specs(state_dir):
+        ok, msg = _start_one(spec)
+        print(msg)
+        if not ok:
             raise typer.Exit(code=1)
-
-        pid = _spawn(spec, child_env)
-        if not _wait_for_pid(pid):
-            print(f"{svc}: failed to start, check log {spec.logfile}")
-            raise typer.Exit(code=1)
-
-        time.sleep(0.7)
-        if not _is_pid_alive(pid):
-            print(f"{svc}: exited during startup, check log {spec.logfile}")
-            raise typer.Exit(code=1)
-
-        _write_pid(spec.pidfile, pid)
-        print(f"{svc}: started pid={pid} log={spec.logfile}")
 
 
 @app.command("stop")
-def cmd_stop(
-    ctx: typer.Context,
-    grace_seconds: float = typer.Option(8.0, "--grace-seconds", help="shutdown grace period"),
-) -> None:
-    state_dir, redis_port = _ctx_values(ctx)
-    specs = _service_specs(state_dir, redis_port)
-
-    for svc in reversed(SERVICE_ORDER):
-        spec = specs[svc]
-        pid = _pid_from_file(spec.pidfile)
-        if not _is_pid_alive(pid):
-            _remove_pid(spec.pidfile)
-            print(f"{svc}: not running")
-            continue
-        _terminate_pid(pid, grace_seconds=grace_seconds)
-        _remove_pid(spec.pidfile)
-        print(f"{svc}: stopped")
-
-
-@app.command("status")
-def cmd_status(ctx: typer.Context) -> None:
-    state_dir, redis_port = _ctx_values(ctx)
-    specs = _service_specs(state_dir, redis_port)
+def cmd_stop(ctx: typer.Context) -> None:
+    state_dir = _ctx_state_dir(ctx)
+    _ensure_dirs(state_dir)
+    # Stop in reverse dependency order.
+    specs = list(reversed(_service_specs(state_dir)))
     exit_code = 0
-
-    for svc in SERVICE_ORDER:
-        spec = specs[svc]
-        pid = _pid_from_file(spec.pidfile)
-        alive = _is_pid_alive(pid)
-        state = "running" if alive else "stopped"
-        if not alive:
+    for spec in specs:
+        ok, msg = _stop_one(spec)
+        print(msg)
+        if not ok:
             exit_code = 1
-        print(f"{svc:8} {state:8} pid={pid if pid else '-'} log={spec.logfile}")
-
     if exit_code:
         raise typer.Exit(code=exit_code)
 
 
-@app.command("logs")
-def cmd_logs(
-    ctx: typer.Context,
-    service: str = typer.Argument(..., help="service name"),
-    lines: int = typer.Option(50, "--lines", help="tail lines"),
-) -> None:
-    state_dir, redis_port = _ctx_values(ctx)
-    specs = _service_specs(state_dir, redis_port)
-    if service not in specs:
-        print(f"unknown service: {service}")
-        raise typer.Exit(code=1)
-
-    log_file = specs[service].logfile
-    if not log_file.exists():
-        print(f"log not found: {log_file}")
-        raise typer.Exit(code=1)
-
-    content = log_file.read_text(errors="replace").splitlines()
-    for line in content[-lines:]:
-        print(line)
-
-
-def _looks_like_app_binary() -> bool:
-    argv0 = sys.argv[0] if sys.argv else ""
-    return ".app/Contents/MacOS/" in argv0
-
-
-def _enable_launcher_log(state_dir: Path) -> None:
-    logs_dir = state_dir / "logs"
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    launcher_log = logs_dir / "launcher.log"
-
-    # Redirect stdout/stderr so Finder launches are observable post-mortem.
-    fp = launcher_log.open("a", buffering=1)
-    os.dup2(fp.fileno(), 1)
-    os.dup2(fp.fileno(), 2)
-
-    ts = datetime.now().isoformat(timespec="seconds")
-    print(f"[{ts}] app-launch argv={sys.argv} cwd={Path.cwd()}")
-
+@app.command("status")
+def cmd_status(ctx: typer.Context) -> None:
+    state_dir = _ctx_state_dir(ctx)
+    _ensure_dirs(state_dir)
+    for spec in _service_specs(state_dir):
+        pid = _pid_from_file(spec.pidfile)
+        alive = _is_pid_alive(pid)
+        status = "running" if alive else "stopped"
+        if alive:
+            print(f"{spec.name}: {status} pid={pid} log={spec.logfile}")
+        else:
+            print(f"{spec.name}: {status} log={spec.logfile}")
 
 
 if __name__ == "__main__":
-    app_launch = _looks_like_app_binary() or getattr(sys, "frozen", False)
-    if app_launch:
-        _enable_launcher_log(DEFAULT_STATE_DIR)
-
-    # App-bundle UX: double-clicking the .app runs with no args.
-    if app_launch and len(sys.argv) == 1:
-        sys.argv.append("start")
-
     app()
+

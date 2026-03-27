@@ -327,6 +327,70 @@ def _ctx_state_dir(ctx: typer.Context) -> Path:
     return Path(ctx.obj["state_dir"]).expanduser()
 
 
+def _inject_default_command(argv: list[str], default_command: str = "foreground") -> list[str]:
+    known = {"init", "start", "stop", "status", "foreground", "--help", "-h"}
+    args = list(argv)
+    i = 0
+    while i < len(args):
+        token = args[i]
+        if token in known:
+            return args
+        # Skip global option value.
+        if token == "--state-dir":
+            i += 2
+            continue
+        if token.startswith("-"):
+            i += 1
+            continue
+        # First positional token that is not a known command.
+        return args
+    return [*args, default_command]
+
+
+def _attach_to_running_logs(specs: list[ServiceSpec]) -> None:
+    print("Services already running; attaching to logs (Ctrl+C to detach).")
+
+    stop_requested = False
+
+    def _on_signal(signum, _frame):
+        nonlocal stop_requested
+        stop_requested = True
+        print(f"received signal {signum}; detaching...")
+
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+
+    positions: Dict[str, int] = {}
+    for spec in specs:
+        spec.logfile.parent.mkdir(parents=True, exist_ok=True)
+        spec.logfile.touch(exist_ok=True)
+        positions[spec.name] = spec.logfile.stat().st_size
+
+    while not stop_requested:
+        any_alive = False
+        for spec in specs:
+            pid = _pid_from_file(spec.pidfile)
+            if _is_pid_alive(pid):
+                any_alive = True
+
+            try:
+                with spec.logfile.open("r", encoding="utf-8", errors="replace") as f:
+                    f.seek(positions.get(spec.name, 0))
+                    chunk = f.read()
+                    positions[spec.name] = f.tell()
+            except Exception:
+                chunk = ""
+
+            if chunk:
+                for line in chunk.splitlines():
+                    print(f"[{spec.name}] {line}")
+
+        if not any_alive:
+            print("No managed services are running; detaching.")
+            return
+        time.sleep(0.25)
+
+
 @app.callback()
 def main(
     ctx: typer.Context,
@@ -366,6 +430,82 @@ def cmd_start(ctx: typer.Context) -> None:
             raise typer.Exit(code=1)
 
 
+@app.command("foreground")
+def cmd_foreground(ctx: typer.Context) -> None:
+    state_dir = _ctx_state_dir(ctx)
+    paths = _ensure_dirs(state_dir)
+    if not paths["env"].exists():
+        raise typer.BadParameter(
+            f"env file not found: {paths['env']} (run `init` first)"
+        )
+    specs = _service_specs(state_dir)
+    running = [s.name for s in specs if _is_pid_alive(_pid_from_file(s.pidfile))]
+    if running:
+        _attach_to_running_logs(specs)
+        return
+
+    children: list[tuple[ServiceSpec, subprocess.Popen]] = []
+    stop_requested = False
+    exit_code = 0
+
+    def _on_signal(signum, _frame):
+        nonlocal stop_requested
+        stop_requested = True
+        print(f"received signal {signum}; shutting down...")
+
+    signal.signal(signal.SIGINT, _on_signal)
+    signal.signal(signal.SIGTERM, _on_signal)
+
+    try:
+        for spec in specs:
+            print(f"starting {spec.name} (foreground)")
+            child = subprocess.Popen(
+                spec.command,
+                cwd=str(spec.cwd),
+                env=spec.env,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+                # Keep children in separate sessions so Ctrl+C is handled here,
+                # then we can drain them in a controlled order.
+                start_new_session=True,
+            )
+            children.append((spec, child))
+
+        while not stop_requested:
+            for _spec, child in children:
+                rc = child.poll()
+                if rc is not None:
+                    exit_code = rc if rc else exit_code
+                    stop_requested = True
+                    break
+            time.sleep(0.2)
+    finally:
+        # Stop in reverse startup order: workers -> api -> redis.
+        for _spec, child in reversed(children):
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGTERM)
+                except Exception:
+                    child.terminate()
+        deadline = time.time() + 8.0
+        for _spec, child in reversed(children):
+            while child.poll() is None and time.time() < deadline:
+                time.sleep(0.1)
+            if child.poll() is None:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except Exception:
+                    child.kill()
+        for _spec, child in children:
+            try:
+                child.wait(timeout=1)
+            except Exception:
+                pass
+
+    if exit_code:
+        raise typer.Exit(code=exit_code)
+
+
 @app.command("stop")
 def cmd_stop(ctx: typer.Context) -> None:
     state_dir = _ctx_state_dir(ctx)
@@ -397,5 +537,4 @@ def cmd_status(ctx: typer.Context) -> None:
 
 
 if __name__ == "__main__":
-    app()
-
+    app(_inject_default_command(sys.argv[1:]))

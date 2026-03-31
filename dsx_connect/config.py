@@ -303,7 +303,7 @@ from functools import lru_cache
 @lru_cache
 def get_config() -> DSXConnectConfig:
     if os.getenv("DSXCONNECT_SKIP_DEVENV", "").lower() not in ("1", "true", "yes"):
-        load_devenv(Path(__file__).with_name('.dev.env'))
+        load_devenv(Path(__file__).with_name('.dev.env'), env_var="DSXCONNECT_ENV_FILE")
     return DSXConnectConfig()
 
 @lru_cache
@@ -312,7 +312,7 @@ def get_auth_config() -> AuthConfig:
 
 def reload_config() -> DSXConnectConfig:
     get_config.cache_clear()
-    load_devenv(Path(__file__).with_name('.dev.env'))
+    load_devenv(Path(__file__).with_name('.dev.env'), env_var="DSXCONNECT_ENV_FILE")
     return get_config()
 
 

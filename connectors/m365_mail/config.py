@@ -10,13 +10,13 @@ class M365MailConnectorConfig(BaseConnectorConfig):
 
     # Graph auth (client credentials)
     tenant_id: str | None = Field(default=None,
-                                  validation_alias=AliasChoices("M365_TENANT_ID"),
+                                  validation_alias=AliasChoices("M365_TENANT_ID", "DSXCONNECTOR_M365_TENANT_ID"),
                                   description="Azure AD tenant ID")
     client_id: str | None = Field(default=None,
-                                  validation_alias=AliasChoices("M365_CLIENT_ID"),
+                                  validation_alias=AliasChoices("M365_CLIENT_ID", "DSXCONNECTOR_M365_CLIENT_ID"),
                                   description="App registration (client ID)")
     client_secret: SecretStr | None = Field(default=None,
-                                      validation_alias=AliasChoices("M365_CLIENT_SECRET"),
+                                      validation_alias=AliasChoices("M365_CLIENT_SECRET", "DSXCONNECTOR_M365_CLIENT_SECRET"),
                                       description="Client secret (do not persist)")
     authority: str = Field(default="https://login.microsoftonline.com", description="OAuth authority")
 
@@ -25,6 +25,7 @@ class M365MailConnectorConfig(BaseConnectorConfig):
         default=None,
         validation_alias=AliasChoices(
             "M365_MAILBOX_UPNS",
+            "DSXCONNECTOR_M365_MAILBOX_UPNS",
             "DSXCONNECTOR_ASSET",
             "ASSET",
         ),
@@ -40,18 +41,26 @@ class M365MailConnectorConfig(BaseConnectorConfig):
         description="Legacy remediation toggle (deprecated; actions enable automatically when item_action != nothing)"
     )
     client_state: SecretStr | None = Field(default=None,
-                                     validation_alias=AliasChoices("M365_CLIENT_STATE"),
+                                     validation_alias=AliasChoices("M365_CLIENT_STATE", "DSXCONNECTOR_M365_CLIENT_STATE"),
                                      description="Optional clientState to verify on webhook deliveries")
     delta_run_interval_seconds: int = Field(default=600, description="Interval for delta query backfill (seconds)")
     webhook_base_url: str | None = Field(
         default=None,
-        validation_alias=AliasChoices("M365_WEBHOOK_URL", "DSXCONNECTOR_WEBHOOK_URL"),
+        validation_alias=AliasChoices(
+            "M365_WEBHOOK_URL",
+            "DSXCONNECTOR_M365_WEBHOOK_URL",
+            "DSXCONNECTOR_WEBHOOK_URL",
+        ),
         description="Optional public HTTPS base URL for Graph webhooks (defaults to connector_url)",
     )
     trigger_delta_on_notification: bool = Field(
         default=False,
         description="Run delta immediately after receiving a webhook notification",
-        validation_alias=AliasChoices("M365_TRIGGER_DELTA_ON_NOTIFICATION", "DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION"),
+        validation_alias=AliasChoices(
+            "M365_TRIGGER_DELTA_ON_NOTIFICATION",
+            "DSXCONNECTOR_M365_TRIGGER_DELTA_ON_NOTIFICATION",
+            "DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION",
+        ),
     )
     # Action customization
     action_move_folder: str | None = Field(default=None, description="Folder display name to move malicious messages (e.g., 'Quarantine')")

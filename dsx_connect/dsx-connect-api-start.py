@@ -36,5 +36,6 @@ if __name__ == "__main__":
         port=8586,
         reload=False,  # Set to False in production with multiple workers
         workers=1,
+        timeout_graceful_shutdown=5,
         **ssl_kwargs
     )

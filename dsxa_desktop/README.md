@@ -63,11 +63,11 @@ Yes, you can upload the locally built Intel zip to the same release used by CI.
 Using GitHub CLI:
 
 ```bash
-gh release upload dsxa-desktop-0.1.0 dist/dsxa-desktop-macos-intel-app.zip --clobber
+gh release upload dsxa-desktop-1.2.0 dist/dsxa-desktop-macos-intel-app.zip --clobber
 ```
 
 Or in GitHub UI:
-- Open the release tag (for example `dsxa-desktop-0.1.0`)
+- Open the release tag (for example `dsxa-desktop-1.2.0`)
 - Click `Edit`
 - Drag/drop `dsxa-desktop-macos-intel-app.zip` into assets
 - Save

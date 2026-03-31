@@ -187,17 +187,10 @@ class ConfigManager:
             "SP_WEBHOOK_ENABLED": "DSXCONNECTOR_SP_WEBHOOK_ENABLED",
             "SP_WEBHOOK_URL": "DSXCONNECTOR_WEBHOOK_URL",
         }
-        # If legacy keys already exist in file, keep them in sync with SP_* values.
+        # Keep legacy DSXCONNECTOR_* aliases in sync with SP_* values for compatibility.
         lines = env_file.read_text(encoding="utf-8").splitlines()
-        existing_keys = set()
-        for line in lines:
-            s = line.strip()
-            if not s or s.startswith("#") or "=" not in line:
-                continue
-            k, _sep, _rest = line.partition("=")
-            existing_keys.add(k.strip())
         for modern, legacy in legacy_aliases.items():
-            if modern in cleaned and legacy in existing_keys:
+            if modern in cleaned:
                 cleaned[legacy] = cleaned[modern]
 
         seen = set()

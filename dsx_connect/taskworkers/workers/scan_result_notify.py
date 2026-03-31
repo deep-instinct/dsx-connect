@@ -45,6 +45,10 @@ class ScanResultNotificationWorker(BaseWorker):
                     enq_total = _to_int(data.get("enqueued_total"))
                     enq_count = _to_int(data.get("enqueued_count")) or 0
                     expected = _to_int(data.get("expected_total"))
+                    succeeded = _to_int(data.get("succeeded_count")) or 0
+                    failed = _to_int(data.get("failed_count")) or 0
+                    cancelled = _to_int(data.get("cancelled_count")) or 0
+                    skipped = _to_int(data.get("skipped_count")) or 0
                     total = enq_total if (enq_total is not None and enq_total >= 0) else expected
                     status = data.get("status", "running")
                     # Duration
@@ -55,6 +59,12 @@ class ScanResultNotificationWorker(BaseWorker):
                         duration = (finished or now_ts) - started if started else None
                     except Exception:
                         duration = None
+                    try:
+                        first_start = int(data.get("first_scan_started_at", 0) or 0)
+                        last_done = int(data.get("last_terminal_at", 0) or data.get("last_completed_at", 0) or 0)
+                        processing_window = max(0, last_done - first_start) if first_start and last_done else None
+                    except Exception:
+                        processing_window = None
 
                     # ETA
                     eta = None
@@ -68,25 +78,21 @@ class ScanResultNotificationWorker(BaseWorker):
                     except Exception:
                         eta = None
 
-                    # Derive completion based on available totals
-                    comp_total = None
-                    if total is not None and total >= 0:
-                        comp_total = total
-                    elif enq_total is not None and enq_total >= 0:
-                        comp_total = enq_total
-                    elif data.get("enqueue_done") == "1" and enq_count is not None and enq_count > 0:
-                        comp_total = enq_count
-
                     summary = {
                         "job_id": job_id,
-                        "status": ("completed" if (comp_total is not None and processed >= comp_total) else status),
+                        "status": status,
                         "processed_count": processed,
                         "total": total,
                         "enqueued_total": enq_total,
                         "enqueued_count": enq_count,
+                        "succeeded_count": succeeded,
+                        "failed_count": failed,
+                        "cancelled_count": cancelled,
+                        "skipped_count": skipped,
                         "enqueue_done": data.get("enqueue_done"),
                         "last_update": data.get("last_update"),
                         "duration_secs": duration,
+                        "processing_window_secs": processing_window,
                         "eta_secs": eta,
                         "time_remaining": (lambda s: (f"{s//86400}d {(s%86400)//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}" if s is not None and s >= 0 and s >= 86400 else (f"{(s or 0)//3600:02d}:{((s or 0)%3600)//60:02d}:{(s or 0)%60:02d}" if s is not None and s >= 0 else None)))(eta),
                     }

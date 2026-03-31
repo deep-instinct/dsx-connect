@@ -109,12 +109,12 @@ async def post_scan_request(
                         await r.hsetnx(key, "connector_uuid", str(conn.uuid))
                 except Exception:
                     pass
-                await r.hincrby(key, "enqueued_count", 1)
+                total = await r.hincrby(key, "enqueued_count", 1)
                 try:
                     await r.rpush(job_keys(job_id), task_id)
                 except Exception:
                     pass
-                mapping = {"last_update": now}
+                mapping = {"enqueued_total": str(total), "expected_total": str(total), "last_update": now}
                 if job_name:
                     mapping["job_name"] = job_name
                 await r.hset(key, mapping=mapping)
@@ -217,16 +217,15 @@ async def post_scan_request_batch(
         serialized_requests.append(serialized)
         per_job_counts[req.scan_job_id] = per_job_counts.get(req.scan_job_id, 0) + 1
 
-    # Pre-increment enqueued counters so job progress works for batched intake.
+    # Ensure per-job metadata exists before the batch worker fans out items.
     try:
         r = getattr(request.app.state, "redis", None)
         if r is not None:
-            for job_id, count in per_job_counts.items():
+            for job_id in per_job_counts:
                 key = job_key(job_id)
                 await r.hsetnx(key, "job_id", job_id)
                 await r.hsetnx(key, "status", "running")
                 await r.hsetnx(key, "started_at", now)
-                await r.hincrby(key, "enqueued_count", count)
                 mapping = {"last_update": now}
                 if job_name:
                     mapping["job_name"] = job_name

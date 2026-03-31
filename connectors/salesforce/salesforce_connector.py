@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, AsyncIterator, Dict, Iterable, List, Set
 
+from pydantic import SecretStr
 from starlette.responses import StreamingResponse
 
 from connectors.framework.dsx_connector import DSXConnector
@@ -149,6 +150,246 @@ async def preview_provider(limit: int) -> list[str]:
     except Exception as exc:
         dsx_logging.warning("Preview provider failed: %s", exc)
     return samples
+
+
+@connector.config
+async def config_handler(base: ConnectorInstanceModel):
+    """Expose runtime Salesforce config for UI with masked secrets."""
+    try:
+        payload = base.model_dump()
+    except Exception:
+        from fastapi.encoders import jsonable_encoder
+        payload = jsonable_encoder(base)
+
+    extra = {
+        "asset": config.asset,
+        "filter": config.filter,
+        "resolved_asset_base": config.asset,
+        "sf_login_url": str(config.sf_login_url),
+        "sf_api_version": config.sf_api_version,
+        "sf_client_id": config.sf_client_id,
+        "sf_username": config.sf_username,
+        "sf_auth_method": config.sf_auth_method,
+        "sf_jwt_private_key_file": config.sf_jwt_private_key_file or "",
+        "sf_jwt_algorithm": config.sf_jwt_algorithm,
+        "sf_jwt_exp_seconds": config.sf_jwt_exp_seconds,
+        "sf_where": config.sf_where,
+        "sf_fields": config.sf_fields,
+        "sf_order_by": config.sf_order_by,
+        "sf_max_records": config.sf_max_records,
+        "sf_verify_tls": config.sf_verify_tls,
+        "sf_ca_bundle": config.sf_ca_bundle or "",
+        "sf_http_timeout": config.sf_http_timeout,
+        "sf_client_secret": "**********" if config.sf_client_secret.get_secret_value() else "",
+        "sf_password": "**********" if config.sf_password.get_secret_value() else "",
+        "sf_security_token": "**********" if config.sf_security_token.get_secret_value() else "",
+        "sf_jwt_private_key": "**********" if config.sf_jwt_private_key.get_secret_value() else "",
+    }
+    payload.update({k: v for k, v in extra.items() if v is not None})
+    return payload
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    """Update runtime-editable Salesforce config and persist for local runtime when available."""
+    global sf_client
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        config.asset = payload.get("asset", "").strip()
+        try:
+            connector.connector_running_model.asset = config.asset
+            connector.connector_running_model.asset_display_name = config.asset
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        try:
+            connector.connector_running_model.filter = config.filter
+        except Exception:
+            pass
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                action_val = ItemActionEnum(action_raw)
+                config.item_action = action_val
+                try:
+                    connector.connector_running_model.item_action = action_val
+                except Exception:
+                    pass
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        try:
+            connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+        except Exception:
+            pass
+        changed = True
+
+    str_fields = [
+        "sf_login_url",
+        "sf_api_version",
+        "sf_client_id",
+        "sf_username",
+        "sf_auth_method",
+        "sf_jwt_private_key_file",
+        "sf_jwt_algorithm",
+        "sf_where",
+        "sf_fields",
+        "sf_order_by",
+        "sf_ca_bundle",
+    ]
+    for key in str_fields:
+        if isinstance(payload.get(key), str):
+            setattr(config, key, payload.get(key, "").strip())
+            changed = True
+            if key.startswith("sf_"):
+                creds_changed = True
+
+    if isinstance(payload.get("sf_max_records"), (int, float, str)):
+        try:
+            config.sf_max_records = max(1, int(payload.get("sf_max_records")))
+            changed = True
+        except Exception:
+            pass
+
+    if isinstance(payload.get("sf_jwt_exp_seconds"), (int, float, str)):
+        try:
+            config.sf_jwt_exp_seconds = int(payload.get("sf_jwt_exp_seconds"))
+            changed = True
+        except Exception:
+            pass
+
+    if "sf_verify_tls" in payload:
+        raw = payload.get("sf_verify_tls")
+        if isinstance(raw, bool):
+            config.sf_verify_tls = raw
+            changed = True
+        elif isinstance(raw, str):
+            v = raw.strip().lower()
+            if v in ("true", "1", "yes", "on"):
+                config.sf_verify_tls = True
+                changed = True
+            elif v in ("false", "0", "no", "off"):
+                config.sf_verify_tls = False
+                changed = True
+
+    if isinstance(payload.get("sf_http_timeout"), (int, float, str)):
+        try:
+            config.sf_http_timeout = float(payload.get("sf_http_timeout"))
+            changed = True
+        except Exception:
+            pass
+
+    secret_field_map = {
+        "sf_client_secret": "sf_client_secret",
+        "sf_password": "sf_password",
+        "sf_security_token": "sf_security_token",
+        "sf_jwt_private_key": "sf_jwt_private_key",
+    }
+    for pkey, attr in secret_field_map.items():
+        if isinstance(payload.get(pkey), str):
+            secret = payload.get(pkey, "")
+            if secret:
+                setattr(config, attr, SecretStr(secret))
+                changed = True
+                creds_changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "sf_login_url",
+                "sf_api_version",
+                "sf_client_id",
+                "sf_client_secret",
+                "sf_username",
+                "sf_password",
+                "sf_security_token",
+                "sf_auth_method",
+                "sf_jwt_private_key",
+                "sf_jwt_private_key_file",
+                "sf_jwt_algorithm",
+                "sf_jwt_exp_seconds",
+                "sf_where",
+                "sf_fields",
+                "sf_order_by",
+                "sf_max_records",
+                "sf_verify_tls",
+                "sf_ca_bundle",
+                "sf_http_timeout",
+            ],
+        }
+
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    if creds_changed:
+        try:
+            await sf_client.close()
+        except Exception:
+            pass
+        sf_client = SalesforceClient(config)
+
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_SF_LOGIN_URL": str(config.sf_login_url),
+            "DSXCONNECTOR_SF_API_VERSION": str(config.sf_api_version or ""),
+            "DSXCONNECTOR_SF_CLIENT_ID": str(config.sf_client_id or ""),
+            "DSXCONNECTOR_SF_USERNAME": str(config.sf_username or ""),
+            "DSXCONNECTOR_SF_AUTH_METHOD": str(config.sf_auth_method or ""),
+            "DSXCONNECTOR_SF_JWT_PRIVATE_KEY_FILE": str(config.sf_jwt_private_key_file or ""),
+            "DSXCONNECTOR_SF_JWT_ALGORITHM": str(config.sf_jwt_algorithm or ""),
+            "DSXCONNECTOR_SF_JWT_EXP_SECONDS": str(config.sf_jwt_exp_seconds),
+            "DSXCONNECTOR_SF_WHERE": str(config.sf_where or ""),
+            "DSXCONNECTOR_SF_FIELDS": str(config.sf_fields or ""),
+            "DSXCONNECTOR_SF_ORDER_BY": str(config.sf_order_by or ""),
+            "DSXCONNECTOR_SF_MAX_RECORDS": str(config.sf_max_records),
+            "DSXCONNECTOR_SF_VERIFY_TLS": "true" if bool(config.sf_verify_tls) else "false",
+            "DSXCONNECTOR_SF_CA_BUNDLE": str(config.sf_ca_bundle or ""),
+            "DSXCONNECTOR_SF_HTTP_TIMEOUT": str(config.sf_http_timeout),
+        }
+        if isinstance(payload.get("sf_client_secret"), str) and payload.get("sf_client_secret"):
+            persist_updates["DSXCONNECTOR_SF_CLIENT_SECRET"] = payload.get("sf_client_secret")
+        if isinstance(payload.get("sf_password"), str) and payload.get("sf_password"):
+            persist_updates["DSXCONNECTOR_SF_PASSWORD"] = payload.get("sf_password")
+        if isinstance(payload.get("sf_security_token"), str) and payload.get("sf_security_token"):
+            persist_updates["DSXCONNECTOR_SF_SECURITY_TOKEN"] = payload.get("sf_security_token")
+        if isinstance(payload.get("sf_jwt_private_key"), str) and payload.get("sf_jwt_private_key"):
+            persist_updates["DSXCONNECTOR_SF_JWT_PRIVATE_KEY"] = payload.get("sf_jwt_private_key")
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    out = await config_handler(connector.connector_running_model)
+    out["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return out
 
 
 @connector.item_action

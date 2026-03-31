@@ -24,6 +24,20 @@ _async_lock = asyncio.Lock()
 # Resolve environment once (it's a small helper over get_config())
 _CFG = get_config()
 
+
+def _connector_timeout() -> "httpx.Timeout":
+    # Keep a conservative default, but allow local benchmarking/tuning of slow
+    # connector read_file paths without code changes in each worker callsite.
+    try:
+        timeout_s = float(_CFG.connectors.client_timeout_seconds)
+    except Exception:
+        try:
+            timeout_s = float(__import__("os").getenv("DSXCONNECT_CONNECTORS__CLIENT_TIMEOUT_SECONDS", "30"))
+        except Exception:
+            timeout_s = 30.0
+    timeout_s = max(1.0, timeout_s)
+    return httpx.Timeout(timeout_s)
+
 def _signed_headers(
         url: str,
         method: str,
@@ -71,7 +85,7 @@ def _conn_parts(conn: Union[str, Any]) -> Tuple[str, Optional[str], Optional[str
 async def get_async_connector_client(conn):
     async with _async_lock:
         url, key_id, secret = _conn_parts(conn)
-        http = _async_pool.setdefault(url, httpx.AsyncClient(verify=False, timeout=30.0))
+        http = _async_pool.setdefault(url, httpx.AsyncClient(verify=False, timeout=_connector_timeout()))
 
     class AClient:
         async def request(self, method: HttpMethod, path: str,
@@ -127,7 +141,7 @@ async def get_async_connector_client(conn):
 def get_connector_client(conn):
     with _sync_lock:
         url, key_id, secret = _conn_parts(conn)
-        http = _sync_pool.setdefault(url, httpx.Client(verify=False, timeout=30.0))
+        http = _sync_pool.setdefault(url, httpx.Client(verify=False, timeout=_connector_timeout()))
 
     class SClient:
         def request(self, method: HttpMethod, path: str,

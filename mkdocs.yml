@@ -184,6 +184,7 @@ nav:
 
   - Operations:
       - Performance Tuning: operations/performance-tuning-job-comparisons.md
+      - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
       - Syslog Forwarding: operations/syslog.md
 #      - Monitoring & Logs: operations/monitoring.md
 #      - Troubleshooting: operations/troubleshooting.md

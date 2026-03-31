@@ -508,7 +508,14 @@
                 readyz:     (uuid) => api(`connectors/readyz/${encodeURIComponent(uuid)}`),
                 config:     (uuid) => api(`connectors/config/${encodeURIComponent(uuid)}`),
                 configUpdate:(uuid) => api(`connectors/config/${encodeURIComponent(uuid)}`),
-                fullscan:   (uuid) => api(`connectors/full_scan/${encodeURIComponent(uuid)}`),
+                fullscan:   (uuid, opts = {}) => {
+                    const qs = new URLSearchParams();
+                    if (opts.limit) qs.set('limit', String(opts.limit));
+                    if (opts.batch) qs.set('batch', 'true');
+                    if (opts.batch_size) qs.set('batch_size', String(opts.batch_size));
+                    const suffix = qs.toString() ? `?${qs.toString()}` : '';
+                    return api(`connectors/full_scan/${encodeURIComponent(uuid)}${suffix}`);
+                },
                 repocheck:  (uuid) => api(`connectors/repo_check/${encodeURIComponent(uuid)}`),
                 unregister: (uuid) => api(`connectors/unregister/${encodeURIComponent(uuid)}`),
                 register:   () => api('connectors/register'),
@@ -563,9 +570,14 @@
     const configSidebar = document.getElementById('configSidebar');
     const seenConnectors = new Set();
     const connectorLastSeen = new Map(); // Track when we last saw each connector
+    const connectorCardByUuid = new Map();
+    const pendingConnectorRefreshByUuid = new Map();
     let scanResultsSSE = null;
     let connectorRegistrationSSE = null;
     const MAX_RESULTS = 1000; // cap rows for performance
+    let activeJobsCache = {};
+    const pendingScanResultQueue = [];
+    let pendingScanResultFlush = false;
     const seenJobIds = new Set();
     const diannaResultsByScanKey = new Map();
     const diannaResultsByScanRequestTaskId = new Map();
@@ -607,12 +619,16 @@
     function isFilesystemConnectorName(name) {
         return String(name || '').trim().toLowerCase().includes('filesystem');
     }
-    function canEditConnectorConfig(connectorName) {
-        if (!uiCap('allow_connector_config_edit', false)) return false;
-        const scope = String((currentUiCaps && currentUiCaps.connector_config_edit_scope) || 'none').toLowerCase();
-        if (scope === 'all') return true;
-        if (scope === 'filesystem_only') return isFilesystemConnectorName(connectorName);
-        return false;
+    function appEnvNorm() {
+        return String(currentAppEnv || '').trim().toLowerCase();
+    }
+    function canEditConnectorGeneralConfig() {
+        const env = appEnvNorm();
+        return env === 'app' || env === 'dev';
+    }
+    function canEditConnectorSecrets() {
+        const env = appEnvNorm();
+        return env === 'app';
     }
 
     function setArchPreviewVisibility() {
@@ -827,12 +843,73 @@
         archPreviewWired = true;
     }
 
+    async function requestJobControl(connectorUuid, jobId, action, optimisticState, fallbackState) {
+        if (!jobId) return false;
+        if (optimisticState) updateActionButtonsByUuid(connectorUuid, optimisticState, jobId);
+        try {
+            const res = await fetch(r.scan.jobs[action](jobId), { method: 'POST' });
+            if (!res.ok) {
+                let detail = '';
+                try {
+                    const body = await res.json();
+                    detail = body?.detail || body?.message || body?.error || '';
+                } catch {}
+                throw new Error(detail || `HTTP ${res.status}`);
+            }
+            return true;
+        } catch (e) {
+            if (fallbackState) updateActionButtonsByUuid(connectorUuid, fallbackState, jobId);
+            showNotification(`${action} failed: ${e?.message || e}`, 'error');
+            return false;
+        }
+    }
+
+    function getConnectorCardByUuid(uuid) {
+        const key = String(uuid || '').trim();
+        if (!key) return null;
+        const cached = connectorCardByUuid.get(key);
+        if (cached && cached.isConnected) return cached;
+        connectorCardByUuid.delete(key);
+        const card = document.querySelector(`.connector-card[data-connector-uuid='${key}']`);
+        if (card) connectorCardByUuid.set(key, card);
+        return card || null;
+    }
+
+    function registerConnectorCardElement(card) {
+        if (!card) return;
+        const uuid = String(card.dataset.connectorUuid || '').trim();
+        if (!uuid) return;
+        connectorCardByUuid.set(uuid, card);
+    }
+
+    function scheduleConnectorRefresh(uuid, refreshFn, delayMs = 250) {
+        const key = String(uuid || '').trim();
+        if (!key) return;
+        const current = pendingConnectorRefreshByUuid.get(key);
+        if (current) clearTimeout(current);
+        const timer = setTimeout(async () => {
+            pendingConnectorRefreshByUuid.delete(key);
+            try {
+                await refreshFn();
+            } catch {}
+        }, delayMs);
+        pendingConnectorRefreshByUuid.set(key, timer);
+    }
+
     // UUID-based action button updater
     function updateActionButtonsByUuid(connectorUuid, state, jobId = null) {
         const actions = document.getElementById(`actions-${connectorUuid}`);
         if (!actions) return;
+        const nextJobId = jobId ? String(jobId) : '';
+        const currentState = String(actions.dataset.state || '');
+        const currentJobId = String(actions.dataset.jobId || '');
+        if (currentState === state && currentJobId === nextJobId) {
+            return;
+        }
+        actions.dataset.state = state;
+        actions.dataset.jobId = nextJobId;
         if (state === 'running') {
-            try { const card = document.querySelector(`.connector-card[data-connector-uuid='${connectorUuid}']`); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
+            try { const card = getConnectorCardByUuid(connectorUuid); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
             actions.innerHTML = `
                 <button id="btn-pause-${connectorUuid}">Pause</button>
                 <button id="btn-cancel-${connectorUuid}" style="background:#ef4444;">Cancel</button>
@@ -849,15 +926,13 @@
             actions.appendChild(copy);
             setJobIdPillByUuid(connectorUuid, jobId);
             document.getElementById(`btn-pause-${connectorUuid}`).onclick = async () => {
-                if (!jobId) return;
-                try { await fetch(r.scan.jobs.pause(jobId), { method: 'POST' }); } catch {}
+                await requestJobControl(connectorUuid, jobId, 'pause', 'paused', 'running');
             };
             document.getElementById(`btn-cancel-${connectorUuid}`).onclick = async () => {
-                if (!jobId) return;
-                try { await fetch(r.scan.jobs.cancel(jobId), { method: 'POST' }); } catch {}
+                await requestJobControl(connectorUuid, jobId, 'cancel', 'done', 'running');
             };
         } else if (state === 'paused') {
-            try { const card = document.querySelector(`.connector-card[data-connector-uuid='${connectorUuid}']`); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
+            try { const card = getConnectorCardByUuid(connectorUuid); const b = card && card.querySelector('.job-complete-badge'); if (b) b.remove(); } catch {}
             actions.innerHTML = `
                 <button id="btn-resume-${connectorUuid}">Resume</button>
                 <button id="btn-cancel-${connectorUuid}" style="background:#ef4444;">Cancel</button>
@@ -874,17 +949,16 @@
             actions.appendChild(copy);
             setJobIdPillByUuid(connectorUuid, jobId);
             document.getElementById(`btn-resume-${connectorUuid}`).onclick = async () => {
-                if (!jobId) return;
-                try { await fetch(r.scan.jobs.resume(jobId), { method: 'POST' }); } catch {}
+                await requestJobControl(connectorUuid, jobId, 'resume', 'running', 'paused');
             };
             document.getElementById(`btn-cancel-${connectorUuid}`).onclick = async () => {
-                if (!jobId) return;
-                try { await fetch(r.scan.jobs.cancel(jobId), { method: 'POST' }); } catch {}
+                await requestJobControl(connectorUuid, jobId, 'cancel', 'done', 'paused');
             };
         } else if (state === 'done') {
             const scanUrl = actions.dataset.scanUrl;
             const connectorNameEsc = actions.dataset.connectorName;
             const cu = actions.dataset.connectorUuid;
+            actions.dataset.jobId = '';
             actions.innerHTML = `
                 <button onclick="invokeFullScanByUuid('${cu}', '${scanUrl}', '${connectorNameEsc}')">Full Scan</button>
             `;
@@ -1405,6 +1479,18 @@
         const secs = s % 60;
         return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
+    function jobElapsedDurationSec(job) {
+        if (!job || typeof job !== 'object') return null;
+        const duration = Number(job.duration_secs);
+        if (Number.isFinite(duration) && duration > 0) return duration;
+        return null;
+    }
+    function jobProcessingDurationSec(job) {
+        if (!job || typeof job !== 'object') return null;
+        const processing = Number(job.processing_window_secs);
+        if (Number.isFinite(processing) && processing > 0) return processing;
+        return jobElapsedDurationSec(job);
+    }
     function formatEpochTime(sec) {
         const n = Number(sec);
         if (!Number.isFinite(n) || n <= 0) return '';
@@ -1554,11 +1640,18 @@
                 <th style="text-align:left;">Job</th>
                 <th>Status</th>
                 <th>Processed</th>
+                <th>Succeeded</th>
+                <th>Failed</th>
+                <th>Skipped</th>
+                <th>Cancelled</th>
+                <th>Success %</th>
                 <th>Job time</th>
                 <th>Total Bytes</th>
                 <th>Total bytes/sec</th>
                 <th>Scan bytes/sec</th>
+                <th>Files per second</th>
                 <th>Avg Req ms</th>
+                <th>Avg Read ms</th>
                 <th>Scan ms/byte</th>
                 <th>Est DSXA Scan Time: 1GB</th>
                 <th>Est Job Time: 1GB</th>
@@ -1569,12 +1662,17 @@
             </tr>`;
         const body = rows.map(r => {
             if (r.error) {
-                return `<tr><td>${r.job_id}</td><td colspan="11" style="color: var(--text-secondary);">${r.error}</td></tr>`;
+                return `<tr><td>${r.job_id}</td><td colspan="25" style="color: var(--text-secondary);">${r.error}</td></tr>`;
             }
             const proc = Number(r.processed_count || 0);
             const total = Number(r.enqueued_total || r.expected_total || r.enqueued_count || 0);
+            const succeeded = Number(r.succeeded_count || 0);
+            const failed = Number(r.failed_count || 0);
+            const skipped = Number(r.skipped_count || 0);
+            const cancelled = Number(r.cancelled_count || 0);
             const status = r.status || '';
-            const duration = formatDurationSec(r.duration_secs);
+            const effectiveDurationSecs = jobProcessingDurationSec(r);
+            const duration = formatDurationSec(effectiveDurationSecs);
             const scanUsPerByte = Number(r.scan_us_per_byte || 0);
             const scanMsPerByte = (Number.isFinite(scanUsPerByte) && scanUsPerByte > 0)
                 ? (scanUsPerByte / 1000.0).toFixed(6)
@@ -1583,6 +1681,10 @@
             const jobLabel = r.job_name ? `${r.job_name} (${r.job_id})` : r.job_id;
             const reqBps = Number(r.request_bytes_per_sec || 0);
             const scanBps = Number(r.scan_bytes_per_sec || 0);
+            const durationSecs = Number(effectiveDurationSecs || 0);
+            const filesPerSec = (Number.isFinite(durationSecs) && durationSecs > 0 && proc > 0)
+                ? (proc / durationSecs).toFixed(2)
+                : '';
             const avgBytes = Number(r.avg_bytes_per_file || 0);
             const estScan1GB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / scanBps) : '';
             const estTotal1GB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / reqBps) : '';
@@ -1594,16 +1696,24 @@
             const estTotal1MFiles = (reqBps > 0 && avgBytes > 0)
                 ? formatDurationSec((avgBytes * 1_000_000) / reqBps)
                 : '';
+            const successPct = proc > 0 ? `${((succeeded / proc) * 100).toFixed(1)}%` : '';
             return `
                 <tr>
                     <td style="text-align:left; white-space:nowrap;">${jobLabel}</td>
                     <td>${status}</td>
                     <td>${proc}${total ? ` / ${total}` : ''}</td>
+                    <td>${succeeded}</td>
+                    <td>${failed}</td>
+                    <td>${skipped}</td>
+                    <td>${cancelled}</td>
+                    <td>${successPct}</td>
                     <td>${duration}</td>
                     <td>${bytesWithMBStr(bytes)}</td>
                     <td>${formatRateBps(r.request_bytes_per_sec)}</td>
                     <td>${formatRateBps(r.scan_bytes_per_sec)}</td>
+                    <td>${filesPerSec}</td>
                     <td>${r.avg_request_elapsed_ms || ''}</td>
+                    <td>${r.avg_read_elapsed_ms || ''}</td>
                     <td>${scanMsPerByte}</td>
                     <td>${estScan1GB}</td>
                     <td>${estTotal1GB}</td>
@@ -1633,11 +1743,19 @@
             'status',
             'processed_count',
             'total_count',
+            'succeeded_count',
+            'failed_count',
+            'skipped_count',
+            'cancelled_count',
+            'success_pct',
             'duration_secs',
+            'processing_window_secs',
             'total_bytes',
             'request_bytes_per_sec',
             'scan_bytes_per_sec',
+            'files_per_sec',
             'avg_request_elapsed_ms',
+            'avg_read_elapsed_ms',
             'scan_ms_per_byte',
             'est_scan_1gb_hhmmss',
             'est_total_1gb_hhmmss',
@@ -1650,12 +1768,21 @@
         for (const r of jobCompareRowsCache) {
             const proc = Number(r.processed_count || 0);
             const total = Number(r.enqueued_total || r.expected_total || r.enqueued_count || 0);
+            const succeeded = Number(r.succeeded_count || 0);
+            const failed = Number(r.failed_count || 0);
+            const skipped = Number(r.skipped_count || 0);
+            const cancelled = Number(r.cancelled_count || 0);
             const reqBps = Number(r.request_bytes_per_sec || 0);
             const scanBps = Number(r.scan_bytes_per_sec || 0);
+            const durationSecs = Number(jobProcessingDurationSec(r) || 0);
+            const filesPerSec = (Number.isFinite(durationSecs) && durationSecs > 0 && proc > 0)
+                ? (proc / durationSecs).toFixed(2)
+                : '';
             const scanUsPerByte = Number(r.scan_us_per_byte || 0);
             const scanMsPerByte = (Number.isFinite(scanUsPerByte) && scanUsPerByte > 0)
                 ? (scanUsPerByte / 1000.0).toFixed(6)
                 : '';
+            const successPct = proc > 0 ? ((succeeded / proc) * 100).toFixed(1) : '';
             const avgBytes = Number(r.avg_bytes_per_file || 0);
             const estScan1GB = scanBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / scanBps) : '';
             const estTotal1GB = reqBps > 0 ? formatDurationSec((1024 * 1024 * 1024) / reqBps) : '';
@@ -1673,11 +1800,19 @@
                 r.status || '',
                 proc,
                 total,
+                succeeded,
+                failed,
+                skipped,
+                cancelled,
+                successPct,
                 r.duration_secs || '',
+                r.processing_window_secs || '',
                 Number(r.total_bytes || 0),
                 r.request_bytes_per_sec || '',
                 r.scan_bytes_per_sec || '',
+                filesPerSec,
                 r.avg_request_elapsed_ms || '',
+                r.avg_read_elapsed_ms || '',
                 scanMsPerByte,
                 estScan1GB,
                 estTotal1GB,
@@ -1733,7 +1868,13 @@
         try {
             const listRes = await fetch(r.connectors.list());
             if (!listRes.ok) throw new Error(`list ${listRes.status}`);
-            const connectors = await listRes.json();
+            const connectorsRaw = await listRes.json();
+            const byUuid = new Map();
+            for (const c of (connectorsRaw || [])) {
+                if (!c || !c.uuid) continue;
+                byUuid.set(String(c.uuid), c);
+            }
+            const connectors = Array.from(byUuid.values());
 
             const results = await Promise.all((connectors || []).map(async (conn) => {
                 const rz = await fetchSafe(r.connectors.readyz(conn.uuid));
@@ -1754,7 +1895,9 @@
             results.forEach(({ conn, ready, statusBody }, idx) => {
                 const card = renderConnectorCard(conn, /* cfg */ statusBody, idx, ready);
                 container.appendChild(card);
+                registerConnectorCardElement(card);
             });
+            dedupeConnectorCards();
         } catch (e) {
             document.getElementById('connectorsGrid').textContent = 'Error loading connectors.';
         }
@@ -1766,13 +1909,25 @@
 
 
 function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
+        let effectiveScanUrl = scanUrl;
+        if (connectorName === 'filesystem-connector') {
+            const url = new URL(scanUrl, window.location.origin);
+            if (!url.searchParams.has('batch')) url.searchParams.set('batch', 'true');
+            if (!url.searchParams.has('batch_size')) url.searchParams.set('batch_size', '100');
+            effectiveScanUrl = url.pathname + url.search;
+        }
+
         showNotification(`Starting full scan for ${connectorName}...`, 'info');
 
-        fetch(scanUrl, { method: 'POST' })
+        fetch(effectiveScanUrl, { method: 'POST' })
             .then(async (res) => {
                 let jobId = res.headers.get('X-Job-Id');
                 let json;
                 try { json = await res.json(); } catch { json = {}; }
+                if (!res.ok) {
+                    const detail = (json && (json.detail || json.message || json.error)) || `HTTP ${res.status}`;
+                    throw new Error(String(detail));
+                }
                 if (!jobId && json && typeof json.description === 'string') {
                     const m = json.description.match(/job_id=([0-9a-fA-F\-]{8,})/);
                     if (m) jobId = m[1];
@@ -1793,9 +1948,14 @@ function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
                             if (obj[connectorUuid]) { delete obj[connectorUuid]; localStorage.setItem('lastScansByConnector', JSON.stringify(obj)); }
                         } catch {}
                         updateActionButtonsByUuid(connectorUuid, 'running', jobId);
+                        scheduleQuickJobProbe(connectorUuid, jobId);
+                    } else {
+                        const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+                        if (noteEl) noteEl.textContent = 'Scan started';
                     }
                 } else {
-                    showNotification(`Scan failed for ${connectorName}: ${json.message}`, 'error');
+                    const msg = (json && (json.message || json.detail)) || 'unknown error';
+                    showNotification(`Scan failed for ${connectorName}: ${msg}`, 'error');
                 }
             })
             .catch(err => {
@@ -1811,6 +1971,10 @@ function invokeSampleScanByUuid(connectorUuid, scanUrl, connectorName, n = 5) {
                 let jobId = res.headers.get('X-Job-Id');
                 let json;
                 try { json = await res.json(); } catch { json = {}; }
+                if (!res.ok) {
+                    const detail = (json && (json.detail || json.message || json.error)) || `HTTP ${res.status}`;
+                    throw new Error(String(detail));
+                }
                 if (!jobId && json && typeof json.description === 'string') {
                     const m = json.description.match(/job_id=([0-9a-fA-F\-]{8,})/);
                     if (m) jobId = m[1];
@@ -1825,14 +1989,113 @@ function invokeSampleScanByUuid(connectorUuid, scanUrl, connectorName, n = 5) {
                         const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
                         if (noteEl) noteEl.textContent = `Job ${jobId.substring(0,8)}… started`;
                         updateActionButtonsByUuid(connectorUuid, 'running', jobId);
+                        scheduleQuickJobProbe(connectorUuid, jobId);
+                    } else {
+                        const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+                        if (noteEl) noteEl.textContent = 'Sample scan started';
                     }
                 } else {
-                    showNotification(`Sample scan failed for ${connectorName}: ${json.message}`, 'error');
+                    const msg = (json && (json.message || json.detail)) || 'unknown error';
+                    showNotification(`Sample scan failed for ${connectorName}: ${msg}`, 'error');
                 }
             })
             .catch(err => {
                 showNotification(`Sample scan error for ${connectorName}: ${err.message}`, 'error');
             });
+    }
+
+    async function probeJobStatus(connectorUuid, jobId) {
+        try {
+            const res = await fetch(r.scan.jobs.status(jobId));
+            if (!res.ok) return;
+            const data = await res.json();
+            const status = String(data?.status || '').toLowerCase();
+            const processed = Number(data?.processed ?? 0);
+            const total = Number(data?.total ?? data?.enqueued_total ?? data?.enqueued_count ?? 0);
+            const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
+            if (!noteEl) return;
+            if (status === 'running' || status === 'paused') {
+                if (total > 0) {
+                    noteEl.textContent = `Job ${jobId.substring(0,8)}… ${processed}/${total} (${status})`;
+                } else {
+                    noteEl.textContent = `Job ${jobId.substring(0,8)}… running (awaiting enqueue)`;
+                }
+            } else if (status === 'completed') {
+                noteEl.textContent = `Job ${jobId.substring(0,8)}… completed (${processed}/${total || processed})`;
+            } else if (status === 'cancelled') {
+                noteEl.textContent = `Job ${jobId.substring(0,8)}… cancelled`;
+            }
+        } catch {}
+    }
+
+    function scheduleQuickJobProbe(connectorUuid, jobId) {
+        // Fast sanity probe so "no-op" scans become visible quickly on card.
+        setTimeout(() => { probeJobStatus(connectorUuid, jobId); }, 400);
+        setTimeout(() => { probeJobStatus(connectorUuid, jobId); }, 1200);
+        setTimeout(() => { probeJobStatus(connectorUuid, jobId); }, 2400);
+        setTimeout(() => { probeJobStatus(connectorUuid, jobId); }, 5000);
+    }
+
+    function formatJobOutcomeSummary(data) {
+        const succeeded = Number(data?.succeeded_count || 0);
+        const failed = Number(data?.failed_count || 0);
+        const skipped = Number(data?.skipped_count || 0);
+        const cancelled = Number(data?.cancelled_count || 0);
+        const parts = [];
+        if (succeeded > 0) parts.push(`ok ${succeeded}`);
+        if (failed > 0) parts.push(`fail ${failed}`);
+        if (skipped > 0) parts.push(`skip ${skipped}`);
+        if (cancelled > 0) parts.push(`cancel ${cancelled}`);
+        return parts.join(' • ');
+    }
+
+    async function reconcileActiveJobs() {
+        const entries = Object.entries(activeJobsCache || {});
+        for (const [jobId, val] of entries) {
+            const uuid = val?.connectorUuid;
+            if (!uuid) continue;
+            const card = getConnectorCardByUuid(uuid);
+            if (!card) continue;
+            try {
+                const res = await fetch(r.scan.jobs.status(jobId));
+                if (!res.ok) continue;
+                const data = await res.json();
+                const status = String(data.status || '').toLowerCase();
+                const toInt = (v, d=0) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+                const enqTotal = ('enqueued_total' in data) ? toInt(data.enqueued_total, -1) : -1;
+                const enqCount = ('enqueued_count' in data) ? toInt(data.enqueued_count, -1) : -1;
+                const expected = ('expected_total' in data) ? toInt(data.expected_total, -1) : -1;
+                const total = enqTotal > 0 ? enqTotal : (expected > 0 ? expected : (enqCount > 0 ? enqCount : -1));
+                const proc = toInt(data.processed_count, 0);
+                const noteEl = document.getElementById(`scan-note-${uuid}`);
+                if (noteEl) {
+                    const dur = formatDurationSec(jobElapsedDurationSec(data));
+                    const outcomes = formatJobOutcomeSummary(data);
+                    if (status === 'paused') {
+                        noteEl.textContent = `Job ${jobId.substring(0,8)}… paused${outcomes ? ` • ${outcomes}` : ''}`;
+                    } else if (status === 'completed' || status === 'cancelled' || toInt(data.finished_at, 0) > 0) {
+                        const label = status === 'cancelled' ? 'cancelled' : 'completed';
+                        noteEl.textContent = `Job ${jobId.substring(0,8)}… ${label}${dur ? ` (${dur})` : ''}${outcomes ? ` • ${outcomes}` : ''}`;
+                    } else if (total > 0) {
+                        noteEl.textContent = `Job ${jobId.substring(0,8)}… ${proc}/${total} (${status || 'running'})${dur ? ` • ${dur}` : ''}${outcomes ? ` • ${outcomes}` : ''}`;
+                    } else if (String(data.enqueue_done || '') === '1') {
+                        noteEl.textContent = `Job ${jobId.substring(0,8)}… ${proc} processed (${status || 'running'})${dur ? ` • ${dur}` : ''}${outcomes ? ` • ${outcomes}` : ''}`;
+                    } else {
+                        noteEl.textContent = `Job ${jobId.substring(0,8)}… running (awaiting enqueue)`;
+                    }
+                }
+                if (status === 'paused') {
+                    updateActionButtonsByUuid(uuid, 'paused', jobId);
+                } else if (status === 'completed' || status === 'cancelled' || toInt(data.finished_at, 0) > 0) {
+                    updateActionButtonsByUuid(uuid, 'done', jobId);
+                    setLastScanNote(uuid, { jobId, processed: proc, durationSecs: jobElapsedDurationSec(data) });
+                    forgetActiveJob(jobId);
+                } else {
+                    updateActionButtonsByUuid(uuid, 'running', jobId);
+                    setJobIdPillByUuid(uuid, jobId);
+                }
+            } catch {}
+        }
     }
 
     // No startJobSummarySSE: progress comes via scan-result SSE only.
@@ -1891,7 +2154,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     // removed idx-based setJobIdPill (use setJobIdPillByUuid)
 
     // Persisted last-scan note per connector
-    function setLastScanNote(connectorUuid, { jobId, processed, durationSecs }) {
+    function setLastScanNote(connectorUuid, { jobId, processed, durationSecs, persisted = false }) {
         try {
             const noteEl = document.getElementById(`scan-note-${connectorUuid}`);
             if (noteEl) {
@@ -1904,7 +2167,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                                  : `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
                 })(durationSecs);
                 const copyId = `lastscan-copy-${connectorUuid}`;
-                noteEl.innerHTML = `Last scan (${processed}${durStr ? ` / ${durStr}` : ''}):
+                const label = persisted ? 'Last known scan' : 'Last scan';
+                noteEl.innerHTML = `${label} (${processed}${durStr ? ` / ${durStr}` : ''}):
                     <code title="${jobId}" style="font-family: var(--font-mono);">${jobId.substring(0,8)}…</code>
                     <button id="${copyId}" class="job-id-copy" title="Copy job id"><i class=\"far fa-copy\"></i></button>`;
                 setTimeout(() => {
@@ -1936,7 +2200,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const raw = localStorage.getItem('lastScansByConnector') || '{}';
             const obj = JSON.parse(raw);
             Object.entries(obj).forEach(([uuid, info]) => {
-                setLastScanNote(uuid, info || {});
+                setLastScanNote(uuid, { ...(info || {}), persisted: true });
             });
         } catch {}
     }
@@ -2039,8 +2303,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
     function scheduleResultsRefreshFallback() {
         // SSE is primary; this backstops UI state drift after triggering scans.
-        setTimeout(() => { prefillResultsOnLoad(); }, 2500);
-        setTimeout(() => { prefillResultsOnLoad(); }, 7000);
+        setTimeout(() => { prefillResultsOnLoad(); }, 1500);
+        setTimeout(() => { prefillResultsOnLoad(); }, 4000);
     }
 
     async function applyResultsFilter() {
@@ -2109,10 +2373,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     });
     function rememberActiveJob(jobId, connectorUuid) {
         try {
-            const raw = localStorage.getItem('activeJobs');
-            const obj = raw ? JSON.parse(raw) : {};
-            obj[jobId] = { connectorUuid };
-            localStorage.setItem('activeJobs', JSON.stringify(obj));
+            activeJobsCache[jobId] = { connectorUuid };
+            localStorage.setItem('activeJobs', JSON.stringify(activeJobsCache));
         } catch {}
         try {
             const actions = document.getElementById(`actions-${connectorUuid}`);
@@ -2122,9 +2384,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     }
     function forgetActiveJob(jobId) {
         try {
-            const raw = localStorage.getItem('activeJobs');
-            const obj = raw ? JSON.parse(raw) : {};
-            if (obj[jobId]) { delete obj[jobId]; localStorage.setItem('activeJobs', JSON.stringify(obj)); }
+            if (activeJobsCache[jobId]) {
+                delete activeJobsCache[jobId];
+                localStorage.setItem('activeJobs', JSON.stringify(activeJobsCache));
+            }
         } catch {}
         try {
             const pills = document.querySelectorAll('.job-id-pill');
@@ -2140,12 +2403,12 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
     async function rehydrateActiveJobs() {
         try {
             const raw = localStorage.getItem('activeJobs');
-            const obj = raw ? JSON.parse(raw) : {};
-            const entries = Object.entries(obj);
+            activeJobsCache = raw ? JSON.parse(raw) : {};
+            const entries = Object.entries(activeJobsCache);
             for (const [jobId, val] of entries) {
                 const uuid = val?.connectorUuid;
                 if (!uuid) continue;
-                const card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === uuid);
+                const card = getConnectorCardByUuid(uuid);
                 if (!card) continue;
                 // One-shot verify status from API to clear stale state
                 try {
@@ -2162,13 +2425,9 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     const finishedAt = toInt(data.finished_at, 0);
                     const lastUpdate = toInt(data.last_update, 0);
                     const nowSec = Math.floor(Date.now() / 1000);
-                    const enqueueDone = String(data.enqueue_done || '') === '1';
-
                     const isComplete = (
                         status === 'completed' || status === 'cancelled' ||
-                        (finishedAt > 0) ||
-                        (total > 0 && proc >= total) ||
-                        (enqueueDone && ((enqTotal > 0 && proc >= enqTotal) || (expected > 0 && proc >= expected)))
+                        (finishedAt > 0)
                     );
 
                     const isStale = lastUpdate && (nowSec - lastUpdate) > 120; // 2 minutes inactivity
@@ -2176,7 +2435,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     if (isComplete || isStale) {
                         // Mark UI done and persist a last-scan note so it remains visible until next scan
                         updateActionButtonsByUuid(uuid, 'done', jobId);
-                        setLastScanNote(uuid, { jobId, processed: proc, durationSecs: (toInt(data.duration_secs, null)) });
+                        setLastScanNote(uuid, { jobId, processed: proc, durationSecs: jobElapsedDurationSec(data) });
                         forgetActiveJob(jobId);
                         continue;
                     }
@@ -2188,9 +2447,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     }
                     setJobIdPillByUuid(uuid, jobId);
                 } catch {
-                    // If job not found or API error, revert to Full Scan (no badge on rehydrate)
-                    updateActionButtonsByUuid(uuid, 'done', jobId);
-                    forgetActiveJob(jobId);
+                    // Keep the current controls on transient API errors; don't flip to done blindly.
+                    setJobIdPillByUuid(uuid, jobId);
                 }
             }
         } catch {}
@@ -2393,62 +2651,76 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         // message has: type, uuid, name, url
         const uuid = message.uuid;
         const container = document.getElementById('connectorsGrid');
-        const cards = container.querySelectorAll('.connector-card');
-        let target = null;
-        cards.forEach(card => { if (card.dataset.connectorUuid === uuid) target = card; });
         // Build a minimal conn object
         const conn = { uuid: uuid, name: message.name || 'connector', url: message.url || '' };
-        // Brief delay to let the connector finish standing up its API
-        await sleep(200);
-        // Fetch readiness + config with retries to avoid race right after registration
-        let ready = false, cfg = {};
-        try { const rz = await fetchSafe(r.connectors.readyz(uuid)); ready = !!(rz && rz.ok); } catch {}
-        try { const c = await fetchSafe(r.connectors.config(uuid)); cfg = c ? await c.json() : {}; } catch {}
-        // Preserve the existing index if the card already exists; else append at the end
-        const idx = target ? Number(target.dataset.index) : container.children.length;
-        const newCard = renderConnectorCard(conn, cfg, idx, ready);
-        if (target) {
-            container.replaceChild(newCard, target);
-        } else {
-            if (container.textContent.includes('No connectors registered')) {
-                container.innerHTML = '';
+        scheduleConnectorRefresh(uuid, async () => {
+            await sleep(200);
+            let ready = false, cfg = {};
+            try { const rz = await fetchSafe(r.connectors.readyz(uuid)); ready = !!(rz && rz.ok); } catch {}
+            try { const c = await fetchSafe(r.connectors.config(uuid)); cfg = c ? await c.json() : {}; } catch {}
+            const target = getConnectorCardByUuid(uuid);
+            const idx = target ? Number(target.dataset.index) : container.children.length;
+            const newCard = renderConnectorCard(conn, cfg, idx, ready);
+            if (target) {
+                container.replaceChild(newCard, target);
+            } else {
+                if (container.textContent.includes('No connectors registered')) {
+                    container.innerHTML = '';
+                }
+                container.appendChild(newCard);
             }
-            container.appendChild(newCard);
-        }
-        // Re-apply any persisted last-scan note for this connector (card was re-rendered)
-        try {
-            const raw = localStorage.getItem('lastScansByConnector') || '{}';
-            const obj = JSON.parse(raw);
-            const info = obj[uuid];
-            if (info && info.jobId) {
-                setLastScanNote(uuid, info);
-            }
-        } catch {}
-        // If still not ready or config missing, schedule one background refresh
-        if (!ready || !(cfg && (cfg.asset || cfg.filter || cfg.resolved_asset_base))) {
-            setTimeout(async () => {
-                try {
+            registerConnectorCardElement(newCard);
+            dedupeConnectorCards();
+            try {
+                const raw = localStorage.getItem('lastScansByConnector') || '{}';
+                const obj = JSON.parse(raw);
+                const info = obj[uuid];
+                if (info && info.jobId) {
+                    setLastScanNote(uuid, { ...info, persisted: true });
+                }
+            } catch {}
+            if (!ready || !(cfg && (cfg.asset || cfg.filter || cfg.resolved_asset_base))) {
+                scheduleConnectorRefresh(uuid, async () => {
                     const rz = await fetchSafe(r.connectors.readyz(uuid));
                     const c = await fetchSafe(r.connectors.config(uuid));
                     const freshCfg = c ? await c.json() : {};
+                    const targetNow = getConnectorCardByUuid(uuid);
+                    if (!targetNow) return;
                     const refreshed = renderConnectorCard(conn, freshCfg, idx, !!(rz && rz.ok));
-                    const cardsNow = container.querySelectorAll('.connector-card');
-                    let targetNow = null;
-                    cardsNow.forEach(card => { if (card.dataset.connectorUuid === uuid) targetNow = card; });
-                    if (targetNow) {
-                        container.replaceChild(refreshed, targetNow);
-                        // Re-apply persisted last-scan note after refresh
-                        try {
-                            const raw = localStorage.getItem('lastScansByConnector') || '{}';
-                            const obj = JSON.parse(raw);
-                            const info = obj[uuid];
-                            if (info && info.jobId) {
-                                setLastScanNote(uuid, info);
-                            }
-                        } catch {}
-                    }
-                } catch {}
-            }, 1200);
+                    container.replaceChild(refreshed, targetNow);
+                    registerConnectorCardElement(refreshed);
+                    dedupeConnectorCards();
+                    try {
+                        const raw = localStorage.getItem('lastScansByConnector') || '{}';
+                        const obj = JSON.parse(raw);
+                        const info = obj[uuid];
+                        if (info && info.jobId) {
+                            setLastScanNote(uuid, { ...info, persisted: true });
+                        }
+                    } catch {}
+                }, 1200);
+            }
+        });
+    }
+
+    function dedupeConnectorCards() {
+        const container = document.getElementById('connectorsGrid');
+        if (!container) return;
+        const cards = Array.from(container.querySelectorAll('.connector-card'));
+        if (!cards.length) return;
+
+        const firstByUuid = new Map();
+        for (const card of cards) {
+            const uuid = String(card.dataset.connectorUuid || '').trim();
+            if (!uuid) continue;
+            if (!firstByUuid.has(uuid)) {
+                firstByUuid.set(uuid, card);
+                registerConnectorCardElement(card);
+            } else {
+                // Remove duplicate card instance for same connector UUID.
+                connectorCardByUuid.delete(uuid);
+                try { card.remove(); } catch {}
+            }
         }
     }
 
@@ -2469,6 +2741,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 }
 
                 card.remove();
+                connectorCardByUuid.delete(uuid);
                 removed = true;
                 console.log(`Removed connector card for ${connectorName} (${uuid})`);
             }
@@ -2512,6 +2785,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const idx = container.children.length;
         const card = renderConnectorCard(newConnector, config, idx);
         container.appendChild(card);
+        registerConnectorCardElement(card);
 
         showNotification(`${newConnector.name} connected`, 'success');
     }
@@ -2724,6 +2998,21 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         refreshNoResultsRowState();
     }
 
+    function flushPendingScanResults() {
+        pendingScanResultFlush = false;
+        if (!pendingScanResultQueue.length) return;
+        const batch = pendingScanResultQueue.splice(0, pendingScanResultQueue.length);
+        batch.forEach((rec) => renderScanResult(rec));
+    }
+
+    function enqueueScanResultRender(rec) {
+        if (!rec || typeof rec !== 'object') return;
+        pendingScanResultQueue.push(rec);
+        if (pendingScanResultFlush) return;
+        pendingScanResultFlush = true;
+        setTimeout(() => { flushPendingScanResults(); }, 16);
+    }
+
     function toggleDetail(id) {
         const row = document.getElementById(id);
         if (row) {
@@ -2888,21 +3177,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 }
                 // Unwrap nested scan_result payloads for rendering
                 const rec = (message && message.scan_result) ? message.scan_result : message;
-                console.log('Received scan result:', rec);
-                renderScanResult(rec);
+                enqueueScanResultRender(rec);
                 // Update any job progress UI from this event (no polling)
                 try {
                     const job = message && message.job ? message.job : (rec && rec.scan_request && rec.scan_request.scan_job_id ? { job_id: rec.scan_request.scan_job_id } : null);
                     if (job && job.job_id) {
-                        const mappingRaw = localStorage.getItem('activeJobs');
-                        const mapping = mappingRaw ? JSON.parse(mappingRaw) : {};
-                        const cv = mapping[job.job_id] && mapping[job.job_id].connectorUuid;
+                        const cv = activeJobsCache[job.job_id] && activeJobsCache[job.job_id].connectorUuid;
                         let card = null;
                         if (cv) {
-                            card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === cv);
+                            card = getConnectorCardByUuid(cv);
                         }
                         if (!card && rec && rec.scan_request && rec.scan_request.connector && rec.scan_request.connector.uuid) {
-                            card = [...document.querySelectorAll('.connector-card')].find(el => el.dataset.connectorUuid === rec.scan_request.connector.uuid);
+                            card = getConnectorCardByUuid(rec.scan_request.connector.uuid);
                         }
                         if (card) {
                             const connectorUuid = String(card.dataset.connectorUuid);
@@ -2926,11 +3212,14 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                                                         : null));
                                 const total = (totalPref != null) ? totalPref : '?';
                                 const eta = job.time_remaining || (job.eta_secs != null ? `${job.eta_secs}s` : '');
-                                const dur = (job.duration_secs != null) ? fmtDur(job.duration_secs) : '';
+                                const effectiveDur = jobElapsedDurationSec(job);
+                                const dur = (effectiveDur != null) ? fmtDur(effectiveDur) : '';
+                                const outcomes = formatJobOutcomeSummary(job);
                                 const parts = [
                                     `Processed ${proc}${total !== '?' ? ` / ${total}` : ''}`,
                                     eta ? `ETA ${eta}` : null,
                                     dur ? `Duration ${dur}` : null,
+                                    outcomes || null,
                                 ].filter(Boolean);
                                 noteEl.textContent = parts.join(' • ');
                             }
@@ -2940,24 +3229,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                             } else if (status === 'completed' || status === 'cancelled') {
                                 updateActionButtonsByUuid(connectorUuid, 'done', job.job_id);
                                 const proc = Number(job.processed_count || 0);
-                                const durS = (job.duration_secs != null) ? Number(job.duration_secs) : null;
+                                const durS = jobElapsedDurationSec(job);
                                 setLastScanNote(connectorUuid, { jobId: job.job_id, processed: proc, durationSecs: durS });
                                 forgetActiveJob(job.job_id);
                             } else if (status) {
-                                // Fallback: if we can infer completion from counts, flip UI immediately
-                                const totalKnown = (job.total != null && job.total >= 0) || (job.enqueued_total != null && Number(job.enqueued_total) >= 0) || (job.enqueued_count != null && Number(job.enqueued_count) >= 0);
-                                const proc = Number(job.processed_count || 0);
-                                const tot = (job.total != null && job.total >= 0) ? Number(job.total)
-                                            : ((job.enqueued_total != null && Number(job.enqueued_total) >= 0) ? Number(job.enqueued_total)
-                                               : ((job.enqueued_count != null && Number(job.enqueued_count) >= 0) ? Number(job.enqueued_count) : null));
-                                if (tot != null && proc >= tot) {
-                                    updateActionButtonsByUuid(connectorUuid, 'done', job.job_id);
-                                    const durS = (job.duration_secs != null) ? Number(job.duration_secs) : null;
-                                    setLastScanNote(connectorUuid, { jobId: job.job_id, processed: proc, durationSecs: durS });
-                                    forgetActiveJob(job.job_id);
-                                } else {
-                                    updateActionButtonsByUuid(connectorUuid, 'running', job.job_id);
-                                }
+                                updateActionButtonsByUuid(connectorUuid, 'running', job.job_id);
                             }
                         }
                     }
@@ -3086,10 +3362,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const modal = document.getElementById('configModal');
         const title = document.getElementById('configModalTitle');
         const content = document.getElementById('configModalContent');
-        const editScope = String((currentUiCaps && currentUiCaps.connector_config_edit_scope) || '').toLowerCase();
-        const capBadgeHtml = uiCap('allow_connector_config_edit', false)
-            ? ` <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">EDIT:${escHtml(editScope || 'all')}</span>`
-            : '';
+        const envText = String(currentAppEnv || 'unknown').trim().toLowerCase();
+        const generalEditAllowed = canEditConnectorGeneralConfig();
+        const secretEditAllowed = canEditConnectorSecrets();
+        const capBadgeHtml = ` <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">ENV:${escHtml(envText)} · ASSET/ACTION:${generalEditAllowed ? 'yes' : 'no'} · SECRETS:${secretEditAllowed ? 'yes' : 'no'}</span>`;
 
         title.innerHTML = `Configuration: ${escHtml(connectorName)}${capBadgeHtml}`;
         content.innerHTML = 'Loading configuration...';
@@ -3111,9 +3387,24 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             }
 
             const config = await response.json();
-            const devMode = canEditConnectorConfig(connectorName);
+            const devMode = generalEditAllowed;
+            const appMode = String(currentAppEnv || '').trim().toLowerCase() === 'app';
             const maskedSecret = String(config.sp_client_secret || '').trim() === '**********';
             let spClientSecretPresent = maskedSecret;
+            const awsSecretMasked = {
+                aws_access_key_id: String(config.aws_access_key_id || '').trim() === '**********',
+                aws_secret_access_key: String(config.aws_secret_access_key || '').trim() === '**********',
+                aws_session_token: String(config.aws_session_token || '').trim() === '**********',
+            };
+            const azureSecretMasked = {
+                azure_storage_connection_string: String(config.azure_storage_connection_string || '').trim() === '**********',
+            };
+            const salesforceSecretMasked = {
+                sf_client_secret: String(config.sf_client_secret || '').trim() === '**********',
+                sf_password: String(config.sf_password || '').trim() === '**********',
+                sf_security_token: String(config.sf_security_token || '').trim() === '**********',
+                sf_jwt_private_key: String(config.sf_jwt_private_key || '').trim() === '**********',
+            };
             const original = {
                 asset: config.asset_display_name || config.resolved_asset_base || config.asset || '',
                 filter: config.filter || '',
@@ -3124,18 +3415,87 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 sp_client_secret: maskedSecret ? '' : String(config.sp_client_secret || ''),
                 sp_webhook_enabled: !!config.sp_webhook_enabled,
                 webhook_base_url: String(config.webhook_base_url || ''),
+                aws_access_key_id: awsSecretMasked.aws_access_key_id ? '' : String(config.aws_access_key_id || ''),
+                aws_secret_access_key: awsSecretMasked.aws_secret_access_key ? '' : String(config.aws_secret_access_key || ''),
+                aws_session_token: awsSecretMasked.aws_session_token ? '' : String(config.aws_session_token || ''),
+                aws_default_region: String(config.aws_default_region || ''),
+                azure_storage_connection_string: azureSecretMasked.azure_storage_connection_string ? '' : String(config.azure_storage_connection_string || ''),
+                sf_login_url: String(config.sf_login_url || ''),
+                sf_api_version: String(config.sf_api_version || ''),
+                sf_client_id: String(config.sf_client_id || ''),
+                sf_client_secret: salesforceSecretMasked.sf_client_secret ? '' : String(config.sf_client_secret || ''),
+                sf_username: String(config.sf_username || ''),
+                sf_password: salesforceSecretMasked.sf_password ? '' : String(config.sf_password || ''),
+                sf_security_token: salesforceSecretMasked.sf_security_token ? '' : String(config.sf_security_token || ''),
+                sf_auth_method: String(config.sf_auth_method || ''),
+                sf_jwt_private_key: salesforceSecretMasked.sf_jwt_private_key ? '' : String(config.sf_jwt_private_key || ''),
+                sf_jwt_private_key_file: String(config.sf_jwt_private_key_file || ''),
+                sf_where: String(config.sf_where || ''),
+                sf_fields: String(config.sf_fields || ''),
+                sf_order_by: String(config.sf_order_by || ''),
+                sf_max_records: String(config.sf_max_records || ''),
             };
 
-            const sharepointKeys = ['sp_tenant_id', 'sp_client_id', 'sp_client_secret', 'sp_webhook_enabled', 'webhook_base_url'];
+            const policyKeys = ['asset', 'filter', 'item_action', 'item_action_move_metainfo'];
+            const sharepointCredentialKeys = ['sp_tenant_id', 'sp_client_id', 'sp_client_secret'];
+            const sharepointMonitoringKeys = ['sp_webhook_enabled', 'webhook_base_url'];
+            const filesystemMonitoringKeys = ['monitor', 'monitor_force_polling', 'monitor_poll_interval_ms'];
+            const awsCredentialKeys = ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'aws_default_region'];
+            const azureCredentialKeys = ['azure_storage_connection_string'];
+            const salesforceCredentialKeys = [
+                'sf_login_url',
+                'sf_api_version',
+                'sf_client_id',
+                'sf_client_secret',
+                'sf_username',
+                'sf_password',
+                'sf_security_token',
+                'sf_auth_method',
+                'sf_jwt_private_key',
+                'sf_jwt_private_key_file',
+                'sf_where',
+                'sf_fields',
+                'sf_order_by',
+                'sf_max_records',
+            ];
             const isSharepointConnector = String(connectorName || '').toLowerCase().includes('sharepoint') || ('sp_tenant_id' in config);
-            const configKeys = [
-                'asset',
-                'filter',
-                'item_action',
-                'item_action_move_metainfo',
-                ...(isSharepointConnector ? sharepointKeys : []),
+            const isAwsConnector = String(connectorName || '').toLowerCase().includes('aws') || String(config.name || '').toLowerCase().includes('aws-s3');
+            const isAzureConnector = String(connectorName || '').toLowerCase().includes('azure') || String(config.name || '').toLowerCase().includes('azure-blob');
+            const isSalesforceConnector = String(connectorName || '').toLowerCase().includes('salesforce') || String(config.name || '').toLowerCase().includes('salesforce');
+            const isFilesystemConnector = isFilesystemConnectorName(connectorName) || String(config.name || '').toLowerCase().includes('filesystem');
+            const hasDesktopBridge = !!(window.dsxDesktop && typeof window.dsxDesktop.pickFolder === 'function');
+            const canSelectFilesystemFolder = appMode && isFilesystemConnector && hasDesktopBridge;
+            const canSelectQuarantineFolder = canSelectFilesystemFolder;
+            const credentialKeys = [
+                ...(isSharepointConnector ? sharepointCredentialKeys : []),
+                ...(isAwsConnector ? awsCredentialKeys : []),
+                ...(isAzureConnector ? azureCredentialKeys : []),
+                ...(isSalesforceConnector ? salesforceCredentialKeys : []),
             ].filter((k) => (k in config) || (k in original));
-            const editable = devMode ? new Set(configKeys) : new Set();
+            const monitoringKeys = [
+                ...(isSharepointConnector ? sharepointMonitoringKeys : []),
+                ...(isFilesystemConnector ? filesystemMonitoringKeys : []),
+            ].filter((k) => (k in config) || (k in original));
+            const configKeys = policyKeys.filter((k) => (k in config) || (k in original));
+            const editableCandidateKeys = [...new Set([...configKeys, ...credentialKeys, ...monitoringKeys])];
+            const secretKeys = new Set([
+                'sp_client_secret',
+                'aws_access_key_id',
+                'aws_secret_access_key',
+                'aws_session_token',
+                'azure_storage_connection_string',
+                'sf_client_secret',
+                'sf_password',
+                'sf_security_token',
+                'sf_jwt_private_key',
+            ]);
+            const editable = new Set();
+            if (generalEditAllowed) {
+                for (const key of editableCandidateKeys) {
+                    if (secretKeys.has(key) && !secretEditAllowed) continue;
+                    editable.add(key);
+                }
+            }
             const runtimeKeys = ['name', 'display_name', 'display_icon', 'uuid', 'meta_info', 'url', 'status', 'asset_display_name', 'resolved_asset_base'];
             const repoDiagKeys = ['last_repo_check_ts', 'last_repo_check_reason', 'last_repo_check_message'];
 
@@ -3154,6 +3514,25 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 if (key === "sp_client_secret") return maskedSecret ? "**********" : original.sp_client_secret;
                 if (key === "sp_webhook_enabled") return original.sp_webhook_enabled ? "true" : "false";
                 if (key === "webhook_base_url") return original.webhook_base_url;
+                if (key === "aws_access_key_id") return awsSecretMasked.aws_access_key_id ? "**********" : original.aws_access_key_id;
+                if (key === "aws_secret_access_key") return awsSecretMasked.aws_secret_access_key ? "**********" : original.aws_secret_access_key;
+                if (key === "aws_session_token") return awsSecretMasked.aws_session_token ? "**********" : original.aws_session_token;
+                if (key === "aws_default_region") return original.aws_default_region;
+                if (key === "azure_storage_connection_string") return azureSecretMasked.azure_storage_connection_string ? "**********" : original.azure_storage_connection_string;
+                if (key === "sf_login_url") return original.sf_login_url;
+                if (key === "sf_api_version") return original.sf_api_version;
+                if (key === "sf_client_id") return original.sf_client_id;
+                if (key === "sf_client_secret") return salesforceSecretMasked.sf_client_secret ? "**********" : original.sf_client_secret;
+                if (key === "sf_username") return original.sf_username;
+                if (key === "sf_password") return salesforceSecretMasked.sf_password ? "**********" : original.sf_password;
+                if (key === "sf_security_token") return salesforceSecretMasked.sf_security_token ? "**********" : original.sf_security_token;
+                if (key === "sf_auth_method") return original.sf_auth_method;
+                if (key === "sf_jwt_private_key") return salesforceSecretMasked.sf_jwt_private_key ? "**********" : original.sf_jwt_private_key;
+                if (key === "sf_jwt_private_key_file") return original.sf_jwt_private_key_file;
+                if (key === "sf_where") return original.sf_where;
+                if (key === "sf_fields") return original.sf_fields;
+                if (key === "sf_order_by") return original.sf_order_by;
+                if (key === "sf_max_records") return original.sf_max_records;
                 return v;
             }
 
@@ -3163,17 +3542,25 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     if (!(k in config)) continue;
                     const v = config[k];
                     const isEditable = editable.has(k);
+                    const pickerButton =
+                        (k === 'asset' && canSelectFilesystemFolder)
+                            ? `<button class="cfg-row-picker" data-picker-key="asset" style="margin-left:8px; font-size:0.75rem;">Select Folder...</button>`
+                            : (k === 'item_action_move_metainfo' && canSelectQuarantineFolder)
+                                ? `<button class="cfg-row-picker" data-picker-key="item_action_move_metainfo" style="margin-left:8px; font-size:0.75rem;">Select Quarantine...</button>`
+                                : '';
                     rows.push(`
                       <tr class="cfg-row ${isEditable ? 'cfg-row-editable' : ''}" data-edit-key="${isEditable ? k : ''}" style="cursor:${isEditable ? 'pointer' : 'default'};">
                         <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color: var(--text-secondary);">${k}</td>
-                        <td class="cfg-row-value-cell" style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${isEditable ? `<span class="cfg-row-value" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span><span class="cfg-edit-badge">Editable</span>` : rowValueHtml(v)}</td>
+                        <td class="cfg-row-value-cell" style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${isEditable ? `<span class="cfg-row-value" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span><span class="cfg-edit-badge">Editable</span>${pickerButton}` : `${rowValueHtml(v)}${pickerButton}`}</td>
                       </tr>
                     `);
                 }
                 return rows;
             }
 
-            const configRows = buildRows(configKeys);
+            const policyRows = buildRows(configKeys);
+            const monitoringRows = buildRows(monitoringKeys);
+            const credentialRows = buildRows(credentialKeys);
             const runtimeRows = buildRows(runtimeKeys);
             const hasRepoDiag = repoDiagKeys.some((k) => (k in config) && config[k] !== null && String(config[k]).trim() !== '');
             const repoDiagRows = hasRepoDiag ? buildRows(repoDiagKeys) : [];
@@ -3196,8 +3583,9 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             `;
 
             const tableView = `
+                ${credentialRows.length ? `
                 <div style="margin-top: 12px;">
-                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Configuration</h4>
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Connection</h4>
                   <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
                     <table style="width:100%; border-collapse: collapse;">
                       <thead>
@@ -3206,10 +3594,39 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                           <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
                         </tr>
                       </thead>
-                      <tbody>${configRows.join('')}</tbody>
+                      <tbody>${credentialRows.join('')}</tbody>
+                    </table>
+                  </div>
+                </div>` : ''}
+                <div style="margin-top: 12px;">
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Policy</h4>
+                  <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${policyRows.join('')}</tbody>
                     </table>
                   </div>
                 </div>
+                ${monitoringRows.length ? `
+                <div style="margin-top: 10px;">
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Monitoring</h4>
+                  <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${monitoringRows.join('')}</tbody>
+                    </table>
+                  </div>
+                </div>` : ''}
                 <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px;">${devMode ? 'Tip: click editable rows in the Configuration section to edit values inline. Changes are staged until you click Save Configuration.' : 'Configuration is read-only in this environment.'}</div>
 
                 ${actionPanel}
@@ -3251,8 +3668,49 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 sp_client_secret: String(original.sp_client_secret || ''),
                 sp_webhook_enabled: !!original.sp_webhook_enabled,
                 webhook_base_url: String(original.webhook_base_url || ''),
+                aws_access_key_id: String(original.aws_access_key_id || ''),
+                aws_secret_access_key: String(original.aws_secret_access_key || ''),
+                aws_session_token: String(original.aws_session_token || ''),
+                aws_default_region: String(original.aws_default_region || ''),
+                azure_storage_connection_string: String(original.azure_storage_connection_string || ''),
+                sf_login_url: String(original.sf_login_url || ''),
+                sf_api_version: String(original.sf_api_version || ''),
+                sf_client_id: String(original.sf_client_id || ''),
+                sf_client_secret: String(original.sf_client_secret || ''),
+                sf_username: String(original.sf_username || ''),
+                sf_password: String(original.sf_password || ''),
+                sf_security_token: String(original.sf_security_token || ''),
+                sf_auth_method: String(original.sf_auth_method || ''),
+                sf_jwt_private_key: String(original.sf_jwt_private_key || ''),
+                sf_jwt_private_key_file: String(original.sf_jwt_private_key_file || ''),
+                sf_where: String(original.sf_where || ''),
+                sf_fields: String(original.sf_fields || ''),
+                sf_order_by: String(original.sf_order_by || ''),
+                sf_max_records: String(original.sf_max_records || ''),
             };
             const editableKeys = Array.from(editable);
+            const secretFieldKeys = new Set([
+                'sp_client_secret',
+                'aws_access_key_id',
+                'aws_secret_access_key',
+                'aws_session_token',
+                'azure_storage_connection_string',
+                'sf_client_secret',
+                'sf_password',
+                'sf_security_token',
+                'sf_jwt_private_key',
+            ]);
+            const secretPresent = {
+                sp_client_secret: spClientSecretPresent,
+                aws_access_key_id: awsSecretMasked.aws_access_key_id,
+                aws_secret_access_key: awsSecretMasked.aws_secret_access_key,
+                aws_session_token: awsSecretMasked.aws_session_token,
+                azure_storage_connection_string: azureSecretMasked.azure_storage_connection_string,
+                sf_client_secret: salesforceSecretMasked.sf_client_secret,
+                sf_password: salesforceSecretMasked.sf_password,
+                sf_security_token: salesforceSecretMasked.sf_security_token,
+                sf_jwt_private_key: salesforceSecretMasked.sf_jwt_private_key,
+            };
 
             function getCurrentValues() {
                 return {
@@ -3265,12 +3723,35 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     sp_client_secret: String(configDraft.sp_client_secret || ''),
                     sp_webhook_enabled: !!configDraft.sp_webhook_enabled,
                     webhook_base_url: String(configDraft.webhook_base_url || '').trim(),
+                    aws_access_key_id: String(configDraft.aws_access_key_id || ''),
+                    aws_secret_access_key: String(configDraft.aws_secret_access_key || ''),
+                    aws_session_token: String(configDraft.aws_session_token || ''),
+                    aws_default_region: String(configDraft.aws_default_region || ''),
+                    azure_storage_connection_string: String(configDraft.azure_storage_connection_string || ''),
+                    sf_login_url: String(configDraft.sf_login_url || ''),
+                    sf_api_version: String(configDraft.sf_api_version || ''),
+                    sf_client_id: String(configDraft.sf_client_id || ''),
+                    sf_client_secret: String(configDraft.sf_client_secret || ''),
+                    sf_username: String(configDraft.sf_username || ''),
+                    sf_password: String(configDraft.sf_password || ''),
+                    sf_security_token: String(configDraft.sf_security_token || ''),
+                    sf_auth_method: String(configDraft.sf_auth_method || ''),
+                    sf_jwt_private_key: String(configDraft.sf_jwt_private_key || ''),
+                    sf_jwt_private_key_file: String(configDraft.sf_jwt_private_key_file || ''),
+                    sf_where: String(configDraft.sf_where || ''),
+                    sf_fields: String(configDraft.sf_fields || ''),
+                    sf_order_by: String(configDraft.sf_order_by || ''),
+                    sf_max_records: String(configDraft.sf_max_records || ''),
                 };
             }
 
             function isDirty() {
                 const cur = getCurrentValues();
                 for (const key of editableKeys) {
+                    if (secretFieldKeys.has(key)) {
+                        if (String(cur[key] || '').length > 0) return true;
+                        continue;
+                    }
                     if (key === 'item_action') {
                         if (String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()) return true;
                         continue;
@@ -3316,8 +3797,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             function syncEditableRows() {
                 const cur = getCurrentValues();
                 for (const key of editableKeys) {
-                    if (key === 'sp_client_secret') {
-                        setRowDisplayValue(key, (cur.sp_client_secret || spClientSecretPresent) ? '**********' : '');
+                    if (secretFieldKeys.has(key)) {
+                        setRowDisplayValue(key, (cur[key] || secretPresent[key]) ? '**********' : '');
                     } else if (key === 'sp_webhook_enabled') {
                         setRowDisplayValue(key, cur.sp_webhook_enabled ? 'true' : 'false');
                     } else {
@@ -3337,8 +3818,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         configDraft.item_action = String(nextValue ?? '').toLowerCase();
                     } else {
                         configDraft[key] = String(nextValue ?? '');
-                        if (key === 'sp_client_secret' && String(nextValue ?? '').length > 0) {
-                            spClientSecretPresent = true;
+                        if (secretFieldKeys.has(key) && String(nextValue ?? '').length > 0) {
+                            secretPresent[key] = true;
                         }
                     }
                 }
@@ -3392,10 +3873,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     editor.addEventListener('blur', () => closeInlineEditor(true));
                 } else {
                     editor = document.createElement('input');
-                    editor.type = key === 'sp_client_secret' ? 'password' : 'text';
-                    editor.value = key === 'sp_client_secret' ? '' : currentValue;
-                    if (key === 'sp_client_secret') {
-                        editor.placeholder = maskedSecret ? 'leave blank to keep existing secret' : '';
+                    editor.type = secretFieldKeys.has(key) ? 'password' : 'text';
+                    editor.value = secretFieldKeys.has(key) ? '' : currentValue;
+                    if (secretFieldKeys.has(key)) {
+                        editor.placeholder = secretPresent[key] ? 'leave blank to keep existing secret' : '';
                     }
                     editor.addEventListener('keydown', (e) => {
                         if (e.key === 'Enter') {
@@ -3455,6 +3936,66 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 }
             });
 
+            async function applyFolderPickerToKey(targetKey) {
+                const selected = await window.dsxDesktop.pickFolder();
+                if (!selected) return;
+                const folder = String(selected).trim();
+                if (!folder) return;
+
+                statusEl.textContent = 'Applying...';
+                if (targetKey === 'asset') {
+                    const put = await saveConnectorConfig(uuid, {
+                        asset: folder,
+                        asset_display_name: folder,
+                    });
+                    if (put && put.config) {
+                        config.asset = put.config.asset;
+                        config.asset_display_name = put.config.asset_display_name || folder;
+                    } else {
+                        config.asset = folder;
+                        config.asset_display_name = folder;
+                    }
+                    original.asset = config.asset_display_name || config.asset || folder;
+                    configDraft.asset = original.asset;
+                    setRowDisplayValue('asset', original.asset);
+                    const cardAsset = document.getElementById(`asset-view-${uuid}`);
+                    if (cardAsset) cardAsset.textContent = original.asset;
+                    showNotification('Filesystem asset folder updated', 'success');
+                } else if (targetKey === 'item_action_move_metainfo') {
+                    const put = await saveConnectorConfig(uuid, {
+                        item_action_move_metainfo: folder,
+                    });
+                    if (put && put.config) {
+                        config.item_action_move_metainfo = put.config.item_action_move_metainfo || folder;
+                    } else {
+                        config.item_action_move_metainfo = folder;
+                    }
+                    original.item_action_move_metainfo = config.item_action_move_metainfo || folder;
+                    configDraft.item_action_move_metainfo = original.item_action_move_metainfo;
+                    setRowDisplayValue('item_action_move_metainfo', original.item_action_move_metainfo);
+                    showNotification('Filesystem quarantine folder updated', 'success');
+                }
+                statusEl.textContent = 'Saved';
+                refreshDirtyUiAndRows();
+            }
+
+            content.querySelectorAll('.cfg-row-picker').forEach((btn) => {
+                btn.addEventListener('click', async (e) => {
+                    try {
+                        e.stopPropagation();
+                        const key = btn.getAttribute('data-picker-key');
+                        if (!key) return;
+                        btn.disabled = true;
+                        await applyFolderPickerToKey(key);
+                    } catch (e) {
+                        statusEl.textContent = 'Select failed';
+                        showNotification(`Failed to select folder: ${e?.message || e}`, 'error');
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            });
+
             saveBtn.addEventListener('click', async () => {
                 if (!devMode) {
                     showNotification('Connector configuration is read-only for this connector in current mode', 'warning');
@@ -3480,10 +4021,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                             }
                             continue;
                         }
-                        if (key === 'sp_client_secret') {
+                        if (secretFieldKeys.has(key)) {
                             // Secret is write-only here; blank means "unchanged".
-                            if (String(cur.sp_client_secret || '').length > 0) {
-                                payload.sp_client_secret = cur.sp_client_secret;
+                            if (String(cur[key] || '').length > 0) {
+                                payload[key] = cur[key];
                             }
                             continue;
                         }
@@ -3496,8 +4037,14 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         return;
                     }
                     const saveResp = await saveConnectorConfig(uuid, payload);
-                    statusEl.textContent = 'Saved';
                     const p = (saveResp && saveResp.persistence) ? saveResp.persistence : null;
+                    if (p && p.applied) {
+                        statusEl.textContent = `Saved (${p.detail})`;
+                    } else if (p && p.detail) {
+                        statusEl.textContent = `Saved (runtime-only: ${p.detail})`;
+                    } else {
+                        statusEl.textContent = 'Saved';
+                    }
                     if (p && p.applied) {
                         showNotification(`Connector configuration updated (persisted: ${p.detail})`, 'info');
                     } else if (p) {
@@ -3672,6 +4219,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         }
         // Reconnect any active job summary streams after cards render
         setTimeout(rehydrateActiveJobs, 800);
+        setInterval(reconcileActiveJobs, 2000);
 
         // Health check for SSE connections
         setInterval(() => {

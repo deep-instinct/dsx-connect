@@ -20,6 +20,7 @@ from dsxa_sdk_py.exceptions import DSXAError, AuthenticationError, BadRequestErr
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryDecision, RetryGroups
 from dsx_connect.config import get_config
 from dsx_connect.taskworkers.dlq_store import enqueue_scan_request_dlq_sync, make_scan_request_dlq_item
+from dsx_connect.taskworkers.job_state import record_scan_request_terminal
 
 from dsx_connect.connectors.client import get_connector_client
 from shared.models.connector_models import ScanRequestModel
@@ -70,6 +71,8 @@ class ScanRequestWorker(BaseWorker):
                 "DSXA auth failure: incorrect or missing AUTH_TOKEN/DSXCONNECT_SCANNER__AUTH_TOKEN"
             )
 
+        cfg = get_config()
+
         # Record per-job scan start timestamps (best-effort)
         try:
             job_id = getattr(scan_request, "scan_job_id", None)
@@ -88,11 +91,11 @@ class ScanRequestWorker(BaseWorker):
         except Exception:
             pass
 
-        dsx_logging.info(f"[scan_request:{self.request.id}] for {scan_request.metainfo} started")
-
         # 1a. Respect job pause/cancel (best-effort): quick sync Redis check
-        cfg = get_config()
         job_id = getattr(scan_request, "scan_job_id", None)
+        dsx_logging.info(
+            f"[scan_request:{self.request.id}] job={job_id or '-'} for {scan_request.metainfo} started"
+        )
         if job_id:
             try:
                 r = redis.Redis.from_url(str(cfg.redis_url), decode_responses=True)
@@ -102,7 +105,8 @@ class ScanRequestWorker(BaseWorker):
                 paused = cancelled = None
             # Act on flags if present
             if cancelled == "1":
-                dsx_logging.info(f"[scan_request:{self.request.id}] Job {job_id} cancelled; dropping task")
+                dsx_logging.info(f"[scan_request:{self.request.id}] job={job_id} cancelled; dropping task")
+                self._record_terminal(job_id, "CANCELLED")
                 return "CANCELLED"
             if paused == "1":
                 # Reschedule without consuming Celery retry budget.
@@ -118,7 +122,7 @@ class ScanRequestWorker(BaseWorker):
                         countdown=delay,
                     )
                     dsx_logging.info(
-                        f"[scan_request:{self.request.id}] Job {job_id} paused; rescheduled as {async_result.id} in {delay}s"
+                        f"[scan_request:{self.request.id}] job={job_id} paused; rescheduled as {async_result.id} in {delay}s"
                     )
                 except Exception as e:
                     # If re-enqueue fails, fall back to a light retry (once) without blowing up the task
@@ -129,6 +133,7 @@ class ScanRequestWorker(BaseWorker):
                 return "PAUSED"
 
         request_start = time.perf_counter()
+        read_elapsed_ms: float | None = None
 
         # 1b. Preflight skip for oversized files (based on provided size hint, if any)
         size_hint = getattr(scan_request, "size_in_bytes", None)
@@ -145,6 +150,7 @@ class ScanRequestWorker(BaseWorker):
                 reason="File Size Too Large",
                 request_elapsed_ms=(time.perf_counter() - request_start) * 1000.0,
             )
+            self._record_terminal(job_id, "SKIPPED")
             return "SKIPPED_FILE_TOO_LARGE"
 
         slot_acquired = False
@@ -154,11 +160,17 @@ class ScanRequestWorker(BaseWorker):
             if not slot_acquired:
                 return "BACKPRESSURE"
 
+            read_started = time.perf_counter()
             file_stream, stream_size = self.read_file_stream_from_connector(scan_request)
+            read_elapsed_ms = (time.perf_counter() - read_started) * 1000.0
             if stream_size is not None:
-                dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read stream ({stream_size} bytes)")
+                dsx_logging.debug(
+                    f"[scan_request:{self.context.task_id}] Read stream ({stream_size} bytes, read_elapsed_ms={read_elapsed_ms:.1f})"
+                )
             else:
-                dsx_logging.debug(f"[scan_request:{self.context.task_id}] Read stream (size unknown)")
+                dsx_logging.debug(
+                    f"[scan_request:{self.context.task_id}] Read stream (size unknown, read_elapsed_ms={read_elapsed_ms:.1f})"
+                )
 
             if max_file_size and stream_size is not None and stream_size > max_file_size:
                 dsx_logging.warning(
@@ -173,6 +185,7 @@ class ScanRequestWorker(BaseWorker):
                     reason="File Size Too Large",
                     request_elapsed_ms=(time.perf_counter() - request_start) * 1000.0,
                 )
+                self._record_terminal(job_id, "SKIPPED")
                 return "SKIPPED_FILE_TOO_LARGE"
 
             # 3. Scan with DSXA
@@ -180,11 +193,15 @@ class ScanRequestWorker(BaseWorker):
             request_elapsed_ms = (time.perf_counter() - request_start) * 1000.0
             try:
                 dpa_verdict = dpa_verdict.model_copy(
-                    update={"dsxconnect_request_elapsed_ms": request_elapsed_ms}
+                    update={
+                        "dsxconnect_request_elapsed_ms": request_elapsed_ms,
+                        "dsxconnect_read_elapsed_ms": read_elapsed_ms,
+                    }
                 )
             except Exception:
                 try:
                     dpa_verdict.dsxconnect_request_elapsed_ms = request_elapsed_ms
+                    dpa_verdict.dsxconnect_read_elapsed_ms = read_elapsed_ms
                 except Exception:
                     pass
             dsx_logging.debug(
@@ -200,8 +217,9 @@ class ScanRequestWorker(BaseWorker):
                 queue=Queues.VERDICT,
             )
             dsx_logging.info(
-                f"[scan_request:{self.context.task_id}] Success -> verdict task {async_result.id}"
+                f"[scan_request:{self.context.task_id}] job={job_id or '-'} success -> verdict task {async_result.id}"
             )
+            self._record_terminal(job_id, "SUCCESS")
             return "SUCCESS"
         finally:
             if slot_acquired:
@@ -402,6 +420,25 @@ class ScanRequestWorker(BaseWorker):
             upstream_task_id=upstream_task_id,
         )
         enqueue_scan_request_dlq_sync(item)
+
+    def _handle_final_failure(self, error: Exception, reason: str, *args, **kwargs) -> None:
+        try:
+            scan_request_dict = args[0] if len(args) > 0 else {}
+            scan_request = ScanRequestModel.model_validate(scan_request_dict)
+            job_id = getattr(scan_request, "scan_job_id", None)
+            dsx_logging.info(
+                f"[scan_request:{getattr(self.request, 'id', 'unknown')}] job={job_id or '-'} terminal failure ({reason})"
+            )
+            self._record_terminal(job_id, "FAILED")
+        except Exception:
+            pass
+        super()._handle_final_failure(error, reason, *args, **kwargs)
+
+    def _record_terminal(self, job_id: str | None, outcome: str) -> None:
+        try:
+            record_scan_request_terminal(job_id, outcome)
+        except Exception:
+            pass
 
     def _acquire_scanner_slot(self, cfg, scan_request_dict: dict, scan_request_task_id: str | None) -> bool:
         """Simple backpressure: cap concurrent/pending scans to protect DSXA."""

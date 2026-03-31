@@ -205,7 +205,11 @@ async def shutdown_event():
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     """
     Full Scan handler for the DSX Connector.
 
@@ -245,20 +249,48 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         bp = bp + "/"
         return k[len(bp):] if k.startswith(bp) else k
 
+    requests: list[ScanRequestModel] = []
     count = 0
     for blob in gcs_client.keys(config.asset_bucket, base_prefix=config.asset_prefix_root, filter_str=config.filter):
         key = blob['Key']
         if config.filter and not relpath_matches_filter(_rel(key), config.filter):
             continue
         full_path = f"{config.asset_bucket}/{key}"
-        await connector.scan_file_request(
-            ScanRequestModel(location=key, metainfo=full_path)
-        )
-        dsx_logging.debug(f"Sent scan request for {full_path}")
-        count += 1
-        if limit and count >= limit:
+        requests.append(ScanRequestModel(location=key, metainfo=full_path))
+        if limit and len(requests) >= limit:
             break
-    dsx_logging.info(f"Full scan enqueued {count} item(s) (asset={config.asset}, filter='{config.filter or ''}')")
+
+    if batch:
+        effective_batch_size = max(1, int(batch_size or 100))
+        dsx_logging.info(
+            f"Using GCS full-scan batch mode: effective_batch_size={effective_batch_size}"
+        )
+        for idx in range(0, len(requests), effective_batch_size):
+            chunk = requests[idx:idx + effective_batch_size]
+            if not chunk:
+                continue
+            result = await connector.scan_file_request_batch(chunk)
+            if result.status == StatusResponseEnum.SUCCESS:
+                count += len(chunk)
+                dsx_logging.debug(
+                    f"Sent GCS scan batch for {len(chunk)} item(s), total_enqueued={count}"
+                )
+            else:
+                dsx_logging.warning(
+                    f"GCS scan batch enqueue failed for {len(chunk)} item(s): {result}"
+                )
+    else:
+        for request in requests:
+            result = await connector.scan_file_request(request)
+            if result.status == StatusResponseEnum.SUCCESS:
+                dsx_logging.debug(f"Sent scan request for {request.metainfo}")
+                count += 1
+            else:
+                dsx_logging.warning(f"GCS scan enqueue failed for {request.metainfo}: {result}")
+
+    dsx_logging.info(
+        f"Full scan enqueued {count} item(s) (asset={config.asset}, filter='{config.filter or ''}')"
+    )
     return StatusResponse(
         status=StatusResponseEnum.SUCCESS,
         message='Full scan invoked and scan requests sent.',

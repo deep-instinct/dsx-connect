@@ -8,6 +8,17 @@ function toBody(data) {
   throw new Error("Unsupported payload type");
 }
 
+function isStreamingBody(data) {
+  if (data == null) return false;
+  if (typeof ReadableStream !== "undefined" && data instanceof ReadableStream) return true;
+  return (
+    typeof data === "object" &&
+    (typeof data.pipe === "function" ||
+      typeof data.getReader === "function" ||
+      typeof data[Symbol.asyncIterator] === "function")
+  );
+}
+
 function encodePassword(value) {
   if (!value) return "";
   if (typeof Buffer !== "undefined") return Buffer.from(value, "utf8").toString("base64");
@@ -59,7 +70,11 @@ class DSXAClient {
 
   async _request(method, path, { headers = {}, body, signal } = {}) {
     const url = `${this.baseUrl}${path}`;
-    const res = await this.fetchImpl(url, { method, headers, body, signal });
+    const requestInit = { method, headers, body, signal };
+    if (body != null && isStreamingBody(body)) {
+      requestInit.duplex = "half";
+    }
+    const res = await this.fetchImpl(url, requestInit);
     const text = await res.text();
     const payload = parseTextBody(text);
     if (!res.ok) throw new DSXAHttpError(`HTTP ${res.status} ${res.statusText || "Error"}`, res.status, payload);
@@ -70,6 +85,14 @@ class DSXAClient {
     return this._request("POST", "/scan/binary/v2", {
       headers: this._headers(opts),
       body: toBody(data),
+      signal: opts.signal,
+    });
+  }
+
+  async scanBinaryStream(data, opts = {}) {
+    return this._request("POST", "/scan/binary/v2", {
+      headers: this._headers(opts),
+      body: data,
       signal: opts.signal,
     });
   }

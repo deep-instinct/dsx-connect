@@ -123,7 +123,8 @@ class ScanResultWorker(BaseWorker):
         _send_syslog(scan_result, original_task_id=scan_request_task_id, current_task_id=self.context.task_id)
 
         # 4) optional extras (best-effort; never raise to retry)
-        # 4a) Update job counters in Redis (best-effort)
+        # 4a) Update per-job aggregates in Redis (best-effort).
+        # Terminal job accounting is owned by scan_request, not scan_result.
         try:
             from dsx_connect.config import get_config
             cfg = get_config()
@@ -137,7 +138,6 @@ class ScanResultWorker(BaseWorker):
                 now = str(int(time.time()))
                 r.hsetnx(key, "job_id", job_id)
                 r.hsetnx(key, "status", "running")
-                r.hincrby(key, "processed_count", 1)
                 # Aggregate per-job timing/size stats
                 try:
                     v = getattr(scan_result, "verdict", None)
@@ -161,6 +161,13 @@ class ScanResultWorker(BaseWorker):
                         r.hincrbyfloat(key, "total_request_elapsed_ms", float(req_ms))
                 except Exception:
                     pass
+                try:
+                    v = getattr(scan_result, "verdict", None)
+                    read_ms = getattr(v, "dsxconnect_read_elapsed_ms", None) if v is not None else None
+                    if read_ms is not None:
+                        r.hincrbyfloat(key, "total_read_elapsed_ms", float(read_ms))
+                except Exception:
+                    pass
                 # verdict breakdown
                 try:
                     v = getattr(getattr(scan_result, "verdict", None), "verdict", None)
@@ -182,53 +189,7 @@ class ScanResultWorker(BaseWorker):
         except Exception:
             pass
 
-        # 4b) If we can determine total and counts match, mark finished
-        try:
-            job_id = getattr(scan_result, "scan_job_id", None) or getattr(getattr(scan_result, "scan_request", None), "scan_job_id", None)
-            if job_id:
-                r = getattr(self.__class__, "_redis", None)
-                if r is not None:
-                    data = r.hgetall(job_key(job_id)) or {}
-                    try:
-                        enq_total = int(data.get("enqueued_total", -1)) if data.get("enqueued_total") is not None else -1
-                        expected = int(data.get("expected_total", -1)) if data.get("expected_total") is not None else -1
-                        total = enq_total if enq_total > 0 else (expected if expected > 0 else -1)
-                        processed = int(data.get("processed_count", 0))
-                        if total > 0 and processed >= total and not data.get("finished_at"):
-                            now = str(int(time.time()))
-                            r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
-                            try:
-                                dsx_logging.info(f"job.complete job={job_id} processed={processed} total={total} finished_at={now}")
-                            except Exception:
-                                pass
-                        elif data.get("enqueue_done") == "1":
-                            # Older behavior: if enqueue_done is set and processed matches enqueued_total, mark done
-                            if enq_total > 0 and processed >= enq_total and not data.get("finished_at"):
-                                now = str(int(time.time()))
-                                r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
-                                try:
-                                    dsx_logging.info(f"job.complete job={job_id} processed={processed} enqueued_total={enq_total} finished_at={now}")
-                                except Exception:
-                                    pass
-                        else:
-                            # Fallback: if we don't know total but enqueued_count is available and matches processed, complete
-                            try:
-                                enq_count = int(data.get("enqueued_count", -1)) if data.get("enqueued_count") is not None else -1
-                            except Exception:
-                                enq_count = -1
-                            if enq_count >= 0 and processed >= enq_count and not data.get("finished_at"):
-                                now = str(int(time.time()))
-                                r.hset(job_key(job_id), mapping={"status": "completed", "finished_at": now, "last_update": now})
-                                try:
-                                    dsx_logging.info(f"job.complete job={job_id} processed={processed} enqueued_count={enq_count} finished_at={now}")
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-        # 4c) Store to DB / stats / notifications
+        # 4b) Store to DB / stats / notifications
         self._best_effort_extras(scan_result)
 
         dsx_logging.info(f"[scan_result:{self.context.task_id}] completed for {scan_request.location}")

@@ -56,12 +56,12 @@ See [Reference → Azure Credentials](../../reference/azure-credentials.md) for 
 env:
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8586"
   DSXCONNECTOR_CONNECTOR_URL: "http://m365-mail-connector:80"
-  M365_TENANT_ID: "<tenant-guid>"
-  M365_CLIENT_ID: "<app-id>"
-  M365_CLIENT_SECRET: "<client-secret>"
-  M365_MAILBOX_UPNS: "user1@contoso.com,user2@contoso.com"
-  M365_CLIENT_STATE: "3f1e9de2-ee73-4b02-8d17-16adf0c6a28c"
-  DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION: "true"
+  DSXCONNECTOR_M365_TENANT_ID: "<tenant-guid>"
+  DSXCONNECTOR_M365_CLIENT_ID: "<app-id>"
+  DSXCONNECTOR_M365_CLIENT_SECRET: "<client-secret>"
+  DSXCONNECTOR_M365_MAILBOX_UPNS: "user1@contoso.com,user2@contoso.com"
+  DSXCONNECTOR_M365_CLIENT_STATE: "3f1e9de2-ee73-4b02-8d17-16adf0c6a28c"
+  DSXCONNECTOR_M365_TRIGGER_DELTA_ON_NOTIFICATION: "true"
 
 webhook:
   publicUrl: "https://mail-connector.example.com"
@@ -82,13 +82,14 @@ ingressWebhook:
 - `DSXCONNECTOR_CONNECTOR_URL` stays internal so dsx-connect talks to the ClusterIP service.
 - `webhook.publicUrl` tells the connector which HTTPS base to register with Graph.
 - The ingress exposes `/m365-mail-connector/webhook/event` publicly; terminate TLS here and reuse the same hostname in `webhook.publicUrl`.
+- If you set `DSXCONNECTOR_M365_CLIENT_STATE`, Graph echoes it in each notification and the connector rejects mismatched payloads.
 
 ## Chart Behaviour
 
-- If `webhook.publicUrl` is set, the chart injects `DSXCONNECTOR_WEBHOOK_URL` for you; otherwise the connector falls back to `DSXCONNECTOR_CONNECTOR_URL`.
+- If `webhook.publicUrl` is set, the chart injects `DSXCONNECTOR_WEBHOOK_URL` for you. The connector also accepts `DSXCONNECTOR_M365_WEBHOOK_URL`; both represent the public HTTPS base URL, not the full `/webhook/event` path.
 - The provided ingress templates only expose the webhook path. Add a second ingress or service if you want other routes reachable outside the cluster.
 - Remember to create (or reuse) the enrollment-token Secret referenced under `auth_dsxconnect.enrollmentSecretName`; dsx-connect and the connector must share the same token when `auth_dsxconnect.enabled=true`.
-- For near real-time scanning, you can add `DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION=true` (or lower `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS`). The connector will still run periodic delta passes as a safety net.
+- For near real-time scanning, add `DSXCONNECTOR_M365_TRIGGER_DELTA_ON_NOTIFICATION=true` (or lower `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS`). The connector will still run periodic delta passes as a safety net.
 
 ## Next Steps
 
@@ -98,7 +99,7 @@ ingressWebhook:
      -f values.yaml
    ```
 2. Confirm the pod starts and the ingress hostname resolves over HTTPS.
-3. Check logs for `Subscriptions reconciled` and `Delta runner` entries to ensure Graph notifications are flowing.
+3. Check logs for `Subscriptions reconciled`, webhook `validationToken` handling, and `delta.kick` entries to ensure Graph notifications are flowing.
 
 For more on Graph credentials and permission setup, see the Reference → [Azure Credentials](../../reference/azure-credentials.md) page.
 

@@ -7,7 +7,7 @@ from typing import Any, Optional, Set
 import httpx
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
 from connectors.framework.auth_hmac import build_outbound_auth_header
 from shared.routes import service_url, API_PREFIX_V1, DSXConnectAPI
 from shared.dsx_logging import dsx_logging
@@ -307,17 +307,17 @@ async def config_handler(base: ConnectorInstanceModel):
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     try:
         concurrency = max(1, int(getattr(config, "scan_concurrency", 10) or 10))
-        sem = asyncio.Semaphore(concurrency)
-        tasks: list[asyncio.Task] = []
         base_path = config.resolved_asset_base or ""
         eff_filter = (config.filter or "").strip()
-
-        async def enqueue(item_id: str, metainfo: str):
-            async with sem:
-                await connector.scan_file_request(ScanRequestModel(location=item_id, metainfo=metainfo))
+        requests: list[ScanRequestModel] = []
+        enqueued_count = 0
 
         async for item in client.iter_files_recursive(base_path):
             if item.get("folder"):
@@ -329,14 +329,44 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
             identifier = item.get("id") or item.get("path")
             if not identifier:
                 continue
-            tasks.append(asyncio.create_task(enqueue(str(identifier), normalized or path)))
-            if limit and len(tasks) >= limit:
+            requests.append(ScanRequestModel(location=str(identifier), metainfo=normalized or path))
+            if limit and len(requests) >= limit:
                 break
 
-        if tasks:
-            await asyncio.gather(*tasks)
-        dsx_logging.info(f"Full scan enqueued {len(tasks)} item(s) (base='{base_path}', filter='{eff_filter}')")
-        return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Full scan invoked", description=f"enqueued={len(tasks)}")
+        if batch:
+            effective_batch_size = max(1, int(batch_size or 100))
+            dsx_logging.info(
+                f"Using OneDrive full-scan batch mode: effective_batch_size={effective_batch_size}"
+            )
+            for idx in range(0, len(requests), effective_batch_size):
+                chunk = requests[idx:idx + effective_batch_size]
+                if not chunk:
+                    continue
+                result = await connector.scan_file_request_batch(chunk)
+                if result.status == StatusResponseEnum.SUCCESS:
+                    enqueued_count += len(chunk)
+                else:
+                    dsx_logging.warning(
+                        f"OneDrive batch enqueue failed for {len(chunk)} item(s): {result}"
+                    )
+        else:
+            sem = asyncio.Semaphore(concurrency)
+
+            async def enqueue(request: ScanRequestModel) -> int:
+                async with sem:
+                    result = await connector.scan_file_request(request)
+                if result.status == StatusResponseEnum.SUCCESS:
+                    return 1
+                dsx_logging.warning(f"OneDrive enqueue failed for {request.metainfo}: {result}")
+                return 0
+
+            if requests:
+                results = await asyncio.gather(*(enqueue(request) for request in requests))
+                enqueued_count = sum(results)
+
+        _SCAN_ENQ_COUNTER.set(enqueued_count)
+        dsx_logging.info(f"Full scan enqueued {enqueued_count} item(s) (base='{base_path}', filter='{eff_filter}')")
+        return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Full scan invoked", description=f"enqueued={enqueued_count}")
     except Exception as exc:
         return StatusResponse(status=StatusResponseEnum.ERROR, message=str(exc))
 

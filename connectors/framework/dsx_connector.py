@@ -461,7 +461,12 @@ class DSXConnector:
         except Exception:
             return False
 
-    def _prepare_scan_request_common(self, scan_request: ScanRequestModel) -> tuple[bool, StatusResponse | None]:
+    def _prepare_scan_request_common(
+        self,
+        scan_request: ScanRequestModel,
+        *,
+        count_enqueued: bool = True,
+    ) -> tuple[bool, StatusResponse | None]:
         if self.connector_running_model.status != ConnectorStatusEnum.READY:
             dsx_logging.warning(
                 "Skipping scan request for %s because connector is not registered with dsx-connect (status=%s).",
@@ -487,7 +492,7 @@ class DSXConnector:
             job_ctx = _SCAN_JOB_ID.get()
             scan_request.scan_job_id = job_ctx or str(uuid.uuid4())
         try:
-            if _SCAN_JOB_ID.get() == scan_request.scan_job_id:
+            if count_enqueued and _SCAN_JOB_ID.get() == scan_request.scan_job_id:
                 c = _SCAN_ENQ_COUNTER.get()
                 _SCAN_ENQ_COUNTER.set(c + 1)
         except Exception:
@@ -621,7 +626,7 @@ class DSXConnector:
         prepared: list[dict[str, Any]] = []
         skipped = 0
         for req in scan_requests:
-            ok, _ = self._prepare_scan_request_common(req)
+            ok, _ = self._prepare_scan_request_common(req, count_enqueued=False)
             if not ok:
                 skipped += 1
                 continue
@@ -659,6 +664,14 @@ class DSXConnector:
                 body = resp.json() if resp.content else {}
             queued = int((body or {}).get("queued_items") or len(prepared))
             self.scan_request_count += queued
+            try:
+                if prepared:
+                    job_id = getattr(scan_requests[0], "scan_job_id", None)
+                    if job_id and _SCAN_JOB_ID.get() == job_id:
+                        c = _SCAN_ENQ_COUNTER.get()
+                        _SCAN_ENQ_COUNTER.set(c + queued)
+            except Exception:
+                pass
             return StatusResponse(
                 status=StatusResponseEnum.SUCCESS,
                 message=f"Batch scan queued ({queued} items)",

@@ -21,6 +21,7 @@ export declare class DSXAClient {
     timeoutMs?: number;
   });
   scanBinary(data: Uint8Array | ArrayBuffer | Blob | string, opts?: ScanOptions): Promise<any>;
+  scanBinaryStream(data: any, opts?: ScanOptions): Promise<any>;
   scanBase64(encodedData: string | Uint8Array, opts?: ScanOptions): Promise<any>;
   scanHash(fileHash: string, opts?: ScanOptions): Promise<any>;
   scanByPath(streamPath: string, opts?: ScanOptions): Promise<any>;

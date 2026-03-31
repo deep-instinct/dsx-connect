@@ -8,6 +8,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -130,6 +131,7 @@ DSXCONNECTOR_CONFIG_PERSIST_LOCAL_ONLY=true
 DSXCONNECTOR_MONITOR=true
 DSXCONNECTOR_MONITOR_FORCE_POLLING=true
 DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS=1000
+DSXCONNECTOR_FULL_SCAN_ENQUEUE_CONCURRENCY=8
 
 # Optional auth
 DSXCONNECTOR_AUTH__ENABLED=false
@@ -341,7 +343,31 @@ def cmd_foreground(
         raise typer.Exit(code=1)
 
     child_env = _child_env(env_path)
-    rc = subprocess.run(spec.command, cwd=spec.cwd, env=child_env).returncode
+    with spec.logfile.open("a", buffering=1) as log_fp:
+        proc = subprocess.Popen(
+            spec.command,
+            cwd=spec.cwd,
+            env=child_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+
+        threads = [
+            threading.Thread(
+                target=_tee_stream, args=(proc.stdout, sys.stdout, log_fp), daemon=True
+            ),
+            threading.Thread(
+                target=_tee_stream, args=(proc.stderr, sys.stderr, log_fp), daemon=True
+            ),
+        ]
+        for thread in threads:
+            thread.start()
+
+        rc = proc.wait()
+        for thread in threads:
+            thread.join(timeout=1.0)
     raise typer.Exit(code=rc or 0)
 
 
@@ -408,6 +434,21 @@ def _enable_launcher_log(state_dir: Path) -> None:
 
     ts = datetime.now().isoformat(timespec="seconds")
     print(f"[{ts}] app-launch argv={sys.argv} cwd={Path.cwd()}")
+
+
+def _tee_stream(src, *dests) -> None:
+    try:
+        for chunk in iter(lambda: src.readline(), ""):
+            if not chunk:
+                break
+            for dest in dests:
+                dest.write(chunk)
+                dest.flush()
+    finally:
+        try:
+            src.close()
+        except Exception:
+            pass
 
 
 

@@ -6,7 +6,7 @@ from typing import Any, Optional, Set
 import httpx
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -627,7 +627,11 @@ async def config_update_handler(payload: dict):
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     """
     Full Scan handler for the DSX Connector.
 
@@ -667,11 +671,59 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         concurrency = max(1, int(getattr(config, 'scan_concurrency', 10) or 10))
         sem = asyncio.Semaphore(concurrency)
         tasks: list[asyncio.Task] = []
+        enqueued_count = 0
+        batch_errors = 0
+        batch_items: list[ScanRequestModel] = []
+        use_batch = bool(batch)
+        effective_batch_size = 1
+
+        if use_batch:
+            caps = await connector.get_core_scan_batch_capabilities()
+            if not bool(caps.get("enabled", False)):
+                dsx_logging.info(
+                    "Batch full scan requested but core batch mode is disabled; "
+                    "falling back to single-item enqueue."
+                )
+                use_batch = False
+            else:
+                default_size = max(1, int(caps.get("default_size", 10)))
+                max_size = max(1, int(caps.get("max_size", 100)))
+                requested = batch_size if isinstance(batch_size, int) and batch_size > 0 else default_size
+                effective_batch_size = min(max(1, int(requested)), max_size)
+                dsx_logging.info(
+                    f"Using SharePoint full-scan batch mode: effective_batch_size={effective_batch_size} "
+                    f"(requested={batch_size}, default={default_size}, max={max_size})"
+                )
 
         async def enqueue(item_id: str, metainfo: str):
+            nonlocal enqueued_count, batch_errors
             async with sem:
                 dsx_logging.debug(f"Enqueuing scan request for item {item_id}")
-                await connector.scan_file_request(ScanRequestModel(location=item_id, metainfo=metainfo))
+                resp = await connector.scan_file_request(ScanRequestModel(location=item_id, metainfo=metainfo))
+                if resp.status == StatusResponseEnum.SUCCESS:
+                    enqueued_count += 1
+                    return
+
+                batch_errors += 1
+                dsx_logging.warning(
+                    f"SharePoint single-item enqueue failed for {metainfo}: "
+                    f"{resp.message} ({resp.description})"
+                )
+
+        async def flush_batch() -> None:
+            nonlocal enqueued_count, batch_errors, batch_items
+            if not batch_items:
+                return
+            resp = await connector.scan_file_request_batch(batch_items, batch_size=effective_batch_size)
+            if resp.status == StatusResponseEnum.SUCCESS:
+                enqueued_count += len(batch_items)
+            else:
+                batch_errors += 1
+                dsx_logging.warning(
+                    f"SharePoint batch enqueue failed for {len(batch_items)} item(s): "
+                    f"{resp.message} ({resp.description})"
+                )
+            batch_items = []
 
         # Choose enumeration strategy: delta (fast) or recursive (baseline)
         provider_mode = (getattr(config, 'sp_provider_mode', 'graph') or 'graph').lower()
@@ -715,17 +767,33 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
             # In REST mode we use drive path as identifier to avoid a per-item resolve round-trip.
             identifier = item.get("id") if provider_mode != 'spo_rest' else item_path
             metainfo = item_path
-            tasks.append(asyncio.create_task(enqueue(identifier, metainfo)))
-            if limit and len(tasks) >= limit:
+            if use_batch:
+                batch_items.append(ScanRequestModel(location=identifier, metainfo=metainfo))
+                if len(batch_items) >= effective_batch_size:
+                    await flush_batch()
+            else:
+                tasks.append(asyncio.create_task(enqueue(identifier, metainfo)))
+                if len(tasks) >= 200:
+                    await asyncio.gather(*tasks)
+                    tasks.clear()
+            if limit and (enqueued_count + len(batch_items if use_batch else tasks)) >= limit:
                 break
 
+        if use_batch and batch_items:
+            await flush_batch()
         if tasks:
             await asyncio.gather(*tasks)
-        count = len(tasks)
+            tasks.clear()
+        count = enqueued_count
+        try:
+            _SCAN_ENQ_COUNTER.set(enqueued_count)
+        except Exception:
+            pass
         mode_desc = 'spo_rest' if provider_mode == 'spo_rest' else ('delta' if use_delta else 'recursive')
         asset_base_log = config.resolved_asset_base if config.resolved_asset_base is not None else (config.asset or "")
         dsx_logging.info(
-            f"Full scan enqueued {count} item(s) (asset_base='{asset_base_log}', filter='{config.filter or ''}', mode={mode_desc})"
+            f"Full scan enqueued {count} item(s) (asset_base='{asset_base_log}', "
+            f"filter='{config.filter or ''}', mode={mode_desc}, batch_errors={batch_errors})"
         )
         return StatusResponse(status=StatusResponseEnum.SUCCESS, message='Full scan invoked and scan requests sent.', description=f"enqueued={count}")
     except Exception as e:

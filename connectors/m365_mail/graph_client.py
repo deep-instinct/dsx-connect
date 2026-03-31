@@ -39,7 +39,8 @@ class GraphClient:
 
     async def list_attachments(self, user: str, message_id: str) -> list[dict[str, Any]]:
         token = await self.token()
-        url = f"https://graph.microsoft.com/v1.0/users/{user}/messages/{message_id}/attachments?$select=id,name,contentType,size,@odata.type"
+        # Graph rejects @odata.type in $select, but still includes it in the payload.
+        url = f"https://graph.microsoft.com/v1.0/users/{user}/messages/{message_id}/attachments?$select=id,name,contentType,size"
         items: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             next_url = url

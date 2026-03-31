@@ -1,3 +1,3 @@
 fn main() {
-    dsxa_tauri_lib::run();
+    dsxa_desktop_lib::run();
 }

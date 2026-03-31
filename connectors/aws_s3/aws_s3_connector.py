@@ -1,3 +1,5 @@
+import os
+import asyncio
 from starlette.responses import StreamingResponse
 
 from connectors.aws_s3.aws_s3_client import AWSS3Client
@@ -48,6 +50,14 @@ def _redact_aws_secret_text(msg: str) -> str:
     return redacted
 
 
+def _aws_runtime_value(key: str) -> str:
+    return str(os.getenv(key, "") or "")
+
+
+def _aws_masked_value(key: str) -> str:
+    return "**********" if _aws_runtime_value(key) else ""
+
+
 @connector.startup
 async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     """
@@ -88,7 +98,11 @@ async def shutdown_event():
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     """
     Full Scan handler for the DSX Connector.
 
@@ -129,18 +143,62 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         return k[len(bp):] if k.startswith(bp) else k
 
     count = 0
+    batch_items: list[ScanRequestModel] = []
+    use_batch = bool(batch)
+    effective_batch_size = 1
+
+    if use_batch:
+        caps = await connector.get_core_scan_batch_capabilities()
+        if not bool(caps.get("enabled", False)):
+            dsx_logging.info(
+                "Batch full scan requested but core batch mode is disabled; "
+                "falling back to single-item enqueue."
+            )
+            use_batch = False
+        else:
+            default_size = max(1, int(caps.get("default_size", 10)))
+            max_size = max(1, int(caps.get("max_size", 100)))
+            requested = batch_size if isinstance(batch_size, int) and batch_size > 0 else default_size
+            effective_batch_size = min(max(1, int(requested)), max_size)
+            dsx_logging.info(
+                f"Using AWS S3 full-scan batch mode: effective_batch_size={effective_batch_size} "
+                f"(requested={batch_size}, default={default_size}, max={max_size})"
+            )
+
+    async def _flush_batch() -> None:
+        nonlocal count, batch_items
+        if not batch_items:
+            return
+        items = batch_items
+        batch_items = []
+        status_response = await connector.scan_file_request_batch(items, batch_size=effective_batch_size)
+        dsx_logging.debug(
+            f"Sent batch scan request for {len(items)} item(s), "
+            f"result: {status_response}"
+        )
+        if getattr(status_response, "status", None) == StatusResponseEnum.SUCCESS:
+            count += len(items)
+
     for key in aws_s3_client.keys(config.asset_bucket, base_prefix=config.asset_prefix_root, filter_str=config.filter):
         file_name = key['Key']  # full key
         rel_name = _rel(file_name)
         if config.filter and not relpath_matches_filter(rel_name, config.filter):
             continue
         full_path = f"{config.asset_bucket}/{file_name}"
-        status_response = await connector.scan_file_request(
-            ScanRequestModel(location=str(file_name), metainfo=full_path))
-        dsx_logging.debug(f'Sent scan request for {full_path}, result: {status_response}')
-        count += 1
+        req = ScanRequestModel(location=str(file_name), metainfo=full_path)
+        if use_batch:
+            batch_items.append(req)
+            if len(batch_items) >= effective_batch_size or (limit and count + len(batch_items) >= limit):
+                await _flush_batch()
+        else:
+            status_response = await connector.scan_file_request(req)
+            dsx_logging.debug(f'Sent scan request for {full_path}, result: {status_response}')
+            if getattr(status_response, "status", None) == StatusResponseEnum.SUCCESS:
+                count += 1
         if limit and count >= limit:
             break
+    if use_batch and batch_items and (not limit or count < limit):
+        await _flush_batch()
     dsx_logging.info(f"Full scan enqueued {count} item(s) (asset={config.asset}, filter='{config.filter or ''}')")
     return StatusResponse(status=StatusResponseEnum.SUCCESS, message='Full scan invoked and scan requests sent.', description=f"enqueued={count}")
 
@@ -171,6 +229,28 @@ async def preview_provider(limit: int) -> list[str]:
     return items
 
 
+@connector.config
+async def config_handler(base: ConnectorInstanceModel):
+    """Expose runtime config for UI, including AWS credential placeholders."""
+    try:
+        payload = base.model_dump()
+    except Exception:
+        from fastapi.encoders import jsonable_encoder
+        payload = jsonable_encoder(base)
+
+    extra = {
+        "asset": config.asset,
+        "filter": config.filter,
+        "resolved_asset_base": config.asset,
+        "aws_access_key_id": _aws_masked_value("AWS_ACCESS_KEY_ID"),
+        "aws_secret_access_key": _aws_masked_value("AWS_SECRET_ACCESS_KEY"),
+        "aws_session_token": _aws_masked_value("AWS_SESSION_TOKEN"),
+        "aws_default_region": _aws_runtime_value("AWS_DEFAULT_REGION"),
+    }
+    payload.update({k: v for k, v in extra.items() if v is not None})
+    return payload
+
+
 @connector.config_update
 async def config_update_handler(payload: dict):
     """Update runtime-editable connector config fields and persist for local runs when enabled."""
@@ -199,10 +279,43 @@ async def config_update_handler(payload: dict):
         config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
         changed = True
 
+    aws_updates: dict[str, str] = {}
+    secret_payload_keys = ("aws_access_key_id", "aws_secret_access_key", "aws_session_token")
+    nonsecret_payload_keys = ("aws_default_region",)
+    key_map = {
+        "aws_access_key_id": "AWS_ACCESS_KEY_ID",
+        "aws_secret_access_key": "AWS_SECRET_ACCESS_KEY",
+        "aws_session_token": "AWS_SESSION_TOKEN",
+        "aws_default_region": "AWS_DEFAULT_REGION",
+    }
+
+    for pkey in secret_payload_keys:
+        if isinstance(payload.get(pkey), str):
+            val = payload.get(pkey, "")
+            # Blank means keep existing (write-only behavior for secrets).
+            if val:
+                aws_updates[key_map[pkey]] = val
+                changed = True
+
+    for pkey in nonsecret_payload_keys:
+        if isinstance(payload.get(pkey), str):
+            val = payload.get(pkey, "").strip()
+            aws_updates[key_map[pkey]] = val
+            changed = True
+
     if not changed:
         return {
             "error": "no_supported_fields",
-            "supported": ["asset", "filter", "item_action", "item_action_move_metainfo"],
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "aws_access_key_id",
+                "aws_secret_access_key",
+                "aws_session_token",
+                "aws_default_region",
+            ],
         }
 
     # Keep derived parts aligned with current asset.
@@ -232,31 +345,33 @@ async def config_update_handler(payload: dict):
     persist_detail = "skipped"
     try:
         action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
-        persisted, persist_detail = ConfigManager.persist_runtime_overrides({
+        persist_updates = {
             "DSXCONNECTOR_ASSET": str(config.asset or ""),
             "DSXCONNECTOR_FILTER": str(config.filter or ""),
             "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
             "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
-        })
+        }
+        persist_updates.update(aws_updates)
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
     except Exception as e:
         persisted = False
         persist_detail = f"persist_error:{type(e).__name__}"
+
+    # Keep process env in sync even when persistence is skipped.
+    for k, v in aws_updates.items():
+        os.environ[k] = v
 
     persistence_message = (
         f"persisted to {persist_detail}" if persisted else f"runtime-only ({persist_detail})"
     )
 
-    return {
-        **connector.connector_running_model.model_dump(),
-        "asset": config.asset,
-        "filter": config.filter,
-        "resolved_asset_base": config.asset,
-        "persistence": {
-            "applied": persisted,
-            "detail": persist_detail,
-        },
-        "note": f"S3 asset update applied; {persistence_message}",
+    out = await config_handler(connector.connector_running_model)
+    out["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
     }
+    out["note"] = f"S3 config update applied; {persistence_message}"
+    return out
 
 
 @connector.item_action

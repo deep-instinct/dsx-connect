@@ -52,6 +52,11 @@ class FilesystemConnectorConfig(BaseConnectorConfig):
     monitor: bool = False
     monitor_force_polling: bool = False
     monitor_poll_interval_ms: int = 1000
+    full_scan_enqueue_concurrency: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum concurrent single-item enqueue requests during full scan when batch mode is off.",
+    )
 
     # Quarantine handling
     quarantine_mount: str = Field("/app/quarantine", description="In-container path for quarantine/move destinations")

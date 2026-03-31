@@ -1,16 +1,16 @@
-import { promises as fs } from "node:fs";
+import fs, { promises as fsPromises } from "node:fs";
 import path from "node:path";
 import { DSXAClient } from "./index.js";
 
 export { DSXAClient };
 
 export async function scanFilePath(client, filePath, opts = {}) {
-  const data = await fs.readFile(filePath);
-  return client.scanBinary(data, opts);
+  const stream = fs.createReadStream(filePath);
+  return client.scanBinaryStream(stream, opts);
 }
 
 async function walk(dir, out) {
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const entries = await fsPromises.readdir(dir, { withFileTypes: true });
   for (const ent of entries) {
     const full = path.join(dir, ent.name);
     if (ent.isDirectory()) await walk(full, out);
@@ -29,8 +29,7 @@ export async function scanFolder(client, folder, { concurrency = 4, perFile = {}
       const idx = i++;
       const file = files[idx];
       try {
-        const data = await fs.readFile(file);
-        const res = await client.scanBinary(data, perFile);
+        const res = await scanFilePath(client, file, perFile);
         results[idx] = { file, status: "ok", result: res };
       } catch (error) {
         results[idx] = { file, status: "failed", error: error?.message || String(error) };

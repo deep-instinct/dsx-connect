@@ -89,10 +89,16 @@ class ConfigManager:
         if not env_file.exists():
             return False, "env_file_missing"
 
+        allowed_exact = {
+            "AWS_ACCESS_KEY_ID",
+            "AWS_SECRET_ACCESS_KEY",
+            "AWS_SESSION_TOKEN",
+            "AWS_DEFAULT_REGION",
+        }
         cleaned: dict[str, str] = {}
         for k, v in (updates or {}).items():
             key = str(k or "").strip()
-            if not key.startswith("DSXCONNECTOR_"):
+            if not (key.startswith("DSXCONNECTOR_") or key in allowed_exact):
                 continue
             val = str(v if v is not None else "")
             if "\n" in val or "\r" in val:

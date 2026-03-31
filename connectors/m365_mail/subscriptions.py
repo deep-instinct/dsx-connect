@@ -56,7 +56,12 @@ class SubscriptionManager:
                                    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
             r.raise_for_status()
 
-    async def reconcile_for_upns(self, upns: Iterable[str], notification_url: str) -> dict:
+    async def reconcile_for_upns(
+        self,
+        upns: Iterable[str],
+        notification_url: str,
+        client_state: str | None = None,
+    ) -> dict:
         """Ensure we have active subs per UPN for /messages to our notification_url.
         Returns a summary dict.
         """
@@ -65,21 +70,23 @@ class SubscriptionManager:
         for s in existing:
             res = s.get("resource", "")
             nurl = s.get("notificationUrl", "")
-            # Key on (resource, notificationUrl)
-            by_key[(res, nurl)] = s
+            cstate = s.get("clientState")
+            # Key on (resource, notificationUrl, clientState) so we don't silently
+            # treat a mismatched shared secret as a reusable subscription.
+            by_key[(res, nurl, cstate)] = s
         created = 0
         renewed = 0
         for u in upns:
-            key = (f"users/{u}/messages", notification_url)
+            key = (f"users/{u}/messages", notification_url, client_state)
             if key in by_key:
                 try:
                     await self.renew(by_key[key]["id"])
                     renewed += 1
                 except Exception:
                     # Attempt create if renew fails
-                    await self.create_for_user(u, notification_url)
+                    await self.create_for_user(u, notification_url, client_state=client_state)
                     created += 1
             else:
-                await self.create_for_user(u, notification_url)
+                await self.create_for_user(u, notification_url, client_state=client_state)
                 created += 1
         return {"created": created, "renewed": renewed}

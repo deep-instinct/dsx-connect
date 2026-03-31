@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Request, Path, HTTPException, Depends, status
+from fastapi import APIRouter, Request, Path, HTTPException, Depends, Query, status
 from starlette.responses import JSONResponse, Response
 from pydantic import BaseModel, ConfigDict
 
@@ -339,6 +339,9 @@ async def connector_state_get(
 async def trigger_fullscan(
         request: Request,
         connector_uuid: UUID = Path(..., description="UUID of the connector"),
+        limit: int | None = Query(default=None, ge=1, description="Optional item limit for sample scans."),
+        batch: bool = Query(default=False, description="Use connector/core batch full-scan mode when supported."),
+        batch_size: int | None = Query(default=None, ge=1, description="Requested batch size; clamped by core max."),
         registry=Depends(get_registry),
         response: Response = None,
 ):
@@ -347,8 +350,13 @@ async def trigger_fullscan(
         raise HTTPException(status_code=404, detail=f"No connector registered with UUID={connector_uuid}")
 
     try:
-        # Forward optional query params (e.g., limit=N for sample scan)
         params = dict(request.query_params)
+        if limit is not None:
+            params["limit"] = str(limit)
+        if batch:
+            params["batch"] = "true"
+        if batch_size is not None:
+            params["batch_size"] = str(batch_size)
         # Ensure a job_id is present so all enqueued items share it
         if 'job_id' not in params or not params['job_id']:
             import uuid as _uuid

@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -17,7 +18,7 @@ from typing import Dict
 import typer
 
 
-DEFAULT_STATE_DIR = Path.home() / ".dsx-connect-local" / "dsx-connect-desktop"
+DEFAULT_STATE_DIR = Path.home() / ".dsx-connect-local" / "dsx-connect"
 
 app = typer.Typer(help="DSX-Connect core local runtime manager")
 
@@ -187,6 +188,16 @@ def _is_pid_alive(pid: int | None) -> bool:
         return False
     try:
         os.kill(pid, 0)
+        try:
+            stat = subprocess.check_output(
+                ["ps", "-o", "stat=", "-p", str(pid)],
+                text=True,
+                stderr=subprocess.DEVNULL,
+            ).strip()
+            if stat.startswith("Z"):
+                return False
+        except Exception:
+            pass
         return True
     except OSError:
         return False
@@ -215,23 +226,31 @@ def _wait_for_pid(pid: int, timeout: float = 10.0) -> bool:
 
 def _terminate_pid(pid: int, grace_seconds: float = 10.0) -> None:
     try:
-        os.kill(pid, signal.SIGTERM)
+        os.killpg(pid, signal.SIGTERM)
     except OSError:
-        return
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return
     deadline = time.time() + grace_seconds
     while time.time() < deadline:
         if not _is_pid_alive(pid):
             return
         time.sleep(0.2)
     try:
-        os.kill(pid, signal.SIGKILL)
+        os.killpg(pid, signal.SIGKILL)
     except OSError:
-        pass
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
 
 
 def _child_env(env_file: Path, extra: Dict[str, str] | None = None) -> Dict[str, str]:
     env = os.environ.copy()
     env["DSXCONNECT_ENV_FILE"] = str(env_file)
+    # Keep both vars aligned: connectors often use DSXCONNECTOR_ENV_FILE.
+    env["DSXCONNECTOR_ENV_FILE"] = str(env_file)
 
     repo = str(_repo_root())
     existing = env.get("PYTHONPATH", "")
@@ -316,6 +335,29 @@ def _start_one(spec: ServiceSpec) -> tuple[bool, str]:
         return False, f"{spec.name}: failed to start (pid did not become alive)"
     _write_pid(spec.pidfile, proc.pid)
     return True, f"{spec.name}: started pid={proc.pid} log={spec.logfile}"
+
+
+def _tee_stream(src, outputs: list[object]) -> None:
+    try:
+        while True:
+            chunk = src.readline()
+            if not chunk:
+                break
+            for out in outputs:
+                try:
+                    out.buffer.write(chunk)
+                    out.flush()
+                except Exception:
+                    try:
+                        out.write(chunk)
+                        out.flush()
+                    except Exception:
+                        pass
+    finally:
+        try:
+            src.close()
+        except Exception:
+            pass
 
 
 def _stop_one(spec: ServiceSpec) -> tuple[bool, str]:
@@ -495,6 +537,8 @@ def cmd_foreground(ctx: typer.Context) -> None:
         return
 
     children: list[tuple[ServiceSpec, subprocess.Popen]] = []
+    tee_threads: list[threading.Thread] = []
+    log_handles = []
     stop_requested = False
     exit_code = 0
 
@@ -509,17 +553,28 @@ def cmd_foreground(ctx: typer.Context) -> None:
     try:
         for spec in specs:
             print(f"starting {spec.name} (foreground)")
+            spec.logfile.parent.mkdir(parents=True, exist_ok=True)
+            logf = spec.logfile.open("ab")
+            log_handles.append(logf)
             child = subprocess.Popen(
                 spec.command,
                 cwd=str(spec.cwd),
                 env=spec.env,
-                stdout=sys.stdout,
-                stderr=sys.stderr,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 # Keep children in separate sessions so Ctrl+C is handled here,
                 # then we can drain them in a controlled order.
                 start_new_session=True,
             )
             children.append((spec, child))
+            if child.stdout is not None:
+                t = threading.Thread(target=_tee_stream, args=(child.stdout, [sys.stdout, logf]), daemon=True)
+                t.start()
+                tee_threads.append(t)
+            if child.stderr is not None:
+                t = threading.Thread(target=_tee_stream, args=(child.stderr, [sys.stderr, logf]), daemon=True)
+                t.start()
+                tee_threads.append(t)
 
         while not stop_requested:
             for _spec, child in children:
@@ -549,6 +604,13 @@ def cmd_foreground(ctx: typer.Context) -> None:
         for _spec, child in children:
             try:
                 child.wait(timeout=1)
+            except Exception:
+                pass
+        for thread in tee_threads:
+            thread.join(timeout=1)
+        for logf in log_handles:
+            try:
+                logf.close()
             except Exception:
                 pass
 

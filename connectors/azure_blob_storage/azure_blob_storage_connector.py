@@ -1,8 +1,10 @@
 import asyncio
+import os
+import time
 from starlette.responses import StreamingResponse, JSONResponse
 
 from connectors.azure_blob_storage.azure_blob_storage_client import AzureBlobClient
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -34,6 +36,14 @@ except Exception:
 connector = DSXConnector(config)
 
 abs_client = AzureBlobClient()
+
+
+def _azure_runtime_value(key: str) -> str:
+    return str(os.getenv(key, "") or "")
+
+
+def _azure_masked_value(key: str) -> str:
+    return "**********" if _azure_runtime_value(key) else ""
 
 
 @connector.startup
@@ -78,7 +88,11 @@ async def shutdown_event():
 
 
 @connector.full_scan
-async def full_scan_handler(limit: int | None = None) -> StatusResponse:
+async def full_scan_handler(
+    limit: int | None = None,
+    batch: bool = False,
+    batch_size: int | None = None,
+) -> StatusResponse:
     """
     Full Scan handler for the DSX Connector.
 
@@ -132,11 +146,55 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
     sem = asyncio.Semaphore(concurrency)
     tasks: list[asyncio.Task] = []
     enq_count = 0
+    batch_errors = 0
+    batch_items: list[ScanRequestModel] = []
+    use_batch = bool(batch)
+    effective_batch_size = 1
+
+    if use_batch:
+        caps = await connector.get_core_scan_batch_capabilities()
+        if not bool(caps.get("enabled", False)):
+            dsx_logging.info("Batch full scan requested but core batch mode is disabled; falling back to single-item enqueue.")
+            use_batch = False
+        else:
+            default_size = max(1, int(caps.get("default_size", 10)))
+            max_size = max(1, int(caps.get("max_size", 100)))
+            requested = batch_size if isinstance(batch_size, int) and batch_size > 0 else default_size
+            effective_batch_size = min(max(1, int(requested)), max_size)
+            dsx_logging.info(
+                f"Using ABS full-scan batch mode: effective_batch_size={effective_batch_size} "
+                f"(requested={batch_size}, default={default_size}, max={max_size})"
+            )
+
+    async def _flush_batch() -> None:
+        nonlocal enq_count, batch_errors, batch_items
+        if not batch_items:
+            return
+        resp = await connector.scan_file_request_batch(batch_items, batch_size=effective_batch_size)
+        if resp.status == StatusResponseEnum.SUCCESS:
+            enq_count += len(batch_items)
+        else:
+            batch_errors += 1
+            dsx_logging.warning(
+                f"ABS batch enqueue failed for {len(batch_items)} item(s): "
+                f"{resp.message} ({resp.description})"
+            )
+        batch_items = []
 
     async def enqueue(key: str, full_path: str):
+        nonlocal enq_count, batch_errors
         async with sem:
-            await connector.scan_file_request(ScanRequestModel(location=key, metainfo=full_path))
-            dsx_logging.debug(f"Sent scan request for {full_path}")
+            resp = await connector.scan_file_request(ScanRequestModel(location=key, metainfo=full_path))
+            if resp.status == StatusResponseEnum.SUCCESS:
+                enq_count += 1
+                dsx_logging.debug(f"Sent scan request for {full_path}")
+                return
+
+            batch_errors += 1
+            dsx_logging.warning(
+                f"ABS single-item enqueue failed for {full_path}: "
+                f"{resp.message} ({resp.description})"
+            )
 
     page_size = getattr(config, 'list_page_size', None)
     for blob in abs_client.keys(config.asset_container, base_prefix=config.asset_prefix_root, filter_str=config.filter, page_size=page_size):
@@ -145,22 +203,35 @@ async def full_scan_handler(limit: int | None = None) -> StatusResponse:
         if config.filter and not relpath_matches_filter(_rel(key), config.filter):
             continue
         full_path = f"{config.asset_container}/{key}"
-        tasks.append(asyncio.create_task(enqueue(key, full_path)))
-        enq_count += 1
+        if use_batch:
+            batch_items.append(ScanRequestModel(location=key, metainfo=full_path))
+            if len(batch_items) >= effective_batch_size:
+                await _flush_batch()
+        else:
+            tasks.append(asyncio.create_task(enqueue(key, full_path)))
 
-        # Batch-gather to bound memory and provide steady backpressure
-        if len(tasks) >= 200:
-            await asyncio.gather(*tasks)
-            tasks.clear()
-        if limit and enq_count >= limit:
+            # Batch-gather to bound memory and provide steady backpressure
+            if len(tasks) >= 200:
+                await asyncio.gather(*tasks)
+                tasks.clear()
+        if limit and (enq_count + len(batch_items if use_batch else [])) >= limit:
             break
+
+    if use_batch and batch_items:
+        await _flush_batch()
 
     if tasks:
         await asyncio.gather(*tasks)
         tasks.clear()
 
+    # Full-scan enqueue tracking uses a ContextVar in the framework. Because this
+    # handler fans out with create_task(), write back the final count explicitly.
+    _SCAN_ENQ_COUNTER.set(enq_count)
+
     dsx_logging.info(
-        f"Full scan enqueued {enq_count} item(s) (asset={config.asset}, filter='{config.filter or ''}', concurrency={concurrency}, page_size={page_size or 'default'})"
+        f"Full scan enqueued {enq_count} item(s) "
+        f"(asset={config.asset}, filter='{config.filter or ''}', batch={use_batch}, batch_errors={batch_errors}, "
+        f"concurrency={concurrency}, page_size={page_size or 'default'})"
     )
     return StatusResponse(status=StatusResponseEnum.SUCCESS, message='Full scan invoked and scan requests sent.', description=f"enqueued={enq_count}")
 
@@ -264,8 +335,25 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
                 ).model_dump(),
                 status_code=503,
             )
-        file_stream = abs_client.get_blob(config.asset_container, scan_event_queue_info.location)
-        return StreamingResponse(stream_blob(file_stream), media_type="application/octet-stream")
+        started = time.perf_counter()
+        file_stream, size_bytes = abs_client.get_blob_stream(
+            config.asset_container,
+            scan_event_queue_info.location,
+            max_concurrency=getattr(config, "download_max_concurrency", 8),
+        )
+        prep_elapsed_ms = (time.perf_counter() - started) * 1000.0
+        dsx_logging.info(
+            "azure.read_file.ready job=%s blob=%s bytes=%s prep_elapsed_ms=%.1f download_max_concurrency=%s",
+            getattr(scan_event_queue_info, "scan_job_id", None),
+            scan_event_queue_info.location,
+            size_bytes,
+            prep_elapsed_ms,
+            getattr(config, "download_max_concurrency", 8),
+        )
+        headers = {}
+        if size_bytes is not None:
+            headers["Content-Length"] = str(size_bytes)
+        return StreamingResponse(file_stream, media_type="application/octet-stream", headers=headers)
     except Exception as e:
         return StatusResponse(status=StatusResponseEnum.ERROR, message=str(e))
 
@@ -320,6 +408,149 @@ async def preview_provider(limit: int) -> list[str]:
     except Exception:
         pass
     return items
+
+
+@connector.config
+async def config_handler(base: ConnectorInstanceModel):
+    """Expose runtime config for UI, including Azure credential placeholders."""
+    try:
+        payload = base.model_dump()
+    except Exception:
+        from fastapi.encoders import jsonable_encoder
+        payload = jsonable_encoder(base)
+
+    extra = {
+        "asset": config.asset,
+        "filter": config.filter,
+        "resolved_asset_base": config.asset,
+        "azure_storage_connection_string": _azure_masked_value("AZURE_STORAGE_CONNECTION_STRING"),
+    }
+    payload.update({k: v for k, v in extra.items() if v is not None})
+    return payload
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    """Update runtime-editable ABS config and persist locally when available."""
+    global abs_client
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        asset_raw = payload.get("asset", "").strip()
+        if asset_raw:
+            config.asset = asset_raw
+            changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                config.item_action = ItemActionEnum(action_raw)
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        changed = True
+
+    azure_updates: dict[str, str] = {}
+    key_map = {
+        "azure_storage_connection_string": "AZURE_STORAGE_CONNECTION_STRING",
+    }
+    secret_payload_keys = ("azure_storage_connection_string",)
+    plain_payload_keys: tuple[str, ...] = ()
+
+    for pkey in secret_payload_keys:
+        if isinstance(payload.get(pkey), str):
+            val = payload.get(pkey, "")
+            # Blank means keep existing secret.
+            if val:
+                azure_updates[key_map[pkey]] = val
+                changed = True
+                creds_changed = True
+
+    for pkey in plain_payload_keys:
+        if isinstance(payload.get(pkey), str):
+            val = payload.get(pkey, "").strip()
+            azure_updates[key_map[pkey]] = val
+            changed = True
+            creds_changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "azure_storage_connection_string",
+            ],
+        }
+
+    # Keep derived parts aligned with current asset.
+    try:
+        raw_asset = (config.asset or "").strip()
+        if "/" in raw_asset:
+            container, prefix = raw_asset.split("/", 1)
+            config.asset_container = container.strip()
+            config.asset_prefix_root = prefix.strip("/")
+        else:
+            config.asset_container = raw_asset
+            config.asset_prefix_root = ""
+    except Exception:
+        config.asset_container = config.asset
+        config.asset_prefix_root = ""
+
+    # Keep running model in sync for UI.
+    try:
+        connector.connector_running_model.asset = config.asset
+        connector.connector_running_model.filter = config.filter
+        connector.connector_running_model.item_action = config.item_action
+        connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+        prefix_disp = f"/{config.asset_prefix_root}" if getattr(config, 'asset_prefix_root', '') else ""
+        connector.connector_running_model.meta_info = f"ABS container: {config.asset_container}{prefix_disp}, filter: {config.filter or '(none)'}"
+    except Exception:
+        pass
+
+    # Persist local runtime updates where supported.
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+        }
+        persist_updates.update(azure_updates)
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    # Keep process env in sync and rebuild client when creds changed.
+    for k, v in azure_updates.items():
+        os.environ[k] = v
+    if creds_changed:
+        try:
+            abs_client = AzureBlobClient()
+        except Exception:
+            pass
+
+    out = await config_handler(connector.connector_running_model)
+    out["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return out
 
 
 @connector.webhook_event

@@ -624,11 +624,18 @@ async def notifications_job_summary(
                     proc = _toi(data.get("processed_count"), 0)
                     exp = _toi(data.get("expected_total"), -1)
                     enq_total = _toi(data.get("enqueued_total"), -1)
+                    succeeded = _toi(data.get("succeeded_count"), 0)
+                    failed = _toi(data.get("failed_count"), 0)
+                    cancelled = _toi(data.get("cancelled_count"), 0)
+                    skipped = _toi(data.get("skipped_count"), 0)
                     total = enq_total if enq_total >= 0 else (exp if exp >= 0 else None)
                     started = _toi(data.get("started_at"), 0)
                     finished = _toi(data.get("finished_at"), 0)
+                    first_start = _toi(data.get("first_scan_started_at"), 0)
+                    last_terminal = _toi(data.get("last_terminal_at"), 0) or _toi(data.get("last_completed_at"), 0)
                     now = int(_t.time())
                     duration = ((finished or now) - started) if started else None
+                    processing_window = (max(0, last_terminal - first_start) if first_start and last_terminal else None)
                     eta = None
                     if total and total > 0 and started and proc > 0 and (not finished) and proc < total:
                         elapsed = max(1, (finished or now) - started)
@@ -654,6 +661,11 @@ async def notifications_job_summary(
                             "processed_count": proc,
                             "total": total,
                             "duration_secs": duration,
+                            "processing_window_secs": processing_window,
+                            "succeeded_count": succeeded,
+                            "failed_count": failed,
+                            "cancelled_count": cancelled,
+                            "skipped_count": skipped,
                             "eta_secs": eta,
                             "time_remaining": _fmt_eta(eta),
                             "last_update": data.get("last_update"),

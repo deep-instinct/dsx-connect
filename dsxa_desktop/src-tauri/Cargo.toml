@@ -1,10 +1,10 @@
 [package]
-name = "dsxa_tauri"
-version = "0.1.0"
+name = "dsxa_desktop"
+version = "1.2.0"
 edition = "2021"
 
 [lib]
-name = "dsxa_tauri_lib"
+name = "dsxa_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -16,7 +16,8 @@ serde_json = "1"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+tokio-util = { version = "0.7", features = ["io"] }
 walkdir = "2"
 uuid = { version = "1", features = ["v4"] }
 sha2 = "0.10"

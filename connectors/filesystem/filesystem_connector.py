@@ -1,7 +1,9 @@
 import errno
+import asyncio
 import os
 import pathlib
 import shutil
+import time
 from uuid import uuid4
 
 import uvicorn
@@ -189,15 +191,22 @@ async def full_scan_handler(
     batch: bool = False,
     batch_size: int | None = None,
 ) -> StatusResponse:
+    started_at = time.perf_counter()
     dsx_logging.debug(
         f"Scanning files at: {config.asset}, filter='{config.filter}', batch={batch}, batch_size={batch_size})"
+    )
+    dsx_logging.info(
+        f"filesystem.full_scan.start asset={config.asset} filter='{config.filter or ''}' "
+        f"limit={limit} batch={batch} batch_size={batch_size} connector_url={config.connector_url}"
     )
     quarantine_paths = _quarantine_paths()
     count = 0
     seen = 0
     batch_errors = 0
     batch_items: list[ScanRequestModel] = []
+    progress_log_every = 10
     effective_batch_size = 1
+    enqueue_concurrency = max(1, int(getattr(config, "full_scan_enqueue_concurrency", 1) or 1))
     use_batch = bool(batch)
     if use_batch:
         caps = await connector.get_core_scan_batch_capabilities()
@@ -213,21 +222,55 @@ async def full_scan_handler(
                 f"Using full-scan batch mode: effective_batch_size={effective_batch_size} "
                 f"(requested={batch_size}, default={default_size}, max={max_size})"
             )
+    elif enqueue_concurrency > 1:
+        dsx_logging.info(
+            f"Using concurrent full-scan enqueue: enqueue_concurrency={enqueue_concurrency}"
+        )
 
     async def _flush_batch() -> None:
         nonlocal count, batch_errors, batch_items
         if not batch_items:
             return
+        batch_started_at = time.perf_counter()
         resp = await connector.scan_file_request_batch(batch_items, batch_size=effective_batch_size)
+        batch_elapsed_ms = (time.perf_counter() - batch_started_at) * 1000.0
         if resp.status == StatusResponseEnum.SUCCESS:
             count += len(batch_items)
+            dsx_logging.info(
+                f"filesystem.full_scan.batch_enqueued size={len(batch_items)} count={count} "
+                f"seen={seen} elapsed_ms={batch_elapsed_ms:.1f}"
+            )
         else:
             batch_errors += 1
             dsx_logging.warning(
                 f"Batch enqueue failed for {len(batch_items)} item(s): "
-                f"{resp.message} ({resp.description})"
+                f"{resp.message} ({resp.description}) elapsed_ms={batch_elapsed_ms:.1f}"
             )
         batch_items = []
+
+    async def _enqueue_single(req: ScanRequestModel, file_path: pathlib.Path) -> bool:
+        request_started_at = time.perf_counter()
+        status_response = await connector.scan_file_request(req)
+        request_elapsed_ms = (time.perf_counter() - request_started_at) * 1000.0
+        dsx_logging.debug(
+            f"Sent scan request for {file_path}, result: {status_response}, elapsed_ms={request_elapsed_ms:.1f}"
+        )
+        return status_response.status == StatusResponseEnum.SUCCESS
+
+    async def _drain_pending(pending: set[asyncio.Task[bool]], *, wait_for_all: bool = False) -> set[asyncio.Task[bool]]:
+        nonlocal count
+        if not pending:
+            return pending
+        done, still_pending = await asyncio.wait(
+            pending,
+            return_when=asyncio.ALL_COMPLETED if wait_for_all else asyncio.FIRST_COMPLETED,
+        )
+        for task in done:
+            if task.result():
+                count += 1
+        return still_pending
+
+    pending_single: set[asyncio.Task[bool]] = set()
 
     async for file_path in get_filepaths_async(
             pathlib.Path(config.asset),
@@ -248,17 +291,30 @@ async def full_scan_handler(
             if len(batch_items) >= effective_batch_size:
                 await _flush_batch()
         else:
-            status_response = await connector.scan_file_request(req)
-            dsx_logging.debug(f'Sent scan request for {file_path}, result: {status_response}')
-            if status_response.status == StatusResponseEnum.SUCCESS:
-                count += 1
+            if enqueue_concurrency <= 1:
+                if await _enqueue_single(req, file_path):
+                    count += 1
+            else:
+                pending_single.add(asyncio.create_task(_enqueue_single(req, file_path)))
+                if len(pending_single) >= enqueue_concurrency:
+                    pending_single = await _drain_pending(pending_single)
+        if seen % progress_log_every == 0:
+            elapsed = max(0.001, time.perf_counter() - started_at)
+            dsx_logging.info(
+                f"filesystem.full_scan.progress seen={seen} enqueued={count} batch_errors={batch_errors} "
+                f"elapsed_s={elapsed:.2f} enqueue_rate={count / elapsed:.2f}/s"
+            )
         if limit and seen >= limit:
             break
     if use_batch and batch_items:
         await _flush_batch()
+    if pending_single:
+        pending_single = await _drain_pending(pending_single, wait_for_all=True)
+    elapsed = max(0.001, time.perf_counter() - started_at)
     dsx_logging.info(
         f"Full scan enqueued {count} item(s) "
-        f"(asset={config.asset}, filter='{config.filter or ''}', batch={use_batch}, batch_errors={batch_errors})"
+        f"(asset={config.asset}, filter='{config.filter or ''}', batch={use_batch}, batch_errors={batch_errors}, "
+        f"seen={seen}, elapsed_s={elapsed:.2f}, enqueue_rate={count / elapsed:.2f}/s)"
     )
     return StatusResponse(
         status=StatusResponseEnum.SUCCESS,
@@ -514,6 +570,8 @@ async def config_update_handler(payload: dict):
         move_raw = payload.get("item_action_move_metainfo", "").strip()
         # allow empty string in case user wants to clear it
         config.item_action_move_metainfo = move_raw
+        # Keep host-path mirror aligned for local persistence and later reloads.
+        config.quarantine_host = move_raw or None
         try:
             connector.connector_running_model.item_action_move_metainfo = move_raw
         except Exception:
@@ -542,7 +600,7 @@ async def config_update_handler(payload: dict):
             "DSXCONNECTOR_ASSET_DISPLAY_NAME": str(config.asset_display_name or config.asset),
             "DSXCONNECTOR_FILTER": str(config.filter or ""),
             "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
-            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.quarantine_host or config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
         })
     except Exception as e:
         persisted = False

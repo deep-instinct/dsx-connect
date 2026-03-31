@@ -8,6 +8,17 @@ function toBody(data) {
   throw new Error("Unsupported payload type");
 }
 
+function isStreamingBody(data) {
+  if (data == null) return false;
+  if (typeof ReadableStream !== "undefined" && data instanceof ReadableStream) return true;
+  return (
+    typeof data === "object" &&
+    (typeof data.pipe === "function" ||
+      typeof data.getReader === "function" ||
+      typeof data[Symbol.asyncIterator] === "function")
+  );
+}
+
 function encodePassword(value) {
   if (!value) return "";
   if (typeof btoa === "function") return btoa(value);
@@ -71,7 +82,11 @@ export class DSXAClient {
     }
 
     try {
-      const res = await this.fetchImpl(url, { method, headers, body, signal: effectiveSignal });
+      const requestInit = { method, headers, body, signal: effectiveSignal };
+      if (body != null && isStreamingBody(body)) {
+        requestInit.duplex = "half";
+      }
+      const res = await this.fetchImpl(url, requestInit);
       const text = await res.text();
       const payload = parseTextBody(text);
       if (!res.ok) {
@@ -88,6 +103,14 @@ export class DSXAClient {
     return this._request("POST", "/scan/binary/v2", {
       headers: this._headers(opts),
       body: toBody(data),
+      signal: opts.signal,
+    });
+  }
+
+  async scanBinaryStream(data, opts = {}) {
+    return this._request("POST", "/scan/binary/v2", {
+      headers: this._headers(opts),
+      body: data,
       signal: opts.signal,
     });
   }
@@ -135,12 +158,10 @@ export class DSXAClient {
 
   async scanFile(fileOrBlob, opts = {}) {
     if (typeof File !== "undefined" && fileOrBlob instanceof File) {
-      const data = new Uint8Array(await fileOrBlob.arrayBuffer());
-      return this.scanBinary(data, opts);
+      return this.scanBinary(fileOrBlob, opts);
     }
     if (typeof Blob !== "undefined" && fileOrBlob instanceof Blob) {
-      const data = new Uint8Array(await fileOrBlob.arrayBuffer());
-      return this.scanBinary(data, opts);
+      return this.scanBinary(fileOrBlob, opts);
     }
     return this.scanBinary(fileOrBlob, opts);
   }

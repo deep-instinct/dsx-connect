@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager, State};
+use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -315,15 +316,25 @@ fn effective_max_file_size_bytes(value: Option<u64>) -> u64 {
     value.unwrap_or(2_u64 * 1024 * 1024 * 1024)
 }
 
-fn sha256_hex(data: &[u8]) -> String {
+fn sha256_file(path: &std::path::Path) -> Result<String, String> {
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| format!("failed to open file for hashing: {e}"))?;
     let mut hasher = Sha256::new();
-    hasher.update(data);
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = std::io::Read::read(&mut file, &mut buf)
+            .map_err(|e| format!("failed to hash file: {e}"))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
     let digest = hasher.finalize();
     let mut out = String::with_capacity(digest.len() * 2);
     for b in digest {
         out.push_str(&format!("{:02x}", b));
     }
-    out
+    Ok(out)
 }
 
 fn is_malicious_verdict(result: &Value) -> bool {
@@ -542,6 +553,36 @@ async fn request_json(
     Ok(body)
 }
 
+async fn request_json_stream(
+    client: &reqwest::Client,
+    method: reqwest::Method,
+    url: String,
+    headers: HeaderMap,
+    body: reqwest::Body,
+) -> Result<Value, String> {
+    let response = client
+        .request(method, &url)
+        .headers(headers)
+        .body(body)
+        .send()
+        .await
+        .map_err(|e| format!("request failed: {e}"))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("failed to read response body: {e}"))?;
+
+    let body: Value = serde_json::from_str(&text).unwrap_or_else(|_| json!({ "raw": text }));
+
+    if !status.is_success() {
+        return Err(format!("HTTP {} {}", status.as_u16(), body));
+    }
+
+    Ok(body)
+}
+
 #[tauri::command]
 async fn get_state(app: tauri::AppHandle) -> Result<SavedState, String> {
     read_state(&app).await
@@ -578,10 +619,6 @@ async fn scan_file(req: ScanFileRequest) -> Result<Value, String> {
             max_size
         ));
     }
-    let raw_data = tokio::fs::read(&req.file_path)
-        .await
-        .map_err(|e| format!("failed to read file: {e}"))?;
-
     let base = req.context.base_url.trim_end_matches('/');
     let endpoint = if req.context.base64_mode {
         "/scan/base64/v2"
@@ -603,14 +640,20 @@ async fn scan_file(req: ScanFileRequest) -> Result<Value, String> {
         false,
     )?;
 
-    let payload = if req.context.base64_mode {
-        base64_encode_bytes(&raw_data).into_bytes()
-    } else {
-        raw_data
-    };
-
     let client = build_http_client(&req.context)?;
-    let result = request_json(&client, reqwest::Method::POST, url, headers, Some(payload)).await?;
+    let result = if req.context.base64_mode {
+        let raw_data = tokio::fs::read(&req.file_path)
+            .await
+            .map_err(|e| format!("failed to read file: {e}"))?;
+        let payload = base64_encode_bytes(&raw_data).into_bytes();
+        request_json(&client, reqwest::Method::POST, url, headers, Some(payload)).await?
+    } else {
+        let file = tokio::fs::File::open(&req.file_path)
+            .await
+            .map_err(|e| format!("failed to open file: {e}"))?;
+        let body = reqwest::Body::wrap_stream(ReaderStream::new(file));
+        request_json_stream(&client, reqwest::Method::POST, url, headers, body).await?
+    };
 
     Ok(json!({
         "operation": "scan-file",
@@ -1039,51 +1082,6 @@ async fn scan_folder_start(
                             continue;
                         }
 
-                        let data = match tokio::fs::read(&path).await {
-                            Ok(d) => d,
-                            Err(e) => {
-                                let s = scanned.fetch_add(1, Ordering::Relaxed) + 1;
-                                let f = failed.fetch_add(1, Ordering::Relaxed) + 1;
-                                let o = ok.load(Ordering::Relaxed);
-                                let fail_record = json!({
-                                    "file": path.to_string_lossy(),
-                                    "status": "failed",
-                                    "error": format!("failed to read file: {e}"),
-                                    "scan_duration_in_microseconds": 0
-                                });
-                                if let Ok(mut list) = failures.lock() {
-                                    list.push(fail_record.clone());
-                                }
-                                if let Ok(mut slot) = jsonl_file.lock() {
-                                    if let Some(file) = slot.as_mut() {
-                                        let _ = writeln!(file, "{}", fail_record);
-                                    }
-                                }
-                                let _ = app_for_task.emit(
-                                    "scan-folder-progress",
-                                    FolderProgressEvent {
-                                        job_id: job_id_for_task.clone(),
-                                        event_type: "progress".to_string(),
-                                        total,
-                                        scanned: s,
-                                        ok: o,
-                                        failed: f,
-                                        stats: Some(json!({
-                                            "benign": benign.load(Ordering::Relaxed),
-                                            "malicious": malicious.load(Ordering::Relaxed),
-                                            "failed": f,
-                                            "encrypted": encrypted.load(Ordering::Relaxed),
-                                            "other": other.load(Ordering::Relaxed)
-                                        })),
-                                        summary: None,
-                                        failures: None,
-                                        error: None,
-                                    },
-                                );
-                                continue;
-                            }
-                        };
-
                         let resolved_metadata = resolve_effective_metadata(
                             &req.context,
                             req.metadata.as_deref(),
@@ -1142,14 +1140,148 @@ async fn scan_folder_start(
                             }
                         };
 
-                        let file_hash = sha256_hex(&data);
-                        let payload = if req.context.base64_mode {
-                            base64_encode_bytes(&data).into_bytes()
-                        } else {
-                            data
+                        let file_hash = match sha256_file(path.as_path()) {
+                            Ok(hash) => hash,
+                            Err(e) => {
+                                let s = scanned.fetch_add(1, Ordering::Relaxed) + 1;
+                                let f = failed.fetch_add(1, Ordering::Relaxed) + 1;
+                                let o = ok.load(Ordering::Relaxed);
+                                let fail_record = json!({
+                                    "file": path.to_string_lossy(),
+                                    "status": "failed",
+                                    "error": e,
+                                    "scan_duration_in_microseconds": 0
+                                });
+                                if let Ok(mut list) = failures.lock() {
+                                    list.push(fail_record.clone());
+                                }
+                                if let Ok(mut slot) = jsonl_file.lock() {
+                                    if let Some(file) = slot.as_mut() {
+                                        let _ = writeln!(file, "{}", fail_record);
+                                    }
+                                }
+                                let _ = app_for_task.emit(
+                                    "scan-folder-progress",
+                                    FolderProgressEvent {
+                                        job_id: job_id_for_task.clone(),
+                                        event_type: "progress".to_string(),
+                                        total,
+                                        scanned: s,
+                                        ok: o,
+                                        failed: f,
+                                        stats: Some(json!({
+                                            "benign": benign.load(Ordering::Relaxed),
+                                            "malicious": malicious.load(Ordering::Relaxed),
+                                            "failed": f,
+                                            "encrypted": encrypted.load(Ordering::Relaxed),
+                                            "other": other.load(Ordering::Relaxed)
+                                        })),
+                                        summary: None,
+                                        failures: None,
+                                        error: None,
+                                    },
+                                );
+                                continue;
+                            }
                         };
 
-                        match request_json(&client, reqwest::Method::POST, url.clone(), headers, Some(payload)).await {
+                        let request_result = if req.context.base64_mode {
+                            let data = match tokio::fs::read(&path).await {
+                                Ok(d) => d,
+                                Err(e) => {
+                                    let s = scanned.fetch_add(1, Ordering::Relaxed) + 1;
+                                    let f = failed.fetch_add(1, Ordering::Relaxed) + 1;
+                                    let o = ok.load(Ordering::Relaxed);
+                                    let fail_record = json!({
+                                        "file": path.to_string_lossy(),
+                                        "status": "failed",
+                                        "error": format!("failed to read file: {e}"),
+                                        "scan_duration_in_microseconds": 0
+                                    });
+                                    if let Ok(mut list) = failures.lock() {
+                                        list.push(fail_record.clone());
+                                    }
+                                    if let Ok(mut slot) = jsonl_file.lock() {
+                                        if let Some(file) = slot.as_mut() {
+                                            let _ = writeln!(file, "{}", fail_record);
+                                        }
+                                    }
+                                    let _ = app_for_task.emit(
+                                        "scan-folder-progress",
+                                        FolderProgressEvent {
+                                            job_id: job_id_for_task.clone(),
+                                            event_type: "progress".to_string(),
+                                            total,
+                                            scanned: s,
+                                            ok: o,
+                                            failed: f,
+                                            stats: Some(json!({
+                                                "benign": benign.load(Ordering::Relaxed),
+                                                "malicious": malicious.load(Ordering::Relaxed),
+                                                "failed": f,
+                                                "encrypted": encrypted.load(Ordering::Relaxed),
+                                                "other": other.load(Ordering::Relaxed)
+                                            })),
+                                            summary: None,
+                                            failures: None,
+                                            error: None,
+                                        },
+                                    );
+                                    continue;
+                                }
+                            };
+                            let payload = base64_encode_bytes(&data).into_bytes();
+                            request_json(&client, reqwest::Method::POST, url.clone(), headers, Some(payload)).await
+                        } else {
+                            let file = match tokio::fs::File::open(&path).await {
+                                Ok(file) => file,
+                                Err(e) => {
+                                    let s = scanned.fetch_add(1, Ordering::Relaxed) + 1;
+                                    let f = failed.fetch_add(1, Ordering::Relaxed) + 1;
+                                    let o = ok.load(Ordering::Relaxed);
+                                    let fail_record = json!({
+                                        "file": path.to_string_lossy(),
+                                        "status": "failed",
+                                        "error": format!("failed to open file: {e}"),
+                                        "scan_duration_in_microseconds": 0
+                                    });
+                                    if let Ok(mut list) = failures.lock() {
+                                        list.push(fail_record.clone());
+                                    }
+                                    if let Ok(mut slot) = jsonl_file.lock() {
+                                        if let Some(file) = slot.as_mut() {
+                                            let _ = writeln!(file, "{}", fail_record);
+                                        }
+                                    }
+                                    let _ = app_for_task.emit(
+                                        "scan-folder-progress",
+                                        FolderProgressEvent {
+                                            job_id: job_id_for_task.clone(),
+                                            event_type: "progress".to_string(),
+                                            total,
+                                            scanned: s,
+                                            ok: o,
+                                            failed: f,
+                                            stats: Some(json!({
+                                                "benign": benign.load(Ordering::Relaxed),
+                                                "malicious": malicious.load(Ordering::Relaxed),
+                                                "failed": f,
+                                                "encrypted": encrypted.load(Ordering::Relaxed),
+                                                "other": other.load(Ordering::Relaxed)
+                                            })),
+                                            summary: None,
+                                            failures: None,
+                                            error: None,
+                                        },
+                                    );
+                                    continue;
+                                }
+                            };
+                            let body = reqwest::Body::wrap_stream(ReaderStream::new(file));
+                            request_json_stream(&client, reqwest::Method::POST, url.clone(), headers, body).await
+                        };
+
+                        match request_result {
                             Ok(result) => {
                                 let dsxa_micros = result
                                     .get("scan_duration_in_microseconds")

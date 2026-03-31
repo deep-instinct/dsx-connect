@@ -11,6 +11,7 @@ from dsx_connect.taskworkers.celery_app import celery_app
 from dsx_connect.taskworkers.dlq_store import enqueue_scan_request_dlq_sync, make_scan_request_dlq_item
 from dsx_connect.taskworkers.errors import MalformedScanRequest
 from dsx_connect.taskworkers.names import Queues, Tasks
+from dsx_connect.taskworkers.job_state import record_scan_request_enqueued
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryGroups
 
 
@@ -50,12 +51,13 @@ class ScanRequestBatchWorker(BaseWorker):
         for start in range(0, total, configured_batch_size):
             chunk = validated[start:start + configured_batch_size]
             for req in chunk:
-                celery_app.send_task(
+                async_result = celery_app.send_task(
                     Tasks.REQUEST,
                     args=[req],
                     kwargs={"scan_request_task_id": root_id},
                     queue=Queues.REQUEST,
                 )
+                record_scan_request_enqueued(req.get("scan_job_id"), task_id=async_result.id)
                 enqueued += 1
 
             dsx_logging.info(

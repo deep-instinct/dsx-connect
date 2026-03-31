@@ -20,6 +20,61 @@ _results_database = database_scan_results_factory(database_loc=config.results_da
 _stats_database = database_scan_stats_factory(database_loc=config.results_database.loc)
 
 
+async def _publish_job_status_event(request: Request, job_id: str, forced_status: str | None = None) -> None:
+    """Best-effort SSE push so the UI reflects job control actions immediately."""
+    try:
+        r = getattr(request.app.state, "redis", None)
+        notifiers = getattr(request.app.state, "notifiers", None)
+        if r is None or notifiers is None:
+            return
+        key = job_key(job_id)
+        data = await r.hgetall(key)
+        if not data:
+            return
+
+        def _to_int(v):
+            try:
+                return int(v)
+            except Exception:
+                return None
+
+        processed = _to_int(data.get("processed_count")) or 0
+        enq_total = _to_int(data.get("enqueued_total"))
+        expected = _to_int(data.get("expected_total"))
+        enq_count = _to_int(data.get("enqueued_count")) or 0
+        succeeded = _to_int(data.get("succeeded_count")) or 0
+        failed = _to_int(data.get("failed_count")) or 0
+        cancelled = _to_int(data.get("cancelled_count")) or 0
+        skipped = _to_int(data.get("skipped_count")) or 0
+        total = enq_total if (enq_total is not None and enq_total >= 0) else expected
+
+        import time as _t
+        started = _to_int(data.get("started_at")) or 0
+        finished = _to_int(data.get("finished_at")) or 0
+        now_ts = int(_t.time())
+        duration = (finished or now_ts) - started if started else None
+
+        summary = {
+            "job_id": job_id,
+            "status": forced_status or data.get("status", "running"),
+            "processed_count": processed,
+            "total": total,
+            "enqueued_total": enq_total,
+            "enqueued_count": enq_count,
+            "succeeded_count": succeeded,
+            "failed_count": failed,
+            "cancelled_count": cancelled,
+            "skipped_count": skipped,
+            "enqueue_done": data.get("enqueue_done"),
+            "last_update": data.get("last_update"),
+            "duration_secs": duration,
+        }
+        event = {"type": "scan_result", "scan_result": {"type": "job_status"}, "job": summary}
+        await notifiers.publish_scan_results(event)
+    except Exception:
+        pass
+
+
 @router.get(
     route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value),
     name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.LIST),
@@ -105,11 +160,16 @@ async def get_job_status(job_id: str, request: Request) -> dict:
         # Processing window (first start to last completion)
         try:
             first_start = int(data.get("first_scan_started_at", 0) or 0)
-            last_done = int(data.get("last_completed_at", 0) or 0)
+            last_done = int(data.get("last_terminal_at", 0) or data.get("last_completed_at", 0) or 0)
             if first_start and last_done:
                 data["processing_window_secs"] = str(max(0, last_done - first_start))
         except Exception:
             pass
+        for field in ("succeeded_count", "failed_count", "cancelled_count", "skipped_count", "terminal_count"):
+            try:
+                data[field] = str(int(data.get(field, 0) or 0))
+            except Exception:
+                pass
         # ETA (if total known and some progress)
         try:
             total = None
@@ -150,10 +210,16 @@ async def get_job_status(job_id: str, request: Request) -> dict:
         except Exception:
             total_request_ms = 0.0
         try:
+            total_read_ms = float(data.get("total_read_elapsed_ms", 0) or 0.0)
+        except Exception:
+            total_read_ms = 0.0
+        try:
             if proc > 0 and total_bytes >= 0:
                 data["avg_bytes_per_file"] = str(int(total_bytes / proc)) if proc else "0"
             if proc > 0 and total_request_ms > 0:
                 data["avg_request_elapsed_ms"] = f"{(total_request_ms / proc):.3f}"
+            if proc > 0 and total_read_ms > 0:
+                data["avg_read_elapsed_ms"] = f"{(total_read_ms / proc):.3f}"
             if total_scan_us > 0 and total_bytes > 0:
                 data["scan_us_per_byte"] = f"{(total_scan_us / total_bytes):.6f}"
                 data["scan_bytes_per_sec"] = f"{(total_bytes / (total_scan_us / 1_000_000.0)):.2f}"
@@ -202,17 +268,13 @@ async def mark_job_enqueue_done(job_id: str, request: Request, payload: dict | N
     key = job_key(job_id)
     now = str(int(__import__('time').time()))
     mapping = {"enqueue_done": "1", "enqueue_finished_at": now, "last_update": now}
-    try:
-        if isinstance(payload, dict) and isinstance(payload.get("enqueued_total"), int):
-            mapping["enqueued_total"] = str(payload["enqueued_total"])
-            # If expected_total isn't set, set it to enqueued_total as advisory
-            await r.hsetnx(key, "expected_total", str(payload["enqueued_total"]))
-    except Exception:
-        pass
     await r.hset(key, mapping=mapping)
     await r.expire(key, 7 * 24 * 3600)
     try:
-        dsx_logging.info(f"job.enqueue_done job={job_id} enqueued_total={mapping.get('enqueued_total','')} at={now}")
+        data = await r.hgetall(key)
+        dsx_logging.info(
+            f"job.enqueue_done job={job_id} enqueued_total={data.get('enqueued_total','')} at={now}"
+        )
     except Exception:
         pass
     return {"ok": True}
@@ -230,45 +292,7 @@ async def pause_job(job_id: str, request: Request) -> dict:
     key = job_key(job_id)
     await r.hset(key, mapping={"paused": "1", "status": "paused", "last_update": str(int(__import__('time').time()))})
     await r.expire(key, 7 * 24 * 3600)
-    # Proactively publish a job-status frame so UI reflects "paused" immediately
-    try:
-        notifiers = getattr(request.app.state, "notifiers", None)
-        if notifiers is not None:
-            data = await r.hgetall(key)
-            # Normalize ints
-            def _to_int(v):
-                try:
-                    return int(v)
-                except Exception:
-                    return None
-            processed = _to_int(data.get("processed_count")) or 0
-            enq_total = _to_int(data.get("enqueued_total"))
-            expected = _to_int(data.get("expected_total"))
-            enq_count = _to_int(data.get("enqueued_count")) or 0
-            total = enq_total if (enq_total is not None and enq_total >= 0) else expected
-            # Build summary consistent with scan_result notifications
-            import time as _t
-            started = _to_int(data.get("started_at")) or 0
-            finished = _to_int(data.get("finished_at")) or 0
-            now_ts = int(_t.time())
-            duration = (finished or now_ts) - started if started else None
-            # Compose event with job summary
-            summary = {
-                "job_id": job_id,
-                "status": "paused",
-                "processed_count": processed,
-                "total": total,
-                "enqueued_total": enq_total,
-                "enqueued_count": enq_count,
-                "enqueue_done": data.get("enqueue_done"),
-                "last_update": data.get("last_update"),
-                "duration_secs": duration,
-            }
-            event = {"type": "scan_result", "scan_result": {"type": "job_status"}, "job": summary}
-            await notifiers.publish_scan_results(event)
-    except Exception:
-        # Non-fatal: SSE update is best-effort
-        pass
+    await _publish_job_status_event(request, job_id, forced_status="paused")
     return {"ok": True}
 
 
@@ -285,6 +309,7 @@ async def resume_job(job_id: str, request: Request) -> dict:
     await r.hdel(key, "paused")
     await r.hset(key, mapping={"status": "running", "last_update": str(int(__import__('time').time()))})
     await r.expire(key, 7 * 24 * 3600)
+    await _publish_job_status_event(request, job_id, forced_status="running")
     return {"ok": True}
 
 
@@ -304,7 +329,7 @@ async def cancel_job(job_id: str, request: Request) -> dict:
         tasks = await r.lrange(job_keys(job_id), 0, -1)
         for tid in tasks or []:
             try:
-                celery_app.control.revoke(tid, terminate=False)
+                celery_app.control.revoke(tid, terminate=True, signal="SIGTERM")
             except Exception:
                 pass
     except Exception:
@@ -312,6 +337,7 @@ async def cancel_job(job_id: str, request: Request) -> dict:
     now = str(int(__import__('time').time()))
     await r.hset(key, mapping={"status": "cancelled", "cancel": "1", "finished_at": now, "last_update": now})
     await r.expire(key, 7 * 24 * 3600)
+    await _publish_job_status_event(request, job_id, forced_status="cancelled")
     return {"ok": True}
 
 

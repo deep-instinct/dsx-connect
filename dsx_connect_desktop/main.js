@@ -1,11 +1,10 @@
-const { app, BrowserWindow, dialog, Menu, shell } = require('electron');
-const { spawn } = require('child_process');
+const { app, BrowserWindow, dialog, Menu, shell, ipcMain } = require('electron');
+const { spawn, spawnSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
 const os = require('os');
-const { randomUUID } = require('crypto');
 
 const API_PORT = process.env.DSXCONNECT_LOCAL_PORT || '8586';
 const API_URL = `http://127.0.0.1:${API_PORT}/`;
@@ -13,6 +12,9 @@ const REPO_ROOT = path.resolve(__dirname, '..');
 const CORE_MANAGER = path.join(REPO_ROOT, 'dsx_connect', 'local', 'dsx_connect_local.py');
 const FS_MANAGER = path.join(REPO_ROOT, 'connectors', 'filesystem', 'local', 'filesystem_local.py');
 const SP_MANAGER = path.join(REPO_ROOT, 'connectors', 'sharepoint', 'local', 'sharepoint_local.py');
+const AWS_MANAGER = path.join(REPO_ROOT, 'connectors', 'aws_s3', 'local', 'aws_s3_local.py');
+const AZURE_MANAGER = path.join(REPO_ROOT, 'connectors', 'azure_blob_storage', 'local', 'azure_blob_storage_local.py');
+const SALESFORCE_MANAGER = path.join(REPO_ROOT, 'connectors', 'salesforce', 'local', 'salesforce_local.py');
 
 const CORE_STATE_DIR = path.join(os.homedir(), '.dsx-connect-local', 'dsx-connect-desktop');
 const CORE_ENV_FILE = path.join(CORE_STATE_DIR, '.env.local');
@@ -22,9 +24,20 @@ const APP_DISPLAY_NAME = 'DSX-Connect Desktop';
 
 app.setName(APP_DISPLAY_NAME);
 
+ipcMain.handle('dsx-desktop:pick-folder', async () => {
+  const picked = await dialog.showOpenDialog({
+    title: 'Select Asset Folder',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (picked.canceled || !picked.filePaths || !picked.filePaths.length) return null;
+  return picked.filePaths[0] || null;
+});
+
 let mainWindow = null;
+let shutdownWindow = null;
 let coreProcess = null;
 const launchedConnectors = [];
+const pendingConnectorPorts = new Set();
 
 function refreshEmbeddedUi() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -72,12 +85,79 @@ function resolvePython() {
   return 'python3';
 }
 
+function checkCommandAvailable(cmd, args = ['--version']) {
+  try {
+    const result = spawnSync(cmd, args, { stdio: 'ignore', shell: false });
+    return result && result.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+function ensureDesktopPrereqs() {
+  if (!checkCommandAvailable('redis-server', ['--version'])) {
+    dialog.showErrorBox(
+      'DSX-Connect Desktop',
+      'redis-server is required but was not found on PATH.\n\n' +
+      'Install Redis (for example: `brew install redis`) or set\n' +
+      '`DSXCONNECT_LOCAL_REDIS_SERVER=/full/path/to/redis-server` and relaunch.'
+    );
+    return false;
+  }
+  return true;
+}
+
 function scriptForKind(kind) {
-  return kind === 'filesystem' ? FS_MANAGER : SP_MANAGER;
+  if (kind === 'filesystem') return FS_MANAGER;
+  if (kind === 'sharepoint') return SP_MANAGER;
+  if (kind === 'aws_s3') return AWS_MANAGER;
+  if (kind === 'azure_blob_storage') return AZURE_MANAGER;
+  if (kind === 'salesforce') return SALESFORCE_MANAGER;
+  throw new Error(`Unsupported connector kind: ${kind}`);
 }
 
 function displayForKind(kind) {
-  return kind === 'filesystem' ? 'Filesystem' : 'SharePoint';
+  if (kind === 'filesystem') return 'Filesystem';
+  if (kind === 'sharepoint') return 'SharePoint';
+  if (kind === 'aws_s3') return 'AWS S3';
+  if (kind === 'azure_blob_storage') return 'Azure Blob';
+  if (kind === 'salesforce') return 'Salesforce';
+  throw new Error(`Unsupported connector kind: ${kind}`);
+}
+
+function defaultPortForKind(kind) {
+  if (kind === 'filesystem') return 8620;
+  if (kind === 'sharepoint') return 8640;
+  if (kind === 'aws_s3') return 8600;
+  if (kind === 'azure_blob_storage') return 8610;
+  if (kind === 'salesforce') return 8670;
+  throw new Error(`Unsupported connector kind: ${kind}`);
+}
+
+function connectorStateDirForKind(kind) {
+  let root = 'connector';
+  if (kind === 'filesystem') root = 'filesystem-connector';
+  else if (kind === 'sharepoint') root = 'sharepoint-connector';
+  else if (kind === 'aws_s3') root = 'aws-s3-connector';
+  else if (kind === 'azure_blob_storage') root = 'azure-blob-storage-connector';
+  else if (kind === 'salesforce') root = 'salesforce-connector';
+  else throw new Error(`Unsupported connector kind: ${kind}`);
+  return path.join(os.homedir(), '.dsx-connect-local', `${root}-desktop`);
+}
+
+function connectorStableIdForKind(kind) {
+  return `${kind}-desktop`;
+}
+
+function makeConnectorEntry(kind, stateDir, port) {
+  return {
+    id: connectorStableIdForKind(kind),
+    kind,
+    display: displayForKind(kind),
+    script: scriptForKind(kind),
+    stateDir,
+    port,
+  };
 }
 
 function waitForHttpReady(url, timeoutMs = 45000, intervalMs = 500) {
@@ -127,6 +207,25 @@ function startCore() {
   });
 }
 
+async function getCoreAppEnv() {
+  const res = await httpJson('GET', `${API_URL}dsx-connect/api/v1/config`);
+  if (!res.ok || !res.data || typeof res.data !== 'object') return 'unknown';
+  return String(res.data.app_env || 'unknown').trim().toLowerCase();
+}
+
+async function ensureCoreInAppMode() {
+  let appEnv = await getCoreAppEnv();
+  if (appEnv === 'app') return true;
+
+  // Best effort: restart the managed core (state dir already pinned to app mode).
+  await stopCore();
+  await new Promise((r) => setTimeout(r, 500));
+  startCore();
+  await waitForHttpReady(API_URL, 30000, 500);
+  appEnv = await getCoreAppEnv();
+  return appEnv === 'app';
+}
+
 async function ensureCoreDesktopState() {
   fs.mkdirSync(CORE_STATE_DIR, { recursive: true });
   const init = await runPythonCommand(CORE_MANAGER, 'init', [], ['--state-dir', CORE_STATE_DIR]);
@@ -134,9 +233,12 @@ async function ensureCoreDesktopState() {
     const detail = [init.stdout, init.stderr].filter(Boolean).join('\n');
     throw new Error(`Failed to initialize core state dir.\n${detail || 'Unknown error'}`);
   }
+  const envValues = readEnvValues(CORE_ENV_FILE);
   upsertEnvValues(CORE_ENV_FILE, {
-    DSXCONNECT_APP_ENV: 'app',
-    DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS: 'false'
+    DSXCONNECT_APP_ENV: envValues.DSXCONNECT_APP_ENV || 'app',
+    DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS: envValues.DSXCONNECT_DIANNA__AUTO_ON_MALICIOUS || 'false',
+    DSXCONNECT_WORKER_POOL: envValues.DSXCONNECT_WORKER_POOL || 'prefork',
+    DSXCONNECT_WORKER_CONCURRENCY: envValues.DSXCONNECT_WORKER_CONCURRENCY || '4'
   });
 }
 
@@ -167,15 +269,8 @@ function runPythonCommand(scriptPath, command, commandArgs = [], globalArgs = []
   });
 }
 
-function instanceStamp() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const ts = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-  return `${ts}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-}
-
 function connectorMenuLabel(item) {
-  return `${item.display} ${item.id.slice(0, 10)}`;
+  return `${item.display} :${item.port}`;
 }
 
 function saveLaunchedConnectors() {
@@ -225,18 +320,88 @@ function upsertEnvValues(envPath, values) {
   fs.writeFileSync(envPath, out.join('\n'), 'utf8');
 }
 
-function ensureConnectorIdentityEnv(stateDir) {
+function readEnvValues(envPath) {
+  const values = {};
+  if (!exists(envPath)) return values;
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    if (!line || line.trim().startsWith('#') || !line.includes('=')) continue;
+    const idx = line.indexOf('=');
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    values[key] = value;
+  }
+  return values;
+}
+
+function shouldStopCoreOnExit() {
+  return process.env.DSXCONNECT_STOP_ON_EXIT !== '0';
+}
+
+function shouldStopConnectorsOnExit() {
+  return process.env.DSXCONNECT_STOP_CONNECTORS_ON_EXIT !== '0';
+}
+
+function ensureConnectorIdentityEnv(stateDir, extraValues = {}) {
   const envPath = path.join(stateDir, '.env.local');
   const connectorDataDir = path.join(stateDir, 'data');
   upsertEnvValues(envPath, {
     DSXCONNECTOR_DATA_DIR: connectorDataDir,
-    DSXCONNECTOR_APP_ENV: 'app'
+    DSXCONNECTOR_APP_ENV: 'app',
+    ...extraValues,
   });
 }
 
+function connectorEnvDefaults(kind, port) {
+  const base = {
+    DSXCONNECTOR_DISPLAY_NAME: `${displayForKind(kind)} :${port}`,
+  };
+  if (kind === 'sharepoint') {
+    // Align desktop launcher behavior with the working local SharePoint integration profile.
+    base.RUN_SP_INTEGRATION = 'true';
+  }
+  return base;
+}
+
 function connectorBaseUrl(item) {
-  const pathPart = item.kind === 'filesystem' ? 'filesystem-connector' : 'sharepoint-connector';
+  let pathPart = 'connector';
+  if (item.kind === 'filesystem') pathPart = 'filesystem-connector';
+  else if (item.kind === 'sharepoint') pathPart = 'sharepoint-connector';
+  else if (item.kind === 'aws_s3') pathPart = 'aws-s3-connector';
+  else if (item.kind === 'azure_blob_storage') pathPart = 'azure-blob-storage-connector';
+  else if (item.kind === 'salesforce') pathPart = 'salesforce-connector';
   return `http://127.0.0.1:${item.port}/${pathPart}`;
+}
+
+async function isConnectorResponsive(item) {
+  try {
+    const ready = await httpJson('GET', `${connectorBaseUrl(item)}/readyz`, null, 1500);
+    return ready.ok;
+  } catch {
+    return false;
+  }
+}
+
+function readPidFromFile(pidfile) {
+  try {
+    if (!exists(pidfile)) return null;
+    const raw = String(fs.readFileSync(pidfile, 'utf8') || '').trim();
+    const pid = Number(raw);
+    if (!Number.isInteger(pid) || pid <= 0) return null;
+    return pid;
+  } catch {
+    return null;
+  }
+}
+
+function isPidAlive(pid) {
+  if (!pid || !Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function httpJson(method, url, payload = null, timeoutMs = 8000) {
@@ -317,33 +482,143 @@ async function setFilesystemAssetFolder(item) {
   });
 }
 
+function readEnvFileRedacted(envPath) {
+  try {
+    if (!exists(envPath)) return `(missing) ${envPath}`;
+    const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+    return lines
+      .map((line) => {
+        if (!line.includes('=')) return line;
+        const idx = line.indexOf('=');
+        const key = line.slice(0, idx).trim();
+        const val = line.slice(idx + 1);
+        if (/secret|token|password/i.test(key)) {
+          if (!val) return `${key}=`;
+          return `${key}=********`;
+        }
+        return line;
+      })
+      .join('\n');
+  } catch (err) {
+    return `(error reading ${envPath}) ${String(err && err.message ? err.message : err)}`;
+  }
+}
+
+async function showConnectorDebugInfo(item) {
+  const base = connectorBaseUrl(item);
+  const envPath = path.join(item.stateDir, '.env.local');
+
+  const [ready, repo, cfg] = await Promise.all([
+    httpJson('GET', `${base}/readyz`, null, 4000),
+    httpJson('GET', `${base}/repo_check?preview=5`, null, 8000),
+    httpJson('GET', `${base}/config`, null, 4000),
+  ]);
+
+  const detail = [
+    `Connector: ${connectorMenuLabel(item)}`,
+    `State dir: ${item.stateDir}`,
+    '',
+    `readyz: HTTP ${ready.statusCode || 0}`,
+    `${JSON.stringify(ready.data || {}, null, 2)}`,
+    '',
+    `repo_check: HTTP ${repo.statusCode || 0}`,
+    `${JSON.stringify(repo.data || {}, null, 2)}`,
+    '',
+    `config: HTTP ${cfg.statusCode || 0}`,
+    `${JSON.stringify(cfg.data || {}, null, 2)}`,
+    '',
+    `.env.local (${envPath})`,
+    `${readEnvFileRedacted(envPath)}`,
+  ].join('\n');
+
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Connector Debug Info',
+    message: connectorMenuLabel(item),
+    detail,
+  });
+}
+
 function loadLaunchedConnectors() {
   try {
-    if (!exists(LAUNCHED_CONNECTORS_FILE)) return;
-    const raw = fs.readFileSync(LAUNCHED_CONNECTORS_FILE, 'utf8');
-    const data = JSON.parse(raw);
-    if (!Array.isArray(data)) return;
+    const byKind = new Map();
+    if (exists(LAUNCHED_CONNECTORS_FILE)) {
+      const raw = fs.readFileSync(LAUNCHED_CONNECTORS_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        for (const item of data) {
+          if (!item || !['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'salesforce'].includes(item.kind)) continue;
+          const port = Number(item.port);
+          byKind.set(item.kind, {
+            stateDir: typeof item.stateDir === 'string' && item.stateDir ? item.stateDir : connectorStateDirForKind(item.kind),
+            port: Number.isInteger(port) && port > 0 ? port : defaultPortForKind(item.kind),
+          });
+        }
+      }
+    }
 
-    for (const item of data) {
-      if (!item || (item.kind !== 'filesystem' && item.kind !== 'sharepoint')) continue;
-      if (typeof item.id !== 'string' || !item.id) continue;
-      if (typeof item.stateDir !== 'string' || !item.stateDir) continue;
-      const port = Number(item.port);
-      if (!Number.isInteger(port) || port <= 0) continue;
-      if (!exists(item.stateDir)) continue;
+    for (const kind of ['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'salesforce']) {
+      const fromFile = byKind.get(kind);
+      if (!fromFile) continue;
+      const canonicalDir = connectorStateDirForKind(kind);
+      const oldDir = String(fromFile.stateDir || canonicalDir);
+      let stateDir = canonicalDir;
 
-      launchedConnectors.push({
-        id: item.id,
-        kind: item.kind,
-        display: displayForKind(item.kind),
-        script: scriptForKind(item.kind),
-        stateDir: item.stateDir,
-        port
-      });
+      // Best-effort migrate legacy per-instance dirs into canonical desktop dir.
+      try {
+        if (oldDir !== canonicalDir && exists(oldDir) && !exists(canonicalDir)) {
+          fs.mkdirSync(canonicalDir, { recursive: true });
+          const oldEnv = path.join(oldDir, '.env.local');
+          const oldData = path.join(oldDir, 'data');
+          if (exists(oldEnv)) fs.copyFileSync(oldEnv, path.join(canonicalDir, '.env.local'));
+          if (exists(oldData)) fs.cpSync(oldData, path.join(canonicalDir, 'data'), { recursive: true });
+        } else if (oldDir !== canonicalDir && exists(oldDir) && exists(canonicalDir)) {
+          // Keep canonical path; old dir is ignored.
+        } else if (!exists(canonicalDir) && exists(oldDir)) {
+          // Fallback to old location when canonical does not exist yet.
+          stateDir = oldDir;
+        }
+      } catch {}
+
+      launchedConnectors.push(makeConnectorEntry(kind, stateDir, fromFile.port));
     }
   } catch (err) {
     console.error('Failed to load launched connectors:', err);
   }
+}
+
+async function rehydrateLaunchedConnectorsOnStartup() {
+  if (!launchedConnectors.length) return { started: 0, failed: [] };
+  let started = 0;
+  const failed = [];
+  for (const item of launchedConnectors) {
+    try {
+      if (await isConnectorResponsive(item)) {
+        started += 1;
+        continue;
+      }
+      ensureConnectorIdentityEnv(item.stateDir, {
+        ...connectorEnvDefaults(item.kind, item.port),
+      });
+      const result = await runPythonCommand(item.script, 'start', [], [
+        '--state-dir',
+        item.stateDir,
+        '--port',
+        String(item.port),
+      ]);
+      if (result.ok || (await isConnectorResponsive(item))) {
+        started += 1;
+      } else {
+        failed.push({
+          kind: item.kind,
+          detail: [result.stdout, result.stderr].filter(Boolean).join('\n'),
+        });
+      }
+    } catch (e) {
+      failed.push({ kind: item.kind, detail: String(e && e.message ? e.message : e) });
+    }
+  }
+  return { started, failed };
 }
 
 async function cleanupConnectorRegistry() {
@@ -397,6 +672,10 @@ async function cleanupConnectorRegistry() {
 }
 
 async function stopAllLaunchedConnectors() {
+  return stopAllLaunchedConnectorsInternal({ showDialog: true });
+}
+
+async function stopAllLaunchedConnectorsInternal({ showDialog = false } = {}) {
   const items = [...launchedConnectors];
   let stopped = 0;
   const failed = [];
@@ -418,18 +697,24 @@ async function stopAllLaunchedConnectors() {
     }
   }
 
-  const failedSummary = failed
-    .slice(0, 5)
-    .map((f) => `- ${f.id}: ${f.detail || 'unknown error'}`)
-    .join('\n');
-  const more = failed.length > 5 ? `\n...and ${failed.length - 5} more failures` : '';
+  if (showDialog) {
+    const failedSummary = failed
+      .slice(0, 5)
+      .map((f) => `- ${f.id}: ${f.detail || 'unknown error'}`)
+      .join('\n');
+    const more = failed.length > 5 ? `\n...and ${failed.length - 5} more failures` : '';
 
-  dialog.showMessageBox({
-    type: 'info',
-    title: 'Stop All Launched Connectors',
-    message: `Stopped ${stopped}/${items.length} connector(s).`,
-    detail: failed.length ? `Failures:\n${failedSummary}${more}` : 'All connectors stopped successfully.',
-  });
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Stop All Launched Connectors',
+      message: `Stopped ${stopped}/${items.length} connector(s).`,
+      detail: failed.length ? `Failures:\n${failedSummary}${more}` : 'All connectors stopped successfully.',
+    });
+  } else if (failed.length) {
+    console.error(`Failed to stop ${failed.length} launched connector(s):`, failed.slice(0, 5));
+  }
+
+  return { stopped, total: items.length, failed };
 }
 
 function forgetAllLaunchedConnectors() {
@@ -437,6 +722,90 @@ function forgetAllLaunchedConnectors() {
   saveLaunchedConnectors();
   buildAppMenu();
   refreshEmbeddedUi();
+}
+
+function listStrayConnectorProcesses() {
+  return new Promise((resolve) => {
+    const proc = spawn('ps', ['-ax', '-o', 'pid=,command='], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let out = '';
+    let err = '';
+    proc.stdout.on('data', (d) => {
+      out += d.toString();
+    });
+    proc.stderr.on('data', (d) => {
+      err += d.toString();
+    });
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        resolve({ ok: false, error: err || `ps exited with ${code}`, rows: [] });
+        return;
+      }
+      const rows = out
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const m = line.match(/^(\d+)\s+(.+)$/);
+          if (!m) return null;
+          return { pid: Number(m[1]), cmd: m[2] };
+        })
+        .filter(Boolean)
+        .filter((r) => Number.isInteger(r.pid) && r.pid > 0);
+      resolve({ ok: true, rows });
+    });
+    proc.on('error', (e) => resolve({ ok: false, error: String(e), rows: [] }));
+  });
+}
+
+async function stopStrayConnectorProcesses() {
+  const listed = await listStrayConnectorProcesses();
+  if (!listed.ok) {
+    dialog.showErrorBox('Stop Stray Connector Processes', `Failed to list processes.\n\n${listed.error || 'Unknown error'}`);
+    return;
+  }
+
+  const patterns = [
+    '/connectors/filesystem/local/filesystem_local.py',
+    '/connectors/sharepoint/local/sharepoint_local.py',
+    '/connectors/aws_s3/local/aws_s3_local.py',
+    '/connectors/azure_blob_storage/local/azure_blob_storage_local.py',
+    '/connectors/salesforce/local/salesforce_local.py',
+  ];
+
+  const targets = listed.rows.filter((r) => patterns.some((p) => r.cmd.includes(p)));
+  if (!targets.length) {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Stop Stray Connector Processes',
+      message: 'No stray connector processes found.',
+    });
+    return;
+  }
+
+  const killed = [];
+  for (const t of targets) {
+    try {
+      process.kill(t.pid, 'SIGTERM');
+      killed.push(t);
+    } catch {
+      // ignore
+    }
+  }
+
+  await new Promise((r) => setTimeout(r, 800));
+
+  // Follow with registry cleanup and UI refresh.
+  await cleanupConnectorRegistry();
+  refreshEmbeddedUi();
+
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'Stop Stray Connector Processes',
+    message: `Signaled ${killed.length}/${targets.length} process(es).`,
+    detail: killed.slice(0, 10).map((k) => `${k.pid} ${k.cmd}`).join('\n'),
+  });
 }
 
 function isPortFree(port, host = '127.0.0.1') {
@@ -450,52 +819,58 @@ function isPortFree(port, host = '127.0.0.1') {
   });
 }
 
-async function findAvailablePort(startPort) {
-  for (let p = startPort; p < startPort + 400; p += 1) {
-    if (await isPortFree(p)) return p;
-  }
-  throw new Error(`No free port found from ${startPort}`);
-}
-
 async function launchConnectorInstance(kind) {
+  const stateDir = connectorStateDirForKind(kind);
+  const fixedPort = defaultPortForKind(kind);
   const script = scriptForKind(kind);
   const display = displayForKind(kind);
-  const basePort = kind === 'filesystem' ? 8620 : 8640;
-  const root = kind === 'filesystem' ? 'filesystem-connector' : 'sharepoint-connector';
-  const stamp = instanceStamp();
-  const id = randomUUID();
-  const stateDir = path.join(os.homedir(), '.dsx-connect-local', `${root}-${stamp}`);
-  const port = await findAvailablePort(basePort);
-  const globalArgs = ['--state-dir', stateDir, '--port', String(port)];
+  const globalArgs = ['--state-dir', stateDir, '--port', String(fixedPort)];
+  let existing = launchedConnectors.find((x) => x.kind === kind);
+  if (!existing) {
+    existing = makeConnectorEntry(kind, stateDir, fixedPort);
+    launchedConnectors.push(existing);
+    saveLaunchedConnectors();
+    buildAppMenu();
+  }
 
-  const init = await runPythonCommand(script, 'init', [], globalArgs);
-  if (!init.ok) {
-    const detail = [init.stdout, init.stderr].filter(Boolean).join('\n');
-    dialog.showErrorBox(`Launch ${display} Connector`, `Init failed.\n\n${detail || 'Unknown error'}`);
+  if (await isConnectorResponsive(existing)) {
     return;
   }
 
-  // Ensure each launched instance has its own connector UUID persistence path.
-  // Without this, multiple instances of the same connector type can share identity.
-  ensureConnectorIdentityEnv(stateDir);
-
-  const start = await runPythonCommand(script, 'start', [], globalArgs);
-  if (!start.ok) {
-    const detail = [start.stdout, start.stderr].filter(Boolean).join('\n');
-    dialog.showErrorBox(`Launch ${display} Connector`, `Start failed.\n\n${detail || 'Unknown error'}`);
+  const portFree = await isPortFree(fixedPort);
+  if (!portFree) {
+    const detail = [
+      `${display} connector fixed port ${fixedPort} is already in use.`,
+      `This desktop launcher supports one ${display} instance.`,
+      `Stop the existing process using that port, then launch again.`
+    ].join('\n');
+    dialog.showErrorBox(`Launch ${display} Connector`, detail);
     return;
   }
 
-  launchedConnectors.push({
-    id,
-    kind,
-    display,
-    script,
-    stateDir,
-    port
-  });
-  saveLaunchedConnectors();
-  buildAppMenu();
+  pendingConnectorPorts.add(fixedPort);
+
+  try {
+    const init = await runPythonCommand(script, 'init', [], globalArgs);
+    if (!init.ok) {
+      const detail = [init.stdout, init.stderr].filter(Boolean).join('\n');
+      dialog.showErrorBox(`Launch ${display} Connector`, `Init failed.\n\n${detail || 'Unknown error'}`);
+      return;
+    }
+
+    ensureConnectorIdentityEnv(stateDir, {
+      ...connectorEnvDefaults(kind, fixedPort),
+    });
+
+    const start = await runPythonCommand(script, 'start', [], globalArgs);
+    if (!start.ok && !(await isConnectorResponsive(existing))) {
+      const detail = [start.stdout, start.stderr].filter(Boolean).join('\n');
+      dialog.showErrorBox(`Launch ${display} Connector`, `Start failed.\n\n${detail || 'Unknown error'}`);
+      return;
+    }
+  } finally {
+    pendingConnectorPorts.delete(fixedPort);
+  }
 }
 
 function buildConnectorItemSubmenu(item) {
@@ -514,9 +889,18 @@ function buildConnectorItemSubmenu(item) {
 
   return [
     {
+      label: 'Show Debug Info',
+      click: async () => {
+        await showConnectorDebugInfo(item);
+      }
+    },
+    { type: 'separator' },
+    {
       label: 'Start',
       click: async () => {
-        ensureConnectorIdentityEnv(item.stateDir);
+        ensureConnectorIdentityEnv(item.stateDir, {
+          ...connectorEnvDefaults(item.kind, item.port),
+        });
         const result = await runPythonCommand(item.script, 'start', [], [
           '--state-dir',
           item.stateDir,
@@ -592,6 +976,11 @@ function buildConnectorItemSubmenu(item) {
 }
 
 function buildAppMenu() {
+  const hasFilesystemLaunched = launchedConnectors.some((x) => x.kind === 'filesystem');
+  const hasSharepointLaunched = launchedConnectors.some((x) => x.kind === 'sharepoint');
+  const hasAwsLaunched = launchedConnectors.some((x) => x.kind === 'aws_s3');
+  const hasAzureLaunched = launchedConnectors.some((x) => x.kind === 'azure_blob_storage');
+  const hasSalesforceLaunched = launchedConnectors.some((x) => x.kind === 'salesforce');
   const launchedSubmenu = launchedConnectors.length
     ? launchedConnectors.map((item) => ({
         label: connectorMenuLabel(item),
@@ -643,7 +1032,8 @@ function buildAppMenu() {
           label: 'Launch...',
           submenu: [
             {
-              label: 'Filesystem',
+              label: hasFilesystemLaunched ? 'Filesystem (Launched)' : 'Filesystem',
+              enabled: !hasFilesystemLaunched,
               click: () => {
                 launchConnectorInstance('filesystem').catch((err) => {
                   dialog.showErrorBox('Launch Filesystem Connector', String(err && err.message ? err.message : err));
@@ -651,10 +1041,38 @@ function buildAppMenu() {
               }
             },
             {
-              label: 'SharePoint',
+              label: hasSharepointLaunched ? 'SharePoint (Launched)' : 'SharePoint',
+              enabled: !hasSharepointLaunched,
               click: () => {
                 launchConnectorInstance('sharepoint').catch((err) => {
                   dialog.showErrorBox('Launch SharePoint Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
+              label: hasAwsLaunched ? 'AWS S3 (Launched)' : 'AWS S3',
+              enabled: !hasAwsLaunched,
+              click: () => {
+                launchConnectorInstance('aws_s3').catch((err) => {
+                  dialog.showErrorBox('Launch AWS S3 Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
+              label: hasAzureLaunched ? 'Azure Blob (Launched)' : 'Azure Blob',
+              enabled: !hasAzureLaunched,
+              click: () => {
+                launchConnectorInstance('azure_blob_storage').catch((err) => {
+                  dialog.showErrorBox('Launch Azure Blob Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
+              label: hasSalesforceLaunched ? 'Salesforce (Launched)' : 'Salesforce',
+              enabled: !hasSalesforceLaunched,
+              click: () => {
+                launchConnectorInstance('salesforce').catch((err) => {
+                  dialog.showErrorBox('Launch Salesforce Connector', String(err && err.message ? err.message : err));
                 });
               }
             }
@@ -673,6 +1091,14 @@ function buildAppMenu() {
           click: () => {
             stopAllLaunchedConnectors().catch((err) => {
               dialog.showErrorBox('Stop All Launched Connectors', String(err && err.message ? err.message : err));
+            });
+          }
+        },
+        {
+          label: 'Stop Stray Processes',
+          click: () => {
+            stopStrayConnectorProcesses().catch((err) => {
+              dialog.showErrorBox('Stop Stray Connector Processes', String(err && err.message ? err.message : err));
             });
           }
         },
@@ -759,6 +1185,7 @@ function createWindow() {
     backgroundColor: '#0f1720',
     title: 'DSX-Connect Desktop',
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -772,14 +1199,118 @@ function createWindow() {
   });
 }
 
+function showShutdownWindow() {
+  if (shutdownWindow && !shutdownWindow.isDestroyed()) {
+    shutdownWindow.focus();
+    return;
+  }
+
+  shutdownWindow = new BrowserWindow({
+    width: 460,
+    height: 170,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    closable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    frame: false,
+    modal: !!mainWindow,
+    parent: mainWindow || undefined,
+    backgroundColor: '#0f1720',
+    title: 'Shutting Down',
+    webPreferences: {
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false
+    }
+  });
+
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            background: #0f1720;
+            color: #e5e7eb;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+          }
+          .wrap {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+          }
+          .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(148, 163, 184, 0.35);
+            border-top-color: #93c5fd;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+          }
+          .title {
+            font-size: 15px;
+            font-weight: 600;
+          }
+          .sub {
+            font-size: 12px;
+            color: #94a3b8;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="wrap">
+          <div class="spinner"></div>
+          <div class="title">DSX-Connect Desktop is shutting down...</div>
+          <div class="sub">Stopping connectors and local services</div>
+        </div>
+      </body>
+    </html>
+  `;
+  shutdownWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  shutdownWindow.once('closed', () => {
+    shutdownWindow = null;
+  });
+}
+
 app.whenReady().then(async () => {
+  if (!ensureDesktopPrereqs()) {
+    app.quit();
+    return;
+  }
+
   loadLaunchedConnectors();
+  saveLaunchedConnectors();
   buildAppMenu();
   await ensureCoreDesktopState();
   startCore();
 
   try {
     await waitForHttpReady(API_URL);
+    const appModeOk = await ensureCoreInAppMode();
+    if (!appModeOk) {
+      dialog.showErrorBox(
+        'DSX-Connect Desktop',
+        `Detected core app_env is not "app".\n\n` +
+        `Desktop uses app mode features and expects app_env=app.\n` +
+        `Port ${API_PORT} may already be serving another DSX-Connect instance.`
+      );
+    }
+    const rehydrated = await rehydrateLaunchedConnectorsOnStartup();
+    if (rehydrated.failed && rehydrated.failed.length) {
+      console.error('Connector rehydrate failures:', rehydrated.failed);
+    }
     createWindow();
   } catch (err) {
     dialog.showErrorBox(
@@ -796,18 +1327,27 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', async () => {
   if (process.platform !== 'darwin') {
-    if (process.env.DSXCONNECT_STOP_ON_EXIT === '1') {
-      await stopCore();
-    }
     app.quit();
   }
 });
 
 app.on('before-quit', async (event) => {
-  if (process.env.DSXCONNECT_STOP_ON_EXIT !== '1') return;
-  if (app.__stopping) return;
+  if (app.__stopping) {
+    if (shutdownWindow && !shutdownWindow.isDestroyed()) shutdownWindow.focus();
+    return;
+  }
   app.__stopping = true;
   event.preventDefault();
-  await stopCore();
+  showShutdownWindow();
+  try {
+    if (shouldStopConnectorsOnExit()) {
+      await stopAllLaunchedConnectorsInternal({ showDialog: false });
+    }
+  } catch {}
+  try {
+    if (shouldStopCoreOnExit()) {
+      await stopCore();
+    }
+  } catch {}
   app.quit();
 });

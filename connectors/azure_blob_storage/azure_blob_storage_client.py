@@ -5,7 +5,9 @@ import pathlib
 import hashlib
 import os
 import re
+import time
 from functools import partial
+from collections.abc import Iterator
 
 from azure.storage.blob import BlobServiceClient
 from azure.core.exceptions import ResourceNotFoundError
@@ -136,27 +138,83 @@ class AzureBlobClient:
                     wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
                     reraise=True,
                     before_sleep=tenacity.before_sleep_log(dsx_logging, logging.WARN))
-    def get_blob(self, container: str, blob_name: str) -> io.BytesIO:
+    def get_blob(self, container: str, blob_name: str, *, max_concurrency: int = 8) -> io.BytesIO:
         self._require_client()
         blob_client = self.service_client.get_blob_client(
             container=container, blob=blob_name
         )
-        # ask the SDK to download in 8 parallel ranges
-        downloader = blob_client.download_blob(max_concurrency=8)
+        started = time.perf_counter()
+        # Ask the SDK to download in parallel ranges. This is one of the main
+        # throughput levers once enqueue is no longer the bottleneck.
+        downloader = blob_client.download_blob(max_concurrency=max(1, int(max_concurrency)))
         content = io.BytesIO()
         # stream the chunks into your BytesIO
         for chunk in downloader.chunks():
             content.write(chunk)
         content.seek(0)
+        elapsed_ms = (time.perf_counter() - started) * 1000.0
+        dsx_logging.info(
+            "azure.get_blob.done container=%s blob=%s bytes=%s elapsed_ms=%.1f sdk_max_concurrency=%s",
+            container,
+            blob_name,
+            content.getbuffer().nbytes,
+            elapsed_ms,
+            max(1, int(max_concurrency)),
+        )
         return content
 
-    async def get_blob_async(self, container: str, blob_name: str) -> io.BytesIO:
+    async def get_blob_async(self, container: str, blob_name: str, *, max_concurrency: int = 8) -> io.BytesIO:
         loop = asyncio.get_running_loop()
         # partial(self._get_blob_sync, ...) fixes the first two args
         return await loop.run_in_executor(
             None,
-            partial(self.get_blob, container, blob_name)
+            partial(self.get_blob, container, blob_name, max_concurrency=max_concurrency)
         )
+
+    def get_blob_stream(
+        self,
+        container: str,
+        blob_name: str,
+        *,
+        max_concurrency: int = 8,
+    ) -> tuple[Iterator[bytes], int | None]:
+        self._require_client()
+        blob_client = self.service_client.get_blob_client(container=container, blob=blob_name)
+        props = blob_client.get_blob_properties()
+        size = getattr(props, "size", None)
+        started = time.perf_counter()
+        downloader = blob_client.download_blob(max_concurrency=max(1, int(max_concurrency)))
+
+        def _iter() -> Iterator[bytes]:
+            first_chunk_ms: float | None = None
+            total_bytes = 0
+            try:
+                for chunk in downloader.chunks():
+                    if not chunk:
+                        continue
+                    if first_chunk_ms is None:
+                        first_chunk_ms = (time.perf_counter() - started) * 1000.0
+                        dsx_logging.info(
+                            "azure.get_blob_stream.first_chunk container=%s blob=%s first_chunk_ms=%.1f sdk_max_concurrency=%s",
+                            container,
+                            blob_name,
+                            first_chunk_ms,
+                            max(1, int(max_concurrency)),
+                        )
+                    total_bytes += len(chunk)
+                    yield chunk
+            finally:
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                dsx_logging.info(
+                    "azure.get_blob_stream.done container=%s blob=%s bytes=%s elapsed_ms=%.1f sdk_max_concurrency=%s",
+                    container,
+                    blob_name,
+                    total_bytes,
+                    elapsed_ms,
+                    max(1, int(max_concurrency)),
+                )
+
+        return _iter(), size
 
 
 

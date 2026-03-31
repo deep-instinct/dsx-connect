@@ -3,7 +3,7 @@
   "productName": "DSX-Connect Desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Electron launcher that hosts the existing DSX Connect web UI",
+  "description": "Electron launcher that hosts DSX-Connect Core components, web UI and Connectors",
   "main": "main.js",
   "scripts": {
     "start": "node ./scripts/run-electron.js",
@@ -29,6 +29,7 @@
     },
     "files": [
       "main.js",
+      "preload.js",
       "package.json"
     ],
     "mac": {

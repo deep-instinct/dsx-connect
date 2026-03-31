@@ -11,7 +11,7 @@ This guide explains how to run the `m365-mail-connector` (Outlook / Exchange Onl
   - `Files.Read.All` if you plan to download `referenceAttachment`s (optional for v1)
 - Service principal credentials: supply via `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET`.
 - List of mailbox UPNs or mailbox folders to monitor via `M365_MAILBOX_UPNS` (comma-separated).
-- Public HTTPS endpoint for Graph change notifications (e.g., port-forward via ngrok/Cloudflare Tunnel). Only `/{connector}/webhook/event` must be reachable from Microsoft Graph.
+- Optional public HTTPS base URL for Graph change notifications (e.g., ngrok/Cloudflare Tunnel). Microsoft Graph must be able to reach `https://<public-host>/m365-mail-connector/webhook/event`.
 
 ## Compose File
 In the extracted bundle, start from `dsx-connect-<core_version>/m365-mail-connector-<connector_version>/docker-compose-m365-mail-connector.yaml`. It references the published connector image and binds port `8650` (container + host) so you can forward webhooks easily.
@@ -31,12 +31,12 @@ In the extracted bundle, start from `dsx-connect-<core_version>/m365-mail-connec
 
 | Variable | Description |
 | --- | --- |
-| `M365_MAILBOX_UPNS` | Comma-separated list of mailbox UPNs (e.g., `user@contoso.com,groupscan@contoso.com`). |
-| `M365_TENANT_ID`, `M365_CLIENT_ID`, `M365_CLIENT_SECRET` | Microsoft Graph app registration credentials. |
-| `M365_CLIENT_STATE` | Optional shared secret for webhook `clientState` validation. |
-| `DSXCONNECTOR_WEBHOOK_URL` | Optional public HTTPS base URL for Graph webhooks (falls back to `DSXCONNECTOR_CONNECTOR_URL`). Use this with ngrok or another tunnel so dsx-connect can stay on the internal URL while Graph reaches the connector. |
+| `DSXCONNECTOR_M365_MAILBOX_UPNS` | Comma-separated list of mailbox UPNs (e.g., `user@contoso.com,groupscan@contoso.com`). |
+| `DSXCONNECTOR_M365_TENANT_ID`, `DSXCONNECTOR_M365_CLIENT_ID`, `DSXCONNECTOR_M365_CLIENT_SECRET` | Microsoft Graph app registration credentials. |
+| `DSXCONNECTOR_M365_CLIENT_STATE` | Optional shared secret for webhook `clientState` validation. Required if you want the connector to reject spoofed notifications. |
+| `DSXCONNECTOR_M365_WEBHOOK_URL` | Optional public HTTPS base URL for Graph webhooks. Set the base URL only; the connector appends `/m365-mail-connector/webhook/event` when it registers subscriptions. |
 | `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS` | Background delta backfill cadence (defaults to 600). |
-| `DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION` | When `true`, run a delta pass immediately after each webhook (default `false`). |
+| `DSXCONNECTOR_M365_TRIGGER_DELTA_ON_NOTIFICATION` | When `true`, run a delta pass immediately after each webhook (default `false`). |
 
 Example:
 
@@ -61,8 +61,9 @@ See Reference → [Assets & Filters](../../reference/assets.md) for sharding pat
 Microsoft Graph must reach `https://<public-host>/m365-mail-connector/webhook/event`.
 
 1. Expose the container’s port `8650` via an HTTPS tunnel or reverse proxy (ngrok, Cloudflare Tunnel, etc.). The tunnel terminates on the Docker host and forwards traffic to `localhost:8650`.
-2. Register Microsoft Graph subscriptions using that public HTTPS URL.
+2. Set `DSXCONNECTOR_M365_WEBHOOK_URL=https://<public-host>` and, optionally, `DSXCONNECTOR_M365_CLIENT_STATE=<random-uuid>`.
 3. Leave `DSXCONNECTOR_CONNECTOR_URL` pointing at the Docker-network hostname (e.g., `http://m365-mail-connector:8650`) so dsx-connect can reach the connector internally.
+4. Start the connector and look for `Subscriptions reconciled` in the logs.
 
 ## Compose vs. Kubernetes
 - **Docker Compose**
@@ -86,15 +87,16 @@ Microsoft Graph delivers notifications only to publicly reachable HTTPS endpoint
 
 1. Install ngrok and run `ngrok http 8650`. ngrok prints both HTTP and HTTPS URLs (e.g., `https://<random>.ngrok-free.app`).
 2. Keep `DSXCONNECTOR_CONNECTOR_URL=http://127.0.0.1:8650` so dsx-connect calls the connector over localhost.
-3. Set `DSXCONNECTOR_WEBHOOK_URL=https://<random>.ngrok-free.app` so the connector registers the ngrok address with Graph.
-4. Restart the connector. Subscription reconciliation will now succeed, and Graph notifications will arrive at the tunneled endpoint.
+3. Set `DSXCONNECTOR_M365_WEBHOOK_URL=https://<random>.ngrok-free.app` so the connector registers the ngrok address with Graph.
+4. Set `DSXCONNECTOR_M365_CLIENT_STATE=<random-uuid>` if you want the connector to validate the `clientState` echoed by Graph.
+5. Restart the connector. Subscription reconciliation will now succeed, and Graph notifications will arrive at the tunneled endpoint.
 
-Any secure tunnel (Cloudflare Tunnel, Azure Relay, etc.) works similarly: expose port 8650, note the HTTPS URL, and place it in `DSXCONNECTOR_WEBHOOK_URL`.
+Any secure tunnel (Cloudflare Tunnel, Azure Relay, etc.) works similarly: expose port 8650, note the HTTPS URL, and place it in `DSXCONNECTOR_M365_WEBHOOK_URL`.
 
 ### Faster Scanning After Notifications
 
 - The connector relies on Graph delta queries for durability. By default it waits `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS` (600s) between runs. During that interval you may see multiple webhook events, but attachments are processed when the next delta pass runs.
-- To reduce latency, either lower the interval (e.g., `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS=30`) or set `DSXCONNECTOR_TRIGGER_DELTA_ON_NOTIFICATION=true` so the connector runs a delta pass immediately after each webhook.
+- To reduce latency, either lower the interval (e.g., `DSXCONNECTOR_DELTA_RUN_INTERVAL_SECONDS=30`) or set `DSXCONNECTOR_M365_TRIGGER_DELTA_ON_NOTIFICATION=true` so the connector runs a delta pass immediately after each webhook.
 - Even with the trigger enabled, the periodic delta loop stays active to recover from missed notifications.
 
 ## Operational Notes

@@ -251,37 +251,46 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     try:
         upns = _configured_upns()
         if _graph and upns:
-            global _subs_mgr, _subs_task
-            _subs_mgr = SubscriptionManager(_graph.token)
-            if getattr(config, "webhook_base_url", None):
-                connector_base = str(config.webhook_base_url).rstrip("/")
+            webhook_base = str(getattr(config, "webhook_base_url", "") or "").rstrip("/")
+            if webhook_base:
+                if webhook_base.startswith("https://"):
+                    global _subs_mgr, _subs_task
+                    _subs_mgr = SubscriptionManager(_graph.token)
+                    webhook_url = f"{webhook_base}/{config.name}/webhook/event"
+                    client_state = config.client_state.get_secret_value() if config.client_state else None
+
+                    async def _reconcile_loop():
+                        while True:
+                            try:
+                                summary = await _subs_mgr.reconcile_for_upns(
+                                    upns,
+                                    webhook_url,
+                                    client_state=client_state,
+                                )
+                                dsx_logging.info(f"Subscriptions reconciled: {summary}")
+                            except httpx.HTTPStatusError as e:
+                                status = e.response.status_code if e.response is not None else "unknown"
+                                msg = ""
+                                try:
+                                    payload = e.response.json()
+                                    msg = payload.get("error", {}).get("message") or ""
+                                except Exception:
+                                    msg = (e.response.text[:256] if e.response is not None else "")
+                                dsx_logging.warning(
+                                    f"Subscription reconcile failed (HTTP {status}): {msg or e}. "
+                                    f"webhook_url={webhook_url}"
+                                )
+                            except Exception as e:
+                                dsx_logging.warning(f"Subscription reconcile failed: {e}")
+                            await asyncio.sleep(1800)  # 30 minutes
+
+                    _subs_task = asyncio.create_task(_reconcile_loop())
+                else:
+                    dsx_logging.info(
+                        "Webhook reconciliation disabled: M365_WEBHOOK_URL must be a public HTTPS base URL."
+                    )
             else:
-                connector_base = str(config.connector_url).rstrip("/")
-            webhook_url = f"{connector_base}/{config.name}/webhook/event"
-            async def _reconcile_loop():
-                while True:
-                    try:
-                        summary = await _subs_mgr.reconcile_for_upns(upns, webhook_url)
-                        dsx_logging.info(f"Subscriptions reconciled: {summary}")
-                    except httpx.HTTPStatusError as e:
-                        status = e.response.status_code if e.response is not None else "unknown"
-                        msg = ""
-                        try:
-                            payload = e.response.json()
-                            msg = payload.get("error", {}).get("message") or ""
-                        except Exception:
-                            msg = (e.response.text[:256] if e.response is not None else "")
-                        hint = ""
-                        if status == 400 and str(config.connector_url).startswith("http://"):
-                            hint = " (Graph requires a publicly reachable HTTPS webhook URL—check DSXCONNECTOR_CONNECTOR_URL)"
-                        dsx_logging.warning(
-                            f"Subscription reconcile failed (HTTP {status}): {msg or e}. "
-                            f"webhook_url={webhook_url}{hint}"
-                        )
-                    except Exception as e:
-                        dsx_logging.warning(f"Subscription reconcile failed: {e}")
-                    await asyncio.sleep(1800)  # 30 minutes
-            _subs_task = asyncio.create_task(_reconcile_loop())
+                dsx_logging.info("Webhook reconciliation disabled: no M365_WEBHOOK_URL configured.")
             # Start delta runner
             global _delta_task
             async def _delta_loop():

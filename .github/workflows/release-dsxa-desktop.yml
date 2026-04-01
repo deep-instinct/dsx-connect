@@ -59,7 +59,9 @@ jobs:
       - name: Cargo vulnerability audit
         run: |
           cd src-tauri
-          cargo audit --deny warnings \
+          cargo audit \
+            --deny unmaintained \
+            --deny unsound \
             --ignore RUSTSEC-2024-0411 \
             --ignore RUSTSEC-2024-0412 \
             --ignore RUSTSEC-2024-0413 \

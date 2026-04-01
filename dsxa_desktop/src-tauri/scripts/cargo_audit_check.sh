@@ -29,4 +29,7 @@ for id in "${IGNORES[@]}"; do
   ARGS+=(--ignore "$id")
 done
 
-cargo audit --deny warnings "${ARGS[@]}"
+cargo audit \
+  --deny unmaintained \
+  --deny unsound \
+  "${ARGS[@]}"

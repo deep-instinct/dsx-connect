@@ -25,6 +25,9 @@ shared/deploy/certs/*.key
 /connectors/filesystem/data/
 /connectors/filesystem/data/
 /connectors/onedrive/data/
+/connectors/m365_mail/data/
 /dsxa_swift/.build/
 /dsxa_swift/.build/
 /archives/
+/SHOST/
+*.egg-info/

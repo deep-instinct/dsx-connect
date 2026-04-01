@@ -1,0 +1,35 @@
+name: Audit Connector Images (No Env Files in Layers)
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: "Image repo/namespace (e.g. dsxconnect)"
+        required: false
+        default: "dsxconnect"
+      tag:
+        description: "Image tag to audit (e.g. latest, 0.5.54)"
+        required: false
+        default: "latest"
+
+jobs:
+  audit-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install tooling
+        run: python -m pip install --upgrade pip invoke
+
+      - name: Audit all connector images
+        run: |
+          python -m invoke audit-connector-images \
+            --repo="${{ inputs.repo }}" \
+            --tag="${{ inputs.tag }}" \
+            --pull=true

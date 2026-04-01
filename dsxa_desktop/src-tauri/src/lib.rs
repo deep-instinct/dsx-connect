@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager, State};
 use tokio_util::io::ReaderStream;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -233,8 +234,9 @@ fn install_app_menu<R: tauri::Runtime>(
     let close_window = PredefinedMenuItem::close_window(app, None)?;
     let window_menu = Submenu::with_items(app, "Window", true, &[&minimize, &maximize, &close_window])?;
 
+    let about_item = MenuItem::with_id(app, "about", "About DSXA Desktop", true, None::<&str>)?;
     let help_item = MenuItem::with_id(app, "help", "DSXA Desktop and SDK", true, None::<&str>)?;
-    let help_menu = Submenu::with_items(app, "Help", true, &[&help_item])?;
+    let help_menu = Submenu::with_items(app, "Help", true, &[&about_item, &help_item])?;
 
     let menu = Menu::with_items(app, &[&file_menu, &contexts_menu, &edit_menu, &view_menu, &window_menu, &help_menu])?;
     app.set_menu(menu)?;
@@ -1561,8 +1563,20 @@ pub fn run() {
             "save-context" | "ctx-save-context" => {
                 let _ = app.emit("save-context", ());
             }
+            "about" => {
+                let version = app.package_info().version.to_string();
+                let body = format!(
+                    "DSXA Desktop\nVersion {version}\n\nDesktop client for file, folder, hash, and EICAR scanning against a DSXA scanner."
+                );
+                app.dialog()
+                    .message(body)
+                    .title("About DSXA Desktop")
+                    .kind(MessageDialogKind::Info)
+                    .buttons(MessageDialogButtons::Ok)
+                    .show(|_| {});
+            }
             "help" => {
-                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/DSXA%20Desktop%20and%20SDK");
+                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/developer/dsxa-desktop-and-sdk/");
             }
             menu_id if menu_id.starts_with("ctx-select-item-") => {
                 if let Some(runtime) = app.try_state::<RuntimeState>() {

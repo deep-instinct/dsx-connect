@@ -6,15 +6,10 @@ This section covers the local DSXA Desktop app and the SDKs used to integrate DS
 
 - **DSXA Desktop**
   - Local desktop client for manual file, folder, and hash scanning
-  - Source: `dsxa_desktop/`
 - **Python SDK**
   - Sync and async clients, including streaming support
-  - Source: `dsxa_sdk_py/`
 - **JavaScript SDK**
   - Node.js and browser client surface for DSXA APIs
-  - Source: `dsxa_sdk_js/`
-- **Swift SDK**
-  - Native client support for Apple platform integrations
 
 ## DSXA Desktop Quick Start
 
@@ -22,12 +17,13 @@ This section covers the local DSXA Desktop app and the SDKs used to integrate DS
 
 When you first open DSXA Desktop, create or select a connection profile and fill in:
 
-- **Base URL**
+- **Base URL (base path to the deployed scanner**
   - Example: `http://127.0.0.1:15000`
+  - note: do not include the API path, i.e. `/scan/binary/v2`
 - **Auth token**
   - Leave empty if your scanner does not require one
 - **Protected entity**
-  - Usually `1` unless your environment uses a different value
+  - Defaults to `1`.  Change as needed.
 - **Custom metadata**
   - Optional; may be used to tag scans
 - **Verify TLS**
@@ -86,6 +82,8 @@ Folder scan output includes:
 ### 6. Scan a hash
 
 Use **Scan Hash** when you want to query by file hash instead of uploading bytes.
+
+Note: DSXA must me configured to support hash scanning.
 
 This is useful for reputation-style checks or when the file content is not available locally.
 

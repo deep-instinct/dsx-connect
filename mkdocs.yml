@@ -179,6 +179,7 @@ nav:
 
   - Case-Studies/Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
+      - BTP Inline Scan Flow: case-studies/btp-inline-scan-diagram.md
 #      - End-to-End (Docker): walkthroughs/docker-full-stack.md
 #      - End-to-End (Kubernetes): walkthroughs/kubernetes-full-stack.md
 

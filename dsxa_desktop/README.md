@@ -33,6 +33,21 @@ npm run tauri:dev
 npm run tauri:build
 ```
 
+## Versioning
+
+Desktop releases use the checked-in app version, not a manually typed release tag.
+
+- `src-tauri/tauri.conf.json` is the release-defining app version for Tauri bundles and installer filenames.
+- `package.json` and `src-tauri/Cargo.toml` must match that same version.
+- Before cutting a release, update all three files together and check them in.
+- The GitHub Actions release workflow derives the GitHub release tag from `tauri.conf.json` and fails if any of the three version files drift.
+
+Example:
+
+- app version in source: `1.2.2`
+- generated release tag: `dsxa-desktop-1.2.2`
+- installer names: `DSXA Desktop_1.2.2_...`
+
 ## Build Intel macOS app locally
 
 If GitHub Actions cannot produce an Intel mac build in your org, you can build it locally on an Intel Mac:
@@ -63,11 +78,11 @@ Yes, you can upload the locally built Intel zip to the same release used by CI.
 Using GitHub CLI:
 
 ```bash
-gh release upload dsxa-desktop-1.2.1 dist/dsxa-desktop-macos-intel-app.zip --clobber
+gh release upload dsxa-desktop-1.2.2 dist/dsxa-desktop-macos-intel-app.zip --clobber
 ```
 
 Or in GitHub UI:
-- Open the release tag (for example `dsxa-desktop-1.2.1`)
+- Open the release tag (for example `dsxa-desktop-1.2.2`)
 - Click `Edit`
 - Drag/drop `dsxa-desktop-macos-intel-app.zip` into assets
 - Save

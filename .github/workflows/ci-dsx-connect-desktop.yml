@@ -1,16 +1,19 @@
-name: Release DSX-Connect Desktop (Electron)
+name: CI DSX-Connect Desktop (Electron)
 
 on:
-  workflow_dispatch:
-    inputs:
-      publish_release:
-        description: "Publish artifacts to a GitHub Release."
-        required: true
-        type: boolean
-        default: false
+  push:
+    paths:
+      - '.github/workflows/ci-dsx-connect-desktop.yml'
+      - '.github/workflows/release-dsx-connect-desktop.yml'
+      - 'dsx_connect_desktop/**'
+  pull_request:
+    paths:
+      - '.github/workflows/ci-dsx-connect-desktop.yml'
+      - '.github/workflows/release-dsx-connect-desktop.yml'
+      - 'dsx_connect_desktop/**'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -21,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
-      release_tag: ${{ steps.version.outputs.release_tag }}
+      artifact_suffix: ${{ steps.version.outputs.artifact_suffix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -46,13 +49,14 @@ jobs:
             details = ", ".join(sorted(lock_versions)) if lock_versions else "(missing)"
             raise SystemExit(f"Desktop version mismatch: package.json={package_version}, package-lock.json={details}")
 
-          release_tag = f"dsx-connect-desktop-{package_version}"
+          run_number = __import__("os").environ.get("GITHUB_RUN_NUMBER", "0")
+          artifact_suffix = f"{package_version}-build.{run_number}"
           with github_output.open("a") as fh:
             fh.write(f"version={package_version}\n")
-            fh.write(f"release_tag={release_tag}\n")
+            fh.write(f"artifact_suffix={artifact_suffix}\n")
 
           print(f"Resolved DSX-Connect Desktop version: {package_version}")
-          print(f"Resolved release tag: {release_tag}")
+          print(f"Artifact suffix: {artifact_suffix}")
           PY
 
   security-compliance:
@@ -236,39 +240,3 @@ jobs:
             dsx_connect_desktop/dist/*.msi
             dsx_connect_desktop/dist/LICENSE
             dsx_connect_desktop/dist/NOTICE.md
-
-  publish-release:
-    if: github.event_name == 'workflow_dispatch' && inputs.publish_release
-    needs:
-      - resolve-version
-      - build-macos
-      - build-linux
-      - build-windows
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dsx-connect-desktop-macos
-          path: dist/release
-
-      - name: Download Linux artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dsx-connect-desktop-linux
-          path: dist/release
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dsx-connect-desktop-windows
-          path: dist/release
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.resolve-version.outputs.release_tag }}
-          files: dist/release/*
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

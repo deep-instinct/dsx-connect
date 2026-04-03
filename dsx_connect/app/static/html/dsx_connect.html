@@ -3362,12 +3362,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         const modal = document.getElementById('configModal');
         const title = document.getElementById('configModalTitle');
         const content = document.getElementById('configModalContent');
-        const envText = String(currentAppEnv || 'unknown').trim().toLowerCase();
-        const generalEditAllowed = canEditConnectorGeneralConfig();
-        const secretEditAllowed = canEditConnectorSecrets();
-        const capBadgeHtml = ` <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">ENV:${escHtml(envText)} · ASSET/ACTION:${generalEditAllowed ? 'yes' : 'no'} · SECRETS:${secretEditAllowed ? 'yes' : 'no'}</span>`;
-
-        title.innerHTML = `Configuration: ${escHtml(connectorName)}${capBadgeHtml}`;
+        title.innerHTML = `Configuration: ${escHtml(connectorName)}`;
         content.innerHTML = 'Loading configuration...';
         modal.style.display = 'block';
 
@@ -3381,6 +3376,12 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     }
                 } catch {}
             }
+            const envText = String(currentAppEnv || 'unknown').trim().toLowerCase();
+            const generalEditAllowed = canEditConnectorGeneralConfig();
+            const secretEditAllowed = canEditConnectorSecrets();
+            const capBadgeHtml = ` <span style="display:inline-block; margin-left:8px; padding:1px 8px; border-radius:999px; border:1px solid var(--card-status-ok); color:var(--card-status-ok); font-size:0.72rem; font-family:var(--font-mono); vertical-align:middle;">ENV:${escHtml(envText)} · ASSET/ACTION:${generalEditAllowed ? 'yes' : 'no'} · SECRETS:${secretEditAllowed ? 'yes' : 'no'}</span>`;
+            title.innerHTML = `Configuration: ${escHtml(connectorName)}${capBadgeHtml}`;
+
             const response = await fetch(r.connectors.config(uuid));
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);

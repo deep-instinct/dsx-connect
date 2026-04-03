@@ -1,0 +1,329 @@
+name: CI DSXA Desktop (Tauri)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ci-dsxa-desktop.yml'
+      - '.github/workflows/release-dsxa-desktop.yml'
+      - 'dsxa_desktop/**'
+  pull_request:
+    paths:
+      - '.github/workflows/ci-dsxa-desktop.yml'
+      - '.github/workflows/release-dsxa-desktop.yml'
+      - 'dsxa_desktop/**'
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact_suffix: ${{ steps.version.outputs.artifact_suffix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Desktop version files
+        id: version
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import re
+
+          repo = pathlib.Path(".")
+          tauri_conf = repo / "dsxa_desktop" / "src-tauri" / "tauri.conf.json"
+          package_json = repo / "dsxa_desktop" / "package.json"
+          cargo_toml = repo / "dsxa_desktop" / "src-tauri" / "Cargo.toml"
+          github_output = pathlib.Path(__import__("os").environ["GITHUB_OUTPUT"])
+
+          tauri_version = json.loads(tauri_conf.read_text())["version"]
+          package_version = json.loads(package_json.read_text())["version"]
+
+          cargo_text = cargo_toml.read_text()
+          cargo_match = re.search(r'^version\s*=\s*"([^"]+)"', cargo_text, re.MULTILINE)
+          if not cargo_match:
+            raise SystemExit("Could not find version in dsxa_desktop/src-tauri/Cargo.toml")
+          cargo_version = cargo_match.group(1)
+
+          versions = {
+              "tauri.conf.json": tauri_version,
+              "package.json": package_version,
+              "Cargo.toml": cargo_version,
+          }
+          unique_versions = set(versions.values())
+          if len(unique_versions) != 1:
+            details = ", ".join(f"{name}={version}" for name, version in versions.items())
+            raise SystemExit(f"Desktop version mismatch: {details}")
+
+          run_number = __import__("os").environ.get("GITHUB_RUN_NUMBER", "0")
+          artifact_suffix = f"{tauri_version}-build.{run_number}"
+          with github_output.open("a") as fh:
+            fh.write(f"version={tauri_version}\n")
+            fh.write(f"artifact_suffix={artifact_suffix}\n")
+
+          print(f"Resolved DSXA Desktop version: {tauri_version}")
+          print(f"Artifact suffix: {artifact_suffix}")
+          PY
+
+  security-compliance:
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    defaults:
+      run:
+        working-directory: dsxa_desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dsxa_desktop/package-lock.json
+
+      - name: Set up Rust
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          else
+            rustup toolchain install stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: NPM vulnerability audit (prod deps)
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Cargo vulnerability audit
+        run: |
+          cd src-tauri
+          cargo audit \
+            --deny unmaintained \
+            --deny unsound \
+            --ignore RUSTSEC-2024-0411 \
+            --ignore RUSTSEC-2024-0412 \
+            --ignore RUSTSEC-2024-0413 \
+            --ignore RUSTSEC-2024-0414 \
+            --ignore RUSTSEC-2024-0415 \
+            --ignore RUSTSEC-2024-0416 \
+            --ignore RUSTSEC-2024-0417 \
+            --ignore RUSTSEC-2024-0418 \
+            --ignore RUSTSEC-2024-0419 \
+            --ignore RUSTSEC-2024-0420 \
+            --ignore RUSTSEC-2024-0429 \
+            --ignore RUSTSEC-2024-0370 \
+            --ignore RUSTSEC-2025-0057 \
+            --ignore RUSTSEC-2025-0075 \
+            --ignore RUSTSEC-2025-0080 \
+            --ignore RUSTSEC-2025-0081 \
+            --ignore RUSTSEC-2025-0098 \
+            --ignore RUSTSEC-2025-0100
+
+      - name: Trivy filesystem scan (HIGH/CRITICAL)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: dsxa_desktop
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: table
+          exit-code: "1"
+
+  build-macos:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    needs:
+      - resolve-version
+      - security-compliance
+    defaults:
+      run:
+        working-directory: dsxa_desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dsxa_desktop/package-lock.json
+
+      - name: Set up Rust
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          else
+            rustup toolchain install stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build macOS app bundle
+        run: npm run tauri:build -- --bundles app
+
+      - name: Collect macOS artifacts
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent "src-tauri/target/release/bundle/macos/DSXA Desktop.app" "dist/dsxa-desktop-${{ needs.resolve-version.outputs.artifact_suffix }}-macos-${{ matrix.arch }}-app.zip"
+          cp ../LICENSE dist/LICENSE
+          cp ../NOTICE.md dist/NOTICE.md
+
+      - name: Upload macOS workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsxa_desktop_macos_${{ matrix.arch }}
+          path: |
+            dsxa_desktop/dist/dsxa-desktop-${{ needs.resolve-version.outputs.artifact_suffix }}-macos-${{ matrix.arch }}-app.zip
+            dsxa_desktop/dist/LICENSE
+            dsxa_desktop/dist/NOTICE.md
+
+  build-linux:
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-version
+      - security-compliance
+    defaults:
+      run:
+        working-directory: dsxa_desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dsxa_desktop/package-lock.json
+
+      - name: Set up Rust
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+          else
+            rustup toolchain install stable
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Linux bundles
+        run: npm run tauri:build -- --bundles appimage,deb
+
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p dist
+          for f in src-tauri/target/release/bundle/appimage/*.AppImage; do
+            base="$(basename "$f")"
+            cp "$f" "dist/${base%.AppImage}-${{ needs.resolve-version.outputs.artifact_suffix }}.AppImage"
+          done
+          for f in src-tauri/target/release/bundle/deb/*.deb; do
+            base="$(basename "$f")"
+            cp "$f" "dist/${base%.deb}-${{ needs.resolve-version.outputs.artifact_suffix }}.deb"
+          done
+          cp ../LICENSE dist/LICENSE
+          cp ../NOTICE.md dist/NOTICE.md
+
+      - name: Upload Linux workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsxa_desktop_linux
+          path: dsxa_desktop/dist/*
+
+  build-windows:
+    runs-on: windows-latest
+    needs:
+      - resolve-version
+      - security-compliance
+    defaults:
+      run:
+        working-directory: dsxa_desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: dsxa_desktop/package-lock.json
+
+      - name: Set up Rust
+        shell: pwsh
+        run: |
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+            Invoke-WebRequest -Uri "https://win.rustup.rs/x86_64" -OutFile "rustup-init.exe"
+            Start-Process -FilePath ".\rustup-init.exe" -ArgumentList "-y --default-toolchain stable" -Wait -NoNewWindow
+          } else {
+            rustup toolchain install stable
+          }
+          "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          rustup default stable
+          rustc --version
+          cargo --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build Windows installers
+        run: npm run tauri:build -- --bundles nsis,msi
+
+      - name: Collect Windows artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Get-ChildItem "src-tauri/target/release/bundle/nsis/*.exe" | ForEach-Object {
+            Copy-Item $_.FullName -Destination ("dist\" + $_.BaseName + "-${{ needs.resolve-version.outputs.artifact_suffix }}" + $_.Extension) -Force
+          }
+          Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | ForEach-Object {
+            Copy-Item $_.FullName -Destination ("dist\" + $_.BaseName + "-${{ needs.resolve-version.outputs.artifact_suffix }}" + $_.Extension) -Force
+          }
+          Copy-Item "..\\LICENSE" -Destination "dist\\LICENSE" -Force
+          Copy-Item "..\\NOTICE.md" -Destination "dist\\NOTICE.md" -Force
+
+      - name: Upload Windows workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dsxa_desktop_windows
+          path: dsxa_desktop/dist/*

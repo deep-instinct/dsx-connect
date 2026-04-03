@@ -94,6 +94,34 @@ This is useful for reputation-style checks or when the file content is not avail
 - Very large files may be better suited to scan-by-path workflows when supported by the deployment.
 - Base64 mode is available, but binary mode is generally preferable for throughput.
 
+### macOS install note
+
+Unsigned or unnotarized macOS builds may be blocked by Gatekeeper with a message like:
+
+```text
+"DSXA Desktop" is damaged and can't be opened. You should move it to the Trash.
+```
+
+For local or internal use, first try opening the app from Finder:
+
+1. Right-click `DSXA Desktop.app`
+2. Choose `Open`
+3. In the macOS warning dialog, click `Open` again
+
+If macOS still refuses to open the app, the usual workaround is to remove the browser quarantine attribute after unzipping:
+
+```bash
+xattr -dr com.apple.quarantine "/path/to/DSXA Desktop.app"
+```
+
+For normal end-user distribution, the proper fix is to sign and notarize the app with an Apple Developer account. Without notarization, macOS may continue to block the app even if the build itself is valid.
+
+### Windows install note
+
+Unsigned Windows installers may show `Unknown Publisher` during installation. For local or internal use, users can usually continue anyway if they trust the source of the MSI or EXE.
+
+For normal end-user distribution, the proper fix is to sign the Windows installer with a code-signing certificate so Windows can show a verified publisher instead of `Unknown Publisher`.
+
 ## Common Desktop Workflow
 
 1. Create a new connection profile.

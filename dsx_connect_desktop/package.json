@@ -1,7 +1,7 @@
 {
   "name": "dsx-connect-desktop",
   "productName": "DSX-Connect Desktop",
-  "version": "0.1.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Electron launcher that hosts DSX-Connect Core components, web UI and Connectors",
   "main": "main.js",

@@ -44,6 +44,24 @@ function refreshEmbeddedUi() {
   mainWindow.webContents.reloadIgnoringCache();
 }
 
+async function showEmbeddedNotification(message, type = 'info') {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const safeMessage = JSON.stringify(String(message || ''));
+  const safeType = JSON.stringify(String(type || 'info'));
+  try {
+    await mainWindow.webContents.executeJavaScript(`
+      (() => {
+        if (typeof showNotification !== 'function') return false;
+        showNotification(${safeMessage}, ${safeType});
+        return true;
+      })()
+    `, true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function resetEmbeddedUiState() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
@@ -270,7 +288,7 @@ function runPythonCommand(scriptPath, command, commandArgs = [], globalArgs = []
 }
 
 function connectorMenuLabel(item) {
-  return `${item.display} :${item.port}`;
+  return `${item.display}`;
 }
 
 function saveLaunchedConnectors() {
@@ -334,6 +352,30 @@ function readEnvValues(envPath) {
   return values;
 }
 
+async function openConnectorSettingsInUi(uuid, connectorName, retries = 12, delayMs = 500) {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+  const safeUuid = JSON.stringify(String(uuid || ''));
+  const safeName = JSON.stringify(String(connectorName || 'Connector'));
+
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    try {
+      await mainWindow.webContents.executeJavaScript(`
+        (() => {
+          if (typeof showConnectorConfig !== 'function') return false;
+          showConnectorConfig(${safeUuid}, ${safeName});
+          return true;
+        })()
+      `, true);
+      return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, delayMs));
+    try {
+      refreshEmbeddedUi();
+    } catch {}
+  }
+  return false;
+}
+
 function shouldStopCoreOnExit() {
   return process.env.DSXCONNECT_STOP_ON_EXIT !== '0';
 }
@@ -380,6 +422,37 @@ async function isConnectorResponsive(item) {
   } catch {
     return false;
   }
+}
+
+async function getRegisteredConnectorForItem(item) {
+  const list = await httpJson('GET', `${API_URL}dsx-connect/api/v1/connectors/list`, null, 4000);
+  if (!list.ok || !Array.isArray(list.data)) return null;
+  const targetBase = connectorBaseUrl(item).replace(/\/+$/, '');
+  return list.data.find((conn) => {
+    const connUrl = String((conn && conn.url) || '').replace(/\/+$/, '');
+    return connUrl === targetBase;
+  }) || null;
+}
+
+async function isConnectorConfigReady(item) {
+  try {
+    const cfg = await httpJson('GET', `${connectorBaseUrl(item)}/config`, null, 2000);
+    return cfg.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function openLaunchedConnectorSettings(item, retries = 12, delayMs = 500) {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    const registered = await getRegisteredConnectorForItem(item);
+    if (registered && registered.uuid && (await isConnectorConfigReady(item))) {
+      const displayName = registered.display_name || item.display || item.kind || 'Connector';
+      return openConnectorSettingsInUi(registered.uuid, displayName, 1, delayMs);
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return false;
 }
 
 function readPidFromFile(pidfile) {
@@ -675,7 +748,7 @@ async function stopAllLaunchedConnectors() {
   return stopAllLaunchedConnectorsInternal({ showDialog: true });
 }
 
-async function stopAllLaunchedConnectorsInternal({ showDialog = false } = {}) {
+async function stopAllLaunchedConnectorsInternal({ showDialog = false, removeFromLauncher = true } = {}) {
   const items = [...launchedConnectors];
   let stopped = 0;
   const failed = [];
@@ -689,6 +762,10 @@ async function stopAllLaunchedConnectorsInternal({ showDialog = false } = {}) {
     ]);
     if (result.ok) {
       stopped += 1;
+      if (removeFromLauncher) {
+        const idx = launchedConnectors.findIndex((x) => x.id === item.id);
+        if (idx >= 0) launchedConnectors.splice(idx, 1);
+      }
     } else {
       failed.push({
         id: item.id,
@@ -714,6 +791,12 @@ async function stopAllLaunchedConnectorsInternal({ showDialog = false } = {}) {
     console.error(`Failed to stop ${failed.length} launched connector(s):`, failed.slice(0, 5));
   }
 
+  if (removeFromLauncher) {
+    saveLaunchedConnectors();
+    buildAppMenu();
+    refreshEmbeddedUi();
+  }
+
   return { stopped, total: items.length, failed };
 }
 
@@ -721,6 +804,60 @@ function forgetAllLaunchedConnectors() {
   launchedConnectors.length = 0;
   saveLaunchedConnectors();
   buildAppMenu();
+  refreshEmbeddedUi();
+}
+
+async function stopLaunchedConnector(item, { removeFromLauncher = true } = {}) {
+  const result = await runPythonCommand(item.script, 'stop', [], [
+    '--state-dir',
+    item.stateDir,
+    '--port',
+    String(item.port)
+  ]);
+  if (!result.ok) {
+    const detail = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    throw new Error(detail || 'Unknown error');
+  }
+
+  if (removeFromLauncher) {
+    const idx = launchedConnectors.findIndex((x) => x.id === item.id);
+    if (idx >= 0) launchedConnectors.splice(idx, 1);
+    saveLaunchedConnectors();
+    buildAppMenu();
+    refreshEmbeddedUi();
+  }
+}
+
+async function forgetConnectorDeployment(item) {
+  const choice = await dialog.showMessageBox({
+    type: 'warning',
+    buttons: ['Cancel', 'Forget Deployment'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    title: 'Forget Connector Deployment',
+    message: `Forget ${connectorMenuLabel(item)}?`,
+    detail: [
+      'This stops the connector, removes it from the launcher, and deletes its local Desktop state.',
+      'Launching it again later will start from a fresh local deployment.'
+    ].join('\n\n'),
+  });
+  if (choice.response !== 1) return;
+
+  try {
+    await stopLaunchedConnector(item, { removeFromLauncher: true });
+  } catch (err) {
+    dialog.showErrorBox('Forget Connector Deployment', `${connectorMenuLabel(item)}\n\n${String(err && err.message ? err.message : err)}`);
+    return;
+  }
+
+  try {
+    fs.rmSync(item.stateDir, { recursive: true, force: true });
+  } catch (err) {
+    dialog.showErrorBox('Forget Connector Deployment', `Stopped connector but failed to remove state directory.\n\n${String(err && err.message ? err.message : err)}`);
+    return;
+  }
+
   refreshEmbeddedUi();
 }
 
@@ -824,6 +961,7 @@ async function launchConnectorInstance(kind) {
   const fixedPort = defaultPortForKind(kind);
   const script = scriptForKind(kind);
   const display = displayForKind(kind);
+  await showEmbeddedNotification(`Launching ${display} connector...`, 'info');
   const globalArgs = ['--state-dir', stateDir, '--port', String(fixedPort)];
   let existing = launchedConnectors.find((x) => x.kind === kind);
   if (!existing) {
@@ -868,108 +1006,28 @@ async function launchConnectorInstance(kind) {
       dialog.showErrorBox(`Launch ${display} Connector`, `Start failed.\n\n${detail || 'Unknown error'}`);
       return;
     }
+    await openLaunchedConnectorSettings(existing);
   } finally {
     pendingConnectorPorts.delete(fixedPort);
   }
 }
 
 function buildConnectorItemSubmenu(item) {
-  const extraFilesystemItems =
-    item.kind === 'filesystem'
-      ? [
-          { type: 'separator' },
-          {
-            label: 'Set Asset Folder...',
-            click: async () => {
-              await setFilesystemAssetFolder(item);
-            }
-          }
-        ]
-      : [];
-
   return [
-    {
-      label: 'Show Debug Info',
-      click: async () => {
-        await showConnectorDebugInfo(item);
-      }
-    },
-    { type: 'separator' },
-    {
-      label: 'Start',
-      click: async () => {
-        ensureConnectorIdentityEnv(item.stateDir, {
-          ...connectorEnvDefaults(item.kind, item.port),
-        });
-        const result = await runPythonCommand(item.script, 'start', [], [
-          '--state-dir',
-          item.stateDir,
-          '--port',
-          String(item.port)
-        ]);
-        if (!result.ok) {
-          const detail = [result.stdout, result.stderr].filter(Boolean).join('\n');
-          dialog.showErrorBox('Start Connector', `${connectorMenuLabel(item)}\n\n${detail || 'Unknown error'}`);
-          return;
-        }
-      }
-    },
-    {
-      label: 'Status',
-      click: async () => {
-        const result = await runPythonCommand(item.script, 'status', [], [
-          '--state-dir',
-          item.stateDir,
-          '--port',
-          String(item.port)
-        ]);
-        if (!result.ok) {
-          const detail = [result.stdout, result.stderr].filter(Boolean).join('\n');
-          dialog.showErrorBox('Connector Status', `${connectorMenuLabel(item)}\n\n${detail || 'Unknown error'}`);
-          return;
-        }
-        dialog.showMessageBox({
-          type: 'info',
-          title: 'Connector Status',
-          message: connectorMenuLabel(item),
-          detail: [result.stdout, result.stderr].filter(Boolean).join('\n')
-        });
-      }
-    },
     {
       label: 'Stop',
       click: async () => {
-        const result = await runPythonCommand(item.script, 'stop', [], [
-          '--state-dir',
-          item.stateDir,
-          '--port',
-          String(item.port)
-        ]);
-        if (!result.ok) {
-          const detail = [result.stdout, result.stderr].filter(Boolean).join('\n');
-          dialog.showErrorBox('Stop Connector', `${connectorMenuLabel(item)}\n\n${detail || 'Unknown error'}`);
-          return;
+        try {
+          await stopLaunchedConnector(item, { removeFromLauncher: true });
+        } catch (err) {
+          dialog.showErrorBox('Stop Connector', `${connectorMenuLabel(item)}\n\n${String(err && err.message ? err.message : err)}`);
         }
       }
     },
     {
-      label: 'Open State Directory',
-      click: () => {
-        shell.openPath(item.stateDir);
-      }
-    },
-    ...extraFilesystemItems,
-    {
-      type: 'separator'
-    },
-    {
-      label: 'Forget from Launcher',
-      click: () => {
-        const idx = launchedConnectors.findIndex((x) => x.id === item.id);
-        if (idx >= 0) launchedConnectors.splice(idx, 1);
-        saveLaunchedConnectors();
-        buildAppMenu();
-        refreshEmbeddedUi();
+      label: 'Forget Deployment...',
+      click: async () => {
+        await forgetConnectorDeployment(item);
       }
     }
   ];
@@ -981,12 +1039,12 @@ function buildAppMenu() {
   const hasAwsLaunched = launchedConnectors.some((x) => x.kind === 'aws_s3');
   const hasAzureLaunched = launchedConnectors.some((x) => x.kind === 'azure_blob_storage');
   const hasSalesforceLaunched = launchedConnectors.some((x) => x.kind === 'salesforce');
-  const launchedSubmenu = launchedConnectors.length
+  const activeItems = launchedConnectors.length
     ? launchedConnectors.map((item) => ({
         label: connectorMenuLabel(item),
         submenu: buildConnectorItemSubmenu(item)
       }))
-    : [{ label: 'No launched connectors', enabled: false }];
+    : [{ label: 'No active connectors', enabled: false }];
 
   const template = [
     {
@@ -1026,10 +1084,10 @@ function buildAppMenu() {
       ]
     },
     {
-      label: 'Connectors...',
+      label: 'Connectors',
       submenu: [
         {
-          label: 'Launch...',
+          label: 'Launch',
           submenu: [
             {
               label: hasFilesystemLaunched ? 'Filesystem (Launched)' : 'Filesystem',
@@ -1078,36 +1136,19 @@ function buildAppMenu() {
             }
           ]
         },
+        { type: 'separator' },
         {
-          label: 'Cleanup Registry (stale)',
-          click: () => {
-            cleanupConnectorRegistry().catch((err) => {
-              dialog.showErrorBox('Cleanup Connector Registry', String(err && err.message ? err.message : err));
-            });
-          }
+          label: 'Active',
+          enabled: false
         },
-        {
-          label: 'Stop All Launched',
-          click: () => {
-            stopAllLaunchedConnectors().catch((err) => {
-              dialog.showErrorBox('Stop All Launched Connectors', String(err && err.message ? err.message : err));
-            });
-          }
-        },
-        {
-          label: 'Stop Stray Processes',
-          click: () => {
-            stopStrayConnectorProcesses().catch((err) => {
-              dialog.showErrorBox('Stop Stray Connector Processes', String(err && err.message ? err.message : err));
-            });
-          }
-        },
-        {
-          label: 'Forget All Launched',
-          click: () => {
-            forgetAllLaunchedConnectors();
-          }
-        },
+        ...activeItems
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { role: 'reload' },
+        { role: 'forceReload' },
         {
           label: 'Reset UI State',
           click: () => {
@@ -1117,19 +1158,7 @@ function buildAppMenu() {
           }
         },
         { type: 'separator' },
-        {
-          label: 'Launched',
-          submenu: launchedSubmenu
-        }
-      ]
-    },
-    {
-      label: 'View',
-      submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
         { role: 'toggleDevTools' },
-        { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -1341,7 +1370,7 @@ app.on('before-quit', async (event) => {
   showShutdownWindow();
   try {
     if (shouldStopConnectorsOnExit()) {
-      await stopAllLaunchedConnectorsInternal({ showDialog: false });
+      await stopAllLaunchedConnectorsInternal({ showDialog: false, removeFromLauncher: false });
     }
   } catch {}
   try {

@@ -4,6 +4,11 @@
   "version": "0.8.1",
   "private": true,
   "description": "Electron launcher that hosts DSX-Connect Core components, web UI and Connectors",
+  "homepage": "https://github.com/deep-instinct/dsx-connect",
+  "author": {
+    "name": "Deep Instinct",
+    "email": "support@deepinstinct.com"
+  },
   "main": "main.js",
   "scripts": {
     "start": "node ./scripts/run-electron.js",
@@ -33,6 +38,7 @@
       "package.json"
     ],
     "mac": {
+      "icon": "build/icons/dsx-connect-desktop.icns",
       "target": [
         "dmg",
         "zip"
@@ -40,6 +46,7 @@
       "category": "public.app-category.developer-tools"
     },
     "win": {
+      "icon": "build/icons/dsx-connect-desktop.ico",
       "target": [
         {
           "target": "nsis",
@@ -50,11 +57,13 @@
       ]
     },
     "linux": {
+      "icon": "build/icons",
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "Deep Instinct <support@deepinstinct.com>"
     }
   }
 }

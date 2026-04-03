@@ -130,19 +130,7 @@ def helm_release(
         if code != 0:
             raise Exit(code)
 
-    chosen = _configured_names(include_disabled=False)
-    if only:
-        wanted = {n.strip() for n in only.split(",") if n.strip()}
-        unknown = wanted - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --only: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n in wanted]
-    if skip:
-        banned = {n.strip() for n in skip.split(",") if n.strip()}
-        unknown = banned - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --skip: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n not in banned]
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
 
     if not chosen:
         print("[helm-release] No connectors selected.")
@@ -244,6 +232,71 @@ def _configured_names(include_disabled: bool = False) -> list[str]:
         if include_disabled or cfg.get("enabled", True):
             names.append(cfg["name"])
     return names
+
+
+def _select_connectors(*, only: str = "", skip: str = "", include_disabled: bool = False) -> list[str]:
+    chosen = _configured_names(include_disabled=include_disabled)
+
+    if only:
+        wanted = {n.strip() for n in only.split(",") if n.strip()}
+        unknown = wanted - set(_configured_names(include_disabled=True))
+        if unknown:
+            raise Exit(f"Unknown connector(s) in --only: {', '.join(sorted(unknown))}", code=2)
+        chosen = [n for n in chosen if n in wanted]
+
+    if skip:
+        banned = {n.strip() for n in skip.split(",") if n.strip()}
+        unknown = banned - set(_configured_names(include_disabled=True))
+        if unknown:
+            raise Exit(f"Unknown connector(s) in --skip: {', '.join(sorted(unknown))}", code=2)
+        chosen = [n for n in chosen if n not in banned]
+
+    return chosen
+
+
+def _connector_image_name(name: str) -> str:
+    return name.replace("_", "-") + "-connector"
+
+
+def _read_connector_version(name: str) -> str:
+    version_file = CONNECTORS_DIR / name / "version.py"
+    if not version_file.exists():
+        raise Exit(f"No version.py found for connector '{name}'", code=2)
+    return read_version_file(version_file)
+
+
+def _connector_compose_file(name: str) -> Path:
+    image_name = _connector_image_name(name)
+    return CONNECTORS_DIR / name / "deploy" / "docker" / f"docker-compose-{image_name}.yaml"
+
+
+def _connector_image_env_var(name: str) -> str:
+    return {
+        "aws_s3": "AWS_S3_IMAGE",
+        "azure_blob_storage": "AZURE_BLOB_IMAGE",
+        "filesystem": "FILESYSTEM_IMAGE",
+        "google_cloud_storage": "GCS_IMAGE",
+        "sharepoint": "SHAREPOINT_IMAGE",
+        "m365_mail": "M365_IMAGE",
+        "onedrive": "ONEDRIVE_IMAGE",
+        "salesforce": "SALESFORCE_IMAGE",
+    }[name]
+
+
+def _remove_local_image_if_present(c, image_ref: str, *, dry_run: bool = False) -> None:
+    inspect = c.run(f"docker image inspect {image_ref}", warn=True, hide=True)
+    if inspect.exited != 0:
+        return
+    cmd = f"docker image rm -f {image_ref}"
+    code = _run(c, cmd, dry_run=dry_run)
+    if code != 0:
+        raise Exit(f"Failed removing existing local image {image_ref}", code=code)
+
+
+def _tag_local_image(c, source_ref: str, target_ref: str, *, dry_run: bool = False) -> None:
+    code = _run(c, f"docker tag {source_ref} {target_ref}", dry_run=dry_run)
+    if code != 0:
+        raise Exit(f"Failed tagging local image {source_ref} -> {target_ref}", code=code)
 
 
 def _build_inv_cmd_for_module(modpath: str, extra: str = "") -> str:
@@ -498,21 +551,7 @@ def release_connectors(
     - Use --only to run a subset:   inv release-connectors --only=aws_s3,filesystem
     - Use --skip to exclude some:   inv release-connectors --skip=google_cloud_storage
     """
-    chosen = _configured_names(include_disabled=False)
-
-    if only:
-        wanted = {n.strip() for n in only.split(",") if n.strip()}
-        unknown = wanted - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --only: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n in wanted]
-
-    if skip:
-        banned = {n.strip() for n in skip.split(",") if n.strip()}
-        unknown = banned - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --skip: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n not in banned]
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
 
     if not chosen:
         print("[release] No connectors selected.")
@@ -562,7 +601,12 @@ def release_all(
         dry_run: bool = False,
 ):
     """
-    Release core + selected connectors. Uses generate_manifest first.
+    Official release path for core + selected connectors. Uses generate_manifest first.
+
+    This path bumps versions, pushes images, and publishes Helm charts. Use
+    `build-all-local`, `deploy-all-local`, and `push-all-dev` for the normal
+    local/dev workflows instead.
+
     You can restrict connectors with --only/--skip (same semantics as release-connectors).
     """
     print("=== Releasing core (dsx_connect) ===")
@@ -603,19 +647,7 @@ def build_all(
     if code != 0:
         raise Exit(code)
 
-    chosen = _configured_names(include_disabled=False)
-    if only:
-        wanted = {n.strip() for n in only.split(",") if n.strip()}
-        unknown = wanted - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --only: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n in wanted]
-    if skip:
-        banned = {n.strip() for n in skip.split(",") if n.strip()}
-        unknown = banned - set(_configured_names(include_disabled=True))
-        if unknown:
-            raise Exit(f"Unknown connector(s) in --skip: {', '.join(sorted(unknown))}", code=2)
-        chosen = [n for n in chosen if n not in banned]
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
 
     if not chosen:
         print("[build_all] No connectors selected.")
@@ -647,6 +679,284 @@ def build_all(
     if errors:
         bad = ", ".join([f"{n}:{code}" for n, code in errors])
         raise Exit(f"Some connector builds failed: {bad}", code=1)
+
+
+@task
+def build_all_local(
+        c,
+        extra_core: str = "",
+        extra_connectors: str = "",
+        only: str = "",
+        skip: str = "",
+        parallel: bool = False,
+        dry_run: bool = False,
+):
+    """
+    Build core + selected connectors into the local Docker daemon only.
+
+    This is the normal Colima/local-k3s image build path. It does not push images
+    or package/push Helm charts. Existing local images for the current version are
+    removed first so local code changes always rebuild without requiring a version bump.
+    """
+    core_version = read_version_file(CORE_VERSION_FILE)
+    _remove_local_image_if_present(c, f"dsx-connect:{core_version}", dry_run=dry_run)
+
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    for name in chosen:
+        version = _read_connector_version(name)
+        _remove_local_image_if_present(c, f"{_connector_image_name(name)}:{version}", dry_run=dry_run)
+
+    build_all(
+        c,
+        extra_core=extra_core,
+        extra_connectors=extra_connectors,
+        only=only,
+        skip=skip,
+        parallel=parallel,
+        dry_run=dry_run,
+    )
+
+    for name in chosen:
+        version = _read_connector_version(name)
+        image_name = _connector_image_name(name)
+        _tag_local_image(
+            c,
+            f"{image_name}:{version}",
+            f"{image_name}:latest",
+            dry_run=dry_run,
+        )
+
+
+@task(help={
+    "namespace": "Kubernetes namespace for local deployment.",
+    "release_prefix": "Prefix used for Helm release names.",
+    "image_pull_policy": "Image pull policy for local images (Never or IfNotPresent).",
+    "extra_core": "Extra raw args appended to the core helm upgrade/install command.",
+    "extra_connectors": "Extra raw args appended to connector helm upgrade/install commands.",
+})
+def deploy_all_local(
+        c,
+        namespace: str = "default",
+        release_prefix: str = "",
+        only: str = "",
+        skip: str = "",
+        image_pull_policy: str = "Never",
+        extra_core: str = "",
+        extra_connectors: str = "",
+        dry_run: bool = False,
+):
+    """
+    Deploy core + selected connectors to the local cluster from local chart directories.
+
+    This uses local image names and local chart paths, not OCI chart repos.
+    """
+    core_version = read_version_file(CORE_VERSION_FILE)
+    core_release = f"{release_prefix}dsx-connect" if release_prefix else "dsx-connect"
+    core_chart_dir = PROJECT_ROOT / "dsx_connect" / "deploy" / "helm"
+    _sync_chart_yaml(core_chart_dir / "Chart.yaml", core_version)
+    dep_code = _run(c, f"helm dependency build {core_chart_dir}", dry_run=dry_run)
+    if dep_code != 0:
+        raise Exit(dep_code)
+    core_cmd = (
+        f"helm upgrade --install {core_release} {core_chart_dir} "
+        f"--namespace {namespace} --create-namespace "
+        f"--set-string global.image.repository=dsx-connect "
+        f"--set-string global.image.tag={core_version} "
+        f"--set-string global.image.pullPolicy={image_pull_policy}"
+    )
+    if extra_core:
+        core_cmd += f" {extra_core.strip()}"
+    code = _run(c, core_cmd, dry_run=dry_run)
+    if code != 0:
+        raise Exit(code)
+
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    if not chosen:
+        print("[deploy_all_local] No connectors selected.")
+        return
+
+    for name in chosen:
+        chart_dir = CONNECTORS_DIR / name / "deploy" / "helm"
+        if not chart_dir.exists():
+            print(f"[deploy_all_local] Skipping {name}: no Helm chart dir at {chart_dir}")
+            continue
+
+        version = _read_connector_version(name)
+        image_name = _connector_image_name(name)
+        release_name = f"{release_prefix}{image_name}" if release_prefix else image_name
+        cmd = (
+            f"helm upgrade --install {release_name} {chart_dir} "
+            f"--namespace {namespace} --create-namespace "
+            f"--set-string image.repository={image_name} "
+            f"--set-string image.tag={version} "
+            f"--set-string image.pullPolicy={image_pull_policy}"
+        )
+        if extra_connectors:
+            cmd += f" {extra_connectors.strip()}"
+        code = _run(c, cmd, dry_run=dry_run)
+        if code != 0:
+            raise Exit(code)
+
+
+@task(help={
+    "include_dsxa": "Also start the bundled DSXA compose stack.",
+    "extra": "Extra raw args appended to the docker compose up command.",
+})
+def compose_up_local(
+        c,
+        only: str = "",
+        skip: str = "",
+        include_dsxa: bool = False,
+        extra: str = "",
+        dry_run: bool = False,
+):
+    """
+    Start the local Docker Compose stack from repo compose files using local images.
+
+    This uses the local `:latest` image tags produced by `build-all-local` and does
+    not rely on Docker Hub or OCI charts.
+    """
+    network_cmd = "docker network inspect dsx-connect-network >/dev/null 2>&1 || docker network create dsx-connect-network"
+    code = _run(c, network_cmd, dry_run=dry_run)
+    if code != 0:
+        raise Exit(code)
+
+    compose_files = [
+        PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
+    ]
+    if include_dsxa:
+        compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
+
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    for name in chosen:
+        compose_path = _connector_compose_file(name)
+        if not compose_path.exists():
+            print(f"[compose_up_local] Skipping {name}: no compose file at {compose_path}")
+            continue
+        compose_files.append(compose_path)
+
+    env = {"DSXCONNECT_IMAGE": "dsx-connect:latest"}
+    for name in chosen:
+        env[_connector_image_env_var(name)] = f"{_connector_image_name(name)}:latest"
+
+    compose_flags = " ".join([f"-f {path}" for path in compose_files])
+    cmd = f"docker compose {compose_flags} up -d"
+    if extra:
+        cmd += f" {extra.strip()}"
+    code = _run(c, cmd, dry_run=dry_run, env=env)
+    if code != 0:
+        raise Exit(code)
+
+
+@task(help={
+    "include_dsxa": "Also stop the bundled DSXA compose stack.",
+    "extra": "Extra raw args appended to the docker compose down command.",
+})
+def compose_down_local(
+        c,
+        only: str = "",
+        skip: str = "",
+        include_dsxa: bool = False,
+        extra: str = "",
+        dry_run: bool = False,
+):
+    """
+    Stop the local Docker Compose stack built from repo compose files.
+    """
+    compose_files = [
+        PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
+    ]
+    if include_dsxa:
+        compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
+
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    for name in chosen:
+        compose_path = _connector_compose_file(name)
+        if compose_path.exists():
+            compose_files.append(compose_path)
+
+    env = {"DSXCONNECT_IMAGE": "dsx-connect:latest"}
+    for name in chosen:
+        env[_connector_image_env_var(name)] = f"{_connector_image_name(name)}:latest"
+
+    compose_flags = " ".join([f"-f {path}" for path in compose_files])
+    cmd = f"docker compose {compose_flags} down"
+    if extra:
+        cmd += f" {extra.strip()}"
+    code = _run(c, cmd, dry_run=dry_run, env=env)
+    if code != 0:
+        raise Exit(code)
+
+
+@task(pre=[generate_manifest], help={
+    "repo": "Docker image namespace/repository prefix for dev images (e.g. dsxconnect-dev).",
+    "helm_repo": "OCI Helm repo for dev charts (e.g. oci://registry-1.docker.io/dsxconnect-dev).",
+})
+def push_all_dev(
+        c,
+        repo: str = "dsxconnect-dev",
+        helm_repo: str = "oci://registry-1.docker.io/dsxconnect-dev",
+        only: str = "",
+        skip: str = "",
+        parallel: bool = False,
+        dry_run: bool = False,
+):
+    """
+    Build + push current-version images and Helm charts to a dev registry namespace.
+
+    This path does not bump versions. It is intended for shared dev/test registries,
+    not official release publication.
+    """
+    print("=== Building and pushing core (dsx_connect) to dev repo ===")
+    code = _run(c, "invoke build", cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+    if code != 0:
+        raise Exit(code)
+    code = _run(c, f"invoke push --repo={repo}", cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+    if code != 0:
+        raise Exit(code)
+
+    chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    if chosen:
+        print("=== Building and pushing connectors to dev repo ===")
+
+        errors: list[tuple[str, int]] = []
+
+        def _push_connector(name: str) -> tuple[str, int]:
+            code = _run(
+                c,
+                f"invoke release-connector-nobump --name={name} --repo-uname={repo}",
+                cwd=PROJECT_ROOT,
+                dry_run=dry_run,
+            )
+            return name, code
+
+        if parallel:
+            with ThreadPoolExecutor(max_workers=min(4, len(chosen))) as ex:
+                futures = {ex.submit(_push_connector, n): n for n in chosen}
+                for fut in as_completed(futures):
+                    n, code = fut.result()
+                    if code != 0:
+                        print(f"[push_all_dev] FAILED: {n} (exit {code})")
+                        errors.append((n, code))
+        else:
+            for n in chosen:
+                _, code = _push_connector(n)
+                if code != 0:
+                    errors.append((n, code))
+
+        if errors:
+            bad = ", ".join([f"{n}:{code}" for n, code in errors])
+            raise Exit(f"Some connector dev pushes failed: {bad}", code=1)
+
+    helm_release(
+        c,
+        repo=helm_repo,
+        only=only,
+        skip=skip,
+        include_core=True,
+        parallel=parallel,
+        dry_run=dry_run,
+    )
 
 
 @task(pre=[generate_manifest])

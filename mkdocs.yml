@@ -211,6 +211,7 @@ nav:
   - Resources:
       - Overview: resources/index.md
       - DSXA Desktop and SDK: developer/dsxa-desktop-and-sdk.md
+      - Build and Release Workflow: developer/build-and-release-workflow.md
       - DSXA SDK:
           - Overview: developer/dsxa-sdk.md
           - Python Calls: developer/sdk/python.md

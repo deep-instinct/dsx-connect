@@ -39,8 +39,16 @@ Desktop releases use the checked-in app version, not a manually typed release ta
 
 - `src-tauri/tauri.conf.json` is the release-defining app version for Tauri bundles and installer filenames.
 - `package.json` and `src-tauri/Cargo.toml` must match that same version.
-- Before cutting a release, update all three files together and check them in.
-- The GitHub Actions release workflow derives the GitHub release tag from `tauri.conf.json` and fails if any of the three version files drift.
+- `package-lock.json` and the `dsxa_desktop` package entry in `src-tauri/Cargo.lock` are kept in sync by the bump task too.
+- Before cutting a release, use the local bump task instead of editing version files by hand:
+
+```bash
+cd dsxa_desktop
+inv bump
+inv bump --version 1.2.4
+```
+
+- The GitHub Actions release workflow derives the GitHub release tag from `tauri.conf.json` and fails if the required version files drift.
 
 Example:
 

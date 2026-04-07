@@ -1576,7 +1576,7 @@ pub fn run() {
                     .show(|_| {});
             }
             "help" => {
-                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/developer/dsxa-desktop-and-sdk/");
+                let _ = webbrowser::open("https://deep-instinct.github.io/dsx-connect/resources/dsxa-desktop/");
             }
             menu_id if menu_id.starts_with("ctx-select-item-") => {
                 if let Some(runtime) = app.try_state::<RuntimeState>() {

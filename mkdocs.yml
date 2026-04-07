@@ -122,12 +122,6 @@ nav:
 
   - Core Concepts:
       - Architecture Overview: concepts/architecture.md
-      - Scope Engine RFC: architecture/scope-engine-rfc.md
-      - Job Model RFC: architecture/job-model-rfc.md
-      - PostgreSQL Control-Plane Schema RFC: architecture/control-plane-schema-rfc.md
-      - Outcome Taxonomy RFC: architecture/outcome-taxonomy-rfc.md
-      - Full Scan Pipeline: architecture/full-scan-pipeline.md
-      - Scope Engine Migration Checklist: architecture/scope-engine-migration-checklist.md
       - Connector Model: concepts/connectors.md
       - Authentication Model: concepts/authentication.md
       - TLS / HTTPS Model: concepts/tls.md
@@ -211,7 +205,7 @@ nav:
   - Development:
       - Overview: developer/index.md
       - Build and Release Workflow: developer/build-and-release-workflow.md
-      - DSXA Desktop and SDK: developer/dsxa-desktop-and-sdk.md
+      - DSXA SDK: developer/dsxa-desktop-and-sdk.md
       - DSXA SDK:
           - Overview: developer/dsxa-sdk.md
           - Python Calls: developer/sdk/python.md
@@ -220,6 +214,8 @@ nav:
 
   - Resources:
       - Overview: resources/index.md
+      - Tools:
+          - DSXA Desktop: resources/dsxa-desktop.md
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
       - GitHub: https://github.com/deep-instinct/dsx-connect

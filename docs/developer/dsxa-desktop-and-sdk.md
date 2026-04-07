@@ -1,136 +1,8 @@
-# DSXA Desktop and SDK
+# DSXA SDK
 
-This section covers the local DSXA Desktop app and the SDKs used to integrate DSXA scanning into applications and services.
+This section covers the SDKs used to integrate DSXA scanning into applications and services.
 
-## Components
-
-- **DSXA Desktop**
-  - Local desktop client for manual file, folder, and hash scanning
-- **Python SDK**
-  - Sync and async clients, including streaming support
-- **JavaScript SDK**
-  - Node.js and browser client surface for DSXA APIs
-
-## DSXA Desktop Quick Start
-
-### 1. Create a connection
-
-When you first open DSXA Desktop, create or select a connection profile and fill in:
-
-- **Base URL (base path to the deployed scanner**
-  - Example: `http://127.0.0.1:15000`
-  - note: do not include the API path, i.e. `/scan/binary/v2`
-- **Auth token**
-  - Leave empty if your scanner does not require one
-- **Protected entity**
-  - Defaults to `1`.  Change as needed.
-- **Custom metadata**
-  - Optional; may be used to tag scans
-- **Verify TLS**
-  - Enable for proper HTTPS validation
-  - Disable only for local development or self-signed test environments
-
-Use **New Connection** to create a profile, then save it before scanning.
-
-### 2. Test scanner connectivity
-
-Before scanning a real file:
-
-- confirm the scanner URL is reachable
-- verify auth settings
-- verify the scanner is not still initializing
-
-The Desktop UI shows readiness state for the configured scanner. If the scanner is unreachable or misconfigured, fix that before proceeding.
-
-### 3. Run an EICAR test
-
-Use the built-in **EICAR** test to confirm the end-to-end path is working:
-
-- DSXA Desktop can reach the scanner
-- the scanner returns a verdict
-- the current connection profile is valid
-
-This is the quickest safe validation before running real file or folder scans.
-
-### 4. Scan a single file
-
-Use **Scan File** when you want to validate one file quickly:
-
-- choose the target file
-- optionally set password or metadata overrides
-- start the scan
-
-This is useful for spot checks and troubleshooting metadata, protected entity, or auth issues.
-
-### 5. Scan a folder
-
-Use **Scan Folder** for multi-file benchmarking or validation:
-
-- choose the folder
-- set a file pattern if needed
-- choose **Max Concurrent Scans**
-- optionally enable detailed JSONL or malicious-only CSV logging
-
-Folder scan output includes:
-
-- total scanned files
-- elapsed time
-- DSXA scan time sum
-- verdict counts
-- failures
-
-### 6. Scan a hash
-
-Use **Scan Hash** when you want to query by file hash instead of uploading bytes.
-
-Note: DSXA must me configured to support hash scanning.
-
-This is useful for reputation-style checks or when the file content is not available locally.
-
-## DSXA Desktop Notes
-
-- Desktop now streams binary file uploads instead of buffering entire files before sending them.
-- Folder scan concurrency is caller-controlled and should be increased gradually.
-- Very large files may be better suited to scan-by-path workflows when supported by the deployment.
-- Base64 mode is available, but binary mode is generally preferable for throughput.
-
-### macOS install note
-
-Unsigned or unnotarized macOS builds may be blocked by Gatekeeper with a message like:
-
-```text
-"DSXA Desktop" is damaged and can't be opened. You should move it to the Trash.
-```
-
-For local or internal use, first try opening the app from Finder:
-
-1. Right-click `DSXA Desktop.app`
-2. Choose `Open`
-3. In the macOS warning dialog, click `Open` again
-
-If macOS still refuses to open the app, the usual workaround is to remove the browser quarantine attribute after unzipping:
-
-```bash
-xattr -dr com.apple.quarantine "/path/to/DSXA Desktop.app"
-```
-
-For normal end-user distribution, the proper fix is to sign and notarize the app with an Apple Developer account. Without notarization, macOS may continue to block the app even if the build itself is valid.
-
-### Windows install note
-
-Unsigned Windows installers may show `Unknown Publisher` during installation. For local or internal use, users can usually continue anyway if they trust the source of the MSI or EXE.
-
-For normal end-user distribution, the proper fix is to sign the Windows installer with a code-signing certificate so Windows can show a verified publisher instead of `Unknown Publisher`.
-
-## Common Desktop Workflow
-
-1. Create a new connection profile.
-2. Enter scanner URL and optional auth token.
-3. Verify the scanner is reachable.
-4. Run the EICAR test.
-5. Scan a single known-good file.
-6. Run a folder scan with bounded concurrency.
-7. Export JSONL or CSV logs if you need detailed review.
+For the DSXA Desktop app quick start and install notes, see [Resources > DSXA Desktop](../resources/dsxa-desktop.md).
 
 ## SDK Guides
 
@@ -139,12 +11,12 @@ For normal end-user distribution, the proper fix is to sign the Windows installe
 - [Swift SDK calls](sdk/swift.md)
 - [JavaScript SDK calls](sdk/javascript.md)
 
-## Key points
+## Key Points
 
 1. SDK clients handle request construction, auth headers, connection reuse, and response parsing.
 2. Concurrency is typically managed by the caller, not by a single DSXA batch endpoint.
-3. Streaming matters for throughput and memory usage, especially for large files or local desktop scanning workflows.
-4. DSXA Desktop is useful for local validation and manual workflows, while the SDKs are the integration path for services and apps.
+3. Streaming matters for throughput and memory usage, especially for large files.
+4. The SDKs are the integration path for services, tools, CLIs, and application code.
 
 ## Typical SDK usage patterns
 

@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSXA JS SDK Browser File Scan</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+        max-width: 48rem;
+      }
+      pre {
+        background: #111;
+        color: #f5f5f5;
+        padding: 1rem;
+        overflow: auto;
+        border-radius: 8px;
+      }
+      label,
+      input,
+      button {
+        display: block;
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Browser File Scan</h1>
+    <p>Pick a file and submit it directly to DSXA using the browser SDK.</p>
+
+    <label>
+      DSXA Base URL
+      <input id="baseUrl" value="http://127.0.0.1:5000" />
+    </label>
+
+    <label>
+      Auth Token
+      <input id="authToken" value="" />
+    </label>
+
+    <label>
+      File
+      <input id="file" type="file" />
+    </label>
+
+    <button id="scan">Scan File</button>
+
+    <pre id="output">Pick a file, then click "Scan File".</pre>
+
+    <script type="module">
+      import { DSXAClient } from "../src/index.js";
+
+      const output = document.querySelector("#output");
+      const fileInput = document.querySelector("#file");
+      const scanButton = document.querySelector("#scan");
+      const baseUrlInput = document.querySelector("#baseUrl");
+      const authTokenInput = document.querySelector("#authToken");
+
+      scanButton.addEventListener("click", async () => {
+        const file = fileInput.files?.[0];
+        if (!file) {
+          output.textContent = "Choose a file first.";
+          return;
+        }
+
+        const client = new DSXAClient({
+          baseUrl: baseUrlInput.value.trim(),
+          authToken: authTokenInput.value.trim(),
+        });
+
+        output.textContent = `Scanning ${file.name}...`;
+        try {
+          const result = await client.scanFile(file, {
+            customMetadata: `source=browser;name=${file.name}`,
+          });
+          output.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          output.textContent = JSON.stringify(
+            {
+              status: "failed",
+              message: error?.message || String(error),
+              body: error?.body,
+            },
+            null,
+            2,
+          );
+        }
+      });
+    </script>
+  </body>
+</html>

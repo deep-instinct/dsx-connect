@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DSXA JS SDK Browser Folder Scan</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2rem;
+        max-width: 56rem;
+      }
+      pre {
+        background: #111;
+        color: #f5f5f5;
+        padding: 1rem;
+        overflow: auto;
+        border-radius: 8px;
+      }
+      label,
+      input,
+      button {
+        display: block;
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Browser Folder Scan</h1>
+    <p>
+      Pick a folder using a browser file input with <code>webkitdirectory</code>.
+      Files are scanned one at a time from the browser.
+    </p>
+
+    <label>
+      DSXA Base URL
+      <input id="baseUrl" value="http://127.0.0.1:5000" />
+    </label>
+
+    <label>
+      Auth Token
+      <input id="authToken" value="" />
+    </label>
+
+    <label>
+      Concurrency
+      <input id="concurrency" type="number" value="4" min="1" max="16" />
+    </label>
+
+    <label>
+      Folder
+      <input id="folder" type="file" webkitdirectory multiple />
+    </label>
+
+    <button id="scan">Scan Folder</button>
+
+    <pre id="output">Pick a folder, then click "Scan Folder".</pre>
+
+    <script type="module">
+      import { DSXAClient } from "../src/index.js";
+
+      const output = document.querySelector("#output");
+      const folderInput = document.querySelector("#folder");
+      const scanButton = document.querySelector("#scan");
+      const baseUrlInput = document.querySelector("#baseUrl");
+      const authTokenInput = document.querySelector("#authToken");
+      const concurrencyInput = document.querySelector("#concurrency");
+
+      async function scanFolder(client, files, concurrency) {
+        const results = new Array(files.length);
+        let index = 0;
+
+        async function worker() {
+          while (index < files.length) {
+            const current = index++;
+            const file = files[current];
+            const path = file.webkitRelativePath || file.name;
+            try {
+              const result = await client.scanFile(file, {
+                customMetadata: `source=browser-folder;path=${path}`,
+              });
+              results[current] = { file: path, status: "ok", result };
+            } catch (error) {
+              results[current] = {
+                file: path,
+                status: "failed",
+                message: error?.message || String(error),
+                body: error?.body,
+              };
+            }
+          }
+        }
+
+        await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
+        return {
+          operation: "browser-folder-scan",
+          scanned: files.length,
+          ok: results.filter((item) => item?.status === "ok").length,
+          failed: results.filter((item) => item?.status === "failed").length,
+          results,
+        };
+      }
+
+      scanButton.addEventListener("click", async () => {
+        const files = Array.from(folderInput.files || []);
+        if (!files.length) {
+          output.textContent = "Choose a folder first.";
+          return;
+        }
+
+        const client = new DSXAClient({
+          baseUrl: baseUrlInput.value.trim(),
+          authToken: authTokenInput.value.trim(),
+        });
+        const concurrency = Math.max(1, Number(concurrencyInput.value) || 1);
+
+        output.textContent = `Scanning ${files.length} file(s)...`;
+        try {
+          const result = await scanFolder(client, files, concurrency);
+          output.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          output.textContent = JSON.stringify(
+            {
+              status: "failed",
+              message: error?.message || String(error),
+              body: error?.body,
+            },
+            null,
+            2,
+          );
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -270,6 +270,10 @@ def _connector_compose_file(name: str) -> Path:
     return CONNECTORS_DIR / name / "deploy" / "docker" / f"docker-compose-{image_name}.yaml"
 
 
+def _compose_state_dir(name: str) -> Path:
+    return Path.home() / ".dsx-connect-local" / f"{name}-compose"
+
+
 def _connector_image_env_var(name: str) -> str:
     return {
         "aws_s3": "AWS_S3_IMAGE",
@@ -281,6 +285,77 @@ def _connector_image_env_var(name: str) -> str:
         "onedrive": "ONEDRIVE_IMAGE",
         "salesforce": "SALESFORCE_IMAGE",
     }[name]
+
+
+def _load_env_file(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+
+    env: dict[str, str] = {}
+    for raw_line in path.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            continue
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        env[key] = value
+    return env
+
+
+def _compose_env_for_selection(chosen: list[str]) -> dict[str, str]:
+    env = _load_env_file(_compose_state_dir("dsx-connect") / ".env.local")
+    for name in chosen:
+        env.update(_load_env_file(_compose_state_dir(_connector_image_name(name)) / ".env.local"))
+    return env
+
+
+def _translate_localhost_url_for_compose(url: str) -> str:
+    return re.sub(r"//(?:127\.0\.0\.1|localhost)(?=[:/]|$)", "//host.docker.internal", url)
+
+
+def _normalize_compose_env(env: dict[str, str], *, include_dsxa: bool) -> dict[str, str]:
+    normalized = dict(env)
+
+    # Let the compose core stack use its built-in internal Redis wiring.
+    for key in (
+        "DSXCONNECT_REDIS_URL",
+        "DSXCONNECT_RESULTS_DB",
+        "DSXCONNECT_WORKERS__BROKER",
+        "DSXCONNECT_WORKERS__BACKEND",
+    ):
+        normalized.pop(key, None)
+
+    # Let connector compose files use their internal service-name defaults.
+    for key in (
+        "DSXCONNECTOR_CONNECTOR_URL",
+        "DSXCONNECTOR_DSX_CONNECT_URL",
+    ):
+        normalized.pop(key, None)
+
+    # Containers should use their mounted in-container data directories, not desktop host paths.
+    normalized["DSXCONNECTOR_DATA_DIR"] = "/app/data"
+
+    # Desktop relative cert paths are not valid in the compose container layout.
+    for key in (
+        "DSXCONNECTOR_TLS_CERTFILE",
+        "DSXCONNECTOR_TLS_KEYFILE",
+        "DSXCONNECTOR_CA_BUNDLE",
+    ):
+        normalized.pop(key, None)
+
+    if include_dsxa:
+        normalized.pop("DSXCONNECT_SCANNER__SCAN_BINARY_URL", None)
+    else:
+        scanner_url = normalized.get("DSXCONNECT_SCANNER__SCAN_BINARY_URL")
+        if scanner_url:
+            normalized["DSXCONNECT_SCANNER__SCAN_BINARY_URL"] = _translate_localhost_url_for_compose(scanner_url)
+
+    return normalized
 
 
 def _remove_local_image_if_present(c, image_ref: str, *, dry_run: bool = False) -> None:
@@ -733,6 +808,8 @@ def build_all_local(
     "image_pull_policy": "Image pull policy for local images (Never or IfNotPresent).",
     "extra_core": "Extra raw args appended to the core helm upgrade/install command.",
     "extra_connectors": "Extra raw args appended to connector helm upgrade/install commands.",
+    "only": "Connectors to deploy, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
+    "skip": "Connectors to skip, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
 })
 def deploy_all_local(
         c,
@@ -801,6 +878,8 @@ def deploy_all_local(
 @task(help={
     "include_dsxa": "Also start the bundled DSXA compose stack.",
     "extra": "Extra raw args appended to the docker compose up command.",
+    "only": "Connectors to deploy, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
+    "skip": "Connectors to skip, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
 })
 def compose_up_local(
         c,
@@ -828,6 +907,12 @@ def compose_up_local(
         compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
 
     chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    raw_env = _compose_env_for_selection(chosen)
+    gcs_sa_path = raw_env.get("GCS_SA_JSON_PATH", "").strip()
+    if "google_cloud_storage" in chosen and (not gcs_sa_path or not Path(gcs_sa_path).expanduser().exists()):
+        print("[compose_up_local] Skipping google_cloud_storage: set GCS_SA_JSON_PATH in google-cloud-storage-connector-compose/.env.local")
+        chosen = [name for name in chosen if name != "google_cloud_storage"]
+
     for name in chosen:
         compose_path = _connector_compose_file(name)
         if not compose_path.exists():
@@ -835,7 +920,8 @@ def compose_up_local(
             continue
         compose_files.append(compose_path)
 
-    env = {"DSXCONNECT_IMAGE": "dsx-connect:latest"}
+    env = _normalize_compose_env(_compose_env_for_selection(chosen), include_dsxa=include_dsxa)
+    env["DSXCONNECT_IMAGE"] = "dsx-connect:latest"
     for name in chosen:
         env[_connector_image_env_var(name)] = f"{_connector_image_name(name)}:latest"
 
@@ -851,6 +937,8 @@ def compose_up_local(
 @task(help={
     "include_dsxa": "Also stop the bundled DSXA compose stack.",
     "extra": "Extra raw args appended to the docker compose down command.",
+    "only": "Connectors to stop, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
+    "skip": "Connectors to exclude from stop, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
 })
 def compose_down_local(
         c,
@@ -870,12 +958,18 @@ def compose_down_local(
         compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
 
     chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
+    raw_env = _compose_env_for_selection(chosen)
+    gcs_sa_path = raw_env.get("GCS_SA_JSON_PATH", "").strip()
+    if "google_cloud_storage" in chosen and (not gcs_sa_path or not Path(gcs_sa_path).expanduser().exists()):
+        chosen = [name for name in chosen if name != "google_cloud_storage"]
+
     for name in chosen:
         compose_path = _connector_compose_file(name)
         if compose_path.exists():
             compose_files.append(compose_path)
 
-    env = {"DSXCONNECT_IMAGE": "dsx-connect:latest"}
+    env = _normalize_compose_env(_compose_env_for_selection(chosen), include_dsxa=include_dsxa)
+    env["DSXCONNECT_IMAGE"] = "dsx-connect:latest"
     for name in chosen:
         env[_connector_image_env_var(name)] = f"{_connector_image_name(name)}:latest"
 
@@ -891,6 +985,8 @@ def compose_down_local(
 @task(pre=[generate_manifest], help={
     "repo": "Docker image namespace/repository prefix for dev images (e.g. dsxconnect-dev).",
     "helm_repo": "OCI Helm repo for dev charts (e.g. oci://registry-1.docker.io/dsxconnect-dev).",
+    "only": "Connectors to publish, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
+    "skip": "Connectors to skip, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
 })
 def push_all_dev(
         c,

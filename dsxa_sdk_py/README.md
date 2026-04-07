@@ -141,6 +141,12 @@ async with AsyncDSXAClient(base_url="https://scanner.example.com") as client:
 
 Install the package (e.g., `pip install -e .`) and use the Typer-based CLI for ad-hoc scans:
 
+Primary uses:
+
+- baseline DSXA throughput and compare concurrency settings
+- scan individual files or folders from the command line
+- serve as runnable example code for SDK users
+
 ```bash
 # Help
 dsxa --help
@@ -159,6 +165,8 @@ dsxa --base-url https://scanner scan-folder ./samples --pattern "**/*.pdf" --con
 ```
 
 Environment variables (`DSXA_BASE_URL`, optional `DSXA_AUTH_TOKEN`, optional `DSXA_PROTECTED_ENTITY` which defaults to `1`, `DSXA_VERIFY_TLS`) may be used instead of flags. If DSXA auth is disabled, simply omit `--token` / `DSXA_AUTH_TOKEN`.
+
+For `scan-files` and `scan-folder`, the CLI prints `Concurrency: <N>` in the final summary so the effective concurrency is explicit in benchmark output. The default concurrency is `4`.
 
 You can also drop a `.env` file next to your project (the CLI loads `.env` from the current working directory upward, just like `python-dotenv`) to persist the settings:
 

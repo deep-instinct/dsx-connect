@@ -1,3 +1,5 @@
+import { HashScanResponse, ScanByPathResponse, ScanResponse } from "./models.js";
+
 function toBody(data) {
   if (data == null) throw new Error("data is required");
   if (typeof Buffer !== "undefined" && Buffer.isBuffer(data)) return data;
@@ -41,6 +43,18 @@ export class DSXAHttpError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+function asScanResponse(payload) {
+  return ScanResponse.fromJson(payload);
+}
+
+function asHashScanResponse(payload) {
+  return HashScanResponse.fromJson(payload);
+}
+
+function asScanByPathResponse(payload) {
+  return ScanByPathResponse.fromJson(payload);
 }
 
 export class DSXAClient {
@@ -100,47 +114,47 @@ export class DSXAClient {
   }
 
   async scanBinary(data, opts = {}) {
-    return this._request("POST", "/scan/binary/v2", {
+    return asScanResponse(await this._request("POST", "/scan/binary/v2", {
       headers: this._headers(opts),
       body: toBody(data),
       signal: opts.signal,
-    });
+    }));
   }
 
   async scanBinaryStream(data, opts = {}) {
-    return this._request("POST", "/scan/binary/v2", {
+    return asScanResponse(await this._request("POST", "/scan/binary/v2", {
       headers: this._headers(opts),
       body: data,
       signal: opts.signal,
-    });
+    }));
   }
 
   async scanBase64(encodedData, opts = {}) {
-    return this._request("POST", "/scan/base64/v2", {
+    return asScanResponse(await this._request("POST", "/scan/base64/v2", {
       headers: this._headers(opts),
       body: toBody(typeof encodedData === "string" ? encodedData : encodedData),
       signal: opts.signal,
-    });
+    }));
   }
 
   async scanHash(fileHash, opts = {}) {
     const headers = this._headers(opts);
     headers["Content-Type"] = "application/json";
     const body = JSON.stringify({ hash: String(fileHash || "") });
-    return this._request("POST", "/scan/by_hash", { headers, body, signal: opts.signal });
+    return asHashScanResponse(await this._request("POST", "/scan/by_hash", { headers, body, signal: opts.signal }));
   }
 
   async scanByPath(streamPath, opts = {}) {
     const headers = this._headers(opts);
     headers["Stream-Path"] = String(streamPath || "");
-    return this._request("GET", "/scan/by_path", { headers, signal: opts.signal });
+    return asScanByPathResponse(await this._request("GET", "/scan/by_path", { headers, signal: opts.signal }));
   }
 
   async getScanByPathResult(scanGuid, opts = {}) {
     const headers = this._headers(opts);
     headers["Content-Type"] = "application/json";
     const body = JSON.stringify({ scan_guid: String(scanGuid || "") });
-    return this._request("POST", "/result/by_path", { headers, body, signal: opts.signal });
+    return asScanResponse(await this._request("POST", "/result/by_path", { headers, body, signal: opts.signal }));
   }
 
   async pollScanByPath(scanGuid, { intervalMs = 5000, timeoutMs = 900000, ...opts } = {}) {
@@ -166,3 +180,11 @@ export class DSXAClient {
     return this.scanBinary(fileOrBlob, opts);
   }
 }
+
+export {
+  VerdictDetails,
+  FileInfo,
+  ScanResponse,
+  ScanByPathResponse,
+  HashScanResponse,
+} from "./models.js";

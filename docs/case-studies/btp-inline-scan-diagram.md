@@ -1,29 +1,49 @@
-# DSX for Applications for SAP BTP — Inline Upload Scanning (VSI 2.0 Model)
+# DSX for Applications for SAP BTP
 
-This document defines a cloud-native scanning integration pattern for SAP Business Technology Platform (BTP) using DSX for Applications (DSXA, formally DPA) and DSX-Connect as a centralized scanning and policy control plane.
+## Inline Upload Scanning with CAP
+
+This document defines an inline scanning pattern for **SAP Business Technology Platform (BTP)** using a **CAP-based upload service** that calls **DSX for Applications (DSXA)** directly before storing uploaded files. The goal is to enforce **scan-before-store** for user-uploaded content such as resumes.
 
 ## Goals
 
-* Enforce scan-before-store for uploaded files (e.g., resume documents)
-* Centralize malware detection + policy decisions
-* Support remediation on files (delete, quarantine, detection events)
-* Align with native BTP architecture
-* Enable future cross-platform reuse (BTP, S3, GCS, SharePoint, etc.)
+* Enforce scan-before-store for uploaded files
+* Keep storage and workflow ownership inside BTP
+* Use CAP as the upload-handling service layer
+* Call DSXA inline for malware scanning
+* Support clean, malicious, and unscannable outcomes
 
+## Core principle
 
-## Overview
-
-The user uploads a file to the application layer. The application sends the file for inline scanning before it is committed to primary storage. DSX-Connect applies orchestration and policy, DSXA performs malware detection, and the resulting verdict determines whether the file is allowed, quarantined, or held.
-
-DSX-Connect should not appear to store the file. BTP always owns storage. DSX only returns a decision.
-
-> **BTP always owns file storage and workflow. DSX provides a verdict decision.**
+> **BTP always owns file storage and workflow. DSXA provides the scan verdict.**
 
 ```text
-Upload -> BTP -> DSX (scan + decision) -> BTP decides -> BTP stores
+User -> SAP Application -> CAP Upload Handler -> DSXA -> CAP decides -> BTP stores
 ```
 
-## Diagram
+## High-level flow
+
+```mermaid
+flowchart TD
+
+    A["User<br/>(Uploads Resume)"]
+    B["SAP Application"]
+    C["Upload Handler / CAP Service"]
+    D["DSXA Inline Scan"]
+    E["CAP Decision Logic"]
+    F["Store Clean File"]
+    G["Quarantine File"]
+    H["Put File on Hold"]
+
+    A --> B
+    B --> C
+    C -->|scan before store| D
+    D --> E
+    E -->|clean| F
+    E -->|malicious| G
+    E -->|unscannable| H
+```
+
+## Detailed implementation flow
 
 ```mermaid
 flowchart TD
@@ -31,210 +51,290 @@ flowchart TD
     A["End User<br/>(Uploads Resume)"]
 
     subgraph BTP["SAP BTP Application Layer"]
-        B["BTP Upload Handler / API"]
-        I["BTP Decision Execution<br/>(Routes Based on Verdict)"]
-        F["Primary Store<br/>(Clean Files)"]
-        G["Quarantine Storage<br/>(Malicious)"]
-        H["Hold / Pending Storage<br/>(Unscannable)"]
+        B["SAP Application UI / Service"]
+        C["Upload Handler<br/>(CAP Service Endpoint)"]
+        D["File Validation<br/>(size, type, required metadata)"]
+        E["Inline Scan Request Builder<br/>(stream file + metadata to DSXA)"]
+        I["Decision Logic in CAP<br/>(interpret DSXA result)"]
+        J["User Response / Workflow Handling"]
+        F["Primary Storage<br/>(clean files only)"]
+        G["Quarantine Storage<br/>(malicious files)"]
+        H["Hold / Pending Storage<br/>(unscannable or error)"]
     end
 
-    subgraph DSX["DSX-Connect Control Plane"]
-        C["DSX-Connect<br/>(Policy + Orchestration)"]
-        D["DSXA Engine<br/>(Malware Detection)"]
-        E["Verdict + Action"]
+    subgraph DSXA["DSX for Applications"]
+        X["DSXA Scan API"]
+        Y["Malware Detection Engine"]
+        Z["Scan Verdict Returned"]
     end
 
     A --> B
-    B -->|Inline Scan before storage| C
+    B --> C
     C --> D
-    D --> E
+    D -->|valid upload| E
+    D -->|invalid upload| J
 
-    E -->|decision| I
-    I -->|allow| F
-    I -->|quarantine| G
-    I -->|hold| H
+    E -->|inline scan before storage| X
+    X --> Y
+    Y --> Z
+
+    Z --> I
+
+    I -->|clean| F
+    I -->|malicious| G
+    I -->|unscannable / timeout / scan error| H
+
+    F --> J
+    G --> J
+    H --> J
 
     classDef user fill:#455a64,stroke:#263238,color:#ffffff
     classDef btp fill:#1565c0,stroke:#0d47a1,color:#ffffff
-    classDef dsx fill:#2e7d32,stroke:#1b5e20,color:#ffffff
-    classDef verdict fill:#66bb6a,stroke:#2e7d32,color:#000000
+    classDef dsxa fill:#2e7d32,stroke:#1b5e20,color:#ffffff
+    classDef storage fill:#6a1b9a,stroke:#4a148c,color:#ffffff
     classDef quarantine fill:#c62828,stroke:#8e0000,color:#ffffff
     classDef hold fill:#ef6c00,stroke:#e65100,color:#ffffff
 
     class A user
-    class B,I,F btp
-    class C,D dsx
-    class E verdict
+    class B,C,D,E,I,J btp
+    class X,Y,Z dsxa
+    class F storage
     class G quarantine
     class H hold
 ```
 
+## Implementation Patterns
 
-### What DSX-A/DSX-Connect does
+There are three practical ways to integrate DSXA into a BTP application.
 
-* Receives file (stream or temp)
-* Scans it (DSXA)
-* Returns:
-  * verdict
-  * recommended action (??) 
+---
 
-### BTP (always owns these)
+### Option 1 — Inline Scan in Existing Application (Preferred)
 
-* File persistence
-* Quarantine location
-* Hold/pending storage
-* User feedback
-* File Workflow
+#### Description
 
-## Important architectural principle
+Existing customer managed SAP application handles uploads and calls DSXA **directly before storing the file**.
 
-> **DSX is a decision service, not a data plane for file storage**
+This is the **cleanest and most direct implementation**.
 
-This is a major architectural point:
+---
 
-* No data residency concerns
-* No storage duplication
-* Fits SAP architecture cleanly
-* Easier to adopt (no replatforming)
+#### Flow
 
-## Integration choices
+```mermaid
+flowchart TD
 
-The practical question is not whether BTP can integrate with scanning. It can.
+    A["User<br/>(Uploads Resume)"]
+    B["SAP Application"]
+    C["Upload Handler<br/>(Existing Backend Service)"]
+    D["DSXA Inline Scan"]
+    E["Application Decision Logic"]
+    F["Primary Storage<br/>(clean files only)"]
+    G["Quarantine Storage<br/>(malicious files)"]
+    H["Hold / Pending<br/>(unscannable)"]
 
-The real question is which integration pattern should be used first.
+    A --> B
+    B --> C
+    C -->|scan before store| D
+    D --> E
 
-There are two legitimate goals:
-
-1. Make the project work.
-2. Turn it into a reusable platform solution.
-
-Those two goals do not always imply the same first implementation.
-
-## What runs in BTP
-
-In all options, there is still a BTP-side application or service that handles uploads.
-
-That BTP service could be:
-
-- a Node.js service
-- a Java service
-- a CAP service
-
-`CAP` means SAP Cloud Application Programming Model, which is SAP’s application/service framework for building BTP applications.
-
-So the decision is usually not Node.js versus CAP.
-
-The decision is:
-
-- direct scanning integration
-- versus scanning through a centralized control plane
-
-## Option 1: BTP application calls DSXA directly
-
-The BTP upload-handling service calls DSXA directly using the JavaScript SDK or REST.
-
-### Flow
-
-```text
-User -> BTP upload service -> DSXA -> BTP executes outcome
+    E -->|clean| F
+    E -->|malicious| G
+    E -->|unscannable| H
 ```
 
-### What this optimizes for
+---
 
-- simplest implementation
-- lowest operational weight
-- fastest path to a working project
-- lower latency
-- fewer moving parts
+#### Responsibilities
 
-### Tradeoffs
+**Application**
 
-- policy logic may end up embedded in the BTP application
-- auditing and decision normalization may differ from other integrations
-- less reuse if additional platforms are added later
-- weaker long-term control-plane story
+* receives upload
+* calls DSXA
+* interprets result
+* executes storage decision
 
-## Option 2: BTP application calls DSX-Connect, which calls DSXA
+**DSXA**
 
-The BTP upload-handling service calls DSX-Connect inline. DSX-Connect orchestrates scanning through DSXA and returns a normalized verdict and action recommendation.
+* scans file
+* returns verdict
 
-### Flow
+---
 
-```text
-User -> BTP upload service -> DSX-Connect -> DSXA -> DSX-Connect decision -> BTP executes outcome
+#### When to use
+
+* application backend is accessible
+* upload handler can be modified
+* goal is fastest and simplest implementation
+
+---
+
+### Option 2 — CAP Sidecar / Upload Gateway
+
+#### Description
+
+A **CAP-based service** is introduced as an **upload proxy** that performs scanning before passing the file to the application or storage layer.
+
+---
+
+#### Flow
+
+```mermaid
+flowchart TD
+
+    A["User<br/>(Uploads Resume)"]
+    B["SAP Application"]
+    C["CAP Upload Gateway"]
+    D["DSXA Inline Scan"]
+    E["CAP Decision Logic"]
+    F["Primary Storage"]
+    G["Quarantine"]
+    H["Hold"]
+
+    A --> B
+    B --> C
+    C -->|scan before store| D
+    D --> E
+
+    E -->|clean| F
+    E -->|malicious| G
+    E -->|unscannable| H
 ```
 
-### What this optimizes for
+---
 
-- centralized policy
-- centralized audit/logging
-- normalized verdicts and actions
-- reuse across multiple platforms and file sources
-- stronger long-term product/platform architecture
+#### Responsibilities
 
-### Tradeoffs
+**CAP Gateway**
 
-- more moving parts
-- more operational complexity
-- extra network hop
-- may be heavier than necessary for a single narrow upload use case
+* receives or proxies upload
+* calls DSXA
+* applies decision logic
+* forwards or stores file
 
-## Recommended interpretation
+---
 
-If the immediate goal is:
+#### When to use
 
-- one BTP application
-- one upload workflow
-- one project that needs to work quickly
+* existing app cannot be modified easily
+* need a reusable scanning layer
+* want separation of concerns
 
-then the simplest engineering answer may be:
+---
 
-> Start with direct BTP-to-DSXA integration.
+### Option 3 — Post-Upload Scanning (Fallback)
 
-If the strategic goal is:
+#### Description
 
-- reusable policy
-- common auditing
-- multiple ingestion points
-- a cross-platform file-security control plane
+The file is stored first, then scanned afterward.
 
-then the stronger architecture is:
+---
 
-> Move toward BTP-to-DSX-Connect-to-DSXA.
+#### Flow
 
-## Suggested phased approach
+```mermaid
+flowchart TD
 
-### Phase 1: Make the project work
+    A["User Upload"]
+    B["Application"]
+    C["Storage"]
+    D["DSXA Scan (async)"]
+    E["Remediation Action"]
 
-Build the BTP upload service so it can:
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+```
 
-- receive file uploads
-- call the scanner path inline
-- apply allow/quarantine/hold outcomes
-- preserve BTP ownership of storage and workflow
+---
 
-For this phase, direct DSXA integration may be the best fit if speed and simplicity matter most.
+#### ⚠️ Important
 
-### Phase 2: Make it a platform solution
+> This is **not scan-before-store**
 
-Introduce DSX-Connect when the need expands to:
+---
 
-- shared policy across applications
-- shared audit and operational visibility
-- cross-platform reuse beyond BTP
-- consistent decisioning across storage systems and business workflows
+#### When to use
 
-This is the point where DSX-Connect becomes valuable as a platform component rather than just another hop.
+* no ability to intercept uploads
+* legacy constraints
+* temporary fallback
 
-## Practical takeaway
+---
 
-Direct-to-DSXA is a project integration.
+## Decision Model
 
-DSX-Connect in the path is a platform architecture.
+All patterns use the same outcome model:
 
-Both are valid.
+| Verdict     | Action               |
+| ----------- | -------------------- |
+| Clean       | Store file           |
+| Malicious   | Quarantine or reject |
+| Unscannable | Hold for review      |
 
-The right answer depends on whether the first milestone is:
+---
 
-- solving one upload workflow quickly
-- or establishing a reusable file-security control plane
+## Role of CAP
+
+CAP is **one possible implementation mechanism**, not a requirement.
+
+CAP can:
+
+* act as upload handler (Option 1)
+* act as sidecar/gateway (Option 2)
+
+But the architecture does **not depend on CAP**.
+
+---
+
+## Future Implementation — DSX-Connect
+
+As the system evolves, DSX-Connect can be introduced as a **centralized control plane**.
+
+---
+
+### Why introduce DSX-Connect
+
+In Options 1 and 2, decision logic lives in application or CAP code:
+
+* quarantine vs reject behavior
+* hold logic
+* file-type rules
+* audit normalization
+
+Over time, this becomes harder to maintain.
+
+---
+
+### Future flow
+
+```text
+User → Application → DSX-Connect → DSXA → DSX-Connect decision → Application executes
+```
+
+---
+
+### What changes
+
+**Instead of:**
+
+* CAP/application interprets DSXA result
+
+**You get:**
+
+* DSX-Connect applies policy
+* returns normalized action
+
+---
+
+### Benefits
+
+* centralized policy
+* less application code
+* consistent decisions across systems
+* reusable across platforms
+* improved audit visibility
+
+---
+

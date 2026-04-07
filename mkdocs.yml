@@ -208,15 +208,18 @@ nav:
           - Storage: reference/kubernetes-storage.md
       - UI Display Icons: reference/display-icons.md
 
-  - Resources:
-      - Overview: resources/index.md
-      - DSXA Desktop and SDK: developer/dsxa-desktop-and-sdk.md
+  - Development:
+      - Overview: developer/index.md
       - Build and Release Workflow: developer/build-and-release-workflow.md
+      - DSXA Desktop and SDK: developer/dsxa-desktop-and-sdk.md
       - DSXA SDK:
           - Overview: developer/dsxa-sdk.md
           - Python Calls: developer/sdk/python.md
           - Swift Calls: developer/sdk/swift.md
           - JavaScript Calls: developer/sdk/javascript.md
+
+  - Resources:
+      - Overview: resources/index.md
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
       - GitHub: https://github.com/deep-instinct/dsx-connect

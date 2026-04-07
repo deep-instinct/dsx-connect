@@ -13,7 +13,7 @@ services:
         target: /app/data
       # Mount a Google service account JSON and point GOOGLE_APPLICATION_CREDENTIALS to it
       - type: bind
-        source: ./gcp-sa.json
+        source: ${GCS_SA_JSON_PATH:-./gcp-sa.json}
         target: /app/creds/gcp-sa.json
         read_only: true
         bind:

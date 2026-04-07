@@ -89,6 +89,7 @@ Characteristics:
 - uses local chart directories for Helm deploys
 - uses repo-local `docker-compose-*.yaml` files for Compose deploys
 - uses local `:latest` image tags for Compose deploys
+- loads Compose-specific env from `~/.dsx-connect-local/*-compose/.env.local`
 - optimized for "does this work on my machine?"
 
 For local development, rebuilding should not require a version bump. Local build tasks should behave like development tasks, not official release tasks.
@@ -202,6 +203,10 @@ The local compose tasks:
 - use local `:latest` tags produced by `inv build-all-local`
 - layer the core compose file together with selected connector compose files
 - optionally add the bundled DSXA compose file
+- read settings from mode-specific local env roots such as:
+  - `~/.dsx-connect-local/dsx-connect-compose/.env.local`
+  - `~/.dsx-connect-local/aws-s3-connector-compose/.env.local`
+  - `~/.dsx-connect-local/filesystem-connector-compose/.env.local`
 
 This keeps the local Compose workflow parallel to the local Helm workflow:
 

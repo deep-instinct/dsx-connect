@@ -7,6 +7,9 @@
   "main": "./src/index.cjs",
   "module": "./src/index.js",
   "types": "./src/index.d.ts",
+  "bin": {
+    "dsxa-node": "./src/cli.mjs"
+  },
   "exports": {
     ".": {
       "types": "./src/index.d.ts",

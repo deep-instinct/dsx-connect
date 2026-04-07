@@ -14,9 +14,73 @@ Source: `dsxa_sdk_js/`
 - `@deep-instinct/dsxa-sdk-js`
   - `DSXAClient`
   - `DSXAHttpError`
+  - `ScanResponse`
+  - `ScanByPathResponse`
+  - `HashScanResponse`
+  - `VerdictDetails`
+  - `FileInfo`
 - `@deep-instinct/dsxa-sdk-js/node`
   - `scanFilePath(client, filePath, opts?)`
   - `scanFolder(client, folder, { concurrency, perFile }?)`
+
+## Local install without publishing
+
+The simplest local install is:
+
+```bash
+npm install ./dsxa_sdk_js
+```
+
+That is the easiest equivalent to "install this package from source locally" without publishing it to npm.
+
+For local CLI usage, prefer:
+
+```bash
+npm install ./dsxa_sdk_js
+npx dsxa-node --help
+```
+
+For editable-style development:
+
+```bash
+cd dsxa_sdk_js
+npm link
+dsxa-node --help
+```
+
+If you specifically want a global install:
+
+```bash
+npm install -g ./dsxa_sdk_js
+```
+
+Depending on your npm configuration, global install may require a user-owned npm prefix instead of the default `/usr/local` path.
+
+## CLI
+
+The JavaScript package also provides a Node CLI:
+
+Primary uses:
+
+- baseline DSXA throughput and compare concurrency settings
+- scan individual files or folders from the command line
+- serve as runnable example code for SDK users
+
+```bash
+npx dsxa-node scan-file /tmp/file.pdf
+npx dsxa-node scan-folder /tmp/samples --concurrency 4
+```
+
+If installed globally:
+
+```bash
+npm install -g @deep-instinct/dsxa-sdk-js
+dsxa-node scan-file /tmp/file.pdf
+```
+
+The command name is `dsxa-node`, intentionally distinct from the Python CLI name `dsxa`.
+
+For folder scans, the CLI prints `Concurrency: <N>` in the final summary so the effective concurrency is explicit in benchmark output. The default concurrency is `4`.
 
 ## Core calls
 
@@ -39,6 +103,15 @@ await scanFilePath(client, "/tmp/a.pdf", { customMetadata: "source=node" });
 await scanFolder(client, "/tmp/samples", { concurrency: 4 });
 ```
 
+Runnable Node examples in this repo:
+
+- `dsxa_sdk_js/examples/node-scan-file.mjs`
+- `dsxa_sdk_js/examples/node-scan-folder.mjs`
+- `dsxa_sdk_js/examples/node-scan-folder-verbose.mjs`
+- `dsxa_sdk_js/examples/node-scan-hash.mjs`
+- `dsxa_sdk_js/examples/node-scan-stream.mjs`
+- `dsxa_sdk_js/examples/node-scan-base64.mjs`
+
 ## Browser usage
 
 ```html
@@ -52,7 +125,22 @@ await scanFolder(client, "/tmp/samples", { concurrency: 4 });
 </script>
 ```
 
+Runnable browser examples in this repo:
+
+- `dsxa_sdk_js/examples/browser-scan-file.html`
+- `dsxa_sdk_js/examples/browser-scan-folder.html`
+
+Browser folder scanning example pattern:
+
+```html
+<input id="folder" type="file" webkitdirectory multiple />
+```
+
+Then scan each selected `File` with `client.scanFile(file, ...)`.
+
 ## Notes
 
 - Folder scanning in a plain browser is constrained by browser file APIs.
 - Native wrappers (Swift/Electron/Tauri/pywebview) can expose folder pickers and still call this SDK.
+- The browser examples use `type="module"` and import from `../src/index.js` for local repo usage.
+- Client methods return modeled result objects by default, not just raw parsed JSON.

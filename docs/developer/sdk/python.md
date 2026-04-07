@@ -149,3 +149,5 @@ async def scan_many(paths: list[Path], concurrency: int = 8):
 
 - There is no single SDK \"batch endpoint\" call; batching is done by running many scan calls concurrently.
 - Reuse a single client instance per run to benefit from connection pooling.
+- The Python CLI is useful for three things: baselining DSXA throughput, scanning files/folders from the command line, and serving as runnable example code for SDK users.
+- The Python CLI `scan-files` and `scan-folder` commands default to concurrency `4` and print `Concurrency: <N>` in the final summary output.

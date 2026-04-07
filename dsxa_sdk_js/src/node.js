@@ -18,7 +18,7 @@ async function walk(dir, out) {
   }
 }
 
-export async function scanFolder(client, folder, { concurrency = 4, perFile = {} } = {}) {
+export async function scanFolder(client, folder, { concurrency = 4, perFile = {}, onResult = null } = {}) {
   const files = [];
   await walk(folder, files);
   const results = [];
@@ -31,8 +31,10 @@ export async function scanFolder(client, folder, { concurrency = 4, perFile = {}
       try {
         const res = await scanFilePath(client, file, perFile);
         results[idx] = { file, status: "ok", result: res };
+        if (typeof onResult === "function") onResult(results[idx]);
       } catch (error) {
         results[idx] = { file, status: "failed", error: error?.message || String(error) };
+        if (typeof onResult === "function") onResult(results[idx]);
       }
     }
   }

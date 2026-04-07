@@ -27,7 +27,13 @@ from . import config_store
 load_dotenv()
 
 app = typer.Typer(
-    help="Command-line interface for DSX Application Scanner REST APIs.",
+    help=(
+        "Command-line interface for DSX Application Scanner REST APIs.\n\n"
+        "Primary uses:\n"
+        "1. Baseline DSXA throughput and compare concurrency settings.\n"
+        "2. Scan individual files or folders from the command line.\n"
+        "3. Serve as runnable example code for SDK users."
+    ),
     no_args_is_help=True,
 )
 context_app = typer.Typer(help="Manage DSXA CLI contexts stored in ~/.dsxa/config.json.")
@@ -315,7 +321,12 @@ def scan_files(
     mode: ScanMode = typer.Option(ScanMode.BINARY, "--mode", case_sensitive=False),
     custom_metadata: Optional[str] = typer.Option(None, "--metadata"),
     password: Optional[str] = typer.Option(None, "--password"),
-    concurrency: int = typer.Option(5, "--concurrency", min=1),
+    concurrency: int = typer.Option(
+        4,
+        "--concurrency",
+        min=1,
+        help="Maximum concurrent scans. Effective value is echoed in the final summary. (default: 4).",
+    ),
 ):
     """
     Scan one or more explicit file paths concurrently using the async client.
@@ -349,7 +360,12 @@ def scan_folder(
     mode: ScanMode = typer.Option(ScanMode.BINARY, "--mode", case_sensitive=False),
     custom_metadata: Optional[str] = typer.Option(None, "--metadata"),
     password: Optional[str] = typer.Option(None, "--password"),
-    concurrency: int = typer.Option(5, "--concurrency", min=1),
+    concurrency: int = typer.Option(
+        4,
+        "--concurrency",
+        min=1,
+        help="Maximum concurrent scans. Effective value is echoed in the final summary. (default: 4).",
+    ),
 ):
     """
     Scan all files under a folder (matching the given glob pattern) using the async client.
@@ -421,9 +437,11 @@ async def _scan_paths(
     await asyncio.gather(*(process(p) for p in paths))
     await client.aclose()
     elapsed = time.perf_counter() - start
+    files_per_second = (len(paths) / elapsed) if elapsed > 0 else 0.0
+    typer.echo(f"Concurrency: {concurrency}")
     typer.echo(
         f"Processed {len(paths)} file(s) in {elapsed:.2f}s "
-        f"(scanned={success}, errors={failures})"
+        f"({files_per_second:.2f} files/s, scanned={success}, errors={failures})"
     )
 
 @context_app.command("list")

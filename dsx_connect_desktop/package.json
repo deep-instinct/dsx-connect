@@ -37,6 +37,70 @@
       "preload.js",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "../connectors",
+        "to": "connectors",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.pytest_cache/**",
+          "!**/tests/**",
+          "!**/.dev.env"
+        ]
+      },
+      {
+        "from": "../dsx_connect",
+        "to": "dsx_connect",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.pytest_cache/**"
+        ]
+      },
+      {
+        "from": "../shared",
+        "to": "shared",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.pytest_cache/**",
+          "!**/tests/**"
+        ]
+      },
+      {
+        "from": "../dsx_connect_sdk",
+        "to": "dsx_connect_sdk",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.pytest_cache/**"
+        ]
+      },
+      {
+        "from": "../dsxa_sdk_py",
+        "to": "dsxa_sdk_py",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc",
+          "!**/.pytest_cache/**",
+          "!**/tests/**"
+        ]
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../NOTICE.md",
+        "to": "NOTICE.md"
+      }
+    ],
     "mac": {
       "icon": "build/icons/dsx-connect-desktop.icns",
       "target": [

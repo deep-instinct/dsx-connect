@@ -935,6 +935,33 @@ def compose_up_local(
 
 
 @task(help={
+    "extra": "Extra raw args appended to the docker compose up command.",
+})
+def compose_dsxa_up(
+        c,
+        extra: str = "",
+        dry_run: bool = False,
+):
+    """
+    Start only the bundled DSXA Docker Compose stack using the dsx-connect-compose env file.
+    """
+    network_cmd = "docker network inspect dsx-connect-network >/dev/null 2>&1 || docker network create dsx-connect-network"
+    code = _run(c, network_cmd, dry_run=dry_run)
+    if code != 0:
+        raise Exit(code)
+
+    compose_file = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
+    env = _load_env_file(_compose_state_dir("dsx-connect") / ".env.local")
+
+    cmd = f"docker compose -f {compose_file} up -d"
+    if extra:
+        cmd += f" {extra.strip()}"
+    code = _run(c, cmd, dry_run=dry_run, env=env)
+    if code != 0:
+        raise Exit(code)
+
+
+@task(help={
     "include_dsxa": "Also stop the bundled DSXA compose stack.",
     "extra": "Extra raw args appended to the docker compose down command.",
     "only": "Connectors to stop, comma-separated with no spaces: aws_s3,azure_blob_storage,filesystem,google_cloud_storage,sharepoint,m365_mail,onedrive.",
@@ -975,6 +1002,28 @@ def compose_down_local(
 
     compose_flags = " ".join([f"-f {path}" for path in compose_files])
     cmd = f"docker compose {compose_flags} down"
+    if extra:
+        cmd += f" {extra.strip()}"
+    code = _run(c, cmd, dry_run=dry_run, env=env)
+    if code != 0:
+        raise Exit(code)
+
+
+@task(help={
+    "extra": "Extra raw args appended to the docker compose down command.",
+})
+def compose_dsxa_down(
+        c,
+        extra: str = "",
+        dry_run: bool = False,
+):
+    """
+    Stop only the bundled DSXA Docker Compose stack.
+    """
+    compose_file = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
+    env = _load_env_file(_compose_state_dir("dsx-connect") / ".env.local")
+
+    cmd = f"docker compose -f {compose_file} down"
     if extra:
         cmd += f" {extra.strip()}"
     code = _run(c, cmd, dry_run=dry_run, env=env)

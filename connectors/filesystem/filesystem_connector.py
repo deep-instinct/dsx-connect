@@ -578,10 +578,60 @@ async def config_update_handler(payload: dict):
             pass
         changed = True
 
+    if "monitor" in payload:
+        config.monitor = bool(payload.get("monitor"))
+        try:
+            connector.connector_running_model.monitor = config.monitor
+        except Exception:
+            pass
+        changed = True
+
+    if "monitor_force_polling" in payload:
+        config.monitor_force_polling = bool(payload.get("monitor_force_polling"))
+        try:
+            connector.connector_running_model.monitor_force_polling = config.monitor_force_polling
+        except Exception:
+            pass
+        changed = True
+
+    if "monitor_poll_interval_ms" in payload:
+        poll_raw = str(payload.get("monitor_poll_interval_ms", "")).strip()
+        try:
+            poll_interval_ms = int(poll_raw)
+            if poll_interval_ms < 1:
+                raise ValueError
+            config.monitor_poll_interval_ms = poll_interval_ms
+            try:
+                connector.connector_running_model.monitor_poll_interval_ms = poll_interval_ms
+            except Exception:
+                pass
+            changed = True
+        except Exception:
+            return {
+                "error": "invalid_monitor_poll_interval_ms",
+                "supported": [
+                    "asset",
+                    "filter",
+                    "item_action",
+                    "item_action_move_metainfo",
+                    "monitor",
+                    "monitor_force_polling",
+                    "monitor_poll_interval_ms",
+                ],
+            }
+
     if not changed:
         return {
             "error": "no_supported_fields",
-            "supported": ["asset", "filter", "item_action", "item_action_move_metainfo"],
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "monitor",
+                "monitor_force_polling",
+                "monitor_poll_interval_ms",
+            ],
         }
 
     # Keep singleton in sync for components that call ConfigManager.get_config()
@@ -601,6 +651,9 @@ async def config_update_handler(payload: dict):
             "DSXCONNECTOR_FILTER": str(config.filter or ""),
             "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
             "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_MONITOR": "true" if bool(getattr(config, "monitor", False)) else "false",
+            "DSXCONNECTOR_MONITOR_FORCE_POLLING": "true" if bool(getattr(config, "monitor_force_polling", False)) else "false",
+            "DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS": str(int(getattr(config, "monitor_poll_interval_ms", 1000) or 1000)),
         })
     except Exception as e:
         persisted = False
@@ -615,6 +668,9 @@ async def config_update_handler(payload: dict):
         "resolved_asset_base": str(config.asset),
         "asset_display_name": config.asset_display_name or str(config.asset),
         "filter": config.filter,
+        "monitor": bool(getattr(config, "monitor", False)),
+        "monitor_force_polling": bool(getattr(config, "monitor_force_polling", False)),
+        "monitor_poll_interval_ms": int(getattr(config, "monitor_poll_interval_ms", 1000)),
         "persistence": {
             "applied": persisted,
             "detail": persist_detail,
@@ -622,13 +678,24 @@ async def config_update_handler(payload: dict):
         "note": f"monitor may need restart if asset path changed; {persistence_message}",
     }
 
-# @connector.config
-# async def config_handler(connector_running_config: ConnectorInstanceModel):
-#     # override the connector_running_config with any specific configuration details you want to add
-#     if config.asset_display_name:
-#         dsx_logging.info(f"Setting asset to asset display name {config.asset_display_name}")
-#         connector_running_config.asset = config.asset_display_name
-#     return connector_running_config
+@connector.config
+async def config_handler(connector_running_config: ConnectorInstanceModel):
+    try:
+        payload = connector_running_config.model_dump()
+    except Exception:
+        from fastapi.encoders import jsonable_encoder
+        payload = jsonable_encoder(connector_running_config)
+
+    payload.update({
+        "asset": config.asset_display_name or str(config.asset),
+        "resolved_asset_base": str(config.asset),
+        "asset_display_name": config.asset_display_name or str(config.asset),
+        "filter": str(config.filter or ""),
+        "monitor": bool(getattr(config, "monitor", False)),
+        "monitor_force_polling": bool(getattr(config, "monitor_force_polling", False)),
+        "monitor_poll_interval_ms": int(getattr(config, "monitor_poll_interval_ms", 1000)),
+    })
+    return payload
 
 
 # Main entry point to start the FastAPI app

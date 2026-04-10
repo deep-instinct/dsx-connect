@@ -5,6 +5,7 @@ import contextlib
 from typing import Any, Optional, Set
 
 import httpx
+from pydantic import SecretStr
 from starlette.responses import StreamingResponse
 
 from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
@@ -17,7 +18,7 @@ from shared.graph.drive import build_drive_item_path, process_drive_delta_items
 from shared.models.connector_models import ConnectorInstanceModel, ItemActionEnum, ScanRequestModel
 from shared.models.status_responses import ItemActionStatusResponse, StatusResponse, StatusResponseEnum
 from shared.log_sanitizer import config_for_log, maybe_mask_identifier
-from connectors.onedrive.config import config
+from connectors.onedrive.config import config, ConfigManager
 from connectors.onedrive.onedrive_client import OneDriveClient
 from connectors.onedrive.version import CONNECTOR_VERSION
 
@@ -301,9 +302,153 @@ async def config_handler(base: ConnectorInstanceModel):
         "asset": config.asset,
         "filter": config.filter,
         "resolved_asset_base": config.resolved_asset_base,
+        "tenant_id": config.tenant_id,
+        "client_id": config.client_id,
+        "client_secret": "**********" if config.client_secret.get_secret_value() else "",
+        "user_id": config.user_id,
+        "webhook_enabled": bool(config.webhook_enabled),
+        "webhook_base_url": str(config.webhook_base_url or ""),
+        "webhook_client_state": "**********" if (config.webhook_client_state and config.webhook_client_state.get_secret_value()) else "",
     }
     payload.update({k: v for k, v in extra.items() if v is not None})
     return payload
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    global client
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        asset_raw = payload.get("asset", "").strip()
+        if asset_raw:
+            config.asset = asset_raw
+            changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                config.item_action = ItemActionEnum(action_raw)
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        changed = True
+
+    if isinstance(payload.get("tenant_id"), str):
+        config.tenant_id = payload.get("tenant_id", "").strip()
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("client_id"), str):
+        config.client_id = payload.get("client_id", "").strip()
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("client_secret"), str):
+        secret = payload.get("client_secret", "")
+        if secret:
+            config.client_secret = SecretStr(secret)
+            changed = True
+            creds_changed = True
+
+    if isinstance(payload.get("user_id"), str):
+        config.user_id = payload.get("user_id", "").strip()
+        changed = True
+        creds_changed = True
+
+    if "webhook_enabled" in payload:
+        raw = payload.get("webhook_enabled")
+        if isinstance(raw, bool):
+            config.webhook_enabled = raw
+            changed = True
+        elif isinstance(raw, str):
+            v = raw.strip().lower()
+            if v in ("true", "1", "yes", "on"):
+                config.webhook_enabled = True
+                changed = True
+            elif v in ("false", "0", "no", "off"):
+                config.webhook_enabled = False
+                changed = True
+
+    if isinstance(payload.get("webhook_base_url"), str):
+        config.webhook_base_url = payload.get("webhook_base_url", "").strip() or None
+        changed = True
+
+    if isinstance(payload.get("webhook_client_state"), str):
+        secret = payload.get("webhook_client_state", "")
+        if secret:
+            config.webhook_client_state = SecretStr(secret)
+            changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "tenant_id",
+                "client_id",
+                "client_secret",
+                "user_id",
+                "webhook_enabled",
+                "webhook_base_url",
+                "webhook_client_state",
+            ],
+        }
+
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    if creds_changed:
+        try:
+            await client.close()
+        except Exception:
+            pass
+        client = OneDriveClient(config)
+
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_ONEDRIVE_TENANT_ID": str(config.tenant_id or ""),
+            "DSXCONNECTOR_ONEDRIVE_CLIENT_ID": str(config.client_id or ""),
+            "DSXCONNECTOR_ONEDRIVE_USER_ID": str(config.user_id or ""),
+            "DSXCONNECTOR_ONEDRIVE_WEBHOOK_ENABLED": "true" if bool(config.webhook_enabled) else "false",
+            "DSXCONNECTOR_ONEDRIVE_WEBHOOK_URL": str(config.webhook_base_url or ""),
+        }
+        if isinstance(payload.get("client_secret"), str) and payload.get("client_secret"):
+            persist_updates["DSXCONNECTOR_ONEDRIVE_CLIENT_SECRET"] = payload.get("client_secret")
+        if isinstance(payload.get("webhook_client_state"), str) and payload.get("webhook_client_state"):
+            persist_updates["DSXCONNECTOR_ONEDRIVE_WEBHOOK_CLIENT_STATE"] = payload.get("webhook_client_state")
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    cfg = await config_handler(connector.connector_running_model)
+    cfg["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return cfg
 
 
 @connector.full_scan

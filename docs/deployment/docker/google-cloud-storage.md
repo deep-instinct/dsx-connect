@@ -101,16 +101,35 @@ Monitoring enables **on-access scanning** when objects are created or modified.
 First, set up notifications for the bucket you want to monitor.
 [Pub/Sub Setup](../../reference/google-cloud-pubsub.md)
 
-Next, set the project_id and subscription obtained from the Pub/Sub setup. 
+Next, configure the Pub/Sub settings from that setup.
+
+Important distinctions:
+
+- `GCS_PUBSUB_PROJECT_ID` is the GCP project ID, for example `se-project-388112`.
+- Do not use the numeric project number here. The project number is only used during the IAM publisher-binding step in the Pub/Sub setup guide.
+- `GCS_PUBSUB_SUBSCRIPTION` is the Pub/Sub subscription name or full subscription path.
+- In the Google Cloud Console, this is the subscription shown on the Subscriptions page. The connector accepts either:
+  - the subscription name you created, for example `dsx-gcs-sub`
+  - the full subscription path for that same subscription, for example `projects/<project-id>/subscriptions/dsx-gcs-sub`
+
+The subscription must be attached to the same topic used by the bucket notification.
 
 | Variable                  | Description                                                                 |
 | ------------------------- | --------------------------------------------------------------------------- |
 | `DSXCONNECTOR_MONITOR`    | Enable monitoring (`true` or `false`).                                      |
-| `GCS_PUBSUB_PROJECT_ID`   | Project containing the Pub/Sub subscription receiving bucket notifications. |
-| `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription that receives bucket event notifications.              |
+| `GCS_PUBSUB_PROJECT_ID`   | GCP project ID that owns the Pub/Sub subscription.                          |
+| `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription name or full path that receives bucket event messages. |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
-Google's client SDK handles the Pub/Sub connection and handling - under the covers, it calls the connector's /webhook/event endpoint.
+The connector consumes Pub/Sub directly using Google's client SDK. It does not use `/webhook/event` when running in native Pub/Sub mode.
+
+Example:
+
+```env
+DSXCONNECTOR_MONITOR=true
+GCS_PUBSUB_PROJECT_ID=se-project-388112
+GCS_PUBSUB_SUBSCRIPTION=projects/se-project-388112/subscriptions/dsx-gcs-sub
+```
 
 ---
 
@@ -134,6 +153,4 @@ compliance/runtime constraints around Pub/Sub.
 For external callbacks into the connector, expose or tunnel the host port mapped to `8630` (compose default). 
 Upstream systems should hit that public address. Internally, set `DSXCONNECTOR_CONNECTOR_URL` to the Docker-service URL 
 (e.g., `http://google-cloud-storage-connector:8630`) so dsx-connect can reach the container.
-
-
 

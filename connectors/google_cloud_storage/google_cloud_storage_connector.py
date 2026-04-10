@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 
 from starlette.responses import StreamingResponse
@@ -315,6 +316,28 @@ async def preview_provider(limit: int) -> list[str]:
         pass
     return items
 
+
+@connector.config
+async def config_handler(base: ConnectorInstanceModel):
+    try:
+        payload = base.model_dump()
+    except Exception:
+        from fastapi.encoders import jsonable_encoder
+        payload = jsonable_encoder(base)
+
+    extra = {
+        "asset": config.asset,
+        "filter": config.filter,
+        "resolved_asset_base": config.asset,
+        "monitor": bool(getattr(config, "monitor", False)),
+        "google_application_credentials": str(getattr(config, "google_application_credentials", "") or ""),
+        "pubsub_project_id": str(getattr(config, "pubsub_project_id", "") or ""),
+        "pubsub_subscription": str(getattr(config, "pubsub_subscription", "") or ""),
+        "pubsub_endpoint": str(getattr(config, "pubsub_endpoint", "") or ""),
+    }
+    payload.update({k: v for k, v in extra.items() if v is not None})
+    return payload
+
 @connector.item_action
 async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> StatusResponse:
     """
@@ -348,6 +371,141 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
         gcs_client.tag_object(config.asset_bucket, file_path, {"Verdict": "Malicious"})
         return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=ItemActionEnum.TAG, message="File tagged.", description=f"File tagged at {config.asset}: {file_path}")
     return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=config.item_action, message="Item action did nothing or not implemented")
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    global gcs_client
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        asset_raw = payload.get("asset", "").strip()
+        if asset_raw:
+            config.asset = asset_raw
+            changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                config.item_action = ItemActionEnum(action_raw)
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        changed = True
+
+    gcs_updates: dict[str, str] = {}
+    if payload.get("monitor") is not None:
+        if isinstance(payload.get("monitor"), str):
+            config.monitor = payload.get("monitor", "").strip().lower() == "true"
+            changed = True
+        elif isinstance(payload.get("monitor"), bool):
+            config.monitor = bool(payload.get("monitor"))
+            changed = True
+
+    if isinstance(payload.get("google_application_credentials"), str):
+        val = payload.get("google_application_credentials", "").strip()
+        config.google_application_credentials = val or None
+        gcs_updates["GOOGLE_APPLICATION_CREDENTIALS"] = val
+        changed = True
+        creds_changed = True
+
+    for key in ("pubsub_project_id", "pubsub_subscription", "pubsub_endpoint"):
+        if isinstance(payload.get(key), str):
+            setattr(config, key, payload.get(key, "").strip())
+            changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "monitor",
+                "google_application_credentials",
+                "pubsub_project_id",
+                "pubsub_subscription",
+                "pubsub_endpoint",
+            ],
+        }
+
+    try:
+        raw_asset = (config.asset or "").strip()
+        if "/" in raw_asset:
+            bucket, prefix = raw_asset.split("/", 1)
+            config.asset_bucket = bucket.strip()
+            config.asset_prefix_root = prefix.strip("/")
+        else:
+            config.asset_bucket = raw_asset
+            config.asset_prefix_root = ""
+    except Exception:
+        config.asset_bucket = config.asset
+        config.asset_prefix_root = ""
+
+    try:
+        connector.connector_running_model.asset = config.asset
+        connector.connector_running_model.filter = config.filter
+        connector.connector_running_model.item_action = config.item_action
+        connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+        prefix_disp = f"/{config.asset_prefix_root}" if getattr(config, "asset_prefix_root", "") else ""
+        connector.connector_running_model.meta_info = f"GCS Bucket: {config.asset_bucket}{prefix_disp}, filter: {config.filter or '(none)'}"
+    except Exception:
+        pass
+
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.asset or ""),
+            "DSXCONNECTOR_FILTER": str(config.filter or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_MONITOR": "true" if bool(getattr(config, "monitor", False)) else "false",
+            "DSXCONNECTOR_PUBSUB_PROJECT_ID": str(config.pubsub_project_id or ""),
+            "DSXCONNECTOR_PUBSUB_SUBSCRIPTION": str(config.pubsub_subscription or ""),
+            "DSXCONNECTOR_PUBSUB_ENDPOINT": str(config.pubsub_endpoint or ""),
+        }
+        persist_updates.update(gcs_updates)
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    if "GOOGLE_APPLICATION_CREDENTIALS" in gcs_updates:
+        cred_path = gcs_updates["GOOGLE_APPLICATION_CREDENTIALS"]
+        if cred_path:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cred_path
+        else:
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+
+    if creds_changed:
+        try:
+            gcs_client = GCSClient()
+        except Exception:
+            pass
+
+    out = await config_handler(connector.connector_running_model)
+    out["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return out
 
 
 

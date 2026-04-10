@@ -3,6 +3,7 @@ import io, hashlib, pathlib, os
 from shared import file_ops
 from shared.file_ops import relpath_matches_filter, compute_prefix_hints
 from shared.dsx_logging import dsx_logging
+from connectors.google_cloud_storage.config import config
 
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
 
@@ -16,6 +17,9 @@ class GCSClient:
     def _get_client(self):
         if self._client is None:
             try:
+                creds_path = str(getattr(config, "google_application_credentials", "") or "").strip()
+                if creds_path:
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = creds_path
                 from google.cloud import storage  # local import to avoid hard dependency at import time
                 self._client = storage.Client()
             except Exception as e:

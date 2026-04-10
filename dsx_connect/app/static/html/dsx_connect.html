@@ -289,15 +289,17 @@
             outline: 1px solid var(--accent-color);
             outline-offset: -1px;
         }
-        .cfg-edit-badge {
-            display: inline-block;
+        .cfg-edit-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
             margin-left: 8px;
-            padding: 1px 6px;
-            border-radius: 999px;
-            border: 1px solid var(--accent-color);
             color: var(--accent-color);
-            font-size: 0.68rem;
-            font-family: var(--font-sans);
+            opacity: 0.85;
+            font-size: 0.78rem;
+            vertical-align: middle;
         }
         .cfg-inline-editor {
             width: 100%;
@@ -309,6 +311,94 @@
             border-radius: 4px;
             background: var(--bg-primary);
             color: var(--text-primary);
+        }
+        .cfg-inline-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            vertical-align: middle;
+        }
+        .cfg-toggle-input {
+            position: absolute;
+            opacity: 0;
+            width: 1px;
+            height: 1px;
+            pointer-events: none;
+        }
+        .cfg-toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 22px;
+            border-radius: 999px;
+            background: #cbd5e1;
+            box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+            transition: background-color 0.18s ease, box-shadow 0.18s ease;
+            flex: 0 0 auto;
+        }
+        .cfg-toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+            transition: transform 0.18s ease;
+        }
+        .cfg-toggle-input:checked + .cfg-toggle-switch {
+            background: var(--accent-color);
+        }
+        .cfg-toggle-input:checked + .cfg-toggle-switch::after {
+            transform: translateX(16px);
+        }
+        .cfg-toggle-input:focus-visible + .cfg-toggle-switch {
+            outline: 2px solid rgba(59, 130, 246, 0.35);
+            outline-offset: 2px;
+        }
+        .cfg-toggle-label {
+            font-family: var(--font-mono);
+            font-size: 0.82rem;
+        }
+        html[data-theme="dark"] .cfg-toggle-switch {
+            background: #475569;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.18);
+        }
+        .cfg-save-btn {
+            background: #16a34a;
+            color: #ffffff;
+            border: 1px solid #15803d;
+            border-radius: 6px;
+            padding: 0.48rem 0.9rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+        }
+        .cfg-save-btn:hover:not(:disabled) {
+            background: #15803d;
+            border-color: #166534;
+        }
+        .cfg-save-btn:disabled {
+            background: #9ca3af;
+            border-color: #9ca3af;
+            color: #f9fafb;
+            cursor: not-allowed;
+            opacity: 0.8;
+        }
+        .cfg-sticky-actions {
+            position: sticky;
+            top: -1.25rem;
+            z-index: 5;
+            margin: -1.25rem -1.25rem 12px -1.25rem;
+            padding: 0.9rem 1.25rem 0.85rem 1.25rem;
+            background: var(--modal-content-bg);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 6px 14px rgba(15, 23, 42, 0.08);
+        }
+        html[data-theme="dark"] .cfg-sticky-actions {
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
         }
         .arch-preview-panel {
             margin-top: 1rem;
@@ -1060,6 +1150,24 @@
               <path d="M19.867 7.282l-4.733 9.533 8.333 9.66L8 28.23l24 .25zm-.934-3.762L8.067 12.613 0 26.223l6.867-.7z"/>
             </svg>`;
         if (lower.startsWith('aws')) return '<i class="fab fa-aws connector-icon" aria-label="Amazon Web Services" style="color: #FF9900;"></i>';
+        if (lower.includes('onedrive')) return `
+            <svg class="connector-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="OneDrive">
+                <defs>
+                    <linearGradient id="onedriveGradient" x1="4" x2="44" y1="24" y2="24">
+                        <stop offset="0" stop-color="#1570d9"></stop>
+                        <stop offset="1" stop-color="#1b4bb8"></stop>
+                    </linearGradient>
+                </defs>
+                <path fill="url(#onedriveGradient)" d="M17.2 20.3a12.4 12.4 0 0 1 22.5 4.3A9.8 9.8 0 0 1 44 43H16.7A12.7 12.7 0 0 1 17.2 20.3Z"></path>
+                <path fill="#2d8cff" d="M13.6 21.5a8.9 8.9 0 0 1 14.3-5.3A12.3 12.3 0 0 0 17.4 41H6.3a8.3 8.3 0 0 1 7.3-19.5Z"></path>
+            </svg>`;
+        if (lower.includes('m365-mail') || lower.includes('m365 mail') || lower.includes('outlook') || lower.includes('mail')) return `
+            <svg class="connector-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="M365 Mail">
+                <path fill="#0a5bd3" d="M18 8h21a3 3 0 0 1 3 3v26a3 3 0 0 1-3 3H18z"></path>
+                <path fill="#1877f2" d="M7 12.5 18 9v30L7 35.5a3 3 0 0 1-2-2.87V15.37A3 3 0 0 1 7 12.5Z"></path>
+                <path fill="#fff" d="M22 16h16a2 2 0 0 1 1.2 3.6l-8.12 6.1a2 2 0 0 1-2.4 0l-8.12-6.1A2 2 0 0 1 22 16Z" opacity="0.96"></path>
+                <path fill="#cfe4ff" d="m21 20 8.9 6.68a2 2 0 0 0 2.4 0L41 20v14a2 2 0 0 1-2 2H23a2 2 0 0 1-2-2z"></path>
+            </svg>`;
         // SharePoint icon (teal overlapping nodes)
         if (lower.includes('sharepoint')) return `
             <svg class="connector-icon" viewBox="0 0 24 24" preserveAspectRatio="xMidYMid meet" role="img" aria-label="SharePoint">
@@ -1067,6 +1175,7 @@
                 <circle cx="16" cy="8" r="5" fill="#0F9D90" opacity="0.9"></circle>
                 <circle cx="17" cy="16" r="5" fill="#0AA1A7" opacity="0.85"></circle>
             </svg>`;
+        if (lower.includes('salesforce')) return '<i class="fab fa-salesforce connector-icon" aria-label="Salesforce" style="color: #00A1E0;"></i>';
         if (lower.startsWith('filesystem')) return '<i class="fas fa-folder connector-icon" aria-label="Filesystem" style="color: #DAA520;"></i>';
         return '';
     }
@@ -1910,12 +2019,10 @@
 
 function invokeFullScanByUuid(connectorUuid, scanUrl, connectorName) {
         let effectiveScanUrl = scanUrl;
-        if (connectorName === 'filesystem-connector') {
-            const url = new URL(scanUrl, window.location.origin);
-            if (!url.searchParams.has('batch')) url.searchParams.set('batch', 'true');
-            if (!url.searchParams.has('batch_size')) url.searchParams.set('batch_size', '100');
-            effectiveScanUrl = url.pathname + url.search;
-        }
+        const url = new URL(scanUrl, window.location.origin);
+        if (!url.searchParams.has('batch')) url.searchParams.set('batch', 'true');
+        if (!url.searchParams.has('batch_size')) url.searchParams.set('batch_size', '100');
+        effectiveScanUrl = url.pathname + url.search;
 
         showNotification(`Starting full scan for ${connectorName}...`, 'info');
 
@@ -2546,6 +2653,39 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         if (Object.prototype.hasOwnProperty.call(payload, 'sp_client_secret')) {
             payload.sp_client_secret = String(payload.sp_client_secret || '');
         }
+        if (Object.prototype.hasOwnProperty.call(payload, 'tenant_id')) {
+            payload.tenant_id = String(payload.tenant_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'client_id')) {
+            payload.client_id = String(payload.client_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'client_secret')) {
+            payload.client_secret = String(payload.client_secret || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'user_id')) {
+            payload.user_id = String(payload.user_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'mailbox_upns')) {
+            payload.mailbox_upns = String(payload.mailbox_upns || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'backfill_days')) {
+            const parsed = Number.parseInt(String(payload.backfill_days ?? '').trim(), 10);
+            payload.backfill_days = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'webhook_enabled')) {
+            if (typeof payload.webhook_enabled === 'string') {
+                payload.webhook_enabled = payload.webhook_enabled.trim().toLowerCase() === 'true';
+            } else {
+                payload.webhook_enabled = !!payload.webhook_enabled;
+            }
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'monitor')) {
+            if (typeof payload.monitor === 'string') {
+                payload.monitor = payload.monitor.trim().toLowerCase() === 'true';
+            } else {
+                payload.monitor = !!payload.monitor;
+            }
+        }
         if (Object.prototype.hasOwnProperty.call(payload, 'sp_webhook_enabled')) {
             if (typeof payload.sp_webhook_enabled === 'string') {
                 payload.sp_webhook_enabled = payload.sp_webhook_enabled.trim().toLowerCase() === 'true';
@@ -2555,6 +2695,24 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         }
         if (Object.prototype.hasOwnProperty.call(payload, 'webhook_base_url')) {
             payload.webhook_base_url = String(payload.webhook_base_url || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'client_state')) {
+            payload.client_state = String(payload.client_state || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'webhook_client_state')) {
+            payload.webhook_client_state = String(payload.webhook_client_state || '');
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'google_application_credentials')) {
+            payload.google_application_credentials = String(payload.google_application_credentials || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'pubsub_project_id')) {
+            payload.pubsub_project_id = String(payload.pubsub_project_id || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'pubsub_subscription')) {
+            payload.pubsub_subscription = String(payload.pubsub_subscription || '').trim();
+        }
+        if (Object.prototype.hasOwnProperty.call(payload, 'pubsub_endpoint')) {
+            payload.pubsub_endpoint = String(payload.pubsub_endpoint || '').trim();
         }
 
         const res = await fetch(r.connectors.configUpdate(uuid), {
@@ -3302,6 +3460,40 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             .replaceAll("'", '&#39;');
     }
 
+    function openExternalLink(url) {
+        const target = String(url || '').trim();
+        if (!target) return false;
+        try {
+            if (window.dsxDesktop && typeof window.dsxDesktop.openExternal === 'function') {
+                window.dsxDesktop.openExternal(target);
+                return false;
+            }
+        } catch (e) {
+            console.warn('openExternal bridge failed:', e);
+        }
+        window.open(target, '_blank', 'noopener');
+        return false;
+    }
+
+    let pendingConfigRestart = null;
+
+    async function closeConfigModal() {
+        const modal = document.getElementById('configModal');
+        if (modal) modal.style.display = 'none';
+        const pending = pendingConfigRestart;
+        pendingConfigRestart = null;
+        if (!pending || !pending.uuid) return;
+        try {
+            if (window.dsxDesktop && typeof window.dsxDesktop.restartConnector === 'function') {
+                showNotification(`Restarting ${pending.name || 'connector'} to apply monitoring changes`, 'info');
+                await window.dsxDesktop.restartConnector(pending.uuid);
+                showNotification(`${pending.name || 'Connector'} restarted`, 'success');
+            }
+        } catch (e) {
+            showNotification(`Failed to restart connector: ${e?.message || e}`, 'error');
+        }
+    }
+
     function normalizeItemActionFromApi(v) {
         const raw = String(v ?? 'nothing').trim().toLowerCase();
         if (raw === 'movetag') return 'move_tag';
@@ -3392,6 +3584,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const appMode = String(currentAppEnv || '').trim().toLowerCase() === 'app';
             const maskedSecret = String(config.sp_client_secret || '').trim() === '**********';
             let spClientSecretPresent = maskedSecret;
+            const onedriveSecretMasked = {
+                client_secret: String(config.client_secret || '').trim() === '**********',
+            };
+            const m365SecretMasked = {
+                client_secret: String(config.client_secret || '').trim() === '**********',
+                client_state: String(config.client_state || '').trim() === '**********',
+            };
             const awsSecretMasked = {
                 aws_access_key_id: String(config.aws_access_key_id || '').trim() === '**********',
                 aws_secret_access_key: String(config.aws_secret_access_key || '').trim() === '**********',
@@ -3399,6 +3598,9 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             };
             const azureSecretMasked = {
                 azure_storage_connection_string: String(config.azure_storage_connection_string || '').trim() === '**********',
+            };
+            const gcsSecretMasked = {
+                google_application_credentials: false,
             };
             const salesforceSecretMasked = {
                 sf_client_secret: String(config.sf_client_secret || '').trim() === '**********',
@@ -3414,13 +3616,28 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 sp_tenant_id: String(config.sp_tenant_id || ''),
                 sp_client_id: String(config.sp_client_id || ''),
                 sp_client_secret: maskedSecret ? '' : String(config.sp_client_secret || ''),
+                tenant_id: String(config.tenant_id || ''),
+                client_id: String(config.client_id || ''),
+                client_secret: (onedriveSecretMasked.client_secret || m365SecretMasked.client_secret) ? '' : String(config.client_secret || ''),
+                user_id: String(config.user_id || ''),
+                mailbox_upns: String(config.mailbox_upns || ''),
+                backfill_days: String(config.backfill_days ?? '0'),
+                webhook_enabled: !!config.webhook_enabled,
+                monitor: !!config.monitor,
+                monitor_force_polling: !!config.monitor_force_polling,
+                monitor_poll_interval_ms: String(config.monitor_poll_interval_ms ?? '1000'),
                 sp_webhook_enabled: !!config.sp_webhook_enabled,
                 webhook_base_url: String(config.webhook_base_url || ''),
+                client_state: m365SecretMasked.client_state ? '' : String(config.client_state || ''),
                 aws_access_key_id: awsSecretMasked.aws_access_key_id ? '' : String(config.aws_access_key_id || ''),
                 aws_secret_access_key: awsSecretMasked.aws_secret_access_key ? '' : String(config.aws_secret_access_key || ''),
                 aws_session_token: awsSecretMasked.aws_session_token ? '' : String(config.aws_session_token || ''),
                 aws_default_region: String(config.aws_default_region || ''),
                 azure_storage_connection_string: azureSecretMasked.azure_storage_connection_string ? '' : String(config.azure_storage_connection_string || ''),
+                google_application_credentials: String(config.google_application_credentials || ''),
+                pubsub_project_id: String(config.pubsub_project_id || ''),
+                pubsub_subscription: String(config.pubsub_subscription || ''),
+                pubsub_endpoint: String(config.pubsub_endpoint || ''),
                 sf_login_url: String(config.sf_login_url || ''),
                 sf_api_version: String(config.sf_api_version || ''),
                 sf_client_id: String(config.sf_client_id || ''),
@@ -3438,11 +3655,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             };
 
             const policyKeys = ['asset', 'filter', 'item_action', 'item_action_move_metainfo'];
+            const m365PolicyKeys = ['backfill_days'];
             const sharepointCredentialKeys = ['sp_tenant_id', 'sp_client_id', 'sp_client_secret'];
+            const onedriveCredentialKeys = ['tenant_id', 'client_id', 'client_secret', 'user_id'];
+            const m365CredentialKeys = ['tenant_id', 'client_id', 'client_secret', 'mailbox_upns'];
             const sharepointMonitoringKeys = ['sp_webhook_enabled', 'webhook_base_url'];
+            const onedriveMonitoringKeys = ['webhook_enabled', 'webhook_base_url'];
+            const m365MonitoringKeys = ['webhook_base_url', 'client_state'];
+            const gcsMonitoringKeys = ['monitor', 'pubsub_project_id', 'pubsub_subscription', 'pubsub_endpoint'];
             const filesystemMonitoringKeys = ['monitor', 'monitor_force_polling', 'monitor_poll_interval_ms'];
             const awsCredentialKeys = ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token', 'aws_default_region'];
             const azureCredentialKeys = ['azure_storage_connection_string'];
+            const gcsCredentialKeys = ['google_application_credentials'];
             const salesforceCredentialKeys = [
                 'sf_login_url',
                 'sf_api_version',
@@ -3460,27 +3684,43 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 'sf_max_records',
             ];
             const isSharepointConnector = String(connectorName || '').toLowerCase().includes('sharepoint') || ('sp_tenant_id' in config);
+            const isOnedriveConnector = String(connectorName || '').toLowerCase().includes('onedrive') || String(config.name || '').toLowerCase().includes('onedrive');
+            const isM365MailConnector = String(connectorName || '').toLowerCase().includes('m365 mail') || String(config.name || '').toLowerCase().includes('m365-mail');
             const isAwsConnector = String(connectorName || '').toLowerCase().includes('aws') || String(config.name || '').toLowerCase().includes('aws-s3');
             const isAzureConnector = String(connectorName || '').toLowerCase().includes('azure') || String(config.name || '').toLowerCase().includes('azure-blob');
+            const isGcsConnector = String(connectorName || '').toLowerCase().includes('google cloud storage') || String(config.name || '').toLowerCase().includes('google-cloud-storage');
             const isSalesforceConnector = String(connectorName || '').toLowerCase().includes('salesforce') || String(config.name || '').toLowerCase().includes('salesforce');
             const isFilesystemConnector = isFilesystemConnectorName(connectorName) || String(config.name || '').toLowerCase().includes('filesystem');
             const hasDesktopBridge = !!(window.dsxDesktop && typeof window.dsxDesktop.pickFolder === 'function');
+            const hasDesktopFilePicker = !!(window.dsxDesktop && typeof window.dsxDesktop.pickFile === 'function');
+            const hasDesktopTunnelHelper = !!(window.dsxDesktop && typeof window.dsxDesktop.startTunnel === 'function');
             const canSelectFilesystemFolder = appMode && isFilesystemConnector && hasDesktopBridge;
             const canSelectQuarantineFolder = canSelectFilesystemFolder;
+            const canSelectGcsCredentialFile = appMode && isGcsConnector && hasDesktopFilePicker;
+            const isWebhookTunnelConnector = isSharepointConnector || isOnedriveConnector || isM365MailConnector;
             const credentialKeys = [
                 ...(isSharepointConnector ? sharepointCredentialKeys : []),
+                ...(isOnedriveConnector ? onedriveCredentialKeys : []),
+                ...(isM365MailConnector ? m365CredentialKeys : []),
                 ...(isAwsConnector ? awsCredentialKeys : []),
                 ...(isAzureConnector ? azureCredentialKeys : []),
+                ...(isGcsConnector ? gcsCredentialKeys : []),
                 ...(isSalesforceConnector ? salesforceCredentialKeys : []),
             ].filter((k) => (k in config) || (k in original));
             const monitoringKeys = [
                 ...(isSharepointConnector ? sharepointMonitoringKeys : []),
+                ...(isOnedriveConnector ? onedriveMonitoringKeys : []),
+                ...(isM365MailConnector ? m365MonitoringKeys : []),
+                ...(isGcsConnector ? gcsMonitoringKeys : []),
                 ...(isFilesystemConnector ? filesystemMonitoringKeys : []),
             ].filter((k) => (k in config) || (k in original));
             const configKeys = policyKeys.filter((k) => (k in config) || (k in original));
-            const editableCandidateKeys = [...new Set([...configKeys, ...credentialKeys, ...monitoringKeys])];
+            const m365PolicySpecificKeys = (isM365MailConnector ? m365PolicyKeys : []).filter((k) => (k in config) || (k in original));
+            const editableCandidateKeys = [...new Set([...configKeys, ...m365PolicySpecificKeys, ...credentialKeys, ...monitoringKeys])];
             const secretKeys = new Set([
                 'sp_client_secret',
+                'client_secret',
+                'client_state',
                 'aws_access_key_id',
                 'aws_secret_access_key',
                 'aws_session_token',
@@ -3505,6 +3745,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 return escHtml(String(v));
             }
 
+            function compactPathDisplay(value) {
+                const raw = String(value || '');
+                if (!raw) return '<span style="color:var(--text-secondary)">not set</span>';
+                if (raw.length <= 64) return escHtml(raw);
+                return `${escHtml(raw.slice(0, 28))}...${escHtml(raw.slice(-24))}`;
+            }
+
+            function displayKeyLabel(key) {
+                if (key === 'pubsub_endpoint') return 'pubsub_endpoint (optional)';
+                return key;
+            }
+
             function editableRowValue(key, v) {
                 if (key === "asset") return original.asset;
                 if (key === "filter") return original.filter;
@@ -3513,13 +3765,28 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 if (key === "sp_tenant_id") return original.sp_tenant_id;
                 if (key === "sp_client_id") return original.sp_client_id;
                 if (key === "sp_client_secret") return maskedSecret ? "**********" : original.sp_client_secret;
+                if (key === "tenant_id") return original.tenant_id;
+                if (key === "client_id") return original.client_id;
+                if (key === "client_secret") return (onedriveSecretMasked.client_secret || m365SecretMasked.client_secret) ? "**********" : original.client_secret;
+                if (key === "user_id") return original.user_id;
+                if (key === "mailbox_upns") return original.mailbox_upns;
+                if (key === "backfill_days") return original.backfill_days;
+                if (key === "webhook_enabled") return original.webhook_enabled ? "true" : "false";
+                if (key === "monitor") return original.monitor ? "true" : "false";
+                if (key === "monitor_force_polling") return original.monitor_force_polling ? "true" : "false";
+                if (key === "monitor_poll_interval_ms") return original.monitor_poll_interval_ms;
                 if (key === "sp_webhook_enabled") return original.sp_webhook_enabled ? "true" : "false";
                 if (key === "webhook_base_url") return original.webhook_base_url;
+                if (key === "client_state") return m365SecretMasked.client_state ? "**********" : original.client_state;
                 if (key === "aws_access_key_id") return awsSecretMasked.aws_access_key_id ? "**********" : original.aws_access_key_id;
                 if (key === "aws_secret_access_key") return awsSecretMasked.aws_secret_access_key ? "**********" : original.aws_secret_access_key;
                 if (key === "aws_session_token") return awsSecretMasked.aws_session_token ? "**********" : original.aws_session_token;
                 if (key === "aws_default_region") return original.aws_default_region;
                 if (key === "azure_storage_connection_string") return azureSecretMasked.azure_storage_connection_string ? "**********" : original.azure_storage_connection_string;
+                if (key === "google_application_credentials") return original.google_application_credentials;
+                if (key === "pubsub_project_id") return original.pubsub_project_id;
+                if (key === "pubsub_subscription") return original.pubsub_subscription;
+                if (key === "pubsub_endpoint") return original.pubsub_endpoint;
                 if (key === "sf_login_url") return original.sf_login_url;
                 if (key === "sf_api_version") return original.sf_api_version;
                 if (key === "sf_client_id") return original.sf_client_id;
@@ -3537,6 +3804,21 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 return v;
             }
 
+            function renderEditableValueCell(k, v, pickerButton, isEditable) {
+                if (!isEditable) {
+                    return `${rowValueHtml(v)}${pickerButton}`;
+                }
+                if (['sp_webhook_enabled', 'webhook_enabled', 'monitor', 'monitor_force_polling'].includes(k)) {
+                    const checked = editableRowValue(k, v) === 'true' ? 'checked' : '';
+                    return `<label class="cfg-inline-toggle"><input type="checkbox" class="cfg-toggle-input" data-key="${k}" ${checked}><span class="cfg-toggle-switch" aria-hidden="true"></span><span class="cfg-row-value cfg-toggle-label" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span></label>${pickerButton}`;
+                }
+                if (k === 'google_application_credentials') {
+                    const fullPath = String(editableRowValue(k, v) || '');
+                    return `<span class="cfg-row-value" data-key="${k}" title="${escHtml(fullPath)}" style="display:inline-block; max-width:420px; overflow:hidden; text-overflow:ellipsis; vertical-align:middle;">${compactPathDisplay(fullPath)}</span>${pickerButton ? `<span style="margin-left:8px;">${pickerButton}</span>` : ''}`;
+                }
+                return `<span class="cfg-row-value" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span><span class="cfg-edit-icon" aria-hidden="true"><i class="fas fa-pen"></i></span>${pickerButton}`;
+            }
+
             function buildRows(keys) {
                 const rows = [];
                 for (const k of keys) {
@@ -3548,11 +3830,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                             ? `<button class="cfg-row-picker" data-picker-key="asset" style="margin-left:8px; font-size:0.75rem;">Select Folder...</button>`
                             : (k === 'item_action_move_metainfo' && canSelectQuarantineFolder)
                                 ? `<button class="cfg-row-picker" data-picker-key="item_action_move_metainfo" style="margin-left:8px; font-size:0.75rem;">Select Quarantine...</button>`
+                                : (k === 'google_application_credentials' && canSelectGcsCredentialFile)
+                                    ? `<button class="cfg-row-picker" data-picker-key="google_application_credentials" style="font-size:0.75rem;">Select JSON...</button>`
                                 : '';
                     rows.push(`
                       <tr class="cfg-row ${isEditable ? 'cfg-row-editable' : ''}" data-edit-key="${isEditable ? k : ''}" style="cursor:${isEditable ? 'pointer' : 'default'};">
-                        <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color: var(--text-secondary);">${k}</td>
-                        <td class="cfg-row-value-cell" style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${isEditable ? `<span class="cfg-row-value" data-key="${k}">${rowValueHtml(editableRowValue(k, v))}</span><span class="cfg-edit-badge">Editable</span>${pickerButton}` : `${rowValueHtml(v)}${pickerButton}`}</td>
+                        <td style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono); color: var(--text-secondary);">${displayKeyLabel(k)}</td>
+                        <td class="cfg-row-value-cell" style="padding:6px 8px; border-bottom:1px solid var(--border-color); font-family: var(--font-mono);">${renderEditableValueCell(k, v, pickerButton, isEditable)}</td>
                       </tr>
                     `);
                 }
@@ -3560,6 +3844,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             }
 
             const policyRows = buildRows(configKeys);
+            const m365PolicyRows = buildRows(m365PolicySpecificKeys);
             const monitoringRows = buildRows(monitoringKeys);
             const credentialRows = buildRows(credentialKeys);
             const runtimeRows = buildRows(runtimeKeys);
@@ -3567,23 +3852,27 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const repoDiagRows = hasRepoDiag ? buildRows(repoDiagKeys) : [];
 
             const actionPanel = `
-                <div style="margin-top: 12px; padding: 0.75rem; border: 1px dashed var(--border-color); border-radius: 6px;">
+                <div class="cfg-sticky-actions">
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap: wrap; margin-bottom: 0.45rem;">
+                    <div style="font-size:0.9rem; font-weight:600; color:var(--text-primary);">Configuration Actions</div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
+                      <button id="btn-save-config" class="cfg-save-btn" ${devMode ? '' : 'disabled'}>Save Configuration</button>
+                      <span id="cfg-save-status" style="font-size:0.8rem; color: var(--text-secondary);"></span>
+                    </div>
+                  </div>
                   <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap; margin-bottom: 0.35rem;">
                     <button id="btn-sample-scan" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Sample Scan 5</button>
                     <button id="btn-preview" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Show Preview 5</button>
                   </div>
-                  <div id="cfg-test-hint" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.6rem;"></div>
-                  <div id="previewList" style="margin-bottom: 0.6rem; font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
-
-                  <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap;">
-                    <button id="btn-save-config" style="font-size:0.8rem;" ${devMode ? '' : 'disabled'}>Save Configuration</button>
-                    <span id="cfg-save-status" style="font-size:0.8rem; color: var(--text-secondary);"></span>
-                  </div>
+                  <div id="cfg-test-hint" style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 0.45rem;"></div>
+                  <div id="previewList" style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary);"></div>
+                  ${isGcsConnector ? '<div id="cfg-restart-note" style="display:none; font-size:0.78rem; color:var(--text-secondary); margin-top:0.45rem;">Changes to monitoring settings require a connector restart. Desktop will restart this connector when you close this popup after saving.</div>' : ''}
                   ${devMode ? '' : '<div style="font-size:0.78rem; color:var(--text-secondary); margin-top:0.45rem;">Config editing is disabled for this connector in the current environment.</div>'}
                 </div>
             `;
 
             const tableView = `
+                ${actionPanel}
                 ${credentialRows.length ? `
                 <div style="margin-top: 12px;">
                   <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Connection</h4>
@@ -3613,9 +3902,31 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     </table>
                   </div>
                 </div>
+                ${m365PolicyRows.length ? `
+                <div style="margin-top: 10px;">
+                  <h4 style="margin:0 0 0.4rem 0; font-size:0.86rem; color:var(--text-secondary);">M365 Mail Specific</h4>
+                  <div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Full Scan Scope: recent mail window in days. Set to <span style="font-family:var(--font-mono);">0</span> to keep delta-only scans.</div>
+                  <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
+                    <table style="width:100%; border-collapse: collapse;">
+                      <thead>
+                        <tr>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Key</th>
+                          <th style="text-align:left; padding:7px 8px; border-bottom:1px solid var(--border-color); font-size:0.8rem; color:var(--text-secondary);">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${m365PolicyRows.join('')}</tbody>
+                    </table>
+                  </div>
+                </div>` : ''}
                 ${monitoringRows.length ? `
                 <div style="margin-top: 10px;">
                   <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Monitoring</h4>
+                  ${isSharepointConnector ? `<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Monitoring enables on-access scanning for new or updated SharePoint content. <a href="https://deep-instinct.github.io/dsx-connect/deployment/docker/sharepoint/#monitoring" target="_blank" rel="noopener noreferrer" onclick="return openExternalLink(this.href)">Setup docs</a></div>` : ''}
+                  ${isOnedriveConnector ? `<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Monitoring uses a Microsoft Graph webhook callback. Make the connector publicly reachable over HTTPS, put that public base URL into <span style="font-family:var(--font-mono);">webhook_base_url</span>, and the connector will register it with Graph.</div>` : ''}
+                  ${isM365MailConnector ? `<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Monitoring uses a Microsoft Graph webhook callback. Make the connector publicly reachable over HTTPS, put that public base URL into <span style="font-family:var(--font-mono);">webhook_base_url</span>, and the connector will register it with Graph.</div>` : ''}
+                  ${isGcsConnector ? `<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Subscription-based monitoring via Pub/Sub. <a href="https://deep-instinct.github.io/dsx-connect/deployment/docker/google-cloud-storage/#google-notification-via-pubsub" target="_blank" rel="noopener noreferrer" onclick="return openExternalLink(this.href)">Setup docs</a></div>` : ''}
+                  ${isFilesystemConnector ? `<div style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:6px;">Filesystem watcher settings. <a href="https://deep-instinct.github.io/dsx-connect/deployment/docker/filesystem/#monitoring" target="_blank" rel="noopener noreferrer" onclick="return openExternalLink(this.href)">Setup docs</a></div>` : ''}
+                  ${isWebhookTunnelConnector && hasDesktopTunnelHelper ? `<div style="display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; margin-bottom:8px;"><button id="btn-start-monitor-tunnel" style="background: transparent; color: var(--accent-color); border: 1px solid var(--accent-color);">Start Tunnel</button><span id="cfg-tunnel-status" style="font-size:0.78rem; color:var(--text-secondary);">Requires <span style="font-family:var(--font-mono);">cloudflared</span> or <span style="font-family:var(--font-mono);">ngrok</span> on PATH. This exposes the local connector on a publicly reachable HTTPS URL and stages that public base URL into <span style="font-family:var(--font-mono);">webhook_base_url</span>.</span></div>` : ''}
                   <div style="border:1px solid var(--border-color); border-radius:6px; overflow:hidden;">
                     <table style="width:100%; border-collapse: collapse;">
                       <thead>
@@ -3629,8 +3940,6 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                   </div>
                 </div>` : ''}
                 <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:6px;">${devMode ? 'Tip: click editable rows in the Configuration section to edit values inline. Changes are staged until you click Save Configuration.' : 'Configuration is read-only in this environment.'}</div>
-
-                ${actionPanel}
 
                 <div style="margin-top: 10px;">
                   <h4 style="margin:0 0 0.4rem 0; font-size:0.9rem; color:var(--text-primary);">Runtime</h4>
@@ -3657,8 +3966,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const statusEl = document.getElementById('cfg-save-status');
             const previewBtn = document.getElementById('btn-preview');
             const sampleBtn = document.getElementById('btn-sample-scan');
+            const startTunnelBtn = document.getElementById('btn-start-monitor-tunnel');
+            const tunnelStatus = document.getElementById('cfg-tunnel-status');
             const previewTarget = document.getElementById('previewList');
             const testHint = document.getElementById('cfg-test-hint');
+            const restartNote = document.getElementById('cfg-restart-note');
             const configDraft = {
                 asset: String(original.asset || ''),
                 filter: String(original.filter || ''),
@@ -3667,13 +3979,28 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 sp_tenant_id: String(original.sp_tenant_id || ''),
                 sp_client_id: String(original.sp_client_id || ''),
                 sp_client_secret: String(original.sp_client_secret || ''),
+                tenant_id: String(original.tenant_id || ''),
+                client_id: String(original.client_id || ''),
+                client_secret: String(original.client_secret || ''),
+                user_id: String(original.user_id || ''),
+                mailbox_upns: String(original.mailbox_upns || ''),
+                backfill_days: String(original.backfill_days || '0'),
+                webhook_enabled: !!original.webhook_enabled,
+                monitor: !!original.monitor,
+                monitor_force_polling: !!original.monitor_force_polling,
+                monitor_poll_interval_ms: String(original.monitor_poll_interval_ms || '1000'),
                 sp_webhook_enabled: !!original.sp_webhook_enabled,
                 webhook_base_url: String(original.webhook_base_url || ''),
+                client_state: String(original.client_state || ''),
                 aws_access_key_id: String(original.aws_access_key_id || ''),
                 aws_secret_access_key: String(original.aws_secret_access_key || ''),
                 aws_session_token: String(original.aws_session_token || ''),
                 aws_default_region: String(original.aws_default_region || ''),
                 azure_storage_connection_string: String(original.azure_storage_connection_string || ''),
+                google_application_credentials: String(original.google_application_credentials || ''),
+                pubsub_project_id: String(original.pubsub_project_id || ''),
+                pubsub_subscription: String(original.pubsub_subscription || ''),
+                pubsub_endpoint: String(original.pubsub_endpoint || ''),
                 sf_login_url: String(original.sf_login_url || ''),
                 sf_api_version: String(original.sf_api_version || ''),
                 sf_client_id: String(original.sf_client_id || ''),
@@ -3692,6 +4019,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             const editableKeys = Array.from(editable);
             const secretFieldKeys = new Set([
                 'sp_client_secret',
+                'client_secret',
+                'client_state',
                 'aws_access_key_id',
                 'aws_secret_access_key',
                 'aws_session_token',
@@ -3703,6 +4032,8 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             ]);
             const secretPresent = {
                 sp_client_secret: spClientSecretPresent,
+                client_secret: onedriveSecretMasked.client_secret || m365SecretMasked.client_secret,
+                client_state: m365SecretMasked.client_state,
                 aws_access_key_id: awsSecretMasked.aws_access_key_id,
                 aws_secret_access_key: awsSecretMasked.aws_secret_access_key,
                 aws_session_token: awsSecretMasked.aws_session_token,
@@ -3722,13 +4053,28 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     sp_tenant_id: String(configDraft.sp_tenant_id || '').trim(),
                     sp_client_id: String(configDraft.sp_client_id || '').trim(),
                     sp_client_secret: String(configDraft.sp_client_secret || ''),
+                    tenant_id: String(configDraft.tenant_id || '').trim(),
+                    client_id: String(configDraft.client_id || '').trim(),
+                    client_secret: String(configDraft.client_secret || ''),
+                    user_id: String(configDraft.user_id || '').trim(),
+                    mailbox_upns: String(configDraft.mailbox_upns || '').trim(),
+                    backfill_days: String(configDraft.backfill_days || '').trim(),
+                    webhook_enabled: !!configDraft.webhook_enabled,
+                    monitor: !!configDraft.monitor,
+                    monitor_force_polling: !!configDraft.monitor_force_polling,
+                    monitor_poll_interval_ms: String(configDraft.monitor_poll_interval_ms || '').trim(),
                     sp_webhook_enabled: !!configDraft.sp_webhook_enabled,
                     webhook_base_url: String(configDraft.webhook_base_url || '').trim(),
+                    client_state: String(configDraft.client_state || ''),
                     aws_access_key_id: String(configDraft.aws_access_key_id || ''),
                     aws_secret_access_key: String(configDraft.aws_secret_access_key || ''),
                     aws_session_token: String(configDraft.aws_session_token || ''),
                     aws_default_region: String(configDraft.aws_default_region || ''),
                     azure_storage_connection_string: String(configDraft.azure_storage_connection_string || ''),
+                    google_application_credentials: String(configDraft.google_application_credentials || '').trim(),
+                    pubsub_project_id: String(configDraft.pubsub_project_id || '').trim(),
+                    pubsub_subscription: String(configDraft.pubsub_subscription || '').trim(),
+                    pubsub_endpoint: String(configDraft.pubsub_endpoint || '').trim(),
                     sf_login_url: String(configDraft.sf_login_url || ''),
                     sf_api_version: String(configDraft.sf_api_version || ''),
                     sf_client_id: String(configDraft.sf_client_id || ''),
@@ -3761,6 +4107,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         if (!!cur.sp_webhook_enabled !== !!original.sp_webhook_enabled) return true;
                         continue;
                     }
+                    if (key === 'webhook_enabled') {
+                        if (!!cur.webhook_enabled !== !!original.webhook_enabled) return true;
+                        continue;
+                    }
+                    if (key === 'monitor') {
+                        if (!!cur.monitor !== !!original.monitor) return true;
+                        continue;
+                    }
+                    if (key === 'monitor_force_polling') {
+                        if (!!cur.monitor_force_polling !== !!original.monitor_force_polling) return true;
+                        continue;
+                    }
                     if (String(cur[key] ?? '') !== String(original[key] ?? '')) return true;
                 }
                 return false;
@@ -3778,6 +4136,14 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             function refreshDirtyUi() {
                 const dirty = isDirty();
                 setTestButtonsEnabled(!dirty);
+                if (saveBtn) {
+                    saveBtn.disabled = !devMode || !dirty;
+                }
+                if (restartNote) {
+                    const projectChanged = String(configDraft.pubsub_project_id || '').trim() !== String(original.pubsub_project_id || '').trim();
+                    const subscriptionChanged = String(configDraft.pubsub_subscription || '').trim() !== String(original.pubsub_subscription || '').trim();
+                    restartNote.style.display = (projectChanged || subscriptionChanged) ? 'block' : 'none';
+                }
                 if (!devMode) {
                     testHint.textContent = 'Testing uses currently saved settings. Editing is disabled in current mode.';
                     return;
@@ -3802,6 +4168,20 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         setRowDisplayValue(key, (cur[key] || secretPresent[key]) ? '**********' : '');
                     } else if (key === 'sp_webhook_enabled') {
                         setRowDisplayValue(key, cur.sp_webhook_enabled ? 'true' : 'false');
+                        const toggleEl = content.querySelector('.cfg-toggle-input[data-key="sp_webhook_enabled"]');
+                        if (toggleEl) toggleEl.checked = !!cur.sp_webhook_enabled;
+                    } else if (key === 'webhook_enabled') {
+                        setRowDisplayValue(key, cur.webhook_enabled ? 'true' : 'false');
+                        const toggleEl = content.querySelector('.cfg-toggle-input[data-key="webhook_enabled"]');
+                        if (toggleEl) toggleEl.checked = !!cur.webhook_enabled;
+                    } else if (key === 'monitor') {
+                        setRowDisplayValue(key, cur.monitor ? 'true' : 'false');
+                        const toggleEl = content.querySelector('.cfg-toggle-input[data-key="monitor"]');
+                        if (toggleEl) toggleEl.checked = !!cur.monitor;
+                    } else if (key === 'monitor_force_polling') {
+                        setRowDisplayValue(key, cur.monitor_force_polling ? 'true' : 'false');
+                        const toggleEl = content.querySelector('.cfg-toggle-input[data-key="monitor_force_polling"]');
+                        if (toggleEl) toggleEl.checked = !!cur.monitor_force_polling;
                     } else {
                         setRowDisplayValue(key, cur[key]);
                     }
@@ -3815,6 +4195,12 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     let nextValue = editor.value;
                     if (key === 'sp_webhook_enabled') {
                         configDraft.sp_webhook_enabled = String(nextValue).toLowerCase() === 'true';
+                    } else if (key === 'webhook_enabled') {
+                        configDraft.webhook_enabled = String(nextValue).toLowerCase() === 'true';
+                    } else if (key === 'monitor') {
+                        configDraft.monitor = String(nextValue).toLowerCase() === 'true';
+                    } else if (key === 'monitor_force_polling') {
+                        configDraft.monitor_force_polling = String(nextValue).toLowerCase() === 'true';
                     } else if (key === 'item_action') {
                         configDraft.item_action = String(nextValue ?? '').toLowerCase();
                     } else {
@@ -3826,7 +4212,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 }
                 try { editor.remove(); } catch {}
                 const valueEl = row.querySelector('.cfg-row-value');
-                const badgeEl = row.querySelector('.cfg-edit-badge');
+                const badgeEl = row.querySelector('.cfg-edit-icon');
                 if (valueEl) valueEl.style.display = '';
                 if (badgeEl) badgeEl.style.display = '';
                 activeInlineEditor = null;
@@ -3841,7 +4227,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
 
                 const valueCell = row.querySelector('.cfg-row-value-cell');
                 const valueEl = row.querySelector('.cfg-row-value');
-                const badgeEl = row.querySelector('.cfg-edit-badge');
+                const badgeEl = row.querySelector('.cfg-edit-icon');
                 if (!valueCell || !valueEl) return;
 
                 if (valueEl) valueEl.style.display = 'none';
@@ -3857,17 +4243,6 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         opt.value = v;
                         opt.textContent = v;
                         if (v === currentValue.toLowerCase()) opt.selected = true;
-                        editor.appendChild(opt);
-                    });
-                    editor.addEventListener('change', () => closeInlineEditor(true));
-                    editor.addEventListener('blur', () => closeInlineEditor(true));
-                } else if (key === 'sp_webhook_enabled') {
-                    editor = document.createElement('select');
-                    ['true', 'false'].forEach((v) => {
-                        const opt = document.createElement('option');
-                        opt.value = v;
-                        opt.textContent = v;
-                        if (v === String(currentValue).toLowerCase()) opt.selected = true;
                         editor.appendChild(opt);
                     });
                     editor.addEventListener('change', () => closeInlineEditor(true));
@@ -3911,9 +4286,53 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 row.addEventListener('click', () => {
                     const key = row.getAttribute('data-edit-key');
                     if (!key) return;
+                    if (key === 'sp_webhook_enabled') return;
+                    if (key === 'webhook_enabled') return;
+                    if (key === 'monitor') return;
+                    if (key === 'monitor_force_polling') return;
+                    if (key === 'google_application_credentials') return;
                     openInlineEditor(row, key);
                 });
             });
+
+            content.querySelectorAll('.cfg-toggle-input[data-key]').forEach((toggle) => {
+                toggle.addEventListener('click', (e) => e.stopPropagation());
+                toggle.addEventListener('change', () => {
+                    const key = toggle.getAttribute('data-key');
+                    if (!key) return;
+                    configDraft[key] = !!toggle.checked;
+                    syncEditableRows();
+                    refreshDirtyUi();
+                });
+            });
+
+            if (startTunnelBtn) {
+                startTunnelBtn.addEventListener('click', async () => {
+                    if (!(window.dsxDesktop && typeof window.dsxDesktop.startTunnel === 'function')) return;
+                    startTunnelBtn.disabled = true;
+                    if (tunnelStatus) tunnelStatus.textContent = 'Starting tunnel...';
+                    try {
+                        const result = await window.dsxDesktop.startTunnel(uuid);
+                        const publicUrl = String((result && result.publicUrl) || '').trim();
+                        const provider = String((result && result.provider) || 'tunnel');
+                        if (!publicUrl) {
+                            throw new Error('Tunnel started but no public URL was returned');
+                        }
+                        configDraft.webhook_base_url = publicUrl;
+                        syncEditableRows();
+                        refreshDirtyUi();
+                        if (tunnelStatus) {
+                            tunnelStatus.innerHTML = `${escHtml(provider)} ready: <span style="font-family:var(--font-mono);">${escHtml(publicUrl)}</span>. Save Configuration to persist it.`;
+                        }
+                        showNotification(`Public tunnel ready via ${provider}`, 'success');
+                    } catch (e) {
+                        if (tunnelStatus) tunnelStatus.textContent = `Tunnel start failed: ${e?.message || e}`;
+                        showNotification(`Failed to start tunnel: ${e?.message || e}`, 'error');
+                    } finally {
+                        startTunnelBtn.disabled = false;
+                    }
+                });
+            }
 
             sampleBtn.addEventListener('click', () => {
                 if (isDirty()) return;
@@ -3937,14 +4356,13 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 }
             });
 
-            async function applyFolderPickerToKey(targetKey) {
-                const selected = await window.dsxDesktop.pickFolder();
-                if (!selected) return;
-                const folder = String(selected).trim();
-                if (!folder) return;
-
+            async function applyPickerToKey(targetKey) {
                 statusEl.textContent = 'Applying...';
                 if (targetKey === 'asset') {
+                    const selected = await window.dsxDesktop.pickFolder();
+                    if (!selected) return;
+                    const folder = String(selected).trim();
+                    if (!folder) return;
                     const put = await saveConnectorConfig(uuid, {
                         asset: folder,
                         asset_display_name: folder,
@@ -3963,6 +4381,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     if (cardAsset) cardAsset.textContent = original.asset;
                     showNotification('Filesystem asset folder updated', 'success');
                 } else if (targetKey === 'item_action_move_metainfo') {
+                    const selected = await window.dsxDesktop.pickFolder();
+                    if (!selected) return;
+                    const folder = String(selected).trim();
+                    if (!folder) return;
                     const put = await saveConnectorConfig(uuid, {
                         item_action_move_metainfo: folder,
                     });
@@ -3975,6 +4397,23 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     configDraft.item_action_move_metainfo = original.item_action_move_metainfo;
                     setRowDisplayValue('item_action_move_metainfo', original.item_action_move_metainfo);
                     showNotification('Filesystem quarantine folder updated', 'success');
+                } else if (targetKey === 'google_application_credentials') {
+                    const selected = await window.dsxDesktop.pickFile();
+                    if (!selected) return;
+                    const filePath = String(selected).trim();
+                    if (!filePath) return;
+                    const put = await saveConnectorConfig(uuid, {
+                        google_application_credentials: filePath,
+                    });
+                    if (put && put.config) {
+                        config.google_application_credentials = put.config.google_application_credentials || filePath;
+                    } else {
+                        config.google_application_credentials = filePath;
+                    }
+                    original.google_application_credentials = config.google_application_credentials || filePath;
+                    configDraft.google_application_credentials = original.google_application_credentials;
+                    setRowDisplayValue('google_application_credentials', original.google_application_credentials);
+                    showNotification('GCS credential file updated', 'success');
                 }
                 statusEl.textContent = 'Saved';
                 refreshDirtyUiAndRows();
@@ -3987,10 +4426,10 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         const key = btn.getAttribute('data-picker-key');
                         if (!key) return;
                         btn.disabled = true;
-                        await applyFolderPickerToKey(key);
+                        await applyPickerToKey(key);
                     } catch (e) {
                         statusEl.textContent = 'Select failed';
-                        showNotification(`Failed to select folder: ${e?.message || e}`, 'error');
+                        showNotification(`Failed to select path: ${e?.message || e}`, 'error');
                     } finally {
                         btn.disabled = false;
                     }
@@ -4009,6 +4448,7 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                 try {
                     const cur = getCurrentValues();
                     const payload = {};
+                    let monitoringChanged = false;
                     for (const key of editableKeys) {
                         if (key === 'item_action') {
                             if (String(cur.item_action).toLowerCase() !== String(original.item_action).toLowerCase()) {
@@ -4019,6 +4459,21 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                         if (key === 'sp_webhook_enabled') {
                             if (!!cur.sp_webhook_enabled !== !!original.sp_webhook_enabled) {
                                 payload.sp_webhook_enabled = !!cur.sp_webhook_enabled;
+                                if (monitoringKeys.includes(key)) monitoringChanged = true;
+                            }
+                            continue;
+                        }
+                        if (key === 'webhook_enabled') {
+                            if (!!cur.webhook_enabled !== !!original.webhook_enabled) {
+                                payload.webhook_enabled = !!cur.webhook_enabled;
+                                if (monitoringKeys.includes(key)) monitoringChanged = true;
+                            }
+                            continue;
+                        }
+                        if (key === 'monitor') {
+                            if (!!cur.monitor !== !!original.monitor) {
+                                payload.monitor = !!cur.monitor;
+                                if (monitoringKeys.includes(key)) monitoringChanged = true;
                             }
                             continue;
                         }
@@ -4026,15 +4481,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                             // Secret is write-only here; blank means "unchanged".
                             if (String(cur[key] || '').length > 0) {
                                 payload[key] = cur[key];
+                                if (monitoringKeys.includes(key)) monitoringChanged = true;
                             }
                             continue;
                         }
                         if (String(cur[key] ?? '') !== String(original[key] ?? '')) {
                             payload[key] = cur[key];
+                            if (monitoringKeys.includes(key)) monitoringChanged = true;
                         }
                     }
                     if (Object.keys(payload).length === 0) {
                         statusEl.textContent = 'No changes';
+                        refreshDirtyUi();
                         return;
                     }
                     const saveResp = await saveConnectorConfig(uuid, payload);
@@ -4053,13 +4511,18 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
                     } else {
                         showNotification('Connector configuration updated', 'info');
                     }
+                    if (monitoringChanged && window.dsxDesktop && typeof window.dsxDesktop.restartConnector === 'function') {
+                        pendingConfigRestart = { uuid, name: connectorName };
+                    } else {
+                        pendingConfigRestart = null;
+                    }
                     await fetchConnectors();
                     await showConnectorConfig(uuid, connectorName);
                 } catch (e) {
                     statusEl.textContent = 'Save failed';
                     showNotification(`Failed to update connector config: ${e?.message || e}`, 'error');
                 } finally {
-                    saveBtn.disabled = false;
+                    refreshDirtyUi();
                 }
             });
 
@@ -4103,11 +4566,19 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
         modals.forEach(modal => {
             const closeBtn = modal.querySelector('.config-modal-close');
             closeBtn.addEventListener('click', () => {
-                modal.style.display = 'none';
+                if (modal.id === 'configModal') {
+                    closeConfigModal();
+                } else {
+                    modal.style.display = 'none';
+                }
             });
             modal.addEventListener('click', (event) => {
                 if (event.target === modal) {
-                    modal.style.display = 'none';
+                    if (modal.id === 'configModal') {
+                        closeConfigModal();
+                    } else {
+                        modal.style.display = 'none';
+                    }
                 }
             });
         });
@@ -4116,7 +4587,11 @@ function addCompletionBadgeByUuid(connectorUuid, status) {
             if (event.key === 'Escape') {
                 modals.forEach(modal => {
                     if (modal.style.display === 'block') {
-                        modal.style.display = 'none';
+                        if (modal.id === 'configModal') {
+                            closeConfigModal();
+                        } else {
+                            modal.style.display = 'none';
+                        }
                     }
                 });
             }

@@ -10,7 +10,14 @@ from functools import partial
 from collections.abc import Iterator
 
 from azure.storage.blob import BlobServiceClient
-from azure.core.exceptions import ResourceNotFoundError
+from azure.core.exceptions import (
+    AzureError,
+    ClientAuthenticationError,
+    HttpResponseError,
+    ResourceNotFoundError,
+    ServiceRequestError,
+    ServiceResponseError,
+)
 
 from shared import file_ops
 from shared.file_ops import relpath_matches_filter, compute_prefix_hints
@@ -21,6 +28,9 @@ import binascii
 from azure.core.credentials import AzureNamedKeyCredential
 
 CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
+
+
+_RETRYABLE_AZURE_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 
 
@@ -40,6 +50,25 @@ def _redact_azure_secret_text(msg: str) -> str:
     for key in ("AccountKey", "SharedAccessSignature", "Sig"):
         redacted = re.sub(rf"(?i)({key}\s*=\s*)([^;\\s]+)", rf"\1***", redacted)
     return redacted
+
+
+def _is_retryable_azure_error(exc: BaseException) -> bool:
+    if isinstance(exc, (ServiceRequestError, ServiceResponseError)):
+        return True
+    if isinstance(exc, ClientAuthenticationError):
+        return False
+    if isinstance(exc, ResourceNotFoundError):
+        return False
+    if isinstance(exc, HttpResponseError):
+        try:
+            status = int(getattr(exc, "status_code", 0) or 0)
+        except Exception:
+            status = 0
+        return status in _RETRYABLE_AZURE_STATUS_CODES
+    if isinstance(exc, AzureError):
+        # Conservative fallback for transport-layer Azure SDK errors without a response status.
+        return True
+    return False
 
 def _maybe_b64_decode(s: str) -> str:
     try:
@@ -134,7 +163,8 @@ class AzureBlobClient:
             dsx_logging.error(f"Error deleting blob: {e}")
             raise
 
-    @tenacity.retry(stop=tenacity.stop_after_attempt(3),
+    @tenacity.retry(retry=tenacity.retry_if_exception(_is_retryable_azure_error),
+                    stop=tenacity.stop_after_attempt(3),
                     wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
                     reraise=True,
                     before_sleep=tenacity.before_sleep_log(dsx_logging, logging.WARN))

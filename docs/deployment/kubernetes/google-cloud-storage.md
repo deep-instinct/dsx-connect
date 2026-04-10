@@ -155,14 +155,29 @@ Enable monitoring:
 | Key | Description |
 | --- | --- |
 | `env.DSXCONNECTOR_MONITOR` | `"true"` to enable on-access scanning via Pub/Sub. |
-| `env.GCS_PUBSUB_PROJECT_ID` | Project that owns the subscription. |
-| `env.GCS_PUBSUB_SUBSCRIPTION` | Subscription name or full path (`projects/<proj>/subscriptions/<sub>`). |
+| `env.GCS_PUBSUB_PROJECT_ID` | GCP project ID that owns the subscription. |
+| `env.GCS_PUBSUB_SUBSCRIPTION` | Subscription name or full path (`projects/<project-id>/subscriptions/<sub>`). |
 | `env.GCS_PUBSUB_ENDPOINT` | Optional endpoint override (for local emulators). |
 
 Notes:
 
 - Pub/Sub is the recommended trigger path.
-- Webhook alternative is supported via `/webhook/event` if you route events from Cloud Run/Functions or middleware.
+- `env.GCS_PUBSUB_PROJECT_ID` should be the project ID, not the numeric project number.
+- `env.GCS_PUBSUB_SUBSCRIPTION` is the Pub/Sub subscription shown in Google Cloud Console. You can provide either:
+  - the subscription name you created, for example `dsx-gcs-sub`
+  - the full subscription path for that same subscription, for example `projects/<project-id>/subscriptions/dsx-gcs-sub`
+- The subscription must be attached to the same topic used by the bucket notification.
+- In native Pub/Sub mode, the connector consumes the subscription directly using Google's client SDK. It does not use `/webhook/event`.
+- Webhook alternative is supported if you route events from Cloud Run/Functions or middleware.
 - For webhook mode, keep `env.DSXCONNECTOR_MONITOR=false` and expose `ingressWebhook`.
+
+Example:
+
+```yaml
+env:
+  DSXCONNECTOR_MONITOR: "true"
+  GCS_PUBSUB_PROJECT_ID: "se-project-388112"
+  GCS_PUBSUB_SUBSCRIPTION: "projects/se-project-388112/subscriptions/dsx-gcs-sub"
+```
 
 {% include-markdown "shared/_common_connector.md" %}

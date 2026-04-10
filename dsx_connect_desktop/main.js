@@ -8,12 +8,15 @@ const os = require('os');
 
 const API_PORT = process.env.DSXCONNECT_LOCAL_PORT || '8586';
 const API_URL = `http://127.0.0.1:${API_PORT}/`;
-const REPO_ROOT = path.resolve(__dirname, '..');
+const REPO_ROOT = app.isPackaged ? process.resourcesPath : path.resolve(__dirname, '..');
 const CORE_MANAGER = path.join(REPO_ROOT, 'dsx_connect', 'local', 'dsx_connect_local.py');
 const FS_MANAGER = path.join(REPO_ROOT, 'connectors', 'filesystem', 'local', 'filesystem_local.py');
 const SP_MANAGER = path.join(REPO_ROOT, 'connectors', 'sharepoint', 'local', 'sharepoint_local.py');
 const AWS_MANAGER = path.join(REPO_ROOT, 'connectors', 'aws_s3', 'local', 'aws_s3_local.py');
 const AZURE_MANAGER = path.join(REPO_ROOT, 'connectors', 'azure_blob_storage', 'local', 'azure_blob_storage_local.py');
+const GCS_MANAGER = path.join(REPO_ROOT, 'connectors', 'google_cloud_storage', 'local', 'google_cloud_storage_local.py');
+const M365_MAIL_MANAGER = path.join(REPO_ROOT, 'connectors', 'm365_mail', 'local', 'm365_mail_local.py');
+const ONEDRIVE_MANAGER = path.join(REPO_ROOT, 'connectors', 'onedrive', 'local', 'onedrive_local.py');
 const SALESFORCE_MANAGER = path.join(REPO_ROOT, 'connectors', 'salesforce', 'local', 'salesforce_local.py');
 
 const CORE_STATE_DIR = path.join(os.homedir(), '.dsx-connect-local', 'dsx-connect-desktop');
@@ -33,11 +36,65 @@ ipcMain.handle('dsx-desktop:pick-folder', async () => {
   return picked.filePaths[0] || null;
 });
 
+ipcMain.handle('dsx-desktop:pick-file', async () => {
+  const picked = await dialog.showOpenDialog({
+    title: 'Select File',
+    properties: ['openFile'],
+    filters: [
+      { name: 'JSON Files', extensions: ['json'] },
+      { name: 'All Files', extensions: ['*'] },
+    ],
+  });
+  if (picked.canceled || !picked.filePaths || !picked.filePaths.length) return null;
+  return picked.filePaths[0] || null;
+});
+
+ipcMain.handle('dsx-desktop:open-external', async (_event, url) => {
+  const target = String(url || '').trim();
+  if (!target) return false;
+  await shell.openExternal(target);
+  return true;
+});
+
+ipcMain.handle('dsx-desktop:restart-connector', async (_event, uuid) => {
+  const targetUuid = String(uuid || '').trim();
+  if (!targetUuid) return false;
+  for (const item of launchedConnectors) {
+    try {
+      const registered = await getRegisteredConnectorForItem(item);
+      if (!registered || String(registered.uuid || '').trim() !== targetUuid) continue;
+      await stopLaunchedConnector(item, { removeFromLauncher: false });
+      await launchConnectorInstance(item.kind);
+      return true;
+    } catch (err) {
+      throw new Error(String(err && err.message ? err.message : err));
+    }
+  }
+  return false;
+});
+
+ipcMain.handle('dsx-desktop:start-tunnel', async (_event, uuid) => {
+  const targetUuid = String(uuid || '').trim();
+  if (!targetUuid) throw new Error('Missing connector uuid');
+  for (const item of launchedConnectors) {
+    if (!['sharepoint', 'onedrive', 'm365_mail'].includes(item.kind)) continue;
+    try {
+      const registered = await getRegisteredConnectorForItem(item);
+      if (!registered || String(registered.uuid || '').trim() !== targetUuid) continue;
+      return await ensureTunnelForItem(item);
+    } catch (err) {
+      throw new Error(String(err && err.message ? err.message : err));
+    }
+  }
+  throw new Error('No launched desktop connector matched that uuid');
+});
+
 let mainWindow = null;
 let shutdownWindow = null;
 let coreProcess = null;
 const launchedConnectors = [];
 const pendingConnectorPorts = new Set();
+const SHUTDOWN_TIMEOUT_MS = 10000;
 
 function refreshEmbeddedUi() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -112,6 +169,172 @@ function checkCommandAvailable(cmd, args = ['--version']) {
   }
 }
 
+function getTunnelTool() {
+  if (checkCommandAvailable('cloudflared', ['--version'])) {
+    return {
+      provider: 'cloudflared',
+      cmd: 'cloudflared',
+      args: (port) => ['tunnel', '--url', `http://127.0.0.1:${port}`, '--no-autoupdate'],
+    };
+  }
+  if (checkCommandAvailable('ngrok', ['version']) || checkCommandAvailable('ngrok', ['--version'])) {
+    return {
+      provider: 'ngrok',
+      cmd: 'ngrok',
+      args: (port) => ['http', `http://127.0.0.1:${port}`, '--log', 'stdout', '--log-format', 'json'],
+    };
+  }
+  return null;
+}
+
+function isChildRunning(child) {
+  return !!(child && child.exitCode === null && !child.killed);
+}
+
+function extractTunnelUrl(chunk) {
+  const text = String(chunk || '');
+  if (!text) return null;
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line);
+      for (const key of ['url', 'public_url']) {
+        const candidate = String((parsed && parsed[key]) || '').trim();
+        if (candidate.startsWith('https://') && !candidate.includes('127.0.0.1') && !candidate.includes('localhost')) {
+          return candidate.replace(/\/+$/, '');
+        }
+      }
+      const msg = String((parsed && parsed.msg) || '');
+      const urlMatch = msg.match(/https:\/\/[^\s"'`]+/);
+      if (urlMatch && !urlMatch[0].includes('127.0.0.1') && !urlMatch[0].includes('localhost')) {
+        return urlMatch[0].replace(/\/+$/, '');
+      }
+    } catch {}
+    const match = line.match(/https:\/\/[^\s"'`]+/);
+    if (match && !match[0].includes('127.0.0.1') && !match[0].includes('localhost')) {
+      return match[0].replace(/\/+$/, '');
+    }
+  }
+  return null;
+}
+
+function stopTunnelForItem(item) {
+  if (!item || !item.tunnel || !item.tunnel.process) {
+    if (item) item.tunnel = null;
+    return;
+  }
+  try {
+    if (isChildRunning(item.tunnel.process)) {
+      item.tunnel.process.kill('SIGTERM');
+    }
+  } catch {}
+  item.tunnel = null;
+}
+
+function stopAllTunnels() {
+  for (const item of launchedConnectors) {
+    stopTunnelForItem(item);
+  }
+}
+
+function waitForTunnelUrl(proc, provider, timeoutMs = 25000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let buffered = '';
+    let logTail = '';
+
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      proc.stdout.off('data', onData);
+      proc.stderr.off('data', onData);
+      proc.off('error', onError);
+      proc.off('exit', onExit);
+      fn(value);
+    };
+
+    const updateTail = (text) => {
+      logTail = `${logTail}${text}`.slice(-4000);
+    };
+
+    const scanBuffer = () => {
+      const candidate = extractTunnelUrl(buffered);
+      if (candidate) finish(resolve, candidate);
+    };
+
+    const onData = (chunk) => {
+      const text = chunk.toString();
+      updateTail(text);
+      buffered += text;
+      if (buffered.length > 16000) buffered = buffered.slice(-16000);
+      scanBuffer();
+    };
+
+    const onError = (err) => {
+      finish(reject, new Error(`${provider} failed to start: ${String(err && err.message ? err.message : err)}`));
+    };
+
+    const onExit = (code) => {
+      finish(reject, new Error(`${provider} exited before producing a public URL (code ${code ?? 'unknown'}).\n${logTail.trim()}`.trim()));
+    };
+
+    const timer = setTimeout(() => {
+      finish(reject, new Error(`Timed out waiting for ${provider} public URL.\n${logTail.trim()}`.trim()));
+    }, timeoutMs);
+
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+    proc.on('error', onError);
+    proc.on('exit', onExit);
+  });
+}
+
+async function ensureTunnelForItem(item) {
+  if (!item || !['sharepoint', 'onedrive', 'm365_mail'].includes(item.kind)) {
+    throw new Error('Tunnel helper is only available for SharePoint, OneDrive, and M365 Mail');
+  }
+  if (item.tunnel && item.tunnel.url && isChildRunning(item.tunnel.process)) {
+    return {
+      provider: item.tunnel.provider,
+      publicUrl: item.tunnel.url,
+      localUrl: connectorBaseUrl(item),
+      reused: true,
+    };
+  }
+
+  stopTunnelForItem(item);
+
+  const tool = getTunnelTool();
+  if (!tool) {
+    throw new Error('No supported tunnel client found on PATH. Install cloudflared or ngrok and relaunch DCD.');
+  }
+
+  const proc = spawn(tool.cmd, tool.args(item.port), {
+    cwd: REPO_ROOT,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    detached: false,
+  });
+  const publicUrl = await waitForTunnelUrl(proc, tool.provider);
+  item.tunnel = {
+    provider: tool.provider,
+    url: publicUrl,
+    process: proc,
+  };
+  proc.on('exit', () => {
+    if (item.tunnel && item.tunnel.process === proc) {
+      item.tunnel = null;
+    }
+  });
+  return {
+    provider: tool.provider,
+    publicUrl,
+    localUrl: connectorBaseUrl(item),
+    reused: false,
+  };
+}
+
 function ensureDesktopPrereqs() {
   if (!checkCommandAvailable('redis-server', ['--version'])) {
     dialog.showErrorBox(
@@ -130,6 +353,9 @@ function scriptForKind(kind) {
   if (kind === 'sharepoint') return SP_MANAGER;
   if (kind === 'aws_s3') return AWS_MANAGER;
   if (kind === 'azure_blob_storage') return AZURE_MANAGER;
+  if (kind === 'google_cloud_storage') return GCS_MANAGER;
+  if (kind === 'm365_mail') return M365_MAIL_MANAGER;
+  if (kind === 'onedrive') return ONEDRIVE_MANAGER;
   if (kind === 'salesforce') return SALESFORCE_MANAGER;
   throw new Error(`Unsupported connector kind: ${kind}`);
 }
@@ -139,6 +365,9 @@ function displayForKind(kind) {
   if (kind === 'sharepoint') return 'SharePoint';
   if (kind === 'aws_s3') return 'AWS S3';
   if (kind === 'azure_blob_storage') return 'Azure Blob';
+  if (kind === 'google_cloud_storage') return 'Google Cloud Storage';
+  if (kind === 'm365_mail') return 'M365 Mail';
+  if (kind === 'onedrive') return 'OneDrive';
   if (kind === 'salesforce') return 'Salesforce';
   throw new Error(`Unsupported connector kind: ${kind}`);
 }
@@ -148,6 +377,9 @@ function defaultPortForKind(kind) {
   if (kind === 'sharepoint') return 8640;
   if (kind === 'aws_s3') return 8600;
   if (kind === 'azure_blob_storage') return 8610;
+  if (kind === 'google_cloud_storage') return 8630;
+  if (kind === 'm365_mail') return 8650;
+  if (kind === 'onedrive') return 8660;
   if (kind === 'salesforce') return 8670;
   throw new Error(`Unsupported connector kind: ${kind}`);
 }
@@ -158,6 +390,9 @@ function connectorStateDirForKind(kind) {
   else if (kind === 'sharepoint') root = 'sharepoint-connector';
   else if (kind === 'aws_s3') root = 'aws-s3-connector';
   else if (kind === 'azure_blob_storage') root = 'azure-blob-storage-connector';
+  else if (kind === 'google_cloud_storage') root = 'google-cloud-storage-connector';
+  else if (kind === 'm365_mail') root = 'm365-mail-connector';
+  else if (kind === 'onedrive') root = 'onedrive-connector';
   else if (kind === 'salesforce') root = 'salesforce-connector';
   else throw new Error(`Unsupported connector kind: ${kind}`);
   return path.join(os.homedir(), '.dsx-connect-local', `${root}-desktop`);
@@ -175,6 +410,7 @@ function makeConnectorEntry(kind, stateDir, port) {
     script: scriptForKind(kind),
     stateDir,
     port,
+    tunnel: null,
   };
 }
 
@@ -287,6 +523,53 @@ function runPythonCommand(scriptPath, command, commandArgs = [], globalArgs = []
   });
 }
 
+function runPythonCommandWithTimeout(scriptPath, command, commandArgs = [], globalArgs = [], timeoutMs = SHUTDOWN_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const python = resolvePython();
+    const args = [scriptPath, ...globalArgs, command, ...commandArgs];
+    const proc = spawn(python, args, {
+      cwd: REPO_ROOT,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      try {
+        proc.kill('SIGTERM');
+      } catch {}
+      finish({
+        ok: false,
+        code: -1,
+        stdout: stdout.trim(),
+        stderr: [stderr.trim(), `Timed out after ${timeoutMs}ms`].filter(Boolean).join('\n')
+      });
+    }, timeoutMs);
+
+    proc.stdout.on('data', (d) => {
+      stdout += d.toString();
+    });
+    proc.stderr.on('data', (d) => {
+      stderr += d.toString();
+    });
+    proc.on('error', (err) => {
+      finish({ ok: false, code: -1, stdout, stderr: `${stderr}\n${String(err)}` });
+    });
+    proc.on('close', (code) => {
+      finish({ ok: code === 0, code: code || 0, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
 function connectorMenuLabel(item) {
   return `${item.display}`;
 }
@@ -352,6 +635,70 @@ function readEnvValues(envPath) {
   return values;
 }
 
+const MANAGED_CONNECTOR_ENV_KEYS = new Set([
+  'DSXCONNECTOR_APP_ENV',
+  'DSXCONNECTOR_DATA_DIR',
+  'DSXCONNECTOR_DISPLAY_NAME',
+  'DSXCONNECTOR_CONNECTOR_URL',
+  'DSXCONNECTOR_DSX_CONNECT_URL',
+  'DSXCONNECTOR_ENV_FILE',
+  'DSXCONNECTOR_LOG_LEVEL',
+  'DSXCONNECTOR_NAME',
+  'DSXCONNECTOR_UUID',
+  'RUN_SP_INTEGRATION',
+]);
+
+function isPlaceholderConfigValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return true;
+  const lower = raw.toLowerCase();
+  if (
+    lower === 'false' ||
+    lower === 'true' ||
+    lower === 'nothing' ||
+    lower === '0' ||
+    lower === 'none' ||
+    lower === 'null'
+  ) {
+    return true;
+  }
+  if (lower.includes('/path/to/')) return true;
+  if (lower === 'http://0.0.0.0:8586/' || lower === 'http://0.0.0.0:8590') return true;
+  return false;
+}
+
+function hasMeaningfulSavedConnectorConfig(kind, stateDir) {
+  const envPath = path.join(stateDir, '.env.local');
+  const values = readEnvValues(envPath);
+  const entries = Object.entries(values).filter(([key]) => !MANAGED_CONNECTOR_ENV_KEYS.has(key));
+  if (!entries.length) return false;
+
+  const kindSpecificKeys = {
+    filesystem: ['DSXCONNECTOR_ASSET', 'DSXCONNECTOR_FILTER', 'DSXCONNECTOR_MONITOR'],
+    sharepoint: ['DSXCONNECTOR_ASSET', 'DSXCONNECTOR_SP_TENANT_ID', 'DSXCONNECTOR_SP_CLIENT_ID', 'DSXCONNECTOR_SP_CLIENT_SECRET', 'DSXCONNECTOR_WEBHOOK_URL'],
+    aws_s3: ['DSXCONNECTOR_ASSET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_DEFAULT_REGION'],
+    azure_blob_storage: ['DSXCONNECTOR_ASSET', 'AZURE_STORAGE_CONNECTION_STRING'],
+    google_cloud_storage: ['DSXCONNECTOR_ASSET', 'GOOGLE_APPLICATION_CREDENTIALS', 'GCS_PUBSUB_SUBSCRIPTION'],
+    m365_mail: ['DSXCONNECTOR_M365_TENANT_ID', 'DSXCONNECTOR_M365_CLIENT_ID', 'DSXCONNECTOR_M365_CLIENT_SECRET', 'DSXCONNECTOR_M365_MAILBOX_UPNS', 'DSXCONNECTOR_M365_WEBHOOK_URL'],
+    onedrive: ['DSXCONNECTOR_ONEDRIVE_TENANT_ID', 'DSXCONNECTOR_ONEDRIVE_CLIENT_ID', 'DSXCONNECTOR_ONEDRIVE_CLIENT_SECRET', 'DSXCONNECTOR_ONEDRIVE_USER_ID', 'DSXCONNECTOR_ONEDRIVE_WEBHOOK_URL'],
+    salesforce: ['SF_LOGIN_URL', 'SF_CLIENT_ID', 'SF_USERNAME', 'SF_PASSWORD'],
+  };
+
+  const preferredKeys = kindSpecificKeys[kind] || [];
+  for (const key of preferredKeys) {
+    if (!Object.prototype.hasOwnProperty.call(values, key)) continue;
+    if (!isPlaceholderConfigValue(values[key])) return true;
+  }
+
+  for (const [key, value] of entries) {
+    if (!key.startsWith('DSXCONNECTOR_') && !key.startsWith('AWS_') && !key.startsWith('AZURE_') && !key.startsWith('GCS_') && !key.startsWith('GOOGLE_') && !key.startsWith('SF_')) {
+      continue;
+    }
+    if (!isPlaceholderConfigValue(value)) return true;
+  }
+  return false;
+}
+
 async function openConnectorSettingsInUi(uuid, connectorName, retries = 12, delayMs = 500) {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
   const safeUuid = JSON.stringify(String(uuid || ''));
@@ -394,9 +741,9 @@ function ensureConnectorIdentityEnv(stateDir, extraValues = {}) {
   });
 }
 
-function connectorEnvDefaults(kind, port) {
+function connectorEnvDefaults(kind) {
   const base = {
-    DSXCONNECTOR_DISPLAY_NAME: `${displayForKind(kind)} :${port}`,
+    DSXCONNECTOR_DISPLAY_NAME: displayForKind(kind),
   };
   if (kind === 'sharepoint') {
     // Align desktop launcher behavior with the working local SharePoint integration profile.
@@ -411,6 +758,9 @@ function connectorBaseUrl(item) {
   else if (item.kind === 'sharepoint') pathPart = 'sharepoint-connector';
   else if (item.kind === 'aws_s3') pathPart = 'aws-s3-connector';
   else if (item.kind === 'azure_blob_storage') pathPart = 'azure-blob-storage-connector';
+  else if (item.kind === 'google_cloud_storage') pathPart = 'google-cloud-storage-connector';
+  else if (item.kind === 'm365_mail') pathPart = 'm365-mail-connector';
+  else if (item.kind === 'onedrive') pathPart = 'onedrive-connector';
   else if (item.kind === 'salesforce') pathPart = 'salesforce-connector';
   return `http://127.0.0.1:${item.port}/${pathPart}`;
 }
@@ -447,7 +797,7 @@ async function openLaunchedConnectorSettings(item, retries = 12, delayMs = 500) 
   for (let attempt = 0; attempt < retries; attempt += 1) {
     const registered = await getRegisteredConnectorForItem(item);
     if (registered && registered.uuid && (await isConnectorConfigReady(item))) {
-      const displayName = registered.display_name || item.display || item.kind || 'Connector';
+      const displayName = item.display || registered.display_name || item.kind || 'Connector';
       return openConnectorSettingsInUi(registered.uuid, displayName, 1, delayMs);
     }
     await new Promise((r) => setTimeout(r, delayMs));
@@ -620,7 +970,7 @@ function loadLaunchedConnectors() {
       const data = JSON.parse(raw);
       if (Array.isArray(data)) {
         for (const item of data) {
-          if (!item || !['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'salesforce'].includes(item.kind)) continue;
+          if (!item || !['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'google_cloud_storage', 'm365_mail', 'onedrive', 'salesforce'].includes(item.kind)) continue;
           const port = Number(item.port);
           byKind.set(item.kind, {
             stateDir: typeof item.stateDir === 'string' && item.stateDir ? item.stateDir : connectorStateDirForKind(item.kind),
@@ -630,7 +980,7 @@ function loadLaunchedConnectors() {
       }
     }
 
-    for (const kind of ['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'salesforce']) {
+    for (const kind of ['filesystem', 'sharepoint', 'aws_s3', 'azure_blob_storage', 'google_cloud_storage', 'm365_mail', 'onedrive', 'salesforce']) {
       const fromFile = byKind.get(kind);
       if (!fromFile) continue;
       const canonicalDir = connectorStateDirForKind(kind);
@@ -671,7 +1021,7 @@ async function rehydrateLaunchedConnectorsOnStartup() {
         continue;
       }
       ensureConnectorIdentityEnv(item.stateDir, {
-        ...connectorEnvDefaults(item.kind, item.port),
+        ...connectorEnvDefaults(item.kind),
       });
       const result = await runPythonCommand(item.script, 'start', [], [
         '--state-dir',
@@ -754,14 +1104,15 @@ async function stopAllLaunchedConnectorsInternal({ showDialog = false, removeFro
   const failed = [];
 
   for (const item of items) {
-    const result = await runPythonCommand(item.script, 'stop', [], [
+    const result = await runPythonCommandWithTimeout(item.script, 'stop', [], [
       '--state-dir',
       item.stateDir,
       '--port',
       String(item.port),
-    ]);
+    ], SHUTDOWN_TIMEOUT_MS);
     if (result.ok) {
       stopped += 1;
+      stopTunnelForItem(item);
       if (removeFromLauncher) {
         const idx = launchedConnectors.findIndex((x) => x.id === item.id);
         if (idx >= 0) launchedConnectors.splice(idx, 1);
@@ -808,16 +1159,18 @@ function forgetAllLaunchedConnectors() {
 }
 
 async function stopLaunchedConnector(item, { removeFromLauncher = true } = {}) {
-  const result = await runPythonCommand(item.script, 'stop', [], [
+  const result = await runPythonCommandWithTimeout(item.script, 'stop', [], [
     '--state-dir',
     item.stateDir,
     '--port',
     String(item.port)
-  ]);
+  ], SHUTDOWN_TIMEOUT_MS);
   if (!result.ok) {
     const detail = [result.stdout, result.stderr].filter(Boolean).join('\n');
     throw new Error(detail || 'Unknown error');
   }
+
+  stopTunnelForItem(item);
 
   if (removeFromLauncher) {
     const idx = launchedConnectors.findIndex((x) => x.id === item.id);
@@ -908,6 +1261,9 @@ async function stopStrayConnectorProcesses() {
     '/connectors/sharepoint/local/sharepoint_local.py',
     '/connectors/aws_s3/local/aws_s3_local.py',
     '/connectors/azure_blob_storage/local/azure_blob_storage_local.py',
+    '/connectors/google_cloud_storage/local/google_cloud_storage_local.py',
+    '/connectors/m365_mail/local/m365_mail_local.py',
+    '/connectors/onedrive/local/onedrive_local.py',
     '/connectors/salesforce/local/salesforce_local.py',
   ];
 
@@ -961,6 +1317,7 @@ async function launchConnectorInstance(kind) {
   const fixedPort = defaultPortForKind(kind);
   const script = scriptForKind(kind);
   const display = displayForKind(kind);
+  const shouldAutoOpenSettings = !hasMeaningfulSavedConnectorConfig(kind, stateDir);
   await showEmbeddedNotification(`Launching ${display} connector...`, 'info');
   const globalArgs = ['--state-dir', stateDir, '--port', String(fixedPort)];
   let existing = launchedConnectors.find((x) => x.kind === kind);
@@ -997,7 +1354,7 @@ async function launchConnectorInstance(kind) {
     }
 
     ensureConnectorIdentityEnv(stateDir, {
-      ...connectorEnvDefaults(kind, fixedPort),
+      ...connectorEnvDefaults(kind),
     });
 
     const start = await runPythonCommand(script, 'start', [], globalArgs);
@@ -1006,7 +1363,9 @@ async function launchConnectorInstance(kind) {
       dialog.showErrorBox(`Launch ${display} Connector`, `Start failed.\n\n${detail || 'Unknown error'}`);
       return;
     }
-    await openLaunchedConnectorSettings(existing);
+    if (shouldAutoOpenSettings) {
+      await openLaunchedConnectorSettings(existing);
+    }
   } finally {
     pendingConnectorPorts.delete(fixedPort);
   }
@@ -1038,6 +1397,9 @@ function buildAppMenu() {
   const hasSharepointLaunched = launchedConnectors.some((x) => x.kind === 'sharepoint');
   const hasAwsLaunched = launchedConnectors.some((x) => x.kind === 'aws_s3');
   const hasAzureLaunched = launchedConnectors.some((x) => x.kind === 'azure_blob_storage');
+  const hasGcsLaunched = launchedConnectors.some((x) => x.kind === 'google_cloud_storage');
+  const hasM365MailLaunched = launchedConnectors.some((x) => x.kind === 'm365_mail');
+  const hasOnedriveLaunched = launchedConnectors.some((x) => x.kind === 'onedrive');
   const hasSalesforceLaunched = launchedConnectors.some((x) => x.kind === 'salesforce');
   const activeItems = launchedConnectors.length
     ? launchedConnectors.map((item) => ({
@@ -1126,6 +1488,33 @@ function buildAppMenu() {
               }
             },
             {
+              label: hasGcsLaunched ? 'Google Cloud Storage (Launched)' : 'Google Cloud Storage',
+              enabled: !hasGcsLaunched,
+              click: () => {
+                launchConnectorInstance('google_cloud_storage').catch((err) => {
+                  dialog.showErrorBox('Launch Google Cloud Storage Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
+              label: hasOnedriveLaunched ? 'OneDrive (Launched)' : 'OneDrive',
+              enabled: !hasOnedriveLaunched,
+              click: () => {
+                launchConnectorInstance('onedrive').catch((err) => {
+                  dialog.showErrorBox('Launch OneDrive Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
+              label: hasM365MailLaunched ? 'M365 Mail (Launched)' : 'M365 Mail',
+              enabled: !hasM365MailLaunched,
+              click: () => {
+                launchConnectorInstance('m365_mail').catch((err) => {
+                  dialog.showErrorBox('Launch M365 Mail Connector', String(err && err.message ? err.message : err));
+                });
+              }
+            },
+            {
               label: hasSalesforceLaunched ? 'Salesforce (Launched)' : 'Salesforce',
               enabled: !hasSalesforceLaunched,
               click: () => {
@@ -1198,10 +1587,23 @@ function stopCore() {
     const proc = spawn(python, args, {
       cwd: REPO_ROOT,
       env: process.env,
-      stdio: 'inherit'
+      stdio: ['ignore', 'pipe', 'pipe']
     });
-    proc.on('exit', () => resolve());
-    proc.on('error', () => resolve());
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      try {
+        proc.kill('SIGTERM');
+      } catch {}
+      finish();
+    }, SHUTDOWN_TIMEOUT_MS);
+    proc.on('exit', finish);
+    proc.on('error', finish);
   });
 }
 
@@ -1372,6 +1774,9 @@ app.on('before-quit', async (event) => {
     if (shouldStopConnectorsOnExit()) {
       await stopAllLaunchedConnectorsInternal({ showDialog: false, removeFromLauncher: false });
     }
+  } catch {}
+  try {
+    stopAllTunnels();
   } catch {}
   try {
     if (shouldStopCoreOnExit()) {

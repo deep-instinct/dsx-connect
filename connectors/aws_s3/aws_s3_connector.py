@@ -9,7 +9,6 @@ from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 from connectors.aws_s3.config import ConfigManager
 from connectors.aws_s3.version import CONNECTOR_VERSION
-from shared.streaming import stream_blob
 from shared.file_ops import relpath_matches_filter
 from shared.log_sanitizer import config_for_log
 import re
@@ -474,8 +473,32 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
     """
     # Read the file content
     try:
-        bytes_obj = aws_s3_client.get_object(bucket=config.asset_bucket, key=scan_event_queue_info.location)
-        return StreamingResponse(stream_blob(bytes_obj), media_type="application/octet-stream")  # Stream file
+        body, size_bytes = aws_s3_client.get_object_stream(
+            bucket=config.asset_bucket,
+            key=scan_event_queue_info.location,
+        )
+
+        def _iter_s3_body():
+            try:
+                while True:
+                    chunk = body.read(getattr(aws_s3_client, "_chunk_size", 1024 * 1024))
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                try:
+                    body.close()
+                except Exception:
+                    pass
+
+        headers = {}
+        if size_bytes is not None:
+            headers["Content-Length"] = str(size_bytes)
+        return StreamingResponse(
+            _iter_s3_body(),
+            media_type="application/octet-stream",
+            headers=headers,
+        )
     except Exception as e:
         err = _redact_aws_secret_text(str(e))
         return StatusResponse(status=StatusResponseEnum.ERROR,

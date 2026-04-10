@@ -410,35 +410,47 @@ class DSXConnector:
             res = self.repo_check_connection_handler()
             if inspect.isawaitable(res):
                 res = await res  # type: ignore[assignment]
-
-            # Normalize common return types to a boolean
-            try:
-                from shared.models.status_responses import StatusResponse, StatusResponseEnum  # local import
-            except Exception:  # pragma: no cover - defensive
-                StatusResponse = None  # type: ignore
-                StatusResponseEnum = None  # type: ignore
-
-            # 1) Explicit bool
-            if isinstance(res, bool):
-                return res
-
-            # 2) Pydantic StatusResponse
-            if StatusResponse is not None and isinstance(res, StatusResponse):
-                try:
-                    return res.status == StatusResponseEnum.SUCCESS  # type: ignore[union-attr]
-                except Exception:
-                    return False
-
-            # 3) dict-like with a status field
-            if isinstance(res, dict):
-                status = str(res.get("status", "")).lower()
-                return status == "success"
-
-            # 4) Fallback to truthiness (legacy); be conservative
-            return bool(res)
+            return self._repo_check_result_ok(res)
         except Exception as e:
             dsx_logging.warning(f"repo_check raised error: {e}")
             return False
+
+    @staticmethod
+    def _repo_check_result_ok(res: Any) -> bool:
+        # Normalize common return types to a boolean.
+        try:
+            from shared.models.status_responses import StatusResponse, StatusResponseEnum  # local import
+        except Exception:  # pragma: no cover - defensive
+            StatusResponse = None  # type: ignore
+            StatusResponseEnum = None  # type: ignore
+
+        if isinstance(res, bool):
+            return res
+
+        if StatusResponse is not None and isinstance(res, StatusResponse):
+            try:
+                return res.status == StatusResponseEnum.SUCCESS  # type: ignore[union-attr]
+            except Exception:
+                return False
+
+        if isinstance(res, dict):
+            status = str(res.get("status", "")).lower()
+            return status == "success"
+
+        if isinstance(res, Response):
+            if getattr(res, "status_code", 500) >= 400:
+                return False
+            body = getattr(res, "body", b"")
+            if isinstance(body, (bytes, bytearray)) and body:
+                try:
+                    payload = jsonable_encoder(__import__("json").loads(body))
+                except Exception:
+                    return True
+                if isinstance(payload, dict) and "status" in payload:
+                    return str(payload.get("status", "")).lower() == "success"
+            return True
+
+        return bool(res)
 
     # ----------------- outward calls -----------------
 
@@ -1086,10 +1098,30 @@ class DSXAConnectorRouter(APIRouter):
             res = self._connector.repo_check_connection_handler()
             if inspect.isawaitable(res):
                 res = await res  # type: ignore
-            status = res if isinstance(res, StatusResponse) else StatusResponse(
-                status=StatusResponseEnum.SUCCESS if bool(res) else StatusResponseEnum.ERROR,
-                message="Repository connectivity success" if bool(res) else "Repository connectivity failed"
-            )
+            if isinstance(res, StatusResponse):
+                status = res
+            elif isinstance(res, Response):
+                body = getattr(res, "body", b"")
+                payload = None
+                if isinstance(body, (bytes, bytearray)) and body:
+                    try:
+                        payload = __import__("json").loads(body)
+                    except Exception:
+                        payload = None
+                if isinstance(payload, dict) and "status" in payload:
+                    status = StatusResponse(**payload)
+                else:
+                    ok = self._connector._repo_check_result_ok(res)
+                    status = StatusResponse(
+                        status=StatusResponseEnum.SUCCESS if ok else StatusResponseEnum.ERROR,
+                        message="Repository connectivity success" if ok else "Repository connectivity failed"
+                    )
+            else:
+                ok = self._connector._repo_check_result_ok(res)
+                status = StatusResponse(
+                    status=StatusResponseEnum.SUCCESS if ok else StatusResponseEnum.ERROR,
+                    message="Repository connectivity success" if ok else "Repository connectivity failed"
+                )
         else:
             status = StatusResponse(status=StatusResponseEnum.ERROR,
                                     message="No event handler registered for repo_check",
@@ -1270,15 +1302,24 @@ class DSXAConnectorRouter(APIRouter):
             except Exception:
                 pass
 
-        # SharePoint/common extra fields supported by the generic fallback path.
+        # Connector-specific/common extra fields supported by the generic fallback path.
         cfg = getattr(self._connector, "connector_config", None)
-        for key in ("sp_tenant_id", "sp_client_id", "sp_client_secret", "sp_webhook_enabled", "webhook_base_url"):
+        for key in (
+            "sp_tenant_id", "sp_client_id", "sp_client_secret", "sp_webhook_enabled", "webhook_base_url",
+            "google_application_credentials", "pubsub_project_id", "pubsub_subscription", "pubsub_endpoint",
+        ):
             if key not in payload:
                 continue
             val = payload.get(key)
             # Do not overwrite existing secret with masked value.
             if key == "sp_client_secret" and isinstance(val, str) and (not val.strip() or val.strip("*") == ""):
                 continue
+            if key == "google_application_credentials":
+                val = str(val or "").strip()
+                if val:
+                    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = val
+                else:
+                    os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
             set_any = False
             if _set_if_hasattr(cfg, key, val):
                 set_any = True

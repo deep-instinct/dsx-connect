@@ -4,10 +4,18 @@ import logging
 import pathlib
 import os
 import re
+from typing import Any
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
+from botocore.exceptions import (
+    ClientError,
+    ConnectTimeoutError,
+    ConnectionClosedError,
+    EndpointConnectionError,
+    HTTPClientError,
+    ReadTimeoutError,
+)
 
 from shared import file_ops
 from shared.file_ops import relpath_matches_filter, compute_prefix_hints
@@ -30,6 +38,38 @@ def _redact_aws_secret_text(msg: str) -> str:
     ):
         redacted = re.sub(rf"(?i)({key}\s*[:=]\s*)([^,;\\s]+)", rf"\1***", redacted)
     return redacted
+
+
+_RETRYABLE_S3_ERROR_CODES = {
+    "RequestTimeout",
+    "RequestTimeoutException",
+    "InternalError",
+    "InternalServerError",
+    "ServiceUnavailable",
+    "SlowDown",
+    "Throttling",
+    "ThrottlingException",
+    "RequestLimitExceeded",
+}
+
+
+def _is_retryable_s3_error(exc: BaseException) -> bool:
+    if isinstance(exc, (EndpointConnectionError, ConnectionClosedError, ReadTimeoutError, ConnectTimeoutError)):
+        return True
+    if isinstance(exc, HTTPClientError):
+        return True
+    if isinstance(exc, ClientError):
+        try:
+            error = exc.response.get("Error", {}) or {}
+            code = str(error.get("Code", "") or "")
+            status = int(exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode", 0) or 0)
+            if code in _RETRYABLE_S3_ERROR_CODES:
+                return True
+            if 500 <= status <= 599:
+                return True
+        except Exception:
+            return False
+    return False
 
 
 class AWSS3Client:
@@ -75,6 +115,7 @@ class AWSS3Client:
             raise
 
     @tenacity.retry(
+        retry=tenacity.retry_if_exception(_is_retryable_s3_error),
         stop=tenacity.stop_after_attempt(3),
         wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
         reraise=True,
@@ -91,6 +132,28 @@ class AWSS3Client:
         except ClientError as e:
             dsx_logging.error(
                 f"ClientError getting object {key} from {bucket}: {_redact_aws_secret_text(str(e))}"
+            )
+            raise
+        except Exception as e:
+            dsx_logging.error(f"Unexpected error: {_redact_aws_secret_text(str(e))}")
+            raise
+
+    @tenacity.retry(
+        retry=tenacity.retry_if_exception(_is_retryable_s3_error),
+        stop=tenacity.stop_after_attempt(3),
+        wait=tenacity.wait_exponential(multiplier=1, min=1, max=10),
+        reraise=True,
+        before_sleep=tenacity.before_sleep_log(dsx_logging, log_level=logging.WARN)
+    )
+    def get_object_stream(self, bucket: str, key: str) -> tuple[Any, int | None]:
+        try:
+            response = self.s3_client.get_object(Bucket=bucket, Key=key)
+            body = response['Body']
+            size = response.get('ContentLength')
+            return body, int(size) if size is not None else None
+        except ClientError as e:
+            dsx_logging.error(
+                f"ClientError getting object stream {key} from {bucket}: {_redact_aws_secret_text(str(e))}"
             )
             raise
         except Exception as e:

@@ -1,15 +1,17 @@
 import asyncio
 import json
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 
 import httpx
+from pydantic import SecretStr
 from fastapi.encoders import jsonable_encoder
 from starlette.responses import StreamingResponse
 from shared.dsx_logging import dsx_logging
 # Import module as alias so connector_api updates propagate
 from connectors.framework import dsx_connector as dsx_framework
 from connectors.framework.dsx_connector import DSXConnector
-from connectors.m365_mail.config import config
+from connectors.m365_mail.config import config, ConfigManager
 from connectors.m365_mail.graph_client import GraphClient
 from connectors.m365_mail.subscriptions import SubscriptionManager
 from fastapi import Request, Response
@@ -194,6 +196,89 @@ async def _delta_runner(limit: int | None = None) -> dict:
         return {"status": status, "enqueued": total, "details": details}
 
 
+async def _run_recent_backfill_for_mailbox(upn: str, days: int, limit: int | None) -> dict:
+    if _graph is None:
+        raise RuntimeError("graph_not_configured")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=max(days, 1))
+    cutoff_iso = cutoff.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    next_url = None
+    enqueued = 0
+    pages = 0
+    completed = True
+
+    while True:
+        remaining = None if limit is None else max(limit - enqueued, 0)
+        if remaining is not None and remaining == 0:
+            completed = False
+            break
+        msgs, next_url = await _graph.list_recent_messages_with_attachments(
+            upn,
+            received_after_iso=cutoff_iso,
+            next_url=next_url,
+        )
+        pages += 1
+        if not msgs:
+            break
+        for msg in msgs:
+            mid = msg.get("id")
+            if not mid:
+                continue
+            try:
+                attachments = await _graph.list_attachments(upn, mid)
+            except Exception as e:
+                dsx_logging.warning(f"list_attachments failed user={upn} mid={mid}: {e}")
+                continue
+            for att in attachments:
+                if not str(att.get("@odata.type", "")).lower().endswith("fileattachment"):
+                    continue
+                att_id = att.get("id")
+                if not att_id:
+                    continue
+                name = att.get("name") or att.get("contentType") or "attachment"
+                uri = f"m365://{upn}/messages/{mid}/attachments/{att_id}"
+                req = ScanRequestModel(location=uri, metainfo=str(name))
+                await connector.scan_file_request(req)
+                enqueued += 1
+                if limit is not None and enqueued >= limit:
+                    completed = False
+                    break
+            if limit is not None and enqueued >= limit:
+                break
+        if limit is not None and enqueued >= limit:
+            break
+        if not next_url:
+            break
+
+    return {"enqueued": enqueued, "completed": completed, "pages": pages, "days": days}
+
+
+async def _recent_backfill_runner(days: int, limit: int | None = None) -> dict:
+    if _graph is None:
+        return {"status": "error", "message": "graph_not_configured"}
+    upns = _configured_upns()
+    if not upns:
+        return {"status": "error", "message": "no_mailboxes_configured"}
+    lock = _ensure_delta_lock()
+    had_error = False
+    details: list[dict] = []
+    total = 0
+    async with lock:
+        for upn in upns:
+            remaining = None if limit is None else max(limit - total, 0)
+            if remaining is not None and remaining == 0:
+                break
+            try:
+                result = await _run_recent_backfill_for_mailbox(upn, days, remaining)
+                total += result.get("enqueued", 0)
+                details.append({"upn": upn, **result})
+            except Exception as e:
+                had_error = True
+                dsx_logging.warning(f"Recent backfill failed for {upn}: {e}")
+                details.append({"upn": upn, "error": str(e), "days": days})
+        status = "success" if not had_error else "partial"
+        return {"status": status, "enqueued": total, "details": details, "days": days}
+
+
 def _kick_delta_for_upns(upns: list[str]) -> None:
     if not upns:
         return
@@ -307,6 +392,166 @@ async def startup_event(base: ConnectorInstanceModel) -> ConnectorInstanceModel:
     except Exception as e:
         dsx_logging.warning(f"Failed to start subscriptions loop: {e}")
     return base
+
+
+@connector.config
+async def config_handler(base: ConnectorInstanceModel):
+    try:
+        payload = base.model_dump()
+    except Exception:
+        payload = jsonable_encoder(base)
+
+    extra = {
+        "asset": config.mailbox_upns or "",
+        "resolved_asset_base": config.mailbox_upns or "",
+        "tenant_id": str(config.tenant_id or ""),
+        "client_id": str(config.client_id or ""),
+        "client_secret": "**********" if (config.client_secret and config.client_secret.get_secret_value()) else "",
+        "mailbox_upns": str(config.mailbox_upns or ""),
+        "backfill_days": int(getattr(config, "backfill_days", 0) or 0),
+        "webhook_base_url": str(config.webhook_base_url or ""),
+        "client_state": "**********" if (config.client_state and config.client_state.get_secret_value()) else "",
+    }
+    payload.update({k: v for k, v in extra.items() if v is not None})
+    return payload
+
+
+@connector.config_update
+async def config_update_handler(payload: dict):
+    global _graph
+    changed = False
+    creds_changed = False
+
+    if isinstance(payload.get("asset"), str):
+        config.mailbox_upns = payload.get("asset", "").strip() or None
+        changed = True
+
+    if isinstance(payload.get("mailbox_upns"), str):
+        config.mailbox_upns = payload.get("mailbox_upns", "").strip() or None
+        changed = True
+
+    if isinstance(payload.get("filter"), str):
+        config.filter = payload.get("filter", "")
+        changed = True
+
+    if isinstance(payload.get("item_action"), str):
+        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
+        if action_raw:
+            try:
+                config.item_action = ItemActionEnum(action_raw)
+                changed = True
+            except Exception:
+                pass
+
+    if isinstance(payload.get("item_action_move_metainfo"), str):
+        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+        changed = True
+
+    if isinstance(payload.get("tenant_id"), str):
+        config.tenant_id = payload.get("tenant_id", "").strip() or None
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("client_id"), str):
+        config.client_id = payload.get("client_id", "").strip() or None
+        changed = True
+        creds_changed = True
+
+    if isinstance(payload.get("client_secret"), str):
+        secret = payload.get("client_secret", "")
+        if secret:
+            config.client_secret = SecretStr(secret)
+            changed = True
+            creds_changed = True
+
+    if isinstance(payload.get("webhook_base_url"), str):
+        config.webhook_base_url = payload.get("webhook_base_url", "").strip() or None
+        changed = True
+
+    if payload.get("backfill_days") is not None:
+        try:
+            config.backfill_days = max(0, int(payload.get("backfill_days")))
+            changed = True
+        except Exception:
+            pass
+
+    if isinstance(payload.get("client_state"), str):
+        secret = payload.get("client_state", "")
+        if secret:
+            config.client_state = SecretStr(secret)
+            changed = True
+
+    if not changed:
+        return {
+            "error": "no_supported_fields",
+            "supported": [
+                "asset",
+                "mailbox_upns",
+                "filter",
+                "item_action",
+                "item_action_move_metainfo",
+                "tenant_id",
+                "client_id",
+                "client_secret",
+                "backfill_days",
+                "webhook_base_url",
+                "client_state",
+            ],
+        }
+
+    try:
+        ConfigManager._config = config
+    except Exception:
+        pass
+
+    if creds_changed:
+        try:
+            secret = config.client_secret.get_secret_value() if config.client_secret else None
+            if config.tenant_id and config.client_id and secret:
+                _graph = GraphClient(config.tenant_id, config.client_id, secret, config.authority)
+            else:
+                _graph = None
+        except Exception:
+            _graph = None
+
+    try:
+        connector.connector_running_model.asset = str(config.mailbox_upns or "")
+        connector.connector_running_model.filter = str(getattr(config, "filter", "") or "")
+        connector.connector_running_model.item_action = config.item_action
+        connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
+    except Exception:
+        pass
+
+    persisted = False
+    persist_detail = "skipped"
+    try:
+        action_val = config.item_action.value if isinstance(config.item_action, ItemActionEnum) else str(config.item_action)
+        persist_updates = {
+            "DSXCONNECTOR_ASSET": str(config.mailbox_upns or ""),
+            "DSXCONNECTOR_M365_MAILBOX_UPNS": str(config.mailbox_upns or ""),
+            "DSXCONNECTOR_FILTER": str(getattr(config, "filter", "") or ""),
+            "DSXCONNECTOR_ITEM_ACTION": str(action_val or "nothing"),
+            "DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO": str(config.item_action_move_metainfo or ""),
+            "DSXCONNECTOR_M365_TENANT_ID": str(config.tenant_id or ""),
+            "DSXCONNECTOR_M365_CLIENT_ID": str(config.client_id or ""),
+            "DSXCONNECTOR_M365_BACKFILL_DAYS": str(int(getattr(config, "backfill_days", 0) or 0)),
+            "DSXCONNECTOR_M365_WEBHOOK_URL": str(config.webhook_base_url or ""),
+        }
+        if isinstance(payload.get("client_secret"), str) and payload.get("client_secret"):
+            persist_updates["DSXCONNECTOR_M365_CLIENT_SECRET"] = payload.get("client_secret")
+        if isinstance(payload.get("client_state"), str) and payload.get("client_state"):
+            persist_updates["DSXCONNECTOR_M365_CLIENT_STATE"] = payload.get("client_state")
+        persisted, persist_detail = ConfigManager.persist_runtime_overrides(persist_updates)
+    except Exception as e:
+        persisted = False
+        persist_detail = f"persist_error:{type(e).__name__}"
+
+    cfg = await config_handler(connector.connector_running_model)
+    cfg["persistence"] = {
+        "applied": persisted,
+        "detail": persist_detail,
+    }
+    return cfg
 
 
 @connector.repo_check
@@ -481,15 +726,21 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
 
 @connector.full_scan
 async def full_scan_handler(limit: int | None = None) -> StatusResponse:
-    result = await _delta_runner(limit=limit)
+    backfill_days = int(getattr(config, "backfill_days", 0) or 0)
+    if backfill_days > 0:
+        result = await _recent_backfill_runner(backfill_days, limit=limit)
+        mode = f"recent_backfill_{backfill_days}d"
+    else:
+        result = await _delta_runner(limit=limit)
+        mode = "delta"
     status = result.get("status")
     if status != "success":
         message = result.get("message") or "delta_runner_failed"
         return StatusResponse(status=StatusResponseEnum.ERROR, message=message, description=str(result.get("details")))
-    desc = f"enqueued={result.get('enqueued', 0)}"
+    desc = f"mode={mode} enqueued={result.get('enqueued', 0)}"
     if limit:
         desc = f"{desc} limit={limit}"
-    return StatusResponse(status=StatusResponseEnum.SUCCESS, message="delta_runner_started", description=desc)
+    return StatusResponse(status=StatusResponseEnum.SUCCESS, message="mail_scan_started", description=desc)
 
 
 # Webhook GET validation (Graph handshake)

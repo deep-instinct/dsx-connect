@@ -6,6 +6,7 @@ Implements client-credentials auth and helpers to list and download attachments.
 import msal  # type: ignore
 import httpx
 from typing import AsyncIterator, Any
+from urllib.parse import quote
 
 
 class GraphClient:
@@ -87,6 +88,32 @@ class GraphClient:
             next_link = data.get("@odata.nextLink")
             delta_link = data.get("@odata.deltaLink")
         return items, next_link, delta_link
+
+    async def list_recent_messages_with_attachments(
+        self,
+        user: str,
+        *,
+        received_after_iso: str,
+        next_url: str | None = None,
+    ) -> tuple[list[dict], str | None]:
+        token = await self.token()
+        if next_url:
+            url = next_url
+        else:
+            filter_expr = quote(
+                f"hasAttachments eq true and receivedDateTime ge {received_after_iso}",
+                safe="=$'(),:",
+            )
+            url = (
+                f"https://graph.microsoft.com/v1.0/users/{user}/mailFolders('inbox')/messages"
+                f"?$select=id,hasAttachments,receivedDateTime,internetMessageId"
+                f"&$top=100&$orderby=receivedDateTime desc&$filter={filter_expr}"
+            )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            r = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+            r.raise_for_status()
+            data = r.json()
+            return data.get("value", []), data.get("@odata.nextLink")
 
     async def fetch_message_body(self, user: str, message_id: str) -> dict:
         token = await self.token()

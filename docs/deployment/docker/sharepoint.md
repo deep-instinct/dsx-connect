@@ -223,27 +223,30 @@ would move quarantined files to `dsx-quarantine` under the same bucket or contai
 
 Monitoring enables **on-access scanning** for new/updated SharePoint content.
 
-### Microsoft Graph Subscription Callback Model
+### How It Works
 
 When monitoring is enabled:
 
-1. Connector creates/refreshes a Microsoft Graph subscription.
-2. Graph posts notifications to the connector webhook callback URL.
-3. Connector validates notification state (optional) and enqueues scans.
-4. Connector performs delta reconciliation to avoid missed events.
+1. Make the SharePoint connector callback publicly reachable over HTTPS.
+2. Set that public base URL in `SP_WEBHOOK_URL`.
+3. The connector registers that callback URL with Microsoft Graph.
+4. Microsoft Graph sends change notifications to the connector, and the connector enqueues scans for new or updated content.
+5. The connector also performs delta reconciliation so missed events can still be recovered.
 
 Required for monitoring:
 
 | Variable | Description |
 | --- | --- |
-| `SP_WEBHOOK_ENABLED` | Enable Graph notification subscriptions (`true`/`false`). |
-| `SP_WEBHOOK_URL` | Public **HTTPS** base URL Graph can call (required when webhooks enabled). |
+| `SP_WEBHOOK_ENABLED` | Enable SharePoint monitoring (`true`/`false`). |
+| `SP_WEBHOOK_URL` | Public **HTTPS** base URL for the connector callback. Microsoft Graph must be able to reach this URL. |
 | `SP_WEBHOOK_CLIENT_STATE` | Optional shared secret echoed by Graph for validation. |
 | `SP_WEBHOOK_CHANGE_TYPES` | Optional change types (default `updated`). |
 
 Notes:
 
-* `SP_WEBHOOK_URL` must be reachable from Microsoft Graph (not localhost-only).
+* `SP_WEBHOOK_URL` should be the public base URL only. The connector appends its webhook path when it registers with Graph.
+* `SP_WEBHOOK_URL` must be reachable from Microsoft Graph, so `localhost` or a Docker-only hostname will not work.
+* For local demos, expose the connector through a tunnel such as `ngrok` and use that public HTTPS URL.
 * Keep `DSXCONNECTOR_CONNECTOR_URL` as the internal Docker network URL for dsx-connect-to-connector traffic.
 * If monitoring is disabled, full scan/manual workflows still work.
 
@@ -257,4 +260,3 @@ Internally, keep:
 `DSXCONNECTOR_CONNECTOR_URL=http://sharepoint-connector:8640`
 
 so DSX-Connect can reach the container over the Docker network.
-

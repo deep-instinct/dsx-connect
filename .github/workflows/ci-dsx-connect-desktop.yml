@@ -6,11 +6,21 @@ on:
       - '.github/workflows/ci-dsx-connect-desktop.yml'
       - '.github/workflows/release-dsx-connect-desktop.yml'
       - 'dsx_connect_desktop/**'
+      - 'dsx_connect/**'
+      - 'connectors/**'
+      - 'shared/**'
+      - 'dsx_connect_sdk/**'
+      - 'dsxa_sdk_py/**'
   pull_request:
     paths:
       - '.github/workflows/ci-dsx-connect-desktop.yml'
       - '.github/workflows/release-dsx-connect-desktop.yml'
       - 'dsx_connect_desktop/**'
+      - 'dsx_connect/**'
+      - 'connectors/**'
+      - 'shared/**'
+      - 'dsx_connect_sdk/**'
+      - 'dsxa_sdk_py/**'
 
 permissions:
   contents: read
@@ -72,7 +82,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dsx_connect_desktop/package-lock.json
 
@@ -108,7 +118,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dsx_connect_desktop/package-lock.json
 
@@ -173,7 +183,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dsx_connect_desktop/package-lock.json
 
@@ -214,7 +224,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: dsx_connect_desktop/package-lock.json
 

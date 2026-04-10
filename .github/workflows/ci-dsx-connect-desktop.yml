@@ -104,7 +104,15 @@ jobs:
           exit-code: "1"
 
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: macos-13
+          - arch: arm64
+            runner: macos-latest
+    runs-on: ${{ matrix.runner }}
     needs:
       - resolve-version
       - security-compliance
@@ -125,8 +133,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build macOS app
-        run: npm run build:mac
+      - name: Build macOS ${{ matrix.arch }} app
+        run: npm run build:mac -- --${{ matrix.arch }}
 
       - name: Collect compliance files
         run: |
@@ -137,7 +145,7 @@ jobs:
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dsx-connect-desktop-macos
+          name: dsx-connect-desktop-macos-${{ matrix.arch }}
           path: |
             dsx_connect_desktop/dist/*.dmg
             dsx_connect_desktop/dist/*.zip

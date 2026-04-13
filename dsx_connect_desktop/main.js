@@ -146,11 +146,16 @@ function exists(p) {
 
 function resolvePython() {
   const candidates = [
+    process.env.DSXCONNECT_LOCAL_PYTHON,
     path.join(REPO_ROOT, '.venv', 'bin', 'python'),
     path.join(REPO_ROOT, '.venv', 'Scripts', 'python.exe'),
+    '/opt/homebrew/bin/python3',
+    '/usr/local/bin/python3',
+    '/Library/Frameworks/Python.framework/Versions/Current/bin/python3',
+    '/usr/bin/python3',
     'python3',
     'python'
-  ];
+  ].filter(Boolean);
   for (const c of candidates) {
     if (c.includes(path.sep)) {
       if (exists(c)) return c;
@@ -200,6 +205,8 @@ function resolveRedisServerBinary() {
 
 function desktopProcessEnv() {
   const env = { ...process.env };
+  const pathParts = ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+  env.PATH = [...pathParts, env.PATH || ''].filter(Boolean).join(path.delimiter);
   const redisServer = resolveRedisServerBinary();
   if (redisServer && redisServer.includes(path.sep)) {
     env.DSXCONNECT_LOCAL_REDIS_SERVER = redisServer;
@@ -1646,7 +1653,7 @@ function stopCore() {
   });
 }
 
-function createWindow() {
+function createWindow({ loadApp = true } = {}) {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 920,
@@ -1662,7 +1669,63 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL(API_URL);
+  if (loadApp) {
+    mainWindow.loadURL(API_URL);
+  } else {
+    const html = `
+      <!doctype html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body {
+              margin: 0;
+              height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              background: #0f1720;
+              color: #e5e7eb;
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            }
+            .wrap {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              gap: 12px;
+            }
+            .spinner {
+              width: 24px;
+              height: 24px;
+              border: 3px solid rgba(148, 163, 184, 0.35);
+              border-top-color: #93c5fd;
+              border-radius: 50%;
+              animation: spin 0.9s linear infinite;
+            }
+            .title {
+              font-size: 16px;
+              font-weight: 600;
+            }
+            .sub {
+              font-size: 12px;
+              color: #94a3b8;
+            }
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="wrap">
+            <div class="spinner"></div>
+            <div class="title">Starting DSX-Connect Desktop...</div>
+            <div class="sub">Starting local services</div>
+          </div>
+        </body>
+      </html>
+    `;
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html)}`);
+  }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -1767,10 +1830,11 @@ app.whenReady().then(async () => {
   loadLaunchedConnectors();
   saveLaunchedConnectors();
   buildAppMenu();
-  await ensureCoreDesktopState();
-  startCore();
+  createWindow({ loadApp: false });
 
   try {
+    await ensureCoreDesktopState();
+    startCore();
     await waitForHttpReady(API_URL);
     const appModeOk = await ensureCoreInAppMode();
     if (!appModeOk) {
@@ -1785,11 +1849,15 @@ app.whenReady().then(async () => {
     if (rehydrated.failed && rehydrated.failed.length) {
       console.error('Connector rehydrate failures:', rehydrated.failed);
     }
-    createWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.loadURL(API_URL);
+    } else {
+      createWindow();
+    }
   } catch (err) {
     dialog.showErrorBox(
       'DSX Connect Local Launcher',
-      `Could not start DSX Connect API at ${API_URL}.\n\n${err.message}`
+      `Could not start DSX Connect API at ${API_URL}.\n\n${String(err && err.message ? err.message : err)}`
     );
     app.quit();
   }

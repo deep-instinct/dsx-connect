@@ -216,6 +216,7 @@ nav:
       - Overview: resources/index.md
       - Tools:
           - DSXA Desktop: resources/dsxa-desktop.md
+          - DSX-Connect Desktop: resources/dsx-connect-desktop.md
       - Docker Compose Bundles: https://github.com/deep-instinct/dsx-connect/releases
       - DSX-Connect Image Repo: https://hub.docker.com/repositories/dsxconnect
       - GitHub: https://github.com/deep-instinct/dsx-connect

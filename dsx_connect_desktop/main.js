@@ -95,6 +95,7 @@ let coreProcess = null;
 const launchedConnectors = [];
 const pendingConnectorPorts = new Set();
 const SHUTDOWN_TIMEOUT_MS = 10000;
+const SHUTDOWN_HARD_TIMEOUT_MS = 30000;
 
 function refreshEmbeddedUi() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -167,6 +168,43 @@ function checkCommandAvailable(cmd, args = ['--version']) {
   } catch {
     return false;
   }
+}
+
+function isExecutableFile(filePath) {
+  try {
+    if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return false;
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveRedisServerBinary() {
+  const override = String(process.env.DSXCONNECT_LOCAL_REDIS_SERVER || '').trim();
+  if (override) {
+    return isExecutableFile(override) ? override : null;
+  }
+
+  for (const candidate of [
+    '/opt/homebrew/bin/redis-server',
+    '/usr/local/bin/redis-server',
+    '/opt/local/bin/redis-server',
+    '/usr/bin/redis-server',
+  ]) {
+    if (isExecutableFile(candidate)) return candidate;
+  }
+
+  return checkCommandAvailable('redis-server', ['--version']) ? 'redis-server' : null;
+}
+
+function desktopProcessEnv() {
+  const env = { ...process.env };
+  const redisServer = resolveRedisServerBinary();
+  if (redisServer && redisServer.includes(path.sep)) {
+    env.DSXCONNECT_LOCAL_REDIS_SERVER = redisServer;
+  }
+  return env;
 }
 
 function getTunnelTool() {
@@ -336,7 +374,8 @@ async function ensureTunnelForItem(item) {
 }
 
 function ensureDesktopPrereqs() {
-  if (!checkCommandAvailable('redis-server', ['--version'])) {
+  const redisServer = resolveRedisServerBinary();
+  if (!redisServer) {
     dialog.showErrorBox(
       'DSX-Connect Desktop',
       'redis-server is required but was not found on PATH.\n\n' +
@@ -451,7 +490,7 @@ function startCore() {
 
   coreProcess = spawn(python, args, {
     cwd: REPO_ROOT,
-    env: process.env,
+    env: desktopProcessEnv(),
     stdio: 'inherit',
     detached: false
   });
@@ -502,7 +541,7 @@ function runPythonCommand(scriptPath, command, commandArgs = [], globalArgs = []
     const args = [scriptPath, ...globalArgs, command, ...commandArgs];
     const proc = spawn(python, args, {
       cwd: REPO_ROOT,
-      env: process.env,
+      env: desktopProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -529,7 +568,7 @@ function runPythonCommandWithTimeout(scriptPath, command, commandArgs = [], glob
     const args = [scriptPath, ...globalArgs, command, ...commandArgs];
     const proc = spawn(python, args, {
       cwd: REPO_ROOT,
-      env: process.env,
+      env: desktopProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
@@ -1586,7 +1625,7 @@ function stopCore() {
     const args = [CORE_MANAGER, '--state-dir', CORE_STATE_DIR, 'stop'];
     const proc = spawn(python, args, {
       cwd: REPO_ROOT,
-      env: process.env,
+      env: desktopProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let settled = false;
@@ -1640,15 +1679,14 @@ function showShutdownWindow() {
     width: 460,
     height: 170,
     resizable: false,
-    minimizable: false,
+    minimizable: true,
     maximizable: false,
-    closable: false,
+    closable: true,
     fullscreenable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    frame: false,
-    modal: !!mainWindow,
-    parent: mainWindow || undefined,
+    alwaysOnTop: false,
+    skipTaskbar: false,
+    frame: true,
+    modal: false,
     backgroundColor: '#0f1720',
     title: 'Shutting Down',
     webPreferences: {
@@ -1695,6 +1733,10 @@ function showShutdownWindow() {
             font-size: 12px;
             color: #94a3b8;
           }
+          .hint {
+            font-size: 11px;
+            color: #64748b;
+          }
           @keyframes spin {
             to { transform: rotate(360deg); }
           }
@@ -1705,6 +1747,7 @@ function showShutdownWindow() {
           <div class="spinner"></div>
           <div class="title">DSX-Connect Desktop is shutting down...</div>
           <div class="sub">Stopping connectors and local services</div>
+          <div class="hint">You can close this window; shutdown will continue.</div>
         </div>
       </body>
     </html>
@@ -1770,18 +1813,27 @@ app.on('before-quit', async (event) => {
   app.__stopping = true;
   event.preventDefault();
   showShutdownWindow();
-  try {
-    if (shouldStopConnectorsOnExit()) {
-      await stopAllLaunchedConnectorsInternal({ showDialog: false, removeFromLauncher: false });
-    }
-  } catch {}
-  try {
-    stopAllTunnels();
-  } catch {}
-  try {
-    if (shouldStopCoreOnExit()) {
-      await stopCore();
-    }
-  } catch {}
+  const shutdownWork = (async () => {
+    try {
+      if (shouldStopConnectorsOnExit()) {
+        await stopAllLaunchedConnectorsInternal({ showDialog: false, removeFromLauncher: false });
+      }
+    } catch {}
+    try {
+      stopAllTunnels();
+    } catch {}
+    try {
+      if (shouldStopCoreOnExit()) {
+        await stopCore();
+      }
+    } catch {}
+  })();
+  const hardTimeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), SHUTDOWN_HARD_TIMEOUT_MS));
+  const result = await Promise.race([shutdownWork.then(() => 'done'), hardTimeout]);
+  if (result === 'timeout') {
+    console.warn(`Shutdown exceeded ${SHUTDOWN_HARD_TIMEOUT_MS}ms; forcing app exit.`);
+    app.exit(0);
+    return;
+  }
   app.quit();
 });

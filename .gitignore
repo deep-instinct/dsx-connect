@@ -4,6 +4,8 @@ __pycache__/#.envs
 .dev.env
 __pycache__/
 *.pyc
+node_modules/
+**/SHOST/
 
 # DSXA SDK test assets
 dsxa_sdk/tests/assets/samples/

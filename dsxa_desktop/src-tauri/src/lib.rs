@@ -307,6 +307,81 @@ fn base64_encode_bytes(bytes: &[u8]) -> String {
     out
 }
 
+fn shell_quote(value: &str) -> String {
+    if value.is_empty() {
+        return "''".to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
+}
+
+fn build_scan_file_curl_command(
+    ctx: &ContextConfig,
+    file_path: &str,
+    metadata: Option<&str>,
+    password: Option<&str>,
+) -> String {
+    let base = ctx.base_url.trim_end_matches('/');
+    let endpoint = if ctx.base64_mode {
+        "/scan/base64/v2"
+    } else {
+        "/scan/binary/v2"
+    };
+    let url = format!("{base}{endpoint}");
+
+    let mut parts = vec![
+        "curl".to_string(),
+        "-sS".to_string(),
+        "-X".to_string(),
+        "POST".to_string(),
+    ];
+
+    if !ctx.verify_tls && base.starts_with("https://") {
+        parts.push("-k".to_string());
+    }
+
+    parts.push(shell_quote(&url));
+    parts.push("-H".to_string());
+    parts.push(shell_quote("Content-Type: application/octet-stream"));
+    parts.push("-H".to_string());
+    parts.push(shell_quote(&format!("protected_entity: {}", ctx.protected_entity)));
+
+    if let Some(md) = metadata {
+        if !md.is_empty() {
+            parts.push("-H".to_string());
+            parts.push(shell_quote(&format!("X-Custom-Metadata: {md}")));
+        }
+    }
+
+    if let Some(pass) = password {
+        if !pass.is_empty() {
+            parts.push("-H".to_string());
+            parts.push(shell_quote(&format!(
+                "scan_password: {}",
+                base64_encode(pass)
+            )));
+        }
+    }
+
+    if !ctx.auth_token.is_empty() {
+        parts.push("-H".to_string());
+        parts.push(shell_quote(&format!("AUTH: {}", ctx.auth_token)));
+        parts.push("-H".to_string());
+        parts.push(shell_quote(&format!("AUTH_TOKEN: {}", ctx.auth_token)));
+    }
+
+    parts.push("--data-binary".to_string());
+    if ctx.base64_mode {
+        parts.push(format!(
+            "\"$(base64 < {} | tr -d '\\n')\"",
+            shell_quote(file_path)
+        ));
+    } else {
+        parts.push(format!("@{}", shell_quote(file_path)));
+    }
+
+    parts.join(" ")
+}
+
 fn build_http_client(ctx: &ContextConfig) -> Result<reqwest::Client, String> {
     reqwest::Client::builder()
         .danger_accept_invalid_certs(!ctx.verify_tls)
@@ -641,6 +716,12 @@ async fn scan_file(req: ScanFileRequest) -> Result<Value, String> {
         req.password.as_deref(),
         false,
     )?;
+    let curl_command = build_scan_file_curl_command(
+        &req.context,
+        &req.file_path,
+        metadata.as_deref(),
+        req.password.as_deref(),
+    );
 
     let client = build_http_client(&req.context)?;
     let result = if req.context.base64_mode {
@@ -660,6 +741,7 @@ async fn scan_file(req: ScanFileRequest) -> Result<Value, String> {
     Ok(json!({
         "operation": "scan-file",
         "file": req.file_path,
+        "curl_command": curl_command,
         "elapsed_seconds": started.elapsed().as_secs_f64(),
         "result": result
     }))

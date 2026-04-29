@@ -2,6 +2,34 @@
 
 JavaScript SDK for DSXA APIs, usable in both Node.js and browser apps.
 
+## Overview
+
+DSXA is a file scanning service deployable in local and cloud docker/cluster environments. It exposes a REST API for submitting files, hashes, and file paths for malware analysis.
+
+Scanning a file can be as simple as calling the `/scan/binary/v2` endpoint directly:
+
+```bash
+curl -sS -X POST "https://scanner.example.com/scan/binary/v2" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @sample.pdf
+```
+
+```js
+import fs from "node:fs";
+
+const response = await fetch("https://scanner.example.com/scan/binary/v2", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/octet-stream",
+  },
+  body: fs.createReadStream("sample.pdf")
+});
+
+console.log(await response.json());
+```
+
+This SDK is provided for cases where raw HTTP is too repetitive or too error-prone. Use the SDK when you want modeled responses, browser and Node support, file/path helpers, stream and base64 helpers, CLI examples, and a cleaner integration surface than hand-building every request. Use direct REST calls when you only need a one-off request, are validating endpoint behavior, or are troubleshooting headers and payloads.
+
 ## Install (local workspace)
 
 ```bash

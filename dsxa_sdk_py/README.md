@@ -2,6 +2,35 @@
 
 Lightweight Python client for Deep Instinct DSX Application Scanner (DSXA) REST APIs. Provides convenient helpers for synchronous file scans (`/scan/binary/v2`, `/scan/base64/v2`), hash scans, and the asynchronous scan-by-path workflow (`/scan/by_path` + `/result/by_path`).
 
+## Overview
+
+DSXA is a file scanning service deployable in local and cloud docker/cluster environments. It exposes a REST API for submitting files, hashes, and file paths for malware analysis.
+Scanning a file can be as simple as calling the `/scan/binary/v2` endpoint directly:
+
+```bash
+curl -sS -X POST "https://scanner.example.com/scan/binary/v2" \
+  -H "Content-Type: application/octet-stream" \
+  --data-binary @sample.pdf
+```
+
+```python
+import requests
+
+with open("sample.pdf", "rb") as fh:
+    response = requests.post(
+        "https://scanner.example.com/scan/binary/v2",
+        headers={
+            "Content-Type": "application/octet-stream",
+        },
+        data=fh,
+        timeout=30,
+    )
+
+print(response.json())
+```
+
+This SDK is provided for cases where raw HTTP is too repetitive or too error-prone. Use the SDK when you want typed responses, sync and async clients, scan helpers for files and streams, automatic header handling, password encoding, polling helpers, and a more stable interface for application code. Use direct REST calls when you only need a very small integration or you are debugging requests at the protocol level.
+
 ## Installation
 
 ```bash

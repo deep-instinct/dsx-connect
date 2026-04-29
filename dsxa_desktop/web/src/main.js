@@ -348,6 +348,7 @@ function renderOutputBlock(title, lines) {
 function renderScanFileResult(result) {
   const lines = [
     `File: ${result?.file || ""}`,
+    `Curl: ${result?.curl_command || ""}`,
     `Elapsed: ${formatSeconds(result?.elapsed_seconds)}s`,
     "",
     JSON.stringify(result?.result || {}, null, 2)

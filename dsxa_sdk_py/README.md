@@ -33,14 +33,17 @@ This SDK is provided for cases where raw HTTP is too repetitive or too error-pro
 
 ## Installation
 
-```bash
-pip install dsxa-sdk-py
-```
-
-_Until this package is published to PyPI or an internal index, install via git/path:_
+Install from local source:
 
 ```bash
 pip install /path/to/dsx-connect/dsxa_sdk_py
+```
+
+Install for local development (editable):
+
+```bash
+cd /path/to/dsx-connect/dsxa_sdk_py
+pip install -e .
 ```
 
 ## License
@@ -168,7 +171,7 @@ async with AsyncDSXAClient(base_url="https://scanner.example.com") as client:
 
 ## CLI
 
-Install the package (e.g., `pip install -e .`) and use the Typer-based CLI for ad-hoc scans:
+Install from local source or use an editable install as shown above, then use the Typer-based CLI for ad-hoc scans:
 
 Primary uses:
 
@@ -176,12 +179,17 @@ Primary uses:
 - scan individual files or folders from the command line
 - serve as runnable example code for SDK users
 
+Important:
+
+- Global CLI options such as `--base-url`, `--token`, `--protected-entity`, and `--context` must appear before the subcommand.
+- When running without install, use `python -m dsxa_sdk_py.cli ...`.
+
 ```bash
 # Help
 dsxa --help
 
 # Binary scan (single file, sync client)
-dsxa --base-url https://scanner --token $TOKEN scan-binary --file dsxa_sdk_py/tests/assets/samples/BadMojoResume.pdf --metadata App123 --protected-entity 3
+dsxa --base-url https://scanner --token $TOKEN --protected-entity 3 scan-binary dsxa_sdk_py/tests/assets/samples/BadMojoResume.pdf --metadata App123
 
 # Hash scan
 dsxa --base-url https://scanner --token $TOKEN scan-hash --hash e3c8ebdf74e4b7a5...
@@ -191,6 +199,9 @@ dsxa --base-url https://scanner scan-files dsxa_sdk_py/tests/assets/samples/* --
 
 # Recursively scan a folder
 dsxa --base-url https://scanner scan-folder ./samples --pattern "**/*.pdf" --concurrency 8
+
+# Run from an unpacked source tree without installing
+python3 -m dsxa_sdk_py.cli --base-url https://scanner scan-files dsxa_sdk_py/tests/assets/samples/*
 ```
 
 Environment variables (`DSXA_BASE_URL`, optional `DSXA_AUTH_TOKEN`, optional `DSXA_PROTECTED_ENTITY` which defaults to `1`, `DSXA_VERIFY_TLS`) may be used instead of flags. If DSXA auth is disabled, simply omit `--token` / `DSXA_AUTH_TOKEN`.
@@ -218,7 +229,7 @@ dsxa context list
 dsxa context set default
 
 # Use a specific context for a single command
-dsxa --context default scan-binary --file sample.pdf
+dsxa --context default scan-binary sample.pdf
 ```
 
 ## Distribution (PyPI or direct)

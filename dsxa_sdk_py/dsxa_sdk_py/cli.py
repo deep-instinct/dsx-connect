@@ -2,7 +2,7 @@
 CLI entrypoint for dsxa-sdk.
 
 Example:
-    dsxa --base-url https://scanner --token $TOKEN scan-binary --file sample.docx --metadata App123 --protected-entity 3
+    dsxa --base-url https://scanner --token $TOKEN scan-file sample.docx --metadata App123 --protected-entity 3
 """
 
 from __future__ import annotations
@@ -32,7 +32,14 @@ app = typer.Typer(
         "Primary uses:\n"
         "1. Baseline DSXA throughput and compare concurrency settings.\n"
         "2. Scan individual files or folders from the command line.\n"
-        "3. Serve as runnable example code for SDK users."
+        "3. Serve as runnable example code for SDK users.\n\n"
+        "Important:\n"
+        "Global options such as --base-url, --token, --protected-entity, and --context "
+        "must appear before the subcommand.\n\n"
+        "Examples:\n"
+        "  dsxa --base-url https://scanner scan-file sample.docx\n"
+        "  dsxa --base-url https://scanner scan-files samples/* --concurrency 4\n"
+        "  python -m dsxa_sdk_py.cli --base-url https://scanner scan-hash --hash <sha256>"
     ),
     no_args_is_help=True,
 )
@@ -101,6 +108,17 @@ def main(
             "Proceeding without it.",
             err=True,
         )
+
+    # Context management commands should work even when no scanner URL is configured yet.
+    if ctx.invoked_subcommand == "context":
+        ctx.obj = CLIConfig(
+            base_url="",
+            auth_token=auth_token if auth_token is not None else (profile or {}).get("auth_token"),
+            protected_entity=protected_entity if protected_entity is not None else (profile or {}).get("protected_entity", 1),
+            verify_tls=verify_tls if verify_tls is not None else (profile or {}).get("verify_tls", True),
+            context_name=selected_context,
+        )
+        return
 
     resolved_base_url = base_url or (profile or {}).get("base_url")
     if not resolved_base_url:
@@ -331,7 +349,7 @@ def scan_files(
     """
     Scan one or more explicit file paths concurrently using the async client.
     Example:
-        dsxa scan-files dsxa_sdk_py/tests/assets/samples/* --concurrency 4
+        dsxa --base-url https://scanner scan-files dsxa_sdk_py/tests/assets/samples/* --concurrency 4
     """
     if not files:
         typer.echo("No files specified", err=True)
@@ -370,8 +388,8 @@ def scan_folder(
     """
     Scan all files under a folder (matching the given glob pattern) using the async client.
     Examples:
-        dsxa scan-folder dsxa_sdk_py/tests/assets/samples --pattern "**/*"
-        dsxa scan-folder ./samples --pattern "**/*.pdf" --concurrency 8
+        dsxa --base-url https://scanner scan-folder dsxa_sdk_py/tests/assets/samples --pattern "**/*"
+        dsxa --base-url https://scanner scan-folder ./samples --pattern "**/*.pdf" --concurrency 8
     """
     if not folder.is_dir():
         typer.echo(f"{folder} is not a directory", err=True)
@@ -573,3 +591,7 @@ def get_async_client(ctx: typer.Context) -> AsyncDSXAClient:
         default_protected_entity=cfg.protected_entity,
         verify_tls=cfg.verify_tls,
     )
+
+
+if __name__ == "__main__":
+    app()

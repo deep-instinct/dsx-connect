@@ -75,17 +75,32 @@ jobs:
           mkdir -p dist
           npm pack --pack-destination dist
 
+      - name: Create source-only tarball
+        run: |
+          version="${{ needs.resolve-version.outputs.version }}"
+          release_dir="../release"
+          package_dir="dsxa_sdk_js-${version}"
+          mkdir -p "$release_dir"
+          cp -R . "$release_dir/$package_dir"
+          rm -rf "$release_dir/$package_dir/dist" \
+                 "$release_dir/$package_dir/node_modules"
+          tar -czf "$release_dir/dsxa_sdk_js-${version}-source-only.tar.gz" -C "$release_dir" "$package_dir"
+
       - name: Upload workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dsxa-sdk-js-dist
-          path: dsxa_sdk_js/dist/*
+          path: |
+            dsxa_sdk_js/dist/*
+            release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}-source-only.tar.gz
 
       - name: Publish GitHub release
         if: github.event_name == 'push' || inputs.publish_release
         uses: softprops/action-gh-release@v2
         with:
-          files: dsxa_sdk_js/dist/*
+          files: |
+            dsxa_sdk_js/dist/*
+            release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}-source-only.tar.gz
           tag_name: ${{ needs.resolve-version.outputs.release_tag }}
           name: DSXA SDK JavaScript ${{ needs.resolve-version.outputs.version }}
           generate_release_notes: true

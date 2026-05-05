@@ -74,6 +74,9 @@ jobs:
         run: |
           mkdir -p dist
           npm pack --pack-destination dist
+          version="${{ needs.resolve-version.outputs.version }}"
+          packed_file="$(find dist -maxdepth 1 -type f -name '*.tgz' | head -n 1)"
+          mv "$packed_file" "dist/dsxa-sdk-js-${version}.tgz"
 
       - name: Create source-only tarball
         run: |

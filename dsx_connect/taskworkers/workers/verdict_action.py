@@ -11,7 +11,7 @@ from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryGroup, 
 from dsx_connect.taskworkers.dlq_store import enqueue_verdict_action_dlq_sync, make_verdict_action_dlq_item
 
 from dsx_connect.connectors.client import get_connector_client
-from dsx_connect.dsxa_client.verdict_models import DPAVerdictModel2, DPAVerdictEnum
+from dsxa_sdk_py.models import ScanResponse, VerdictEnum
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum
 from shared.dsx_logging import dsx_logging
 from shared.routes import ConnectorAPI
@@ -27,7 +27,7 @@ class VerdictActionWorker(BaseWorker):
         # 1) validate inputs
         try:
             scan_request = ScanRequestModel.model_validate(scan_request_dict)
-            verdict = DPAVerdictModel2.model_validate(verdict_dict)
+            verdict = ScanResponse.model_validate(verdict_dict)
             dsx_logging.debug(f"Processing {scan_request} for scan verdict: {verdict}")
         except ValidationError as e:
             dsx_logging.error(f"Failed to validate scan request or verdict: {e}", exc_info=True)
@@ -40,7 +40,7 @@ class VerdictActionWorker(BaseWorker):
             message="No action taken",
         )
 
-        if verdict.verdict == DPAVerdictEnum.MALICIOUS:
+        if verdict.verdict == VerdictEnum.MALICIOUS:
             # 2a. Call item_action if verdict is MALICIOUS and perhaps in some future - where the severity meets a threshold
             dsx_logging.info(f"Verdict is MALICIOUS, calling item_action")
             target = scan_request.connector or scan_request.connector_url

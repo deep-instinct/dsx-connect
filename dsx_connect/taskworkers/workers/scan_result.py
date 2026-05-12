@@ -17,7 +17,7 @@ from dsx_connect.taskworkers.dlq_store import enqueue_scan_result_dlq_sync, \
     make_scan_result_dlq_item
 from dsx_connect.taskworkers.errors import TaskError, MalformedScanRequest, MalformedResponse
 
-from dsx_connect.dsxa_client.verdict_models import DPAVerdictModel2
+from dsxa_sdk_py.models import ScanResponse
 from shared.models.connector_models import ScanRequestModel, ItemActionModel
 from dsx_connect.models.scan_result import ScanResultModel, ScanResultStatusEnum
 from shared.dsx_logging import dsx_logging
@@ -89,7 +89,7 @@ class ScanResultWorker(BaseWorker):
         # 1) validate inputs
         try:
             scan_request = ScanRequestModel.model_validate(scan_request_dict)
-            verdict = DPAVerdictModel2.model_validate(verdict_dict)
+            verdict = ScanResponse.model_validate(verdict_dict)
             item_action_status = ItemActionStatusResponse.model_validate(item_action_dict)
         except ValidationError as e:
             raise MalformedResponse(f"Invalid scan_result inputs: {e}") from e

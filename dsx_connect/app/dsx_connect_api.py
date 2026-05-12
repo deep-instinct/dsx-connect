@@ -31,7 +31,6 @@ from shared.routes import (
     route_name,
     Action, route_path,
 )
-from dsx_connect.dsxa_client.dsxa_client import DSXAClient
 from shared.dsx_logging import dsx_logging
 
 from dsx_connect.app.dependencies import static_path

@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 class VerdictEnum(str, Enum):
     BENIGN = "Benign"
     MALICIOUS = "Malicious"
+    UNKNOWN = "Unknown"
+    UNSUPPORTED = "Unsupported File Type"
     NOT_SCANNED = "Not Scanned"
     SCANNING = "Scanning"
     NON_COMPLIANT = "Non Compliant"
@@ -49,6 +51,9 @@ class ScanResponse(BaseModel):
     file_info: Optional[FileInfo] = None
     protected_entity: Optional[int] = None
     scan_duration_in_microseconds: Optional[int] = None
+    dsxconnect_request_elapsed_ms: Optional[float] = None
+    dsxconnect_read_elapsed_ms: Optional[float] = None
+    dsxconnect_dsxa_elapsed_ms: Optional[float] = None
     container_files_scanned: Optional[int] = None
     container_files_scanned_size: Optional[int] = None
     x_custom_metadata: Optional[str] = Field(None, alias="X-Custom-Metadata")

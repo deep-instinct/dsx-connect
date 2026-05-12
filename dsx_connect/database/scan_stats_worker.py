@@ -1,6 +1,6 @@
 from dsx_connect.database.scan_stats_base_db import ScanStatsBaseDB
 from dsx_connect.models.scan_result import ScanResultModel, ScanStatsModel
-from dsx_connect.dsxa_client.verdict_models import DPAVerdictEnum
+from dsxa_sdk_py.models import VerdictEnum
 
 import heapq
 
@@ -51,15 +51,15 @@ class ScanStatsWorker:
         # Increment verdict counters
         try:
             v = scan_result.verdict.verdict if scan_result.verdict else None
-            if v == DPAVerdictEnum.BENIGN:
+            if v == VerdictEnum.BENIGN:
                 stats.benign_count += 1
-            elif v == DPAVerdictEnum.MALICIOUS:
+            elif v == VerdictEnum.MALICIOUS:
                 stats.malicious_count += 1
-            elif v == DPAVerdictEnum.UNKNOWN:
+            elif v == VerdictEnum.UNKNOWN:
                 stats.unknown_count += 1
-            elif v == DPAVerdictEnum.UNSUPPORTED:
+            elif v == VerdictEnum.UNSUPPORTED:
                 stats.unsupported_count += 1
-            elif v in {DPAVerdictEnum.NOT_SCANNED, DPAVerdictEnum.NON_COMPLIANT}:
+            elif v in {VerdictEnum.NOT_SCANNED, VerdictEnum.NON_COMPLIANT}:
                 stats.not_scanned_count += 1
                 try:
                     reason = (

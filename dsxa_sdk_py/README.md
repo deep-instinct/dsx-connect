@@ -169,6 +169,19 @@ async with AsyncDSXAClient(base_url="https://scanner.example.com") as client:
     resp = await client.scan_binary_stream(async_file_chunks("sample.docx"))
 ```
 
+## FastAPI upload demo
+
+A minimal multi-file intake demo is included under [examples/webapp](examples/webapp/README.md). It uses FastAPI plus `AsyncDSXAClient` to scan uploads concurrently on the server, accepts benign files into a local intake folder, and reports rejected files back to the browser without SSE or background jobs.
+
+Install and run:
+
+```bash
+cd dsxa_sdk_py
+pip install -e ".[webapp]"
+export DSXA_BASE_URL=https://scanner.example.com
+uvicorn examples.webapp.app:app --reload
+```
+
 ## CLI
 
 Install from local source or use an editable install as shown above, then use the Typer-based CLI for ad-hoc scans:

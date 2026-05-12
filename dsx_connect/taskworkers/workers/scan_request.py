@@ -17,6 +17,7 @@ ensure_sdk_on_path()
 
 from dsxa_sdk_py import DSXAClient
 from dsxa_sdk_py.exceptions import DSXAError, AuthenticationError, BadRequestError, ServerError
+from dsxa_sdk_py.models import FileInfo, ScanResponse, VerdictDetails, VerdictEnum
 from dsx_connect.taskworkers.workers.base_worker import BaseWorker, RetryDecision, RetryGroups
 from dsx_connect.config import get_config
 from dsx_connect.taskworkers.dlq_store import enqueue_scan_request_dlq_sync, make_scan_request_dlq_item
@@ -31,12 +32,6 @@ from dsx_connect.taskworkers.names import Tasks, Queues
 import redis  # lightweight sync client for quick job-state checks
 from shared.dsx_logging import dsx_logging
 from shared.routes import ConnectorAPI
-from dsx_connect.dsxa_client.verdict_models import (
-    DPAVerdictModel2,
-    DPAVerdictEnum,
-    DPAVerdictDetailsModel,
-    DPAVerdictFileInfoModel,
-)
 from dsx_connect.messaging.state_keys import job_key, scanner_inflight_key
 from dsx_connect.messaging.state_scripts import get_acquire_scanner_script
 
@@ -284,11 +279,11 @@ class ScanRequestWorker(BaseWorker):
                 file_stream,
                 custom_metadata=metadata_info,
             )
-            dpa_verdict = self._convert_verdict(resp)
+            dpa_verdict = self._normalize_verdict(resp)
 
             # Handle special "initializing" case
             reason = getattr(dpa_verdict.verdict_details, "reason", "") or ""
-            if dpa_verdict.verdict == DPAVerdictEnum.NOT_SCANNED and "initializing" in reason:
+            if dpa_verdict.verdict == VerdictEnum.NOT_SCANNED and "initializing" in reason:
                 raise DsxaServerError("DSXA scanner is initializing")
 
             return dpa_verdict
@@ -352,47 +347,24 @@ class ScanRequestWorker(BaseWorker):
             metadata_info += f",scan_request_task_id:{_encode_value(task_id)}"
         return metadata_info
 
-    def _convert_verdict(self, resp):
-        # Map dsxa_sdk ScanResponse to DPAVerdictModel2 (legacy)
-        verdict_map = {
-            "benign": DPAVerdictEnum.BENIGN,
-            "malicious": DPAVerdictEnum.MALICIOUS,
-            "not scanned": DPAVerdictEnum.NOT_SCANNED,
-            "scanning": DPAVerdictEnum.NOT_SCANNED,
-            "non compliant": DPAVerdictEnum.NON_COMPLIANT,
-            "unknown": DPAVerdictEnum.UNKNOWN,
-        }
-        raw_verdict = getattr(resp, "verdict", None)
-        verdict_str = raw_verdict.value if hasattr(raw_verdict, "value") else str(raw_verdict or "")
-        verdict_val = verdict_map.get(verdict_str.lower(), DPAVerdictEnum.UNKNOWN)
+    def _normalize_verdict(self, resp: ScanResponse) -> ScanResponse:
+        if resp.verdict != VerdictEnum.SCANNING:
+            return resp
 
-        details = DPAVerdictDetailsModel(
-            event_description=getattr(resp.verdict_details, "event_description", None) or "",
-            reason=getattr(resp.verdict_details, "reason", None),
-            threat_type=getattr(resp.verdict_details, "threat_type", None),
-        )
-
-        file_info = None
-        if resp.file_info:
-            file_info = DPAVerdictFileInfoModel(
-                file_type=getattr(resp.file_info, "file_type", None) or "",
-                file_size_in_bytes=getattr(resp.file_info, "file_size_in_bytes", None) or 0,
-                file_hash=getattr(resp.file_info, "file_hash", None),
-                container_hash=getattr(resp.file_info, "container_hash", None),
-                additional_office_data=None,
-            )
-
-        return DPAVerdictModel2(
-            scan_guid=getattr(resp, "scan_guid", None),
-            verdict=verdict_val,
-            verdict_details=details,
-            file_info=file_info,
-            protected_entity=getattr(resp, "protected_entity", None),
-            scan_duration_in_microseconds=getattr(resp, "scan_duration_in_microseconds", None) or -1,
-            container_files_scanned=getattr(resp, "container_files_scanned", None),
-            container_files_scanned_size=getattr(resp, "container_files_scanned_size", None),
-            x_custom_metadata=getattr(resp, "x_custom_metadata", None),
-            last_update_time=getattr(resp, "last_update_time", None),
+        return ScanResponse(
+            scan_guid=resp.scan_guid,
+            verdict=VerdictEnum.NOT_SCANNED,
+            verdict_details=resp.verdict_details,
+            file_info=resp.file_info,
+            protected_entity=resp.protected_entity,
+            scan_duration_in_microseconds=resp.scan_duration_in_microseconds,
+            dsxconnect_request_elapsed_ms=resp.dsxconnect_request_elapsed_ms,
+            dsxconnect_read_elapsed_ms=resp.dsxconnect_read_elapsed_ms,
+            dsxconnect_dsxa_elapsed_ms=resp.dsxconnect_dsxa_elapsed_ms,
+            container_files_scanned=resp.container_files_scanned,
+            container_files_scanned_size=resp.container_files_scanned_size,
+            x_custom_metadata=resp.x_custom_metadata,
+            last_update_time=resp.last_update_time,
         )
 
     def _enqueue_dlq(
@@ -503,11 +475,11 @@ class ScanRequestWorker(BaseWorker):
         request_elapsed_ms: float | None = None,
     ):
         """Emit a synthetic Not Scanned verdict so downstream logging/UI can act on oversized files."""
-        details = DPAVerdictDetailsModel(
+        details = VerdictDetails(
             event_description="File not scanned",
             reason=reason,
         )
-        file_info = DPAVerdictFileInfoModel(
+        file_info = FileInfo(
             file_type="Unknown",
             file_size_in_bytes=size,
             file_hash="",
@@ -517,9 +489,9 @@ class ScanRequestWorker(BaseWorker):
         from uuid import uuid4
         synthetic_guid = uuid4().hex
 
-        verdict = DPAVerdictModel2(
+        verdict = ScanResponse(
             scan_guid=synthetic_guid,
-            verdict=DPAVerdictEnum.NON_COMPLIANT,
+            verdict=VerdictEnum.NON_COMPLIANT,
             verdict_details=details,
             file_info=file_info,
             scan_duration_in_microseconds=0,

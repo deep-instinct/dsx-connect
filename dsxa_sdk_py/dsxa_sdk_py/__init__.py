@@ -11,9 +11,11 @@ from .exceptions import (
     ServerError,
 )
 from .models import (
+    FileInfo,
     ScanResponse,
     ScanByPathResponse,
     ScanByPathVerdictResponse,
+    VerdictDetails,
     VerdictEnum,
     ThreatType,
 )
@@ -27,6 +29,8 @@ __all__ = [
     "BadRequestError",
     "NotFoundError",
     "ServerError",
+    "VerdictDetails",
+    "FileInfo",
     "ScanResponse",
     "ScanByPathResponse",
     "ScanByPathVerdictResponse",

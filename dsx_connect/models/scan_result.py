@@ -1,7 +1,7 @@
 from enum import Enum
 
 from pydantic import BaseModel
-from dsx_connect.dsxa_client.verdict_models import DPAVerdictModel2
+from dsxa_sdk_py.models import ScanResponse
 from shared.models.connector_models import ScanRequestModel
 from shared.models.status_responses import ItemActionStatusResponse
 
@@ -19,7 +19,7 @@ class ScanResultModel(BaseModel):
     scan_job_id: str | None = None
     metadata_tag: str | None = None
     scan_request: ScanRequestModel | None = None
-    verdict: DPAVerdictModel2 | None = None
+    verdict: ScanResponse | None = None
     item_action: ItemActionStatusResponse | None = None
     status: str = ScanResultStatusEnum.NOT_SCANNED
 

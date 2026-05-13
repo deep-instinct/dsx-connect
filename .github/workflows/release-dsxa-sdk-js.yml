@@ -78,7 +78,7 @@ jobs:
           packed_file="$(find dist -maxdepth 1 -type f -name '*.tgz' | head -n 1)"
           mv "$packed_file" "dist/dsxa-sdk-js-${version}.tgz"
 
-      - name: Create source-only tarball
+      - name: Create source tarballs
         run: |
           version="${{ needs.resolve-version.outputs.version }}"
           release_dir="../release"
@@ -87,6 +87,7 @@ jobs:
           cp -R . "$release_dir/$package_dir"
           rm -rf "$release_dir/$package_dir/dist" \
                  "$release_dir/$package_dir/node_modules"
+          tar -czf "$release_dir/dsxa_sdk_js-${version}.tar.gz" -C "$release_dir" "$package_dir"
           tar -czf "$release_dir/dsxa_sdk_js-${version}-source-only.tar.gz" -C "$release_dir" "$package_dir"
 
       - name: Upload workflow artifacts
@@ -95,6 +96,7 @@ jobs:
           name: dsxa-sdk-js-dist
           path: |
             dsxa_sdk_js/dist/*
+            release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}.tar.gz
             release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}-source-only.tar.gz
 
       - name: Publish GitHub release
@@ -103,6 +105,7 @@ jobs:
         with:
           files: |
             dsxa_sdk_js/dist/*
+            release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}.tar.gz
             release/dsxa_sdk_js-${{ needs.resolve-version.outputs.version }}-source-only.tar.gz
           tag_name: ${{ needs.resolve-version.outputs.release_tag }}
           name: DSXA SDK JavaScript ${{ needs.resolve-version.outputs.version }}

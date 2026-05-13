@@ -21,6 +21,7 @@ const statsOpen = document.querySelector("#stats-open");
 const statsClose = document.querySelector("#stats-close");
 const statsContent = document.querySelector("#stats-content");
 let latestResults = [];
+let latestWallTimeMs = null;
 
 function openConfigModal() {
   configModal.classList.add("open");
@@ -107,6 +108,7 @@ function renderStats() {
 
   const rows = [
     ["Files with scan timing", durationsMs.length],
+    ["Wall time", latestWallTimeMs != null ? formatMilliseconds(latestWallTimeMs) : "n/a"],
     ["Total scan time", formatMilliseconds(totalMs)],
     ["Average scan time", formatMilliseconds(averageMs)],
     ["Median scan time", formatMilliseconds(medianMs)],
@@ -233,6 +235,7 @@ form.addEventListener("submit", async (event) => {
 
   submit.disabled = true;
   status.textContent = "Scanning files with DSXA...";
+  const startedAt = performance.now();
 
   try {
     const results = await runBounded(files, concurrency, (file) =>
@@ -249,6 +252,7 @@ form.addEventListener("submit", async (event) => {
     };
 
     latestResults = results;
+    latestWallTimeMs = performance.now() - startedAt;
     setCounts(summary);
     renderItems(accepted, acceptedItems, "No accepted files in this batch.");
     renderItems(rejected, rejectedItems, "No rejected or held files in this batch.");

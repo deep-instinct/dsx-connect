@@ -430,6 +430,7 @@
     const statsClose = document.getElementById("stats-close");
     const statsContent = document.getElementById("stats-content");
     let latestResults = [];
+    let latestWallTimeMs = null;
 
     function openConfigModal() {
       configModal.classList.add("open");
@@ -527,6 +528,7 @@
 
       const rows = [
         ["Files with scan timing", durationsMs.length],
+        ["Wall time", latestWallTimeMs != null ? formatMilliseconds(latestWallTimeMs) : "n/a"],
         ["Total scan time", formatMilliseconds(totalMs)],
         ["Average scan time", formatMilliseconds(averageMs)],
         ["Median scan time", formatMilliseconds(medianMs)],
@@ -596,6 +598,7 @@
       }
       submit.disabled = true;
       status.textContent = "Scanning files with DSXA...";
+      const startedAt = performance.now();
 
       const data = new FormData();
       for (const file of input.files) {
@@ -609,6 +612,7 @@
           throw new Error(payload.detail || "Upload failed.");
         }
         latestResults = [...payload.accepted, ...payload.rejected];
+        latestWallTimeMs = performance.now() - startedAt;
         setCounts(payload.summary);
         renderItems(accepted, payload.accepted, "No accepted files in this batch.");
         renderItems(rejected, payload.rejected, "No rejected or held files in this batch.");

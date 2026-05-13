@@ -1,6 +1,6 @@
 [project]
 name = "dsxa-sdk-py"
-version = "0.1.10"
+version = "0.2.1"
 description = "Python SDK/CLI for Deep Instinct DSX Application Scanner (DSXA) REST APIs"
 authors = [
     {name = "Deep Instinct"}
@@ -34,4 +34,7 @@ dsxa = "dsxa_sdk_py.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["dsxa_sdk_py*"]
+include = ["dsxa_sdk_py*", "examples*"]
+
+[tool.setuptools.package-data]
+"examples.webapp" = ["templates/*.html"]

@@ -63,7 +63,7 @@ export class DSXAClient {
     this.baseUrl = String(baseUrl).replace(/\/+$/, "");
     this.authToken = authToken || "";
     this.defaultProtectedEntity = defaultProtectedEntity;
-    this.fetchImpl = fetchImpl || globalThis.fetch;
+    this.fetchImpl = fetchImpl || (typeof globalThis.fetch === "function" ? globalThis.fetch.bind(globalThis) : undefined);
     this.timeoutMs = timeoutMs;
     if (!this.fetchImpl) throw new Error("fetch implementation is required");
   }

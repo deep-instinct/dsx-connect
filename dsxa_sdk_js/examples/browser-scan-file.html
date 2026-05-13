@@ -27,7 +27,7 @@
   </head>
   <body>
     <h1>Browser File Scan</h1>
-    <p>Pick a file and submit it directly to DSXA using the browser SDK.</p>
+    <p>Pick a file and submit it directly to DSXA using the DSXA SDK.</p>
 
     <label>
       DSXA Base URL
@@ -43,6 +43,9 @@
       File
       <input id="file" type="file" />
     </label>
+    <p style="margin-top: -0.1rem; color: #555;">
+      Note: DSXA must have browser CORS support enabled for this example, for example with <code>-e CORS=true</code>.
+    </p>
 
     <button id="scan">Scan File</button>
 
@@ -76,10 +79,25 @@
           });
           output.textContent = JSON.stringify(result, null, 2);
         } catch (error) {
+          const message = error?.message || String(error);
+          const likelyCause =
+            message === "Failed to fetch"
+              ? [
+                  "Browser could not complete the request.",
+                  "Likely causes:",
+                  "- DSXA is not reachable at the configured base URL",
+                  "- CORS blocked the cross-origin request",
+                  "- the browser blocked a mixed-content request",
+                  "- the DSXA endpoint rejected the preflight OPTIONS request",
+                  "",
+                  "Open DevTools -> Network/Console and inspect the failed request for the exact browser reason.",
+                ].join("\n")
+              : undefined;
           output.textContent = JSON.stringify(
             {
               status: "failed",
-              message: error?.message || String(error),
+              message,
+              likelyCause,
               body: error?.body,
             },
             null,

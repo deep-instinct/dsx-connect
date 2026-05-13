@@ -26,6 +26,7 @@ Browser examples:
 
 - `examples/browser-scan-file.html`
 - `examples/browser-scan-folder.html`
+- `examples/webapp/`
 
 Notes:
 
@@ -33,3 +34,4 @@ Notes:
 - `node-scan-folder-verbose.mjs` prints per-file results and is the most complete async folder scan example.
 - `node-scan-stream.mjs` uses the SDK streaming path.
 - `browser-scan-folder.html` shows the browser-friendly folder pattern using `webkitdirectory`.
+- `examples/webapp/` is a richer browser intake demo with accepted/rejected result buckets.

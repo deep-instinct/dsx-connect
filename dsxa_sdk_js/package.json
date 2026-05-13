@@ -1,6 +1,6 @@
 {
   "name": "@deep-instinct/dsxa-sdk-js",
-  "version": "0.1.5",
+  "version": "0.2.1",
   "description": "JavaScript SDK for Deep Instinct DSXA APIs (Node + Browser)",
   "license": "Apache-2.0",
   "type": "module",

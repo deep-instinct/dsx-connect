@@ -1,0 +1,12 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -f
+      - examples/webapp/Dockerfile
+      - -t
+      - gcr.io/$PROJECT_ID/dsxa-webapp-demo
+      - .
+
+images:
+  - gcr.io/$PROJECT_ID/dsxa-webapp-demo

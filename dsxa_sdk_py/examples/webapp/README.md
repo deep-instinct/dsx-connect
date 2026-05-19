@@ -69,3 +69,58 @@ uvicorn examples.webapp.app:app --reload
 ```
 
 Then open `http://127.0.0.1:8000`.
+
+## Docker
+
+Build from the `dsxa_sdk_py` project root:
+
+```bash
+docker build -f examples/webapp/Dockerfile -t dsxa-webapp-demo .
+```
+
+Run locally:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e DSXA_BASE_URL=https://scanner.example.com \
+  -e DSXA_AUTH_TOKEN=your-token \
+  -e DSXA_PROTECTED_ENTITY=1 \
+  -e WEBAPP_SCAN_CONCURRENCY=4 \
+  dsxa-webapp-demo
+```
+
+Then open `http://127.0.0.1:8080`.
+
+If DSXA is running on your host machine, set `DSXA_BASE_URL` to `http://host.docker.internal:PORT` instead of `127.0.0.1` or `localhost`.
+
+If DSXA and this demo are both running as containers on the same Docker host, place them on the same user-defined Docker network and set `DSXA_BASE_URL` to the DSXA container name and internal port, for example `http://dsxa:15002`.
+
+## Cloud Run
+
+This example can run on Google Cloud Run as a simple containerized webapp.
+
+Notes:
+
+- Accepted files are currently written to the container filesystem.
+- On Cloud Run, that storage is ephemeral and not durable across instance restarts.
+- For a real deployment, store accepted files in GCS instead of `WEBAPP_UPLOAD_DIR`.
+- The Cloud Run service must be able to reach your DSXA endpoint over the network.
+
+Build and push with Cloud Build from the `dsxa_sdk_py` project root:
+
+```bash
+gcloud builds submit --config examples/webapp/cloudbuild.yaml .
+```
+
+Deploy to Cloud Run:
+
+```bash
+gcloud run deploy dsxa-webapp-demo \
+  --image gcr.io/PROJECT_ID/dsxa-webapp-demo \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars DSXA_BASE_URL=https://scanner.example.com,DSXA_AUTH_TOKEN=your-token,DSXA_PROTECTED_ENTITY=1,WEBAPP_SCAN_CONCURRENCY=4
+```
+
+If DSXA uses a private or internal address, Cloud Run also needs the appropriate VPC connectivity to reach it.

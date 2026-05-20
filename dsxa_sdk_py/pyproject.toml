@@ -37,4 +37,4 @@ where = ["."]
 include = ["dsxa_sdk_py*", "examples*"]
 
 [tool.setuptools.package-data]
-"examples.webapp" = ["templates/*.html"]
+"examples.webapp" = ["templates/*.html", "README.md", "Dockerfile", "cloudbuild.yaml"]

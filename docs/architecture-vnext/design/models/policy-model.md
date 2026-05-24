@@ -11,6 +11,11 @@ Perfect—this is the last core piece that turns everything into a **real, progr
 
 This document defines how policies are structured and evaluated in DSX-Connect.
 
+For the runtime handoff between scan completion, policy evaluation, downstream stage enqueueing, and stage-specific result delivery, see:
+
+- `design/models/post-scan-orchestration-model.md`
+- `design/models/result-sink-model.md`
+
 Policy is responsible for:
 
 - interpreting signals (DSXA, DIANNA, etc.)
@@ -31,6 +36,91 @@ Policy is:
 - centralized
 - deterministic (given same inputs)
 - independent of connectors and applications
+
+In `dsx_connect_ng`, policy is currently modeled as a **local component invoked by scan completion**, not as a required queue hop.
+
+The canonical runtime contract is:
+
+- `PolicyHandoffRequest`
+- `PolicyHandoffDecision`
+
+The older `PolicyDecision` model remains only as a compatibility bridge for transitional worker paths.
+
+---
+
+## Runtime Config Sources
+
+Policy input is expected to come from three layers:
+
+1. integration runtime config
+2. protected-scope `post_scan_policy`
+3. per-item explicit overrides in the submitted item payload
+
+The intended precedence is:
+
+1. per-item explicit override
+2. scope policy override
+3. integration policy default
+4. runtime fallback/default behavior
+
+This keeps policy programmable without requiring the scan worker itself to own branching logic.
+
+---
+
+## Current Typed Runtime Policy Config
+
+The current typed config surface is intentionally small and pragmatic.
+
+Integration config may include:
+
+```json
+{
+  "policy": {
+    "policy_id": "default-policy",
+    "auto_dianna_on_verdicts": ["malicious"],
+    "wait_for_dianna_on_auto_request": true,
+    "remediation_plan_by_verdict": {
+      "malicious": { "action": "quarantine" }
+    },
+    "result_delivery_policy": {
+      "scan": "malicious_only",
+      "remediation": "all_outcomes",
+      "dianna": "completed_only"
+    },
+    "delivery": {
+      "scan_targets": [{ "connector": "scan-sink" }],
+      "workflow_summary_targets": [{ "connector": "summary-sink" }]
+    },
+    "content_preservation_mode_by_verdict": {
+      "malicious": "cached"
+    }
+  }
+}
+```
+
+Protected scopes may provide the same policy shape through `post_scan_policy`, overriding integration defaults where specified.
+
+This typed policy config should be validated at the control-plane boundary:
+
+- integration `config`
+- protected-scope `post_scan_policy`
+
+Invalid policy config should fail on create/update rather than surfacing later during scan-time orchestration.
+
+Current typed fields:
+
+- `policy_id`
+- `auto_dianna_on_verdicts`
+- `wait_for_dianna_on_auto_request`
+- `remediation_plan_by_verdict`
+- `result_delivery_policy`
+- `delivery.scan_targets`
+- `delivery.remediation_targets`
+- `delivery.dianna_targets`
+- `delivery.workflow_summary_targets`
+- `content_preservation_mode_by_verdict`
+
+This is not yet a full rule engine. It is the first explicit, typed policy surface that drives the post-scan orchestration contract.
 
 ---
 
@@ -64,6 +154,40 @@ Provided by request or system:
 - content_type
 - file size
 - optional user/workflow metadata
+- integration runtime config
+- protected-scope policy override
+- current `content_source`
+- current delivery requirements
+
+In the current runtime, scan worker builds this into `PolicyHandoffRequest.policy_context` and `PolicyHandoffRequest.item_metadata` before invoking policy.
+
+---
+
+## Current Default Evaluation Behavior
+
+Today’s default/stub policy engine applies these rules:
+
+- per-item explicit `policyDecision` wins if provided
+- otherwise resolved integration/scope policy config is consulted
+- otherwise verdict-driven defaults apply
+
+Current default behaviors include:
+
+- malicious or suspicious verdicts may auto-request DIANNA if configured
+- malicious or suspicious verdicts may map to a configured remediation plan
+- stage-specific result emission policy may come from typed policy config
+- content preservation may move to `cached` or other modes based on verdict
+- delivery targets may differ by result family:
+  - `scan_result`
+  - `remediation_result`
+  - `dianna_result`
+  - `workflow_summary`
+
+This keeps the scan worker thin:
+
+- scan worker executes scan
+- policy decides applicability, preservation, and result emission
+- downstream side-effect workers execute only what policy requested
 
 ---
 

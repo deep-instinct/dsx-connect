@@ -1,0 +1,151 @@
+import os
+import uuid
+
+import pytest
+
+from dsx_connect_ng.jobs.models import JobCreate, JobItemCreate, StageRecord
+psycopg = pytest.importorskip("psycopg")
+from dsx_connect_ng.jobs.postgres_repo import PostgresJobRepository, apply_schema
+
+
+TEST_POSTGRES_URL = os.environ.get("DSX_CONNECT_NG_TEST_POSTGRES_URL")
+
+
+pytestmark = pytest.mark.skipif(
+    not TEST_POSTGRES_URL,
+    reason="set DSX_CONNECT_NG_TEST_POSTGRES_URL to run postgres repository tests",
+)
+
+
+@pytest.fixture()
+def postgres_repo():
+    assert TEST_POSTGRES_URL
+    apply_schema(TEST_POSTGRES_URL)
+    return PostgresJobRepository(TEST_POSTGRES_URL)
+
+
+def test_postgres_job_repository_crud(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    created = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.requested",
+            state="accepted",
+            idempotency_key=f"idem-{suffix}",
+            payload={"selector": f"/finance/{suffix}.pdf"},
+        )
+    )
+    fetched = postgres_repo.get_job(created.job_id)
+    assert fetched is not None
+    assert fetched.idempotency_key == f"idem-{suffix}"
+
+    updated = postgres_repo.update_job_state(created.job_id, state="queued", error=None)
+    assert updated is not None
+    assert updated.state == "queued"
+
+
+def test_postgres_job_repository_outbox(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.requested",
+            state="accepted",
+            idempotency_key=f"idem-outbox-{suffix}",
+        )
+    )
+    outbox = postgres_repo.create_outbox_record(
+        job=job,
+        topic=job.job_type,
+        payload=job.as_envelope(state_override="queued").model_dump(mode="json"),
+    )
+    assert outbox.publish_state == "pending"
+
+    published = postgres_repo.mark_outbox_published(outbox.outbox_id)
+    assert published is not None
+    assert published.publish_state == "published"
+
+
+def test_postgres_job_repository_lists_outbox(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.requested",
+            state="accepted",
+            idempotency_key=f"idem-list-{suffix}",
+        )
+    )
+    outbox = postgres_repo.create_outbox_record(
+        job=job,
+        topic=job.job_type,
+        payload=job.as_envelope(state_override="queued").model_dump(mode="json"),
+    )
+
+    rows = postgres_repo.list_outbox_records(publish_state="pending", limit=10)
+    assert any(row.outbox_id == outbox.outbox_id for row in rows)
+    fetched = postgres_repo.get_outbox_record(outbox.outbox_id)
+    assert fetched is not None
+    assert fetched.job_id == job.job_id
+
+
+def test_postgres_job_repository_job_items(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.batch",
+            state="accepted",
+            idempotency_key=f"idem-items-{suffix}",
+        )
+    )
+    first = postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity=f"/finance/{suffix}-a.pdf",
+            state="accepted",
+        )
+    )
+    postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=1,
+            object_identity=f"/finance/{suffix}-b.pdf",
+            state="queued",
+        )
+    )
+    postgres_repo.update_job_item_state(first.job_item_id, state="publish_pending", error={"code": "x"})
+
+    rows = postgres_repo.list_job_items(job_id=job.job_id)
+    assert len(rows) == 2
+    summary = postgres_repo.summarize_job_items(job.job_id)
+    assert summary.total == 2
+    assert summary.publish_pending == 1
+    assert summary.queued == 1
+
+
+def test_postgres_job_repository_updates_stage(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.batch",
+            state="accepted",
+            idempotency_key=f"idem-stage-{suffix}",
+        )
+    )
+    item = postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity=f"/finance/{suffix}.pdf",
+            state="queued",
+        )
+    )
+    updated = postgres_repo.update_job_item_stage(
+        item.job_item_id,
+        stage_name="scan_stage",
+        stage_record=StageRecord(state="running"),
+        state="scanning",
+        error=None,
+        completed_at=None,
+    )
+    assert updated is not None
+    assert updated.scan_stage.state == "running"
+    assert updated.state == "scanning"

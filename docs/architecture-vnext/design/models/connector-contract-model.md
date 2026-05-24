@@ -27,7 +27,9 @@ A connector is responsible for:
 - enumerating objects within configured scope(s)
 - returning object batches and continuation cursors
 - providing stable object identity and minimal metadata
-- retrieving object content or a content stream when needed
+- exposing repository read semantics either:
+  - through a connector-owned read capability consumed by a `ConnectorProxyReader`
+  - or by supplying normalized read hints that a native Reader can use
 - performing remediation actions where supported and authorized
 - surfacing platform-specific errors and capabilities
 
@@ -84,17 +86,32 @@ The item should be lightweight and should not require immediate full-content tra
 
 ---
 
-## Fetch Contract
+## Read Contract
 
-A connector should support one or both of these patterns:
+A connector may participate in content acquisition in one of two ways.
 
-### Reference Fetch
-Core receives a fetchable locator and requests content later.
+### Proxy Read Capability
+The connector exposes a stable read contract that a worker-side `ConnectorProxyReader` can call.
 
-### Streamed Fetch
-Connector streams content directly for synchronous or worker-driven scanning.
+Expected request context includes:
 
-The preferred pattern may vary by platform and file size.
+- integration identifier
+- scope identifier where relevant
+- object identity
+- normalized content source
+- normalized read hints
+- preferred response modes such as `stream`, `artifact_ref`, or `buffer`
+
+Expected response semantics include:
+
+- stream body
+- buffered bytes
+- or a temporary artifact reference
+
+### Native Reader Support
+The connector does not serve bytes directly, but provides normalized identity and read hints that a DI-owned native Reader can use.
+
+This is the optimized path for integrations where DI chooses tighter first-order support.
 
 ---
 
@@ -152,7 +169,7 @@ Core should determine retry behavior from category, not from string matching.
 The connector contract should be intentionally narrow:
 
 - connector discovers
-- connector fetches
+- connector may proxy reads
 - connector remediates
 - core decides
 - core counts

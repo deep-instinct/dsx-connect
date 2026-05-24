@@ -1,4 +1,4 @@
-# ADR-007: Move Repository Read Path from Connectors to Worker-Hosted Readers
+# ADR-007: Move Repository Read Path Behind a Reader Contract
 
 - **Status:** Proposed
 - **Date:** 2026-04-10
@@ -30,11 +30,16 @@ As DSX-Connect moves to tenant/account-wide connectors, that coupling becomes a 
 
 ## Decision
 
-DSX-Connect will move the repository file-read path out of connectors and into **worker-hosted Reader components**.
+DSX-Connect will move the repository file-read path behind a formal **Reader contract** executed by generic workers.
 
-A generic scan request worker will remain responsible for scan execution. When processing a scan job, it will select the appropriate Reader implementation for the integration type and use that Reader to directly open the object stream from the source repository.
+A generic scan request worker will remain responsible for scan execution. When processing a scan job, it will resolve an appropriate Reader implementation for the integration and use that Reader to obtain content for scanning.
 
-Examples:
+That Reader may be:
+
+- a **native worker-hosted Reader** that directly accesses the repository
+- a **ConnectorProxyReader** that calls a connector-owned read capability, preserving the first-generation extension model
+
+Examples of native Readers:
 
 - `S3Reader`
 - `AzureBlobReader`
@@ -60,7 +65,7 @@ Workers will remain generic and will continue to own:
 - throughput and concurrency management
 - scan metrics and observability
 
-Readers will own only the worker-side repository access path needed to retrieve the object content for scanning.
+Readers will own only the repository access path needed to retrieve the object content for scanning.
 
 ## Decision Drivers
 
@@ -127,30 +132,110 @@ Rejected as the target architecture. May be useful as a temporary migration aid,
 
 ---
 
-### Option 3: Worker-Hosted Readers with Generic Scan Workers
+### Option 3: Worker-Resolved Readers with Generic Scan Workers
 
-In this model, generic workers load Reader implementations and read directly from the repository.
+In this model, generic workers resolve Reader implementations and obtain content through a stable Reader contract.
 
 #### Pros
 
-- removes the connector from the per-object scan data path
-- allows repository read throughput to scale with worker count
-- keeps worker concurrency aligned with read concurrency
+- preserves a generic worker-side read contract
+- allows DI to provide native Readers for performance-critical integrations
+- allows third parties to remain fully decoupled by exposing connector-side read capabilities through a ConnectorProxyReader
+- permits per-integration optimization without forcing every integration into core
 - keeps connectors focused on integration/control-plane concerns
 - improves full scan scalability
 - creates a cleaner long-term control-plane/data-plane split
-- reduces connector resource pressure and file-proxy behavior
+- reduces connector resource pressure where native Readers are used
+- keeps an extensible platform model for integrations DI does not own
 
 #### Cons
 
 - requires a deliberate credential delivery architecture
-- requires Reader code and repository SDKs to exist in the worker runtime
+- native Readers require Reader code and repository SDKs to exist in the worker runtime
 - requires stronger normalized job contracts for object identity and read context
-- introduces versioning and compatibility considerations between connector-side logic and worker-side Readers
+- introduces versioning and compatibility considerations between connector-side normalization and Reader assumptions
+- proxy Readers retain an extra hop and therefore do not eliminate all read-path overhead
 
 #### Outcome
 
 Accepted.
+
+### Clarifying Addendum: Hybrid Reader Model
+
+The Reader contract is the architectural boundary. Direct worker-hosted repository access is **not** the only valid implementation strategy.
+
+The platform will support a hybrid model:
+
+- **ConnectorProxyReader**
+  - generic worker-side Reader implementation
+  - calls a connector-owned read capability over a stable contract
+  - preserves the first-generation "connectors can ship independently of core" model
+- **Native Readers**
+  - DI-owned optimized implementations for selected repositories
+  - remove the extra connector hop when performance or control justifies tighter integration
+
+This allows DSX-Connect to remain:
+
+- **open by default** for third-party and separately released integrations
+- **optimized selectively** where DI chooses to invest in first-order repository support
+
+The architectural goal is therefore not "every Reader must be native in the worker runtime".
+The goal is "every scan worker depends on a Reader contract rather than connector-specific read logic".
+
+### Clarifying Addendum: Open Platform, Selective Optimization
+
+The first-generation platform property remains important:
+
+- connectors should still be able to ship independently of DSX-Connect core
+- third parties should still be able to build supported integrations without modifying worker runtimes
+
+The Reader contract therefore exists to decouple the **scan worker contract** from the **implementation strategy** used to obtain bytes.
+
+The intended platform posture is:
+
+- **open by default**
+  - integrations can satisfy read semantics through a connector-owned read capability
+  - workers consume that capability through a generic `ConnectorProxyReader`
+- **optimized selectively**
+  - DI may provide native Readers for selected repositories where the extra connector hop is too expensive or operationally limiting
+
+This means ADR-007 is not a decision that "all read logic moves into core".
+It is a decision that "all scan workers consume a stable Reader abstraction, and some Reader implementations may remain connector-backed".
+
+### Clarifying Addendum: Readers Also Own Reuse and Preservation Paths
+
+The Reader contract is not only the boundary for the **first read** performed by a scan worker.
+It is also the correct boundary for **later content reuse** by downstream stages such as DIANNA or post-remediation validation.
+
+This avoids pushing cross-stage preservation logic into the scan worker itself.
+
+The intended model is:
+
+- policy and orchestration decide whether content should be preserved for later use
+- content provenance is reflected in normalized `content_source` state such as:
+  - `original`
+  - `cached`
+  - `quarantine`
+  - `none`
+- later workers resolve Readers again against that updated source
+
+Examples of Reader strategies in that model include:
+
+- `ConnectorProxyReader`
+- `NativeRepositoryReader`
+- `CachedArtifactReader`
+- `QuarantineReader`
+
+DSX-Connect therefore should not encode special-case logic such as:
+
+- "scan worker should cache bytes because DIANNA might run later"
+- "DIANNA worker should know where scan worker placed a temporary file"
+
+Instead:
+
+- policy decides whether preservation is needed
+- Readers decide how later consumers obtain bytes
+- workers remain stage-focused and do not become cross-stage content managers
 
 ## Architecture Implications
 
@@ -189,6 +274,7 @@ Responsible for:
 - selecting the correct Reader
 - invoking the Reader to open the object stream
 - streaming content to DSXA
+- invoking policy handoff logic after scan completion
 - handling retries and transient failures
 - persisting results and metrics
 
@@ -196,12 +282,14 @@ Responsible for:
 
 Responsible for:
 
-- worker-side repository access
+- repository content acquisition through a stable Reader contract
 - object-open and stream-read operations
-- repository-specific fetch behavior
+- repository-specific fetch behavior, whether direct or proxied
 - minimal translation of read-related errors into normalized worker semantics
+- resolving whether content should come from original source, cached artifact, or quarantine source
+- hiding artifact reuse mechanics from stage workers
 
-Readers are not connectors. They are not responsible for monitoring, enumeration, or remediation. They are narrow worker-side object access components.
+Readers are not connectors. They are not responsible for monitoring, enumeration, or remediation. They are narrow object access components resolved by workers.
 
 ## Expected Benefits
 
@@ -209,11 +297,12 @@ The primary expected benefit is improved scalability of the read path under the 
 
 Specifically:
 
-- the heaviest operation, object retrieval, moves to the horizontally scalable worker tier
+- the heaviest operation, object retrieval, is moved behind a worker-resolved Reader boundary
 - connectors are no longer forced to proxy file content for every scan
-- full-scan throughput can scale more naturally with worker concurrency
+- full-scan throughput can scale more naturally with worker concurrency where native Readers are used
 - connector bottlenecks become less likely as a single connector represents broader tenant/account scope
 - architecture becomes cleaner by separating integration/control-plane logic from scan/data-plane execution
+- cached or quarantined content reuse can be introduced without bloating scan-worker logic
 
 This decision is not expected to eliminate all integration complexity. Discovery, monitoring, scope definition, normalization, and remediation remain connector responsibilities.
 
@@ -229,7 +318,11 @@ Workers will need a secure way to obtain repository access at execution time. Th
 
 ### Runtime Packaging
 
-Workers may need integration SDKs and Reader implementations for multiple platforms, increasing worker runtime complexity.
+Workers may need Reader implementations and repository SDKs for multiple platforms, increasing worker runtime complexity for native Readers.
+
+### Platform Fragmentation
+
+If proxy Readers and native Readers diverge in semantics, the platform may become inconsistent across integrations.
 
 ### Contract Stability
 
@@ -247,7 +340,10 @@ As a result of this decision:
 - Reader interfaces must be defined as a formal DSX-Connect abstraction
 - scan jobs must include enough integration and object context for worker-side reading
 - credential delivery must be designed as a dedicated architecture topic
-- connectors should increasingly be treated as control-plane integrations, not scan-path data-plane services
+- connectors should increasingly be treated as control-plane integrations, not mandatory scan-path data-plane services
+- a connector-owned read capability remains valid when exposed through a ConnectorProxyReader
+- connector-side read capabilities are a first-class compatibility path, not merely a temporary migration aid
+- cached and quarantine-backed reads should be treated as Reader strategies, not scan-worker special cases
 
 ## Follow-On Work
 
@@ -259,6 +355,9 @@ The following design work is required after this ADR:
 4. define error and retry semantics for Reader failures
 5. define packaging and deployment strategy for Reader implementations in workers
 6. define migration path from connector `read_file` callbacks to Reader-based fetching
+7. define the ConnectorProxyReader request/response contract
+8. define how reader selection chooses between `proxy`, `native`, `cached`, and `quarantine` strategies
+9. define how integrations declare preferred and fallback reader strategies
 
 ## Summary
 
@@ -268,6 +367,8 @@ The architecture will therefore move to a model in which:
 
 - connectors remain integration and control-plane components
 - workers remain generic scan execution components
-- Readers provide worker-side direct repository access
+- Readers provide the worker-side content acquisition contract
+- some Readers may be native and direct
+- some Readers may proxy through connector-owned read capabilities
 
-This places the heaviest operation, object retrieval, in the tier that is already designed to scale horizontally, and establishes a cleaner long-term separation between integration logic and scan execution.
+This establishes a cleaner long-term separation between integration logic and scan execution, while preserving an extensible platform model and allowing selective optimization where native Readers are worthwhile.

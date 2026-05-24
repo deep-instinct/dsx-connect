@@ -1,0 +1,44 @@
+[project]
+name = "dsx-connect-ng"
+version = "0.1.0"
+description = "Standalone next-generation control-plane and worker architecture for DSX-Connect"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Deep Instinct" }
+]
+dependencies = [
+  "fastapi>=0.115.0",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.5.0",
+  "psycopg[binary]>=3.2.0",
+  "typer>=0.12.0",
+  "uvicorn>=0.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+workers = [
+  "aio-pika>=9.5.0",
+]
+
+[project.scripts]
+dsx-connect-ng = "dsx_connect_ng.app:run"
+dsx-connect-ng-relay = "dsx_connect_ng.workers.relay_worker:run"
+dsx-connect-ng-scan-worker = "dsx_connect_ng.workers.scan_worker:run"
+dsx-connect-ng-policy-worker = "dsx_connect_ng.workers.policy_worker:run"
+dsx-connect-ng-remediation-worker = "dsx_connect_ng.workers.remediation_worker:run"
+dsx-connect-ng-result-sink-worker = "dsx_connect_ng.workers.result_sink_worker:run"
+dsx-connect-ng-delivery-worker = "dsx_connect_ng.workers.delivery_worker:run"
+dsx-connect-ng-dianna-worker = "dsx_connect_ng.workers.dianna_worker:run"
+dsx-connect-ng-local = "dsx_connect_ng.local.dsx_connect_ng_local:run"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dsx_connect_ng*"]

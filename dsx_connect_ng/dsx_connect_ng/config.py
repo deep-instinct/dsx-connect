@@ -4,6 +4,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from dsx_connect_ng.readers.contracts import ReaderStrategy
+from dsx_connect_ng.recovery import RecoveryMode
 
 
 class FeatureFlags(BaseSettings):
@@ -68,6 +69,7 @@ class ScannerSettings(BaseSettings):
     base_url: str = ""
     auth_token: str | None = None
     protected_entity: int | None = 1
+    max_file_size_bytes: int = 2 * 1024 * 1024 * 1024
     verify_tls: bool = True
     timeout_seconds: float = 30.0
 
@@ -91,6 +93,20 @@ class ResultSinkSettings(BaseSettings):
     path: str = "/tmp/dsx-connect-ng-results.jsonl"
 
 
+class RecoverySettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DSX_CONNECT_NG_RECOVERY__",
+        extra="ignore",
+    )
+
+    mode: RecoveryMode = "batch"
+    batch_size: int = 100
+    checkpoint_every_items: int | None = None
+    checkpoint_every_seconds: int | None = None
+    large_object_threshold_bytes: int | None = None
+    prefer_item_mode_for_archives: bool = True
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="DSX_CONNECT_NG__",
@@ -109,6 +125,7 @@ class AppSettings(BaseSettings):
     scanner: ScannerSettings = Field(default_factory=ScannerSettings)
     readers: ReaderSettings = Field(default_factory=ReaderSettings)
     result_sink: ResultSinkSettings = Field(default_factory=ResultSinkSettings)
+    recovery: RecoverySettings = Field(default_factory=RecoverySettings)
 
 
 settings = AppSettings()

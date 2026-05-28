@@ -1,5 +1,6 @@
 import errno
 import asyncio
+import json
 import os
 import pathlib
 import shutil
@@ -11,7 +12,7 @@ import uvicorn
 from starlette.responses import StreamingResponse
 
 from shared.file_ops import get_filepaths_async
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, \
     ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
@@ -87,6 +88,36 @@ def _quarantine_paths() -> list[pathlib.Path]:
             uniq.append(p)
             seen.add(key)
     return uniq
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, dict[str, str]]:
+    requested = scan_request.requested_action
+    if requested is None or not requested.type:
+        default_tags = {"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {}
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, default_tags
+
+    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
+    try:
+        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
+    except Exception:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, {"Verdict": "Malicious"}
+
+    destination = requested.destination or {}
+    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
+    tags = {str(k): str(v) for k, v in (requested.tags or {}).items()}
+    if action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) and not tags:
+        tags = {"Verdict": "Malicious"}
+    return action, (str(target).strip() if target else None), tags
+
+
+def _tag_sidecar_path(path: pathlib.Path) -> pathlib.Path:
+    return path.parent / f"{path.name}.dsx.tags.json"
+
+
+def _write_tag_sidecar(path: pathlib.Path, tags: dict[str, str]) -> pathlib.Path:
+    sidecar = _tag_sidecar_path(path)
+    sidecar.write_text(json.dumps(tags, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+    return sidecar
 
 
 # given that this could potentially be a lengthy file iteration, make the iteration asynchronous...
@@ -390,23 +421,24 @@ async def webhook_handler(event: dict | ScanRequestModel) -> StatusResponse:
 async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> StatusResponse:
     file_path = scan_event_queue_info.location
     path_obj = _normalize_path(file_path)
+    requested_action, target_path, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
 
     if not path_obj.is_file():
-        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                         message="Item action failed.",
                                         description=f"File does not exist at {file_path}")
 
-    if config.item_action == ItemActionEnum.DELETE:
+    if requested_action == ItemActionEnum.DELETE:
         dsx_logging.debug(f'Item action {ItemActionEnum.DELETE} on {file_path} invoked.')
         path_obj.unlink()
         return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS,
-                                        item_action=config.item_action,
+                                        item_action=requested_action,
                                         message='File deleted.',
                                         description=f"File deleted from {file_path}")
-    elif config.item_action == ItemActionEnum.MOVE:
-        dsx_logging.debug(f'Item action {ItemActionEnum.MOVE} on {file_path} invoked.')
+    elif requested_action in (ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG):
+        dsx_logging.debug(f'Item action {requested_action} on {file_path} invoked.')
 
-        raw_target = config.item_action_move_metainfo or ""
+        raw_target = target_path or ""
         dest_root = pathlib.Path(os.path.expandvars(raw_target)).expanduser()
         if not dest_root.is_absolute():
             dest_root = (_normalize_path(config.asset) / dest_root).resolve()
@@ -439,7 +471,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                     return ItemActionStatusResponse(
                         status=StatusResponseEnum.ERROR,
                         message=error_msg,
-                        item_action=config.item_action,
+                        item_action=requested_action,
                     )
             else:
                 error_msg = f'Failed to move file {file_path}: {exc}'
@@ -447,17 +479,34 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                 return ItemActionStatusResponse(
                     status=StatusResponseEnum.ERROR,
                     message=error_msg,
-                    item_action=config.item_action,
+                    item_action=requested_action,
                 )
+
+        if requested_action == ItemActionEnum.MOVE_TAG:
+            sidecar = _write_tag_sidecar(destination, requested_tags)
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.SUCCESS,
+                item_action=requested_action,
+                message="File moved and tagged",
+                description=f"File moved to {destination} and tag sidecar written to {sidecar}",
+            )
 
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
-            item_action=config.item_action,
+            item_action=requested_action,
             message="File moved",
-            description=f'Item action {config.item_action} was invoked. File {file_path} successfully moved to {destination}.'
+            description=f'Item action {requested_action} was invoked. File {file_path} successfully moved to {destination}.'
+        )
+    elif requested_action == ItemActionEnum.TAG:
+        sidecar = _write_tag_sidecar(path_obj, requested_tags)
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            item_action=requested_action,
+            message="File tagged",
+            description=f"Tag sidecar written to {sidecar}",
         )
 
-    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=config.item_action,
+    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=requested_action,
                                     message="Item action did nothing or not implemented")
 
 
@@ -552,30 +601,13 @@ async def config_update_handler(payload: dict):
             pass
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                action_val = ItemActionEnum(action_raw)
-                config.item_action = action_val
-                try:
-                    connector.connector_running_model.item_action = action_val
-                except Exception:
-                    pass
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        move_raw = payload.get("item_action_move_metainfo", "").strip()
-        # allow empty string in case user wants to clear it
-        config.item_action_move_metainfo = move_raw
-        # Keep host-path mirror aligned for local persistence and later reloads.
-        config.quarantine_host = move_raw or None
-        try:
-            connector.connector_running_model.item_action_move_metainfo = move_raw
-        except Exception:
-            pass
+    action_changed = apply_requested_action_config_update(
+        payload,
+        connector_config=config,
+        connector_running_model=connector.connector_running_model,
+    )
+    if action_changed:
+        config.quarantine_host = (config.item_action_move_metainfo or "").strip() or None
         changed = True
 
     if "monitor" in payload:

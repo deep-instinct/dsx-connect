@@ -110,6 +110,25 @@ This allows scaling both vertically and horizontally while maintaining operation
 
 ## Performance and Throughput Implications
 
+### Full Scan and Monitoring Guidance
+
+Full scans establish baseline coverage across a repository at a point in operational time.
+
+Because protected repositories remain active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring or event-driven protection maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
 If you are:
 
 * Increasing replica counts

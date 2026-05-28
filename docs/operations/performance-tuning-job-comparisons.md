@@ -22,6 +22,25 @@ The goal is sustained, predictable throughput without saturating:
 * CPU or memory
 * Operational budget
 
+## Full Scan Operational Model
+
+Full scans establish baseline coverage across a repository at a point in operational time.
+
+Because protected repositories remain active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring or event-driven protection maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
 ---
 
 ## Step 1 — Establish a Baseline
@@ -214,4 +233,3 @@ Stop when:
 * Cost outweighs benefit
 
 Performance tuning is an optimization process — not a race.
-

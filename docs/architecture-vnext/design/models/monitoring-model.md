@@ -171,3 +171,7 @@ Monitoring should remain:
 - a connector capability
 - platform-specific in implementation
 - normalized at the DSX-Connect core boundary
+
+For connector-facing change watermark and version metadata expectations, see:
+
+- [Version and Change Watermark Model](version-and-change-watermark-model.md)

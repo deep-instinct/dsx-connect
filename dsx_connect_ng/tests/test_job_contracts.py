@@ -76,7 +76,10 @@ def test_remediation_requested_converts_to_generic_envelope() -> None:
     message = RemediationRequested(
         job_id="job-4",
         job_item_id="item-4",
+        integration_id="integration-4",
+        scope_id="scope-4",
         object_identity="/finance/bad.exe",
+        content_source={"mode": "original", "locator": "/finance/bad.exe"},
         scan_result={"verdict": "Malicious"},
         remediation_plan={"action": "quarantine"},
     )
@@ -84,5 +87,27 @@ def test_remediation_requested_converts_to_generic_envelope() -> None:
     envelope = message.as_envelope()
 
     assert envelope.message_type == "remediation_requested"
+    assert envelope.integration_id == "integration-4"
+    assert envelope.scope_id == "scope-4"
+    assert envelope.payload["content_source"]["locator"] == "/finance/bad.exe"
     assert envelope.payload["scan_result"]["verdict"] == "Malicious"
     assert envelope.payload["remediation_plan"]["action"] == "quarantine"
+
+
+def test_remediation_requested_builds_normalized_connector_request() -> None:
+    message = RemediationRequested(
+        job_id="job-4",
+        job_item_id="item-4",
+        integration_id="integration-4",
+        scope_id="scope-4",
+        object_identity="/finance/bad.exe",
+        content_source={"mode": "original", "locator": "/finance/bad.exe"},
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={"action": "quarantine", "targetPath": "tenant-quarantine", "tag": True},
+    )
+
+    connector_request = message.as_connector_remediation_request()
+
+    assert connector_request.action == "movetag"
+    assert connector_request.destination == {"path": "tenant-quarantine"}
+    assert connector_request.tags == {"Verdict": "Malicious"}

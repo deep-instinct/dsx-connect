@@ -353,6 +353,37 @@ That helper will:
 - poll until all expanded `job_item`s reach terminal state
 - print the parent `item_summary`, `job_item_ids`, and per-item terminal states
 
+If local runtime is configured with the `json_lines` result sink backend, the batch helper can also validate the emitted result-sink payloads for the specific batch job:
+
+```bash
+python3 scripts/validate_ng_batch_proxy_reader.py --scan-only --sample-kind eicar --item-count 6 --poll --result-sink-path /tmp/dsx-connect-ng-results.jsonl
+```
+
+In `--scan-only` mode this asserts:
+
+- one `scan_result` event per submitted item
+- no `workflow_summary` events
+- each event includes:
+  - `schema_version = "1.0"`
+  - `verdict`
+  - `scan_guid`
+  - `content_source_mode`
+
+For the full workflow-summary path, keep `--scan-only` off and the helper will additionally require one `workflow_summary` event per submitted item:
+
+```bash
+python3 scripts/validate_ng_batch_proxy_reader.py --sample-kind eicar --item-count 3 --poll --result-sink-path /tmp/dsx-connect-ng-results.jsonl
+```
+
+If you want to validate intentional parallel scan execution rather than single-file progression, start the local stack with a higher scan-worker prefetch count and require overlap during the batch run:
+
+```bash
+dsx-connect-ng-local --with-postgres-docker --with-rabbit-docker --scan-worker-prefetch-count 2 foreground
+python3 scripts/validate_ng_batch_proxy_reader.py --scan-only --sample-kind eicar --item-count 6 --poll --min-concurrent-scans 2
+```
+
+That flow asserts that at least two batch items were observed in `scan_stage.state = "running"` at the same time. If you want to cap concurrency during validation, the helper also accepts `--max-concurrent-scans`.
+
 For a real connector-proxy read-path validation, run the scan worker in DSXA mode so the scan executor actually invokes the selected Reader:
 
 ```bash
@@ -466,6 +497,15 @@ Execution submit behavior:
 - failed publish moves the job to `publish_pending`
 - `idempotency_key` is honored when provided
 - pending outbox records can be inspected and retried through the execution API
+
+Transaction Outbox Pattern:
+
+- this execution model follows the Transaction Outbox Pattern
+- PostgreSQL stores the canonical state change and the durable intent to publish
+- RabbitMQ stores and redelivers the message after publish succeeds
+- RabbitMQ durability alone is not sufficient for producer-side correctness, because the process may commit PostgreSQL state and crash before the broker receives the message
+- for that reason, the outbox is the producer-side durability boundary and RabbitMQ is the transport boundary
+- outbox publish ownership is claimed atomically before publish so immediate publish and relay retry cannot publish the same outbox record concurrently
 
 Batch job behavior:
 

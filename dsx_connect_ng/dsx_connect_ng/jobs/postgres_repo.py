@@ -478,6 +478,25 @@ class PostgresJobRepository(JobRepository):
             row = cur.fetchone()
             return OutboxRecord.model_validate(row) if row else None
 
+    def claim_outbox_record(self, outbox_id: str) -> OutboxRecord | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE cp_job_outbox
+                SET publish_state = 'publishing',
+                    updated_at = NOW()
+                WHERE outbox_id = %s
+                  AND publish_state = 'pending'
+                RETURNING outbox_id, job_id, topic, payload_json AS payload,
+                          publish_state, publish_attempts, last_error_json AS last_error,
+                          created_at, updated_at, published_at
+                """,
+                (outbox_id,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return OutboxRecord.model_validate(row) if row else None
+
     def mark_outbox_published(self, outbox_id: str) -> OutboxRecord | None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(

@@ -67,6 +67,12 @@ Optional explicit idempotency ledger (in addition to `cp_jobs.idempotency_key` u
 
 Transactional outbox for reliable notifications/webhooks/SSE fanout from durable state transitions.
 
+This is the Transaction Outbox Pattern:
+
+- PostgreSQL stores durable state transition plus publish intent
+- the broker transports and redelivers after publish succeeds
+- broker durability does not replace producer-side outbox durability
+
 ## Canonical Job Envelope (v1)
 
 Canonical model is defined in:

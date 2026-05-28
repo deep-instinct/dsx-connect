@@ -10,16 +10,14 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from dsx_connect_ng.config import settings
-from dsx_connect_ng.control_plane.config_models import resolve_policy_runtime_config
-from dsx_connect_ng.jobs.contracts import MessageEnvelope, PolicyEvaluationRequested, ScanItemRequested
-from dsx_connect_ng.jobs.models import PolicyStageUpdateRequest, ScanResult, ScanStageUpdateRequest
+from dsx_connect_ng.jobs.contracts import MessageEnvelope, ScanItemRequested
+from dsx_connect_ng.jobs.models import ScanResult, ScanStageUpdateRequest
 from dsx_connect_ng.ops_logging import log_event, ops_logging
 from dsx_connect_ng.readers.base import Reader, TerminalScanError
 from dsx_connect_ng.readers.local_path import LocalPathReader
 from dsx_connect_ng.readers.resolver import build_scan_reader
 from dsx_connect_ng.jobs.service import JobService
 from dsx_connect_ng.workers.consumer import consume_queue
-from dsx_connect_ng.workers.policy_engine import PolicyEngine, stub_policy_engine
 from dsx_connect_ng.workers.runtime import build_job_service
 
 
@@ -120,13 +118,44 @@ def _classify_dsxa_transport_error(exc: Exception) -> tuple[str, str]:
     return "scanner_unavailable", message
 
 
+def _extract_size_hint_bytes(request: ScanItemRequested) -> int | None:
+    read_hint = getattr(request, "read_hint", {}) or {}
+    for key in ("sizeInBytes", "size_in_bytes"):
+        value = read_hint.get(key)
+        if isinstance(value, int):
+            return value
+    return None
+
+
 async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> ScanResult:
     base_url = settings.scanner.base_url.rstrip("/")
     if not base_url:
         raise TerminalScanError("scanner_base_url_required", "DSX_CONNECT_NG_SCANNER__BASE_URL is required for dsxa scan mode")
+    max_file_size = settings.scanner.max_file_size_bytes
+    size_hint = _extract_size_hint_bytes(request)
+    if max_file_size and size_hint is not None and size_hint > max_file_size:
+        raise TerminalScanError(
+            "content_too_large",
+            "scan skipped because content size hint exceeds scanner limit",
+            details={
+                "sizeInBytes": size_hint,
+                "maxFileSizeBytes": max_file_size,
+                "enforcement": "size_hint",
+            },
+        )
     read_started = time.perf_counter()
     read_result = await reader.acquire(request)
     read_elapsed_ms = (time.perf_counter() - read_started) * 1000.0
+    if max_file_size and read_result.content_length is not None and read_result.content_length > max_file_size:
+        raise TerminalScanError(
+            "content_too_large",
+            "scan skipped because content size exceeds scanner limit",
+            details={
+                "sizeInBytes": read_result.content_length,
+                "maxFileSizeBytes": max_file_size,
+                "enforcement": "read_result",
+            },
+        )
     if read_result.local_path is None:
         raise TerminalScanError("reader_local_path_required", "current dsxa scan mode requires a local reader path", details=read_result.details)
     file_path = read_result.local_path
@@ -206,50 +235,11 @@ def resolve_scan_executor() -> ScanExecutor:
     return stub_scan_executor
 
 
-def build_policy_handoff_context(service: JobService, request: ScanItemRequested) -> tuple[dict, dict]:
-    if service.control_plane is None:
-        return {}, {}
-    integration = service.control_plane.get_integration_or_404(request.integration_id) if request.integration_id else None
-    scope = service.control_plane.get_scope_or_404(request.scope_id) if request.scope_id else None
-    integration_config = integration.config if integration is not None else {}
-    scope_policy = scope.post_scan_policy if scope is not None else {}
-    resolved_policy = resolve_policy_runtime_config(integration_config, scope_policy)
-    policy_context = {
-        "integration_config": integration_config,
-        "scope_policy": scope_policy,
-        "resolved_policy": resolved_policy.model_dump(mode="json", exclude_none=True),
-    }
-    item_metadata = {
-        "integration": (
-            {
-                "integration_id": integration.integration_id,
-                "platform": integration.platform,
-                "platform_key": integration.platform_key,
-            }
-            if integration is not None
-            else {}
-        ),
-        "scope": (
-            {
-                "scope_id": scope.scope_id,
-                "scope_type": scope.scope_type,
-                "scope_mode": scope.mode,
-                "resource_selector": scope.resource_selector,
-                "normalized_selector": scope.normalized_selector,
-            }
-            if scope is not None
-            else {}
-        ),
-    }
-    return policy_context, item_metadata
-
-
 async def process_scan_message(
     service: JobService,
     envelope: MessageEnvelope,
     *,
     execute_scan: ScanExecutor,
-    evaluate_policy: PolicyEngine = stub_policy_engine,
 ) -> None:
     request = ScanItemRequested.from_envelope(envelope)
     reader = build_scan_reader(request, control_plane=service.control_plane)
@@ -307,7 +297,7 @@ async def process_scan_message(
         scan_result=result,
         scanner_metadata=request.scan_options.get("_dsx_scanner_metadata") or {},
     ).as_stage_update_request()
-    updated = service.update_scan_stage(
+    service.update_scan_stage(
         request.job_item_id,
         scan_stage_request,
     )
@@ -323,66 +313,14 @@ async def process_scan_message(
         file_type=result.file_type,
         scanner_metadata=scan_stage_request.metadata,
     )
-    policy_request = PolicyEvaluationRequested(
-        job_id=request.job_id,
-        job_item_id=request.job_item_id,
-        integration_id=request.integration_id,
-        scope_id=request.scope_id,
-        object_identity=request.object_identity,
-        idempotency_key=request.idempotency_key,
-        scan_result=result,
-        item_payload={
-            **updated.payload,
-            "content_source": updated.content_source.model_dump(mode="json"),
-            "delivery_requirements": updated.delivery_requirements.model_dump(mode="json"),
-        },
-    ).as_policy_handoff_request()
-    policy_context, item_metadata = build_policy_handoff_context(service, request)
-    policy_request = policy_request.model_copy(
-        update={
-            "policy_context": policy_context,
-            "item_metadata": item_metadata,
-        }
-    )
-    await service.advance_policy_stage(
-        request.job_item_id,
-        PolicyStageUpdateRequest(state="running").as_stage_update_request(),
-    )
-    try:
-        handoff = await evaluate_policy(policy_request)
-    except Exception as exc:
-        log_event(
-            ops_logging,
-            40,
-            "policy_handoff_failed",
-            job_id=request.job_id,
-            job_item_id=request.job_item_id,
-            object_identity=request.object_identity,
-            error={"code": "policy_handoff_failed", "message": str(exc), "retryable": False},
-        )
-        await service.advance_policy_stage(
-            request.job_item_id,
-            PolicyStageUpdateRequest(
-                state="failed",
-                error={"code": "policy_handoff_failed", "message": str(exc)},
-            ).as_stage_update_request(),
-        )
-        return
-    await service.advance_policy_stage(
-        request.job_item_id,
-        PolicyStageUpdateRequest(state="completed", decision=handoff).as_stage_update_request(),
-    )
+    await service.request_policy_evaluation(request.job_item_id)
     log_event(
         ops_logging,
         20,
-        "policy_handoff_completed",
+        "policy_evaluation_requested",
         job_id=request.job_id,
         job_item_id=request.job_item_id,
         object_identity=request.object_identity,
-        policy_id=handoff.policy_stage_result.policy_id,
-        remediation_state=handoff.remediation.state,
-        dianna_state=handoff.dianna.state,
-        workflow_summary_targets=len(handoff.delivery.workflow_summary_targets or handoff.delivery.targets),
     )
 
 
@@ -426,7 +364,7 @@ async def main() -> None:
     )
 
     async def handle(envelope: MessageEnvelope) -> None:
-        await process_scan_message(service, envelope, execute_scan=executor, evaluate_policy=stub_policy_engine)
+        await process_scan_message(service, envelope, execute_scan=executor)
 
     await consume_queue(
         amqp_url=settings.rabbitmq.url,

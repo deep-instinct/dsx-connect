@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
+
+from dsx_connect_ng.control_plane.config_models import RemediationCapabilitiesConfig, resolve_remediation_capabilities
 
 
 ScopeType = Literal["path", "identity"]
@@ -23,6 +25,14 @@ class IntegrationBase(BaseModel):
     capability_read: bool = False
     capability_remediate: bool = False
     config: dict = Field(default_factory=dict)
+
+    @computed_field
+    @property
+    def remediation_capabilities(self) -> RemediationCapabilitiesConfig:
+        return resolve_remediation_capabilities(
+            self.config,
+            default_enabled=self.capability_remediate,
+        )
 
 
 class IntegrationCreate(IntegrationBase):

@@ -10,6 +10,8 @@ from dsx_connect_ng.readers.contracts import ReaderStrategy
 
 ProxyAuthMode = Literal["none", "static_header", "dsx_hmac"]
 PolicyVerdict = Literal["benign", "suspicious", "malicious"]
+PolicyRemediationAction = Literal["detect_only", "quarantine", "delete", "tag_only"]
+PolicyFallbackTreatment = Literal["treat_as_benign", "treat_as_malicious"]
 
 
 class ProxyReaderConfig(BaseModel):
@@ -29,6 +31,29 @@ class ReaderConfig(BaseModel):
     proxy: ProxyReaderConfig | None = None
 
 
+class RemediationCapabilitiesConfig(BaseModel):
+    supports_delete: bool = False
+    supports_move: bool = False
+    supports_tag: bool = False
+    supports_movetag: bool = False
+    supports_overwrite: bool = False
+    supports_metadata_preserving_move: bool = False
+
+    def supports_action(self, action: str) -> bool:
+        normalized = str(action or "nothing").strip().lower()
+        if normalized == "nothing":
+            return True
+        if normalized == "delete":
+            return self.supports_delete
+        if normalized == "move":
+            return self.supports_move
+        if normalized == "tag":
+            return self.supports_tag
+        if normalized == "movetag":
+            return self.supports_movetag or (self.supports_move and self.supports_tag)
+        return False
+
+
 class PolicyDeliveryTargetsConfig(BaseModel):
     scan_targets: list[dict[str, Any]] | None = None
     remediation_targets: list[dict[str, Any]] | None = None
@@ -36,10 +61,19 @@ class PolicyDeliveryTargetsConfig(BaseModel):
     workflow_summary_targets: list[dict[str, Any]] | None = None
 
 
+class MaliciousVerdictPolicyConfig(BaseModel):
+    action: PolicyRemediationAction = "detect_only"
+    quarantine_target: dict[str, Any] | None = None
+    tag_on_quarantine: bool = True
+
+
 class PolicyRuntimeConfig(BaseModel):
     policy_id: str | None = None
     auto_dianna_on_verdicts: list[PolicyVerdict] | None = None
     wait_for_dianna_on_auto_request: bool | None = None
+    malicious_verdict: MaliciousVerdictPolicyConfig | None = None
+    non_compliant_treatment: PolicyFallbackTreatment | None = None
+    not_scanned_treatment: PolicyFallbackTreatment | None = None
     remediation_plan_by_verdict: dict[PolicyVerdict, dict[str, Any]] | None = None
     result_delivery_policy: StageResultDeliveryPolicy | None = None
     delivery: PolicyDeliveryTargetsConfig | None = None
@@ -49,7 +83,20 @@ class PolicyRuntimeConfig(BaseModel):
 class IntegrationRuntimeConfig(BaseModel):
     reader: ReaderConfig | None = None
     reader_strategy: ReaderStrategy | None = None
+    remediation: RemediationCapabilitiesConfig | None = None
     policy: PolicyRuntimeConfig | None = None
+
+
+def resolve_remediation_capabilities(config: dict | None, *, default_enabled: bool = False) -> RemediationCapabilitiesConfig:
+    runtime = parse_integration_runtime_config(config)
+    if runtime.remediation is not None:
+        return runtime.remediation
+    return RemediationCapabilitiesConfig(
+        supports_delete=default_enabled,
+        supports_move=default_enabled,
+        supports_tag=default_enabled,
+        supports_movetag=default_enabled,
+    )
 
 
 def parse_integration_runtime_config(config: dict | None) -> IntegrationRuntimeConfig:
@@ -78,6 +125,9 @@ def resolve_policy_runtime_config(
         policy_id=_resolve("policy_id"),
         auto_dianna_on_verdicts=_resolve("auto_dianna_on_verdicts"),
         wait_for_dianna_on_auto_request=_resolve("wait_for_dianna_on_auto_request"),
+        malicious_verdict=_resolve("malicious_verdict"),
+        non_compliant_treatment=_resolve("non_compliant_treatment"),
+        not_scanned_treatment=_resolve("not_scanned_treatment"),
         remediation_plan_by_verdict=_resolve("remediation_plan_by_verdict"),
         result_delivery_policy=_resolve("result_delivery_policy"),
         delivery=_resolve("delivery"),

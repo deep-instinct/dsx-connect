@@ -79,6 +79,92 @@ def _sanitize_display_icon(raw: str | None) -> str | None:
     return None
 
 
+def _normalize_requested_item_action(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = str(value).strip().lower().replace("move_tag", "movetag")
+    if normalized in {"nothing", "delete", "move", "tag", "movetag"}:
+        return normalized
+    return None
+
+
+def _coerce_item_action_enum(value: str | None) -> ItemActionEnum | None:
+    normalized = _normalize_requested_item_action(value)
+    if normalized is None:
+        return None
+    if normalized == "movetag":
+        return ItemActionEnum.MOVE_TAG
+    return ItemActionEnum(normalized)
+
+
+def _extract_requested_action_update(payload: dict[str, Any]) -> tuple[str | None, str | None]:
+    requested_action = payload.get("requested_action")
+    if not isinstance(requested_action, dict):
+        return None, None
+
+    action = _normalize_requested_item_action(requested_action.get("type"))
+    destination = requested_action.get("destination")
+    move_metainfo: str | None = None
+    if isinstance(destination, dict):
+        raw = destination.get("path") or destination.get("prefix")
+        if raw is not None:
+            move_metainfo = str(raw).strip()
+    elif isinstance(destination, str):
+        move_metainfo = destination.strip()
+
+    return action, move_metainfo
+
+
+def apply_requested_action_config_update(
+    payload: dict[str, Any],
+    *,
+    connector_config: Any,
+    connector_running_model: Any | None = None,
+) -> bool:
+    changed = False
+    requested_action_value, requested_move_metainfo = _extract_requested_action_update(payload)
+
+    action_enum: ItemActionEnum | None = None
+    if "item_action" in payload and isinstance(payload.get("item_action"), str):
+        action_enum = _coerce_item_action_enum(payload.get("item_action"))
+    elif requested_action_value:
+        action_enum = _coerce_item_action_enum(requested_action_value)
+
+    if action_enum is not None:
+        try:
+            setattr(connector_config, "item_action", action_enum)
+            changed = True
+        except Exception:
+            pass
+        if connector_running_model is not None:
+            try:
+                setattr(connector_running_model, "item_action", action_enum)
+                changed = True
+            except Exception:
+                pass
+
+    move_metainfo: str | None = None
+    if "item_action_move_metainfo" in payload and isinstance(payload.get("item_action_move_metainfo"), str):
+        move_metainfo = payload.get("item_action_move_metainfo", "").strip()
+    elif requested_move_metainfo is not None:
+        move_metainfo = requested_move_metainfo
+
+    if move_metainfo is not None:
+        try:
+            setattr(connector_config, "item_action_move_metainfo", move_metainfo)
+            changed = True
+        except Exception:
+            pass
+        if connector_running_model is not None:
+            try:
+                setattr(connector_running_model, "item_action_move_metainfo", move_metainfo)
+                changed = True
+            except Exception:
+                pass
+
+    return changed
+
+
 class DSXConnector:
     def __init__(self, connector_config: BaseConnectorConfig):
         self.connector_id = connector_config.name
@@ -1282,25 +1368,14 @@ class DSXAConnectorRouter(APIRouter):
                 changed = True
             except Exception:
                 pass
-        if "item_action" in payload and isinstance(payload.get("item_action"), str):
-            val = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-            if val:
-                try:
-                    setattr(self._connector.connector_running_model, "item_action", val)
-                    if getattr(self._connector, "connector_config", None) is not None:
-                        setattr(self._connector.connector_config, "item_action", val)
-                    changed = True
-                except Exception:
-                    pass
-        if "item_action_move_metainfo" in payload and isinstance(payload.get("item_action_move_metainfo"), str):
-            val = payload.get("item_action_move_metainfo", "").strip()
-            try:
-                setattr(self._connector.connector_running_model, "item_action_move_metainfo", val)
-                if getattr(self._connector, "connector_config", None) is not None:
-                    setattr(self._connector.connector_config, "item_action_move_metainfo", val)
-                changed = True
-            except Exception:
-                pass
+        changed = (
+            apply_requested_action_config_update(
+                payload,
+                connector_config=getattr(self._connector, "connector_config", None),
+                connector_running_model=self._connector.connector_running_model,
+            )
+            or changed
+        )
 
         # Connector-specific/common extra fields supported by the generic fallback path.
         cfg = getattr(self._connector, "connector_config", None)

@@ -3,7 +3,7 @@ import asyncio
 from starlette.responses import StreamingResponse
 
 from connectors.aws_s3.aws_s3_client import AWSS3Client
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -265,18 +265,14 @@ async def config_update_handler(payload: dict):
         config.filter = payload.get("filter", "")
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                config.item_action = ItemActionEnum(action_raw)
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     aws_updates: dict[str, str] = {}
     secret_payload_keys = ("aws_access_key_id", "aws_secret_access_key", "aws_session_token")

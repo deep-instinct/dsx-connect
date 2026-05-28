@@ -8,6 +8,25 @@ It supports:
 * **Continuous monitoring** via Microsoft Graph change notifications
 * **Remediation actions** such as delete, move, or tag after malicious verdicts
 
+## Full Scan and Monitoring Guidance
+
+Full scans establish baseline coverage across a SharePoint scope at a point in operational time.
+
+Because SharePoint content remains active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring via Microsoft Graph change notifications maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
 Monitoring uses a **subscription callback model**: the connector creates a Graph subscription, and Microsoft Graph calls the connector webhook URL when changes occur.
 
 ---

@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
+
+from dsx_connect_ng.recovery import RecoveryMode, ResolvedRecoveryMode
 
 
 def utcnow() -> datetime:
@@ -31,6 +33,7 @@ class BatchJobSubmitRequest(BaseModel):
     integration_id: str | None = None
     scope_id: str | None = None
     idempotency_key: str | None = None
+    recovery_mode: RecoveryMode | None = None
     payload: dict[str, Any] = Field(default_factory=dict)
     items: list[BatchJobItemInput] = Field(default_factory=list)
 
@@ -42,6 +45,16 @@ class DiannaAnalysisRequest(BaseModel):
 
 
 ContentSourceMode = Literal["original", "quarantine", "cached", "none"]
+ConnectorItemAction = Literal["nothing", "delete", "move", "tag", "movetag"]
+ConnectorRemediationStatus = Literal[
+    "success",
+    "nothing",
+    "not_supported",
+    "permission_error",
+    "object_not_found",
+    "transient_platform_error",
+    "error",
+]
 
 
 class ContentSource(BaseModel):
@@ -61,6 +74,39 @@ class DeliveryRequest(BaseModel):
 
 class RemediationRequest(BaseModel):
     remediation_plan: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConnectorActionRequest(BaseModel):
+    item_action: ConnectorItemAction = "nothing"
+    item_action_move_metainfo: str | None = None
+    tags: dict[str, str] = Field(default_factory=dict)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class ConnectorRemediationRequest(BaseModel):
+    action: ConnectorItemAction = "nothing"
+    destination: dict[str, Any] = Field(default_factory=dict)
+    tags: dict[str, str] = Field(default_factory=dict)
+    details: dict[str, Any] = Field(default_factory=dict)
+
+    def as_legacy_action_request(self) -> ConnectorActionRequest:
+        destination_path = self.destination.get("path") or self.destination.get("prefix")
+        move_metainfo = str(destination_path) if destination_path else None
+        return ConnectorActionRequest(
+            item_action=self.action,
+            item_action_move_metainfo=move_metainfo,
+            tags=self.tags,
+            details=self.details,
+        )
+
+
+class ConnectorRemediationResponse(BaseModel):
+    status: ConnectorRemediationStatus = "error"
+    applied_action: ConnectorItemAction = "nothing"
+    target_path: str | None = Field(default=None, alias="targetPath")
+    details: dict[str, Any] = Field(default_factory=dict)
+    error_code: str | None = Field(default=None, alias="errorCode")
+    error_message: str | None = Field(default=None, alias="errorMessage")
 
 
 StageResultDeliveryMode = Literal[
@@ -168,16 +214,18 @@ class PolicyHandoffDecision(BaseModel):
 
 
 class ScanResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     verdict: str
-    scan_guid: str | None = None
-    verdict_details: dict[str, Any] = Field(default_factory=dict)
-    file_info: dict[str, Any] | None = None
-    protected_entity: int | None = None
-    scan_duration_in_microseconds: int | None = None
-    container_files_scanned: int | None = None
-    container_files_scanned_size: int | None = None
+    scan_guid: str | None = Field(default=None, alias="scanGuid")
+    verdict_details: dict[str, Any] = Field(default_factory=dict, alias="verdictDetails")
+    file_info: dict[str, Any] | None = Field(default=None, alias="fileInfo")
+    protected_entity: int | None = Field(default=None, alias="protectedEntity")
+    scan_duration_in_microseconds: int | None = Field(default=None, alias="scanDurationUs")
+    container_files_scanned: int | None = Field(default=None, alias="containerFilesScanned")
+    container_files_scanned_size: int | None = Field(default=None, alias="containerFilesScannedSize")
     x_custom_metadata: str | None = Field(default=None, alias="X-Custom-Metadata")
-    last_update_time: str | None = None
+    last_update_time: str | None = Field(default=None, alias="lastUpdateTime")
 
     @model_validator(mode="before")
     @classmethod
@@ -273,6 +321,24 @@ class JobRecord(BaseModel):
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     completed_at: datetime | None = None
+
+    @computed_field
+    @property
+    def recovery_mode_requested(self) -> RecoveryMode | None:
+        value = self.payload.get("recoveryModeRequested")
+        return value if value in {"item", "batch", "shard", "adaptive"} else None
+
+    @computed_field
+    @property
+    def effective_recovery_mode(self) -> ResolvedRecoveryMode | None:
+        value = self.payload.get("effectiveRecoveryMode")
+        return value if value in {"item", "batch", "shard"} else None
+
+    @computed_field
+    @property
+    def recovery_policy_snapshot(self) -> dict[str, Any] | None:
+        value = self.payload.get("recoveryPolicySnapshot")
+        return value if isinstance(value, dict) else None
 
     def as_envelope(
         self,
@@ -394,7 +460,7 @@ class ScanStageUpdateRequest(BaseModel):
     def as_stage_update_request(self) -> StageUpdateRequest:
         return StageUpdateRequest(
             state=self.state,
-            result=self.scan_result.model_dump(mode="json", by_alias=True) if self.scan_result is not None else None,
+            result=self.scan_result.model_dump(mode="json") if self.scan_result is not None else None,
             metadata=self.scanner_metadata,
             error=self.error,
         )

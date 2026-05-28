@@ -4,7 +4,7 @@ import threading
 
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
 from connectors.google_cloud_storage.gcs_client import GCSClient
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
@@ -41,6 +41,26 @@ gcs_client = GCSClient()
 
 _monitor_thread: threading.Thread | None = None
 _monitor_stop = threading.Event()
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, dict[str, str]]:
+    requested = scan_request.requested_action
+    if requested is None or not requested.type:
+        default_tags = {"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {}
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, default_tags
+
+    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
+    try:
+        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
+    except Exception:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, {"Verdict": "Malicious"}
+
+    destination = requested.destination or {}
+    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
+    tags = {str(k): str(v) for k, v in (requested.tags or {}).items()}
+    if action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) and not tags:
+        tags = {"Verdict": "Malicious"}
+    return action, (str(target).strip() if target else None), tags
 
 
 def _should_monitor() -> bool:
@@ -357,20 +377,69 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
             or an error if the action is not implemented.
     """
     file_path = scan_event_queue_info.location
+    requested_action, target_prefix, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
     if not gcs_client.key_exists(config.asset_bucket, file_path):
-        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action, message="Item action failed.", description=f"File does not exist at {config.asset}: {file_path}")
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.ERROR,
+            item_action=requested_action,
+            message="Item action failed.",
+            description=f"File does not exist at {config.asset}: {file_path}",
+        )
 
-    if config.item_action == ItemActionEnum.DELETE:
-            gcs_client.delete_object(config.asset_bucket, file_path)
-            return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=ItemActionEnum.DELETE, message="File deleted.", description=f"File deleted from {config.asset}: {file_path}")
-    elif config.item_action == ItemActionEnum.MOVE:
-        dest_key = f"{config.item_action_move_metainfo}/{file_path}"
+    if requested_action == ItemActionEnum.DELETE:
+        gcs_client.delete_object(config.asset_bucket, file_path)
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            item_action=ItemActionEnum.DELETE,
+            message="File deleted.",
+            description=f"File deleted from {config.asset}: {file_path}",
+        )
+    if requested_action == ItemActionEnum.MOVE:
+        if not target_prefix:
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.ERROR,
+                item_action=ItemActionEnum.MOVE,
+                message="Item action failed.",
+                description="Move action requires a destination path.",
+            )
+        dest_key = f"{target_prefix.rstrip('/')}/{file_path}"
         gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=ItemActionEnum.MOVE, message="File moved.", description=f"File moved from {config.asset}: {file_path} to {dest_key}")
-    elif config.item_action == ItemActionEnum.TAG:
-        gcs_client.tag_object(config.asset_bucket, file_path, {"Verdict": "Malicious"})
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=ItemActionEnum.TAG, message="File tagged.", description=f"File tagged at {config.asset}: {file_path}")
-    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=config.item_action, message="Item action did nothing or not implemented")
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            item_action=ItemActionEnum.MOVE,
+            message="File moved.",
+            description=f"File moved from {config.asset}: {file_path} to {dest_key}",
+        )
+    if requested_action == ItemActionEnum.TAG:
+        gcs_client.tag_object(config.asset_bucket, file_path, requested_tags)
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            item_action=ItemActionEnum.TAG,
+            message="File tagged.",
+            description=f"File tagged at {config.asset}: {file_path}",
+        )
+    if requested_action == ItemActionEnum.MOVE_TAG:
+        if not target_prefix:
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.ERROR,
+                item_action=ItemActionEnum.MOVE_TAG,
+                message="Item action failed.",
+                description="Move/tag action requires a destination path.",
+            )
+        dest_key = f"{target_prefix.rstrip('/')}/{file_path}"
+        gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
+        gcs_client.tag_object(config.asset_bucket, dest_key, requested_tags)
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            item_action=ItemActionEnum.MOVE_TAG,
+            message="File moved and tagged.",
+            description=f"File moved from {config.asset}: {file_path} to {dest_key} and tagged.",
+        )
+    return ItemActionStatusResponse(
+        status=StatusResponseEnum.NOTHING,
+        item_action=requested_action,
+        message="Item action did nothing or not implemented",
+    )
 
 
 @connector.config_update
@@ -389,18 +458,14 @@ async def config_update_handler(payload: dict):
         config.filter = payload.get("filter", "")
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                config.item_action = ItemActionEnum(action_raw)
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     gcs_updates: dict[str, str] = {}
     if payload.get("monitor") is not None:

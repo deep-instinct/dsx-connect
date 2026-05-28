@@ -1,4 +1,5 @@
 from dsx_connect_ng.jobs.contracts import MessageEnvelope, PolicyEvaluationRequested, RemediationRequested, ResultSinkEmitRequested, ScanItemRequested
+from dsx_connect_ng.jobs.models import ScanResult
 
 
 def test_scan_item_requested_from_envelope_parses_typed_payload() -> None:
@@ -68,8 +69,11 @@ def test_remediation_requested_from_envelope_parses_typed_payload() -> None:
         message_type="remediation_requested",
         job_id="job-3",
         job_item_id="item-3",
+        integration_id="integration-1",
+        scope_id="scope-1",
         object_identity="/finance/bad.exe",
         payload={
+            "content_source": {"mode": "original", "locator": "/finance/bad.exe"},
             "scan_result": {"verdict": "Malicious"},
             "remediation_plan": {"action": "quarantine"},
         },
@@ -77,8 +81,70 @@ def test_remediation_requested_from_envelope_parses_typed_payload() -> None:
 
     message = RemediationRequested.from_envelope(envelope)
 
+    assert message.integration_id == "integration-1"
+    assert message.scope_id == "scope-1"
+    assert message.content_source.mode == "original"
     assert message.scan_result.verdict == "Malicious"
     assert message.remediation_plan.remediation_plan["action"] == "quarantine"
+
+
+def test_remediation_requested_as_envelope_uses_scan_result_aliases() -> None:
+    message = RemediationRequested(
+        job_id="job-3",
+        job_item_id="item-3",
+        integration_id="integration-1",
+        scope_id="scope-1",
+        object_identity="/finance/bad.exe",
+        content_source={"mode": "original", "locator": "/finance/bad.exe"},
+        scan_result=ScanResult(verdict="Malicious", scanGuid="scan-2"),
+        remediation_plan={"action": "quarantine"},
+    )
+
+    envelope = message.as_envelope()
+
+    assert envelope.integration_id == "integration-1"
+    assert envelope.scope_id == "scope-1"
+    assert envelope.payload["content_source"]["mode"] == "original"
+    assert envelope.payload["scan_result"]["scanGuid"] == "scan-2"
+    assert "scan_guid" not in envelope.payload["scan_result"]
+
+
+def test_remediation_requested_translates_quarantine_tag_plan_to_connector_action() -> None:
+    message = RemediationRequested(
+        job_id="job-3",
+        job_item_id="item-3",
+        object_identity="/finance/bad.exe",
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={
+            "action": "quarantine",
+            "targetPath": "tenant-quarantine",
+            "tag": True,
+        },
+    )
+
+    connector_action = message.as_connector_action_request()
+
+    assert connector_action.item_action == "movetag"
+    assert connector_action.item_action_move_metainfo == "tenant-quarantine"
+    assert connector_action.tags == {"Verdict": "Malicious"}
+
+
+def test_remediation_requested_translates_tag_only_plan_to_connector_action() -> None:
+    message = RemediationRequested(
+        job_id="job-3",
+        job_item_id="item-3",
+        object_identity="/finance/bad.exe",
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={
+            "action": "tag_only",
+            "tags": {"Verdict": "Malicious", "Policy": "finance"},
+        },
+    )
+
+    connector_action = message.as_connector_action_request()
+
+    assert connector_action.item_action == "tag"
+    assert connector_action.tags == {"Verdict": "Malicious", "Policy": "finance"}
 
 
 def test_result_sink_emit_requested_from_envelope_parses_typed_payload() -> None:

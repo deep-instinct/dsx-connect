@@ -59,8 +59,17 @@ export DSXA_AUTH_TOKEN=your-token   # optional if auth is disabled
 export DSXA_PROTECTED_ENTITY=1
 export DSXA_VERIFY_TLS=true
 export WEBAPP_SCAN_CONCURRENCY=4
+export WEBAPP_BLOCK_EXECUTABLES=true
+export WEBAPP_MAX_UPLOAD_FILES=5000
+export WEBAPP_MAX_VISIBLE_RESULTS=100
 export WEBAPP_UPLOAD_DIR="demo_uploads/accepted"
 ```
+
+`WEBAPP_BLOCK_EXECUTABLES` is an intake-policy setting in the sample webapp. When enabled, executable file types are rejected even if DSXA returns a benign verdict.
+
+`WEBAPP_MAX_UPLOAD_FILES` is only a webapp multipart-upload limit. It is not a DSXA scanning limit.
+
+`WEBAPP_MAX_VISIBLE_RESULTS` is only a browser/UI rendering cap for the sample results panes. It does not change how many files are uploaded or scanned.
 
 ## Run
 
@@ -98,6 +107,23 @@ If DSXA and this demo are both running as containers on the same Docker host, pl
 ## Cloud Run
 
 This example can run on Google Cloud Run as a simple containerized webapp.
+
+Architecture:
+
+```mermaid
+flowchart LR
+    U[User / Browser]
+    UI[Web UI]
+    CR[Cloud Run WebApp<br/>FastAPI + dsxa_sdk_py]
+    DSXA[DSXA]
+
+    U --> UI
+    UI -->|Upload files| CR
+    CR -->|scan_binary | DSXA
+    DSXA -->|verdict + scan result| CR
+    CR -->|render results| UI
+    UI --> U
+```
 
 Notes:
 

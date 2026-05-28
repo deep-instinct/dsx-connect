@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, HttpUrl, Field
@@ -17,6 +17,13 @@ class ItemActionEnum(str, Enum):
 class ItemActionModel(BaseModel):
     action_type: ItemActionEnum = ItemActionEnum.NOTHING
     action_meta: str = None
+
+
+class RequestedActionModel(BaseModel):
+    type: str | None = None
+    destination: dict[str, Any] | None = None
+    tags: dict[str, str] | None = None
+    details: dict[str, Any] | None = None
 
 
 class ConnectorStatusEnum(str, Enum):
@@ -50,6 +57,7 @@ class ScanRequestModel(BaseModel):
     location: str
     metainfo: str
     connector_url: str = None
+    requested_action: RequestedActionModel | None = None
     # Optional known file size in bytes (provided by connectors to enable preflight checks)
     size_in_bytes: int | None = Field(default=None, ge=0)
     # Logical job identifier to associate related scan requests.

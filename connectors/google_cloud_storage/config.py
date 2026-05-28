@@ -116,6 +116,26 @@ class ConfigManager:
                 return None
 
     @classmethod
+    def _normalize_credentials_path(
+        cls,
+        config: GoogleCloudStorageConnectorConfig,
+    ) -> GoogleCloudStorageConnectorConfig:
+        creds_value = str(getattr(config, "google_application_credentials", "") or "").strip()
+        if not creds_value:
+            return config
+        creds_path = Path(creds_value).expanduser()
+        if not creds_path.is_absolute():
+            env_file = cls._effective_env_file()
+            if env_file is not None:
+                creds_path = (env_file.parent / creds_path).resolve()
+            else:
+                creds_path = creds_path.resolve()
+        normalized = str(creds_path)
+        if normalized == creds_value:
+            return config
+        return config.model_copy(update={"google_application_credentials": normalized})
+
+    @classmethod
     def _is_local_env_file(cls, env_file: Path) -> bool:
         try:
             local_root = (Path.home() / ".dsx-connect-local").resolve()
@@ -178,13 +198,19 @@ class ConfigManager:
     def get_config(cls) -> GoogleCloudStorageConnectorConfig:
         if cls._config is None:
             load_devenv(Path(__file__).with_name('.dev.env'))
-            cls._config = GoogleCloudStorageConnectorConfig()
+            cls._config = cls._normalize_credentials_path(GoogleCloudStorageConnectorConfig())
+            if cls._config.google_application_credentials:
+                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cls._config.google_application_credentials
         return cls._config
 
     @classmethod
     def reload_config(cls) -> GoogleCloudStorageConnectorConfig:
         load_devenv(Path(__file__).with_name('.dev.env'))
-        cls._config = GoogleCloudStorageConnectorConfig()
+        cls._config = cls._normalize_credentials_path(GoogleCloudStorageConnectorConfig())
+        if cls._config.google_application_credentials:
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = cls._config.google_application_credentials
+        else:
+            os.environ.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
         return cls._config
 
 

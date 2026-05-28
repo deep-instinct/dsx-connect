@@ -59,6 +59,11 @@ def test_postgres_job_repository_outbox(postgres_repo: PostgresJobRepository) ->
     )
     assert outbox.publish_state == "pending"
 
+    claimed = postgres_repo.claim_outbox_record(outbox.outbox_id)
+    assert claimed is not None
+    assert claimed.publish_state == "publishing"
+    assert postgres_repo.claim_outbox_record(outbox.outbox_id) is None
+
     published = postgres_repo.mark_outbox_published(outbox.outbox_id)
     assert published is not None
     assert published.publish_state == "published"

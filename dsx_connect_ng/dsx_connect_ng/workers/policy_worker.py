@@ -8,7 +8,7 @@ from dsx_connect_ng.jobs.contracts import MessageEnvelope, PolicyEvaluationReque
 from dsx_connect_ng.jobs.models import PolicyStageUpdateRequest
 from dsx_connect_ng.jobs.service import JobService
 from dsx_connect_ng.workers.consumer import consume_queue
-from dsx_connect_ng.workers.policy_engine import LegacyPolicyEvaluator, stub_policy_evaluator
+from dsx_connect_ng.workers.policy_engine import PolicyEngine, stub_policy_engine
 from dsx_connect_ng.workers.runtime import build_job_service
 
 
@@ -16,14 +16,14 @@ async def process_policy_message(
     service: JobService,
     envelope: MessageEnvelope,
     *,
-    evaluate_policy: LegacyPolicyEvaluator,
+    evaluate_policy: PolicyEngine,
 ) -> None:
     request = PolicyEvaluationRequested.from_envelope(envelope)
     await service.advance_policy_stage(
         request.job_item_id,
         PolicyStageUpdateRequest(state="running").as_stage_update_request(),
     )
-    decision = await evaluate_policy(request)
+    decision = await evaluate_policy(request.as_policy_handoff_request())
     await service.advance_policy_stage(
         request.job_item_id,
         PolicyStageUpdateRequest(state="completed", decision=decision).as_stage_update_request(),
@@ -43,7 +43,7 @@ async def main() -> None:
     print(json.dumps({"event": "policy_worker_start", **summary, "queue": args.queue}), flush=True)
 
     async def handle(envelope: MessageEnvelope) -> None:
-        await process_policy_message(service, envelope, evaluate_policy=stub_policy_evaluator)
+        await process_policy_message(service, envelope, evaluate_policy=stub_policy_engine)
 
     await consume_queue(
         amqp_url=settings.rabbitmq.url,

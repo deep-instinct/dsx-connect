@@ -53,6 +53,7 @@ class LocalPathReader(Reader):
         path = self.resolve_path(request)
         return ReadResult(
             local_path=path,
+            content_length=path.stat().st_size,
             details={
                 "reader": "local_path",
                 "resolvedPath": str(path),

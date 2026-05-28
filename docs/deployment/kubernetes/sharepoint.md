@@ -10,6 +10,25 @@ Deploy the `sharepoint-connector-chart` (under `connectors/sharepoint/deploy/hel
 - Microsoft Entra app credentials and Graph application permissions (see [Azure Credentials](../../reference/azure-credentials.md)).
 - For secret-handling best practices, see [Kubernetes Secrets and Credentials](index.md#kubernetes-secrets-and-credentials).
 
+## Full Scan and Monitoring Guidance
+
+Full scans establish baseline coverage across a SharePoint scope at a point in operational time.
+
+Because SharePoint content remains active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring via Microsoft Graph change notifications maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
 ## Minimal Deployment
 
 1. Create the SharePoint credentials Secret:

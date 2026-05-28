@@ -10,7 +10,7 @@ from starlette.responses import StreamingResponse
 from shared.dsx_logging import dsx_logging
 # Import module as alias so connector_api updates propagate
 from connectors.framework import dsx_connector as dsx_framework
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
 from connectors.m365_mail.config import config, ConfigManager
 from connectors.m365_mail.graph_client import GraphClient
 from connectors.m365_mail.subscriptions import SubscriptionManager
@@ -434,18 +434,14 @@ async def config_update_handler(payload: dict):
         config.filter = payload.get("filter", "")
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                config.item_action = ItemActionEnum(action_raw)
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     if isinstance(payload.get("tenant_id"), str):
         config.tenant_id = payload.get("tenant_id", "").strip() or None

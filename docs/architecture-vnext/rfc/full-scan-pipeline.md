@@ -110,6 +110,11 @@ Full scan operates on live data at enumeration time.
 
 - No point-in-time snapshot guarantee.
 - Objects appearing later are expected to be handled by monitoring.
+- Full scans establish baseline coverage across a repository at a point in operational time.
+- Protected repositories remain active during scanning, so full scans are best-effort enumeration of a live data set rather than immutable snapshots.
+- Continuous monitoring or event-driven protection maintains convergence by detecting newly created, modified, overwritten, and post-scan changed objects.
+- Operationally, full scans are best scheduled during lower repository activity when possible, while monitoring remains enabled for steady-state protection.
+- See [ADR-014: Full-Scan Consistency and Monitoring Convergence](../adr/adr-014-full-scan-consistency-and-monitoring-convergence.md).
 
 ### No Snapshot Mode
 

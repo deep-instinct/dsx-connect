@@ -38,6 +38,11 @@ def test_inmemory_job_repository_outbox_lifecycle() -> None:
     )
     assert outbox.publish_state == "pending"
 
+    claimed = repo.claim_outbox_record(outbox.outbox_id)
+    assert claimed is not None
+    assert claimed.publish_state == "publishing"
+    assert repo.claim_outbox_record(outbox.outbox_id) is None
+
     published = repo.mark_outbox_published(outbox.outbox_id)
     assert published is not None
     assert published.publish_state == "published"

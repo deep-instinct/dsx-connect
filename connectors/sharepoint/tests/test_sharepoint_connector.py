@@ -1,4 +1,10 @@
 import pytest
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[3]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import connectors.sharepoint.sharepoint_connector as spc
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum
@@ -46,6 +52,63 @@ async def test_item_action_delete_success(monkeypatch):
         resp = await spc.item_action_handler(ScanRequestModel(location="abc", metainfo="file.txt"))
         assert resp.status.value == "success"
         assert resp.item_action == ItemActionEnum.DELETE
+    finally:
+        spc.config.item_action = orig_action
+
+
+@pytest.mark.asyncio
+async def test_item_action_move_tag_uses_requested_destination(monkeypatch):
+    orig_action = spc.config.item_action
+    orig_target = spc.config.item_action_move_metainfo
+    spc.config.item_action = ItemActionEnum.NOTHING
+    spc.config.item_action_move_metainfo = "fallback-target"
+
+    calls = []
+
+    async def fake_move(item_id: str, dest_folder: str):
+        calls.append((item_id, dest_folder))
+        return {"id": item_id}
+
+    monkeypatch.setattr(spc.sp_client, "move_file", fake_move)
+    try:
+        resp = await spc.item_action_handler(
+            ScanRequestModel(
+                location="abc",
+                metainfo="file.txt",
+                requested_action={
+                    "type": "movetag",
+                    "destination": {"path": "tenant-quarantine"},
+                },
+            )
+        )
+        assert resp.status.value == "success"
+        assert resp.item_action == ItemActionEnum.MOVE_TAG
+        assert "Tagging skipped" in resp.message
+        assert calls == [("abc", "tenant-quarantine")]
+    finally:
+        spc.config.item_action = orig_action
+        spc.config.item_action_move_metainfo = orig_target
+
+
+@pytest.mark.asyncio
+async def test_item_action_tag_requested_returns_not_supported(monkeypatch):
+    orig_action = spc.config.item_action
+    spc.config.item_action = ItemActionEnum.DELETE
+
+    try:
+        resp = await spc.item_action_handler(
+            ScanRequestModel(
+                location="abc",
+                metainfo="file.txt",
+                requested_action={
+                    "type": "tag",
+                    "tags": {"Verdict": "Malicious"},
+                },
+            )
+        )
+        assert resp.status.value == "nothing"
+        assert resp.item_action == ItemActionEnum.TAG
+        assert "not supported" in resp.message
     finally:
         spc.config.item_action = orig_action
 

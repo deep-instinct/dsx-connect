@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ReadResult:
     local_path: Path | None = None
+    content_length: int | None = None
     details: dict[str, Any] = field(default_factory=dict)
 
 

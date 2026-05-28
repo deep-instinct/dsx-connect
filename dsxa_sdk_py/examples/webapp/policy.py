@@ -35,9 +35,9 @@ def _is_executable_file_type(file_type: str | None) -> bool:
     return file_type in EXECUTABLE_FILE_TYPES
 
 
-def classify_scan(response: ScanResponse) -> UploadDecision:
+def classify_scan(response: ScanResponse, *, block_executables: bool = True) -> UploadDecision:
     file_type = getattr(response.file_info, "file_type", None)
-    if _is_executable_file_type(file_type):
+    if block_executables and _is_executable_file_type(file_type):
         return UploadDecision(
             accepted=False,
             bucket="rejected",

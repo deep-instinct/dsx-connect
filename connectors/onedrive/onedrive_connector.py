@@ -8,7 +8,7 @@ import httpx
 from pydantic import SecretStr
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
 from connectors.framework.auth_hmac import build_outbound_auth_header
 from shared.routes import service_url, API_PREFIX_V1, DSXConnectAPI
 from shared.dsx_logging import dsx_logging
@@ -94,6 +94,22 @@ def _normalize_drive_path(path: str) -> str:
     if raw.lower().startswith(base_clean.lower()):
         return raw
     return f"{base_clean}/{raw}".strip("/")
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None]:
+    requested = scan_request.requested_action
+    if requested is None or not requested.type:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
+
+    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
+    try:
+        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
+    except Exception:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
+
+    destination = requested.destination or {}
+    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
+    return action, (str(target).strip() if target else None)
 
 
 async def _kv_get(key: str) -> Optional[str]:
@@ -330,18 +346,14 @@ async def config_update_handler(payload: dict):
         config.filter = payload.get("filter", "")
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                config.item_action = ItemActionEnum(action_raw)
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     if isinstance(payload.get("tenant_id"), str):
         config.tenant_id = payload.get("tenant_id", "").strip()
@@ -539,39 +551,46 @@ async def preview_provider(limit: int) -> list[str]:
 
 @connector.item_action
 async def item_action_handler(scan_info: ScanRequestModel) -> ItemActionStatusResponse:
-    dsx_logging.debug(f"OneDrive item_action_handler action={config.item_action} target={scan_info.location}")
-    if config.item_action == ItemActionEnum.DELETE:
+    requested_action, target_path = _resolve_requested_item_action(scan_info)
+    dsx_logging.debug(f"OneDrive item_action_handler action={requested_action} target={scan_info.location}")
+    if requested_action == ItemActionEnum.DELETE:
         try:
             target_id = await client.resolve_item_id(scan_info.location)
             await client.delete_file(target_id)
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.SUCCESS,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message="File deleted",
                 description=f"Deleted item {scan_info.location}"
             )
         except Exception as exc:
-            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action, message=str(exc))
-    if config.item_action in (ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG):
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action, message=str(exc))
+    if requested_action in (ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG):
         try:
-            dest_raw = config.item_action_move_metainfo or ""
+            dest_raw = target_path or ""
             dest_folder = _normalize_drive_path(dest_raw)
             await client.move_file(scan_info.location, dest_folder)
             extra = ""
-            if config.item_action == ItemActionEnum.MOVE_TAG:
+            if requested_action == ItemActionEnum.MOVE_TAG:
                 extra = " Tagging skipped (not supported for OneDrive)."
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.SUCCESS,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message=f"File moved.{extra}",
                 description=f"Moved item {scan_info.location} to {dest_folder or 'drive root'}"
             )
         except Exception as exc:
-            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action, message=str(exc))
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action, message=str(exc))
+    if requested_action == ItemActionEnum.TAG:
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.NOTHING,
+            item_action=requested_action,
+            message="Item action tag not supported for OneDrive",
+        )
     return ItemActionStatusResponse(
         status=StatusResponseEnum.NOTHING,
-        item_action=config.item_action,
-        message=f"Item action {config.item_action.value} not implemented",
+        item_action=requested_action,
+        message=f"Item action {requested_action.value} not implemented",
     )
 
 

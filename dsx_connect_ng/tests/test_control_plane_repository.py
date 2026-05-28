@@ -15,9 +15,19 @@ def test_inmemory_repository_integration_crud() -> None:
             platform_key="tenant-a",
             display_name="Tenant A",
             capability_read=True,
+            capability_remediate=True,
+            config={
+                "remediation": {
+                    "supports_delete": True,
+                    "supports_move": True,
+                }
+            },
         )
     )
     assert repo.get_integration(created.integration_id) is not None
+    assert created.remediation_capabilities.supports_delete is True
+    assert created.remediation_capabilities.supports_move is True
+    assert created.remediation_capabilities.supports_tag is False
 
     updated = repo.update_integration(
         created.integration_id,

@@ -6,6 +6,8 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, field_validator
 
 from dsx_connect_ng.jobs.models import (
+    ConnectorActionRequest,
+    ConnectorRemediationRequest,
     ContentSource,
     DeliveryRequest,
     DeliveryRequirements,
@@ -131,6 +133,8 @@ class PolicyEvaluationRequested(BaseModel):
     idempotency_key: str | None = None
     scan_result: ScanResult
     item_payload: dict[str, Any] = Field(default_factory=dict)
+    policy_context: dict[str, Any] = Field(default_factory=dict)
+    item_metadata: dict[str, Any] = Field(default_factory=dict)
     emitted_at: datetime = Field(default_factory=utcnow)
 
     def as_envelope(self) -> MessageEnvelope:
@@ -146,6 +150,8 @@ class PolicyEvaluationRequested(BaseModel):
             payload={
                 "scan_result": self.scan_result.model_dump(mode="json", by_alias=True),
                 "item_payload": self.item_payload,
+                "policy_context": self.policy_context,
+                "item_metadata": self.item_metadata,
             },
         )
 
@@ -161,6 +167,8 @@ class PolicyEvaluationRequested(BaseModel):
             emitted_at=envelope.emitted_at,
             scan_result=ScanResult.model_validate(envelope.payload.get("scan_result") or {}),
             item_payload=envelope.payload.get("item_payload") or {},
+            policy_context=envelope.payload.get("policy_context") or {},
+            item_metadata=envelope.payload.get("item_metadata") or {},
         )
 
     def as_policy_handoff_request(self) -> PolicyHandoffRequest:
@@ -176,6 +184,8 @@ class PolicyEvaluationRequested(BaseModel):
             ),
             scan_result=self.scan_result,
             item_payload=self.item_payload,
+            policy_context=self.policy_context,
+            item_metadata=self.item_metadata,
         )
 
 
@@ -268,7 +278,10 @@ class RemediationRequested(BaseModel):
     message_type: Literal["remediation_requested"] = "remediation_requested"
     job_id: str
     job_item_id: str
+    integration_id: str | None = None
+    scope_id: str | None = None
     object_identity: str
+    content_source: ContentSource = Field(default_factory=ContentSource)
     scan_result: ScanResult
     remediation_plan: RemediationRequest
     emitted_at: datetime = Field(default_factory=utcnow)
@@ -285,9 +298,12 @@ class RemediationRequested(BaseModel):
             message_type=self.message_type,
             job_id=self.job_id,
             job_item_id=self.job_item_id,
+            integration_id=self.integration_id,
+            scope_id=self.scope_id,
             object_identity=self.object_identity,
             emitted_at=self.emitted_at,
             payload={
+                "content_source": self.content_source.model_dump(mode="json"),
                 "scan_result": self.scan_result.model_dump(mode="json", by_alias=True),
                 "remediation_plan": self.remediation_plan.remediation_plan,
             },
@@ -298,11 +314,43 @@ class RemediationRequested(BaseModel):
         return cls(
             job_id=envelope.job_id,
             job_item_id=envelope.job_item_id,
+            integration_id=envelope.integration_id,
+            scope_id=envelope.scope_id,
             object_identity=envelope.object_identity,
             emitted_at=envelope.emitted_at,
+            content_source=ContentSource.model_validate(envelope.payload.get("content_source") or {}),
             scan_result=ScanResult.model_validate(envelope.payload.get("scan_result") or {}),
             remediation_plan=RemediationRequest.model_validate({"remediation_plan": envelope.payload.get("remediation_plan") or {}}),
         )
+
+    def as_connector_action_request(self) -> ConnectorActionRequest:
+        return self.as_connector_remediation_request().as_legacy_action_request()
+
+    def as_connector_remediation_request(self) -> ConnectorRemediationRequest:
+        plan = self.remediation_plan.remediation_plan
+        action = str(plan.get("action") or "nothing").strip().lower()
+        if action == "delete":
+            return ConnectorRemediationRequest(action="delete")
+        if action == "tag_only":
+            return ConnectorRemediationRequest(
+                action="tag",
+                tags={k: str(v) for k, v in (plan.get("tags") or {"Verdict": "Malicious"}).items()},
+            )
+        if action == "quarantine":
+            move_target = (
+                plan.get("targetPath")
+                or plan.get("target_path")
+                or ((plan.get("quarantineTarget") or {}).get("path"))
+                or ((plan.get("quarantineTarget") or {}).get("prefix"))
+            )
+            tag_enabled = bool(plan.get("tag"))
+            return ConnectorRemediationRequest(
+                action="movetag" if tag_enabled else "move",
+                destination={"path": str(move_target)} if move_target else {},
+                tags={k: str(v) for k, v in (plan.get("tags") or {"Verdict": "Malicious"}).items()} if tag_enabled else {},
+                details={"quarantine_target": plan.get("quarantineTarget") or {}},
+            )
+        return ConnectorRemediationRequest(action="nothing")
 
 
 class RemediationCompleted(BaseModel):

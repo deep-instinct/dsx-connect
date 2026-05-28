@@ -279,6 +279,7 @@ class ConnectorProxyReader(Reader):
             )
         return ReadResult(
             local_path=path,
+            content_length=response.content_length,
             details={
                 "reader": "connector_proxy",
                 "resolvedPath": str(path),

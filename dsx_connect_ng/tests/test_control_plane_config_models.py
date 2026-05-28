@@ -1,4 +1,8 @@
-from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config, resolve_policy_runtime_config
+from dsx_connect_ng.control_plane.config_models import (
+    parse_integration_runtime_config,
+    resolve_policy_runtime_config,
+    resolve_remediation_capabilities,
+)
 
 
 def test_parse_integration_runtime_config_with_proxy_reader() -> None:
@@ -31,6 +35,11 @@ def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
                 "policy_id": "integration-default",
                 "auto_dianna_on_verdicts": ["malicious"],
                 "wait_for_dianna_on_auto_request": True,
+                "malicious_verdict": {
+                    "action": "quarantine",
+                    "quarantine_target": {"prefix": "tenant-quarantine"},
+                },
+                "non_compliant_treatment": "treat_as_malicious",
                 "result_delivery_policy": {
                     "scan": "malicious_only",
                     "remediation": "all_outcomes",
@@ -43,6 +52,9 @@ def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
         },
         {
             "policy_id": "scope-override",
+            "malicious_verdict": {
+                "action": "delete",
+            },
             "delivery": {
                 "scan_targets": [{"connector": "scope-scan"}],
             },
@@ -55,6 +67,36 @@ def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
     assert config.policy_id == "scope-override"
     assert config.auto_dianna_on_verdicts == ["malicious"]
     assert config.wait_for_dianna_on_auto_request is True
+    assert config.malicious_verdict is not None
+    assert config.malicious_verdict.action == "delete"
+    assert config.malicious_verdict.tag_on_quarantine is True
+    assert config.non_compliant_treatment == "treat_as_malicious"
     assert config.delivery is not None
     assert config.delivery.scan_targets == [{"connector": "scope-scan"}]
     assert config.content_preservation_mode_by_verdict == {"malicious": "cached"}
+
+
+def test_parse_integration_runtime_config_with_remediation_capabilities() -> None:
+    config = parse_integration_runtime_config(
+        {
+            "remediation": {
+                "supports_delete": True,
+                "supports_move": True,
+                "supports_tag": True,
+            }
+        }
+    )
+
+    assert config.remediation is not None
+    assert config.remediation.supports_delete is True
+    assert config.remediation.supports_movetag is False
+    assert config.remediation.supports_action("movetag") is True
+
+
+def test_resolve_remediation_capabilities_defaults_from_legacy_flag() -> None:
+    capabilities = resolve_remediation_capabilities({}, default_enabled=True)
+
+    assert capabilities.supports_delete is True
+    assert capabilities.supports_move is True
+    assert capabilities.supports_tag is True
+    assert capabilities.supports_movetag is True

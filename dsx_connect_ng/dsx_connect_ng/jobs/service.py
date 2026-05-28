@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 
+from dsx_connect_ng.config import RecoverySettings
+from dsx_connect_ng.control_plane.config_models import resolve_policy_runtime_config
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.bus import JobBus
 from dsx_connect_ng.jobs.contracts import (
@@ -35,13 +37,45 @@ from dsx_connect_ng.jobs.models import (
     StageUpdateRequest,
 )
 from dsx_connect_ng.jobs.repository import JobRepository
+from dsx_connect_ng.recovery import RecoveryMode, ResolvedRecoveryMode
 
 
 class JobService:
-    def __init__(self, repo: JobRepository, bus: JobBus, control_plane: ControlPlaneService | None = None) -> None:
+    def __init__(
+        self,
+        repo: JobRepository,
+        bus: JobBus,
+        control_plane: ControlPlaneService | None = None,
+        recovery_settings: RecoverySettings | None = None,
+    ) -> None:
         self.repo = repo
         self.bus = bus
         self.control_plane = control_plane
+        self.recovery_settings = recovery_settings or RecoverySettings()
+
+    def _resolve_effective_recovery_mode(self, requested_mode: RecoveryMode | None) -> tuple[ResolvedRecoveryMode, dict]:
+        configured_mode = self.recovery_settings.mode
+        selected_mode = requested_mode or configured_mode
+        if selected_mode == "adaptive":
+            effective_mode: ResolvedRecoveryMode = "batch"
+            source = "requested_adaptive" if requested_mode == "adaptive" else "settings_adaptive_default"
+            reason = "adaptive_defaults_to_batch_until_workload_hints_are_modeled"
+        else:
+            effective_mode = selected_mode
+            source = "request" if requested_mode is not None else "settings_default"
+            reason = "explicit_mode_selected"
+        return effective_mode, {
+            "source": source,
+            "requestedMode": requested_mode,
+            "configuredMode": configured_mode,
+            "effectiveMode": effective_mode,
+            "reason": reason,
+            "batchSize": self.recovery_settings.batch_size,
+            "checkpointEveryItems": self.recovery_settings.checkpoint_every_items,
+            "checkpointEverySeconds": self.recovery_settings.checkpoint_every_seconds,
+            "largeObjectThresholdBytes": self.recovery_settings.large_object_threshold_bytes,
+            "preferItemModeForArchives": self.recovery_settings.prefer_item_mode_for_archives,
+        }
 
     def _validate_control_plane_references(
         self,
@@ -184,6 +218,7 @@ class JobService:
         job: JobRecord,
         job_item: JobItemRecord,
     ) -> MessageEnvelope:
+        policy_context, item_metadata = self._build_policy_handoff_context(job=job, job_item=job_item)
         message = PolicyEvaluationRequested(
             job_id=job.job_id,
             job_item_id=job_item.job_item_id,
@@ -193,6 +228,8 @@ class JobService:
             idempotency_key=job.idempotency_key,
             scan_result=job_item.scan_stage.result or {},
             item_payload=job_item.payload,
+            policy_context=policy_context,
+            item_metadata=item_metadata,
         )
         return message.as_envelope()
 
@@ -228,7 +265,10 @@ class JobService:
         message = RemediationRequested(
             job_id=job.job_id,
             job_item_id=job_item.job_item_id,
+            integration_id=job.integration_id,
+            scope_id=job.scope_id,
             object_identity=job_item.object_identity,
+            content_source=job_item.content_source,
             scan_result=job_item.scan_stage.result or {},
             remediation_plan=payload.remediation_plan,
         )
@@ -243,6 +283,43 @@ class JobService:
             "dianna": job_item.dianna_stage.result or {},
             "contentSource": job_item.content_source.model_dump(mode="json"),
         }
+
+    def _build_policy_handoff_context(self, *, job: JobRecord, job_item: JobItemRecord) -> tuple[dict, dict]:
+        if self.control_plane is None:
+            return {}, {}
+        integration = self.control_plane.get_integration_or_404(job.integration_id) if job.integration_id else None
+        scope = self.control_plane.get_scope_or_404(job.scope_id) if job.scope_id else None
+        integration_config = integration.config if integration is not None else {}
+        scope_policy = scope.post_scan_policy if scope is not None else {}
+        resolved_policy = resolve_policy_runtime_config(integration_config, scope_policy)
+        policy_context = {
+            "integration_config": integration_config,
+            "scope_policy": scope_policy,
+            "resolved_policy": resolved_policy.model_dump(mode="json", exclude_none=True),
+        }
+        item_metadata = {
+            "integration": (
+                {
+                    "integration_id": integration.integration_id,
+                    "platform": integration.platform,
+                    "platform_key": integration.platform_key,
+                }
+                if integration is not None
+                else {}
+            ),
+            "scope": (
+                {
+                    "scope_id": scope.scope_id,
+                    "scope_type": scope.scope_type,
+                    "scope_mode": scope.mode,
+                    "resource_selector": scope.resource_selector,
+                    "normalized_selector": scope.normalized_selector,
+                }
+                if scope is not None
+                else {}
+            ),
+        }
+        return policy_context, item_metadata
 
     def _delivery_blocked_by_dianna(self, job_item: JobItemRecord) -> bool:
         if not job_item.delivery_requirements.wait_for_dianna:
@@ -793,10 +870,14 @@ class JobService:
         return await self.request_workflow_summary_emit(job_item_id, payload)
 
     async def _publish_outbox_record(self, outbox: OutboxRecord) -> tuple[bool, OutboxRecord]:
-        if "message_type" in outbox.payload:
-            envelope = MessageEnvelope.model_validate(outbox.payload)
+        claimed_outbox = self.repo.claim_outbox_record(outbox.outbox_id)
+        if claimed_outbox is None:
+            existing = self.repo.get_outbox_record(outbox.outbox_id) or outbox
+            return True, existing
+        if "message_type" in claimed_outbox.payload:
+            envelope = MessageEnvelope.model_validate(claimed_outbox.payload)
         else:
-            envelope = DomainJobEnvelope.model_validate(outbox.payload)
+            envelope = DomainJobEnvelope.model_validate(claimed_outbox.payload)
         try:
             await self.bus.publish(envelope)
         except Exception as exc:
@@ -804,7 +885,7 @@ class JobService:
                 "code": "job_publish_failed",
                 "message": str(exc),
             }
-            failed_outbox = self.repo.mark_outbox_failed(outbox.outbox_id, error=error)
+            failed_outbox = self.repo.mark_outbox_failed(claimed_outbox.outbox_id, error=error)
             if envelope.job_item_id:
                 current_item = self.repo.get_job_item(envelope.job_item_id)
                 if isinstance(envelope, MessageEnvelope) and envelope.message_type == "policy_evaluation_requested" and current_item is not None:
@@ -839,14 +920,14 @@ class JobService:
                     )
                 else:
                     self.repo.update_job_item_state(envelope.job_item_id, state="publish_pending", error=error)
-                self._refresh_parent_job_state(outbox.job_id)
+                self._refresh_parent_job_state(claimed_outbox.job_id)
             else:
-                self.repo.update_job_state(outbox.job_id, state="publish_pending", error=error)
+                self.repo.update_job_state(claimed_outbox.job_id, state="publish_pending", error=error)
             if failed_outbox is None:
                 raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="outbox_state_update_failed")
             return False, failed_outbox
 
-        published_outbox = self.repo.mark_outbox_published(outbox.outbox_id)
+        published_outbox = self.repo.mark_outbox_published(claimed_outbox.outbox_id)
         if envelope.job_item_id:
             current_item = self.repo.get_job_item(envelope.job_item_id)
             if isinstance(envelope, MessageEnvelope) and envelope.message_type == "policy_evaluation_requested" and current_item is not None:
@@ -933,6 +1014,7 @@ class JobService:
             integration_id=payload.integration_id,
             scope_id=payload.scope_id,
         )
+        effective_recovery_mode, recovery_policy_snapshot = self._resolve_effective_recovery_mode(payload.recovery_mode)
 
         created = self.repo.create_job(
             JobCreate(
@@ -945,6 +1027,9 @@ class JobService:
                 payload={
                     **payload.payload,
                     "itemCount": len(payload.items),
+                    "recoveryModeRequested": payload.recovery_mode,
+                    "effectiveRecoveryMode": effective_recovery_mode,
+                    "recoveryPolicySnapshot": recovery_policy_snapshot,
                 },
             )
         )

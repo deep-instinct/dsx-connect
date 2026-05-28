@@ -57,6 +57,38 @@ def _normalized_verdict(verdict: str) -> str:
     return verdict.strip().lower()
 
 
+def _effective_policy_verdict(policy_config: PolicyRuntimeConfig, raw_verdict: str) -> str:
+    normalized = _normalized_verdict(raw_verdict)
+    if normalized in {"malicious", "suspicious", "benign"}:
+        return normalized
+    if normalized in {"non-compliant", "non_compliant", "noncompliant"}:
+        return "malicious" if policy_config.non_compliant_treatment == "treat_as_malicious" else "benign"
+    if normalized in {"not scanned", "not_scanned", "notscanned"}:
+        return "malicious" if policy_config.not_scanned_treatment == "treat_as_malicious" else "benign"
+    return normalized
+
+
+def _default_remediation_plan_for_verdict(policy_config: PolicyRuntimeConfig, effective_verdict: str) -> dict:
+    if effective_verdict != "malicious":
+        return {}
+    malicious_policy = policy_config.malicious_verdict
+    if malicious_policy is None or malicious_policy.action == "detect_only":
+        return {}
+    if malicious_policy.action == "delete":
+        return {"action": "delete"}
+    if malicious_policy.action == "tag_only":
+        return {"action": "tag_only", "tag": True}
+    plan: dict[str, Any] = {"action": "quarantine"}
+    if malicious_policy.quarantine_target:
+        target = malicious_policy.quarantine_target
+        target_path = target.get("targetPath") or target.get("target_path") or target.get("path") or target.get("prefix")
+        if target_path is not None:
+            plan["targetPath"] = target_path
+        plan["quarantineTarget"] = target
+    plan["tag"] = bool(malicious_policy.tag_on_quarantine)
+    return plan
+
+
 def _targets_from_policy_config(policy_config: PolicyRuntimeConfig, fallback_targets: list[dict]) -> DeliveryDispatchDecision:
     delivery = policy_config.delivery
     if delivery is None:
@@ -89,14 +121,14 @@ def _content_preservation_for_verdict(policy_config: PolicyRuntimeConfig, verdic
 
 def _build_stub_handoff_decision(handoff: PolicyHandoffRequest, decision: PolicyDecision) -> PolicyHandoffDecision:
     verdict = handoff.scan_result.verdict
-    normalized_verdict = _normalized_verdict(verdict)
     policy_config = _extract_policy_runtime_config(handoff)
+    effective_verdict = _effective_policy_verdict(policy_config, verdict)
     remediation = (
         StageApplicabilityDecision(state="requested", details={"remediation_plan": decision.remediation_plan})
         if decision.remediation_plan
         else StageApplicabilityDecision(
             state="skipped",
-            reason="benign_verdict" if verdict.strip().lower() == "benign" else "remediation_not_configured",
+            reason="benign_verdict" if effective_verdict == "benign" else "remediation_not_configured",
         )
     )
     delivery = _targets_from_policy_config(policy_config, _delivery_targets_from_decision(decision))
@@ -117,19 +149,24 @@ def _build_stub_handoff_decision(handoff: PolicyHandoffRequest, decision: Policy
         else StageApplicabilityDecision(
             state="skipped",
             reason="not_auto_requested",
-            details={"verdict": verdict} if verdict else {},
+            details={"verdict": verdict, "effective_verdict": effective_verdict} if verdict else {},
         )
     )
     return PolicyHandoffDecision(
         policy_stage_result=PolicyStageResult(
             policy_id=policy_config.policy_id,
-            decision_trace={"engine": "stub_policy", "source": "scan_worker_inline", "verdict": normalized_verdict}
+            decision_trace={
+                "engine": "stub_policy",
+                "source": "policy_worker",
+                "verdict": _normalized_verdict(verdict),
+                "effective_verdict": effective_verdict,
+            }
         ),
         remediation=remediation,
         dianna=dianna,
         delivery=delivery,
-        content_preservation=_content_preservation_for_verdict(policy_config, normalized_verdict),
-        result_delivery_policy=policy_config.result_delivery_policy or _delivery_policy_for_scan_verdict(verdict),
+        content_preservation=_content_preservation_for_verdict(policy_config, effective_verdict),
+        result_delivery_policy=policy_config.result_delivery_policy or _delivery_policy_for_scan_verdict(effective_verdict),
     )
 
 
@@ -149,7 +186,7 @@ def policy_decision_from_handoff_decision(handoff: PolicyHandoffDecision) -> Pol
 async def stub_policy_engine(handoff: PolicyHandoffRequest) -> PolicyHandoffDecision:
     item_payload = _extract_item_payload(handoff)
     policy_config = _extract_policy_runtime_config(handoff)
-    verdict = _normalized_verdict(handoff.scan_result.verdict)
+    effective_verdict = _effective_policy_verdict(policy_config, handoff.scan_result.verdict)
     explicit = item_payload.get("policyDecision") or item_payload.get("policy_decision")
     if explicit:
         decision = PolicyDecision.model_validate(explicit)
@@ -159,13 +196,14 @@ async def stub_policy_engine(handoff: PolicyHandoffRequest) -> PolicyHandoffDeci
     remediation_plan = (
         item_payload.get("remediationPlan")
         or item_payload.get("remediation_plan")
-        or remediation_by_verdict.get(verdict)
+        or remediation_by_verdict.get(effective_verdict)
+        or _default_remediation_plan_for_verdict(policy_config, effective_verdict)
         or {}
     )
     request_dianna = bool(item_payload.get("requestDianna") or item_payload.get("request_dianna"))
     if not request_dianna:
         auto_dianna = policy_config.auto_dianna_on_verdicts or []
-        request_dianna = verdict in auto_dianna
+        request_dianna = effective_verdict in auto_dianna
     wait_for_dianna = bool(
         item_payload.get("waitForDiannaBeforeDelivery")
         or item_payload.get("wait_for_dianna_before_delivery")

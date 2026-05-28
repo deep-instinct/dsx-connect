@@ -6,9 +6,12 @@ import json
 from typing import Awaitable, Callable
 
 from dsx_connect_ng.config import settings
+from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.contracts import MessageEnvelope, RemediationRequested
 from dsx_connect_ng.jobs.models import RemediationResult, RemediationStageUpdateRequest
+from dsx_connect_ng.readers.base import TerminalScanError
 from dsx_connect_ng.jobs.service import JobService
+from dsx_connect_ng.workers.connector_actions import execute_connector_item_action
 from dsx_connect_ng.workers.consumer import consume_queue
 from dsx_connect_ng.workers.runtime import build_job_service
 
@@ -36,16 +39,44 @@ async def process_remediation_message(
 
 async def stub_remediation_executor(request: RemediationRequested) -> RemediationResult:
     plan = request.remediation_plan.remediation_plan
+    connector_action = request.as_connector_action_request()
     action = str(plan.get("action") or "noop")
     target_path = plan.get("targetPath") or plan.get("target_path")
     if target_path is None and action == "quarantine":
         target_path = f"/quarantine/{request.job_item_id}"
+    details = {
+        "worker": "remediation_stub",
+        "tagApplied": bool(plan.get("tag")) if action in {"quarantine", "tag_only"} else False,
+        "connectorAction": connector_action.model_dump(mode="json"),
+    }
+    if plan.get("quarantineTarget") is not None:
+        details["quarantineTarget"] = plan.get("quarantineTarget")
     return RemediationResult(
         action=action,
         outcome="succeeded",
         targetPath=target_path,
-        details={"worker": "remediation_stub"},
+        details=details,
     )
+
+
+def build_remediation_executor(service: JobService) -> RemediationExecutor:
+    control_plane: ControlPlaneService | None = service.control_plane
+
+    async def execute(request: RemediationRequested) -> RemediationResult:
+        connector_action = request.as_connector_action_request()
+        if connector_action.item_action == "nothing":
+            return await stub_remediation_executor(request)
+        if request.integration_id is None or control_plane is None:
+            return await stub_remediation_executor(request)
+        try:
+            return await execute_connector_item_action(request, control_plane=control_plane)
+        except TerminalScanError:
+            raise
+        except Exception:
+            # Best-effort phase: keep local stub path available when connector action transport/config is absent.
+            return await stub_remediation_executor(request)
+
+    return execute
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,10 +90,11 @@ def parse_args() -> argparse.Namespace:
 async def main() -> None:
     args = parse_args()
     service, summary = build_job_service()
+    executor = build_remediation_executor(service)
     print(json.dumps({"event": "remediation_worker_start", **summary, "queue": args.queue}), flush=True)
 
     async def handle(envelope: MessageEnvelope) -> None:
-        await process_remediation_message(service, envelope, execute_remediation=stub_remediation_executor)
+        await process_remediation_message(service, envelope, execute_remediation=executor)
 
     await consume_queue(
         amqp_url=settings.rabbitmq.url,

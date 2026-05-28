@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, Dict, Iterable, List, Set
 from pydantic import SecretStr
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
 from connectors.salesforce.config import ConfigManager, SalesforceConnectorConfig
 from connectors.salesforce.salesforce_client import SalesforceClient
 from connectors.salesforce.version import CONNECTOR_VERSION
@@ -213,27 +213,14 @@ async def config_update_handler(payload: dict):
             pass
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                action_val = ItemActionEnum(action_raw)
-                config.item_action = action_val
-                try:
-                    connector.connector_running_model.item_action = action_val
-                except Exception:
-                    pass
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        try:
-            connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
-        except Exception:
-            pass
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     str_fields = [
         "sf_login_url",

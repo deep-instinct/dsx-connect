@@ -128,6 +128,10 @@ Where supported, the connector may expose remediation operations such as:
 Core decides **whether** remediation should occur.
 Connector performs **how** it occurs on that platform.
 
+For the detailed remediation request/response contract, authority split, and 1g-to-2g migration model, see:
+
+- [Remediation Contract Model](remediation-contract-model.md)
+
 ---
 
 ## Capability Advertisement
@@ -174,3 +178,8 @@ The connector contract should be intentionally narrow:
 - core decides
 - core counts
 - core owns workflow state
+
+For version-aware enumeration and mutable-repository consistency expectations, see:
+
+- [Version and Change Watermark Model](version-and-change-watermark-model.md)
+- [Remediation Contract Model](remediation-contract-model.md)

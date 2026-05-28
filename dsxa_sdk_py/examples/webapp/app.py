@@ -5,9 +5,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
+from starlette.formparsers import MultiPartException
+from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from dsxa_sdk_py.client import AsyncDSXAClient
 from dsxa_sdk_py.exceptions import DSXAError
@@ -30,6 +32,9 @@ class Settings:
         self.protected_entity = int(os.getenv("DSXA_PROTECTED_ENTITY", "1"))
         self.verify_tls = _env_bool("DSXA_VERIFY_TLS", True)
         self.scan_concurrency = max(1, int(os.getenv("WEBAPP_SCAN_CONCURRENCY", "4")))
+        self.block_executables = _env_bool("WEBAPP_BLOCK_EXECUTABLES", True)
+        self.max_upload_files = max(1, int(os.getenv("WEBAPP_MAX_UPLOAD_FILES", "5000")))
+        self.max_visible_results = max(1, int(os.getenv("WEBAPP_MAX_VISIBLE_RESULTS", "100")))
         self.upload_dir = Path(
             os.getenv("WEBAPP_UPLOAD_DIR", str(Path.cwd() / ".demo_uploads" / "accepted"))
         )
@@ -40,13 +45,29 @@ class Settings:
             "authToken": self.auth_token or "",
             "protectedEntity": self.protected_entity,
             "scanConcurrency": self.scan_concurrency,
+            "blockExecutables": self.block_executables,
+            "maxUploadFiles": self.max_upload_files,
+            "maxVisibleResults": self.max_visible_results,
         }
 
-    def update(self, *, base_url: str, auth_token: str, protected_entity: int, scan_concurrency: int) -> None:
+    def update(
+        self,
+        *,
+        base_url: str,
+        auth_token: str,
+        protected_entity: int,
+        scan_concurrency: int,
+        block_executables: bool,
+        max_upload_files: int,
+        max_visible_results: int,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.auth_token = auth_token or None
         self.protected_entity = protected_entity
         self.scan_concurrency = max(1, scan_concurrency)
+        self.block_executables = bool(block_executables)
+        self.max_upload_files = max(1, max_upload_files)
+        self.max_visible_results = max(1, max_visible_results)
 
 
 class ConfigUpdate(BaseModel):
@@ -54,6 +75,9 @@ class ConfigUpdate(BaseModel):
     authToken: str = ""
     protectedEntity: int = 1
     scanConcurrency: int = 4
+    blockExecutables: bool = True
+    maxUploadFiles: int = 5000
+    maxVisibleResults: int = 100
 
 
 settings = Settings()
@@ -87,6 +111,9 @@ async def health() -> dict[str, Any]:
         "ok": True,
         "configured": bool(settings.base_url),
         "scan_concurrency": settings.scan_concurrency,
+        "block_executables": settings.block_executables,
+        "max_upload_files": settings.max_upload_files,
+        "max_visible_results": settings.max_visible_results,
         "upload_dir": str(settings.upload_dir),
     }
 
@@ -105,6 +132,9 @@ async def update_config(payload: ConfigUpdate) -> dict[str, Any]:
         auth_token=payload.authToken.strip(),
         protected_entity=payload.protectedEntity,
         scan_concurrency=payload.scanConcurrency,
+        block_executables=payload.blockExecutables,
+        max_upload_files=payload.maxUploadFiles,
+        max_visible_results=payload.maxVisibleResults,
     )
     return {
         "message": "Configuration updated.",
@@ -113,9 +143,21 @@ async def update_config(payload: ConfigUpdate) -> dict[str, Any]:
 
 
 @app.post("/api/uploads")
-async def upload_and_scan(files: list[UploadFile] = File(...)) -> dict[str, Any]:
+async def upload_and_scan(request: Request) -> dict[str, Any]:
     if not settings.base_url:
         raise HTTPException(status_code=500, detail="DSXA_BASE_URL is not configured.")
+    try:
+        form = await request.form(max_files=settings.max_upload_files)
+    except MultiPartException as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{exc} This is a webapp upload limit controlled by WEBAPP_MAX_UPLOAD_FILES, "
+                "not a DSXA scanning limit."
+            ),
+        ) from exc
+
+    files = [value for value in form.getlist("files") if isinstance(value, StarletteUploadFile)]
     if not files:
         raise HTTPException(status_code=400, detail="At least one file is required.")
 
@@ -161,7 +203,7 @@ async def scan_one_upload(
                 payload,
                 custom_metadata=f"loan-intake:{filename}",
             )
-        decision = classify_scan(response)
+        decision = classify_scan(response, block_executables=settings.block_executables)
         if decision.accepted:
             destination = _allocate_destination(filename)
             await asyncio.to_thread(destination.write_bytes, payload)

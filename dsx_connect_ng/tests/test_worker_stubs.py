@@ -9,7 +9,7 @@ from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScop
 from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneRepository
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.bus import InMemoryJobBus
-from dsx_connect_ng.jobs.contracts import MessageEnvelope, ResultSinkEmitRequested
+from dsx_connect_ng.jobs.contracts import MessageEnvelope, PolicyEvaluationRequested, ResultSinkEmitRequested
 from dsx_connect_ng.jobs.models import (
     BatchJobSubmitRequest,
     ContentPreservationDecision,
@@ -18,7 +18,6 @@ from dsx_connect_ng.jobs.models import (
     DeliveryResult,
     DeliveryRequirements,
     DiannaResult,
-    PolicyDecision,
     PolicyHandoffDecision,
     PolicyHandoffRequest,
     PolicyStageResult,
@@ -35,7 +34,9 @@ from dsx_connect_ng.workers.delivery_worker import process_result_sink_message
 from dsx_connect_ng.workers.dianna_worker import process_dianna_message
 from dsx_connect_ng.workers.policy_worker import process_policy_message
 from dsx_connect_ng.workers.policy_engine import stub_policy_engine
-from dsx_connect_ng.workers.remediation_worker import process_remediation_message
+from dsx_connect_ng.workers.connector_actions import build_legacy_connector_action_payload
+from dsx_connect_ng.workers.connector_actions import normalize_connector_remediation_response
+from dsx_connect_ng.workers.remediation_worker import build_remediation_executor, process_remediation_message
 from dsx_connect_ng.workers.scan_worker import (
     TerminalScanError,
     execute_scan_via_dsxa,
@@ -61,26 +62,6 @@ async def _fake_benign_scan(_request, _reader) -> ScanResult:
         fileType="TextFileType",
         scanDurationUs=1000,
     )
-
-
-async def _fake_policy(request) -> PolicyDecision:
-    if request.scan_result.verdict == "Malicious":
-        return PolicyDecision(
-            remediation_plan={"action": "quarantine"},
-            delivery_target={"connector": "sharepoint"},
-            request_dianna=True,
-            wait_for_dianna_before_delivery=True,
-        )
-    return PolicyDecision(delivery_target={"connector": "sharepoint"})
-
-
-async def _fake_policy_without_dianna(request) -> PolicyDecision:
-    if request.scan_result.verdict == "Malicious":
-        return PolicyDecision(
-            remediation_plan={"action": "quarantine"},
-            delivery_target={"connector": "sharepoint"},
-        )
-    return PolicyDecision(delivery_target={"connector": "sharepoint"})
 
 
 async def _fake_policy_engine(_request) -> PolicyHandoffDecision:
@@ -145,6 +126,13 @@ def test_stub_policy_engine_uses_resolved_policy_context() -> None:
                 "policy_id": "scope-policy-1",
                 "auto_dianna_on_verdicts": ["malicious"],
                 "wait_for_dianna_on_auto_request": True,
+                "malicious_verdict": {
+                    "action": "quarantine",
+                    "quarantine_target": {"prefix": "tenant-quarantine"},
+                    "tag_on_quarantine": True,
+                },
+                "non_compliant_treatment": "treat_as_malicious",
+                "not_scanned_treatment": "treat_as_benign",
                 "remediation_plan_by_verdict": {
                     "malicious": {"action": "quarantine"},
                 },
@@ -176,6 +164,117 @@ def test_stub_policy_engine_uses_resolved_policy_context() -> None:
     assert decision.result_delivery_policy.scan == "malicious_only"
 
 
+def test_stub_policy_engine_maps_non_compliant_to_malicious_policy() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/risky.bin",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(verdict="Non-Compliant", scanGuid="scan-1"),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "auto_dianna_on_verdicts": ["malicious"],
+                "wait_for_dianna_on_auto_request": True,
+                "malicious_verdict": {
+                    "action": "delete",
+                },
+                "non_compliant_treatment": "treat_as_malicious",
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "requested"
+    assert decision.remediation.details["remediation_plan"]["action"] == "delete"
+    assert decision.dianna.state == "requested"
+    assert decision.policy_stage_result.decision_trace["effective_verdict"] == "malicious"
+    assert decision.remediation.details["remediation_plan"]["action"] == "delete"
+
+
+def test_stub_policy_engine_maps_not_scanned_to_benign_policy() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/unknown.bin",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(verdict="not scanned", scanGuid="scan-1"),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "malicious_verdict": {
+                    "action": "delete",
+                },
+                "not_scanned_treatment": "treat_as_benign",
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "skipped"
+    assert decision.remediation.reason == "benign_verdict"
+    assert decision.dianna.state == "skipped"
+    assert decision.policy_stage_result.decision_trace["effective_verdict"] == "benign"
+
+
+def test_stub_policy_engine_builds_tag_only_remediation_plan() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/tag-me.bin",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(verdict="Malicious", scanGuid="scan-1"),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "malicious_verdict": {
+                    "action": "tag_only",
+                },
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "requested"
+    assert decision.remediation.details["remediation_plan"] == {"action": "tag_only", "tag": True}
+
+
+def test_stub_policy_engine_quarantine_defaults_to_tagging() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/quarantine.bin",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(verdict="Malicious", scanGuid="scan-1"),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "malicious_verdict": {
+                    "action": "quarantine",
+                    "quarantine_target": {"prefix": "tenant-quarantine"},
+                },
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "requested"
+    assert decision.remediation.details["remediation_plan"]["action"] == "quarantine"
+    assert decision.remediation.details["remediation_plan"]["tag"] is True
+
+
 
 async def _fake_delivery(_request) -> DeliveryResult:
     return DeliveryResult(
@@ -192,7 +291,7 @@ async def _fake_dianna(_request) -> DiannaResult:
     )
 
 
-def test_scan_worker_processes_message_and_requests_follow_on_work_inline() -> None:
+def test_scan_worker_processes_message_and_enqueues_policy_evaluation() -> None:
     repo = InMemoryJobRepository()
     bus = InMemoryJobBus()
     service = JobService(repo=repo, bus=bus)
@@ -203,17 +302,17 @@ def test_scan_worker_processes_message_and_requests_follow_on_work_inline() -> N
     assert isinstance(first_message, MessageEnvelope)
     assert first_message.message_type == "scan_item_requested"
 
-    asyncio.run(process_scan_message(service, first_message, execute_scan=_fake_scan, evaluate_policy=_fake_policy_engine))
+    asyncio.run(process_scan_message(service, first_message, execute_scan=_fake_scan))
 
     item = service.list_job_items(job_id=created.job.job_id)[0]
     assert item.scan_stage.result is not None
     assert item.scan_stage.result["scan_guid"] == "scan-worker-1"
     assert item.scan_stage.metadata == {}
-    assert item.policy_stage.state == "completed"
+    assert item.policy_stage.state == "pending"
     published_types = [message.message_type for message in bus.snapshot() if isinstance(message, MessageEnvelope)]
-    assert "policy_evaluation_requested" not in published_types
-    assert "dianna_analysis_requested" in published_types
-    assert "remediation_requested" in published_types
+    assert "policy_evaluation_requested" in published_types
+    assert "dianna_analysis_requested" not in published_types
+    assert "remediation_requested" not in published_types
 
 
 def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane() -> None:
@@ -265,21 +364,18 @@ def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane
     )
     first_message = bus.snapshot()[0]
     assert isinstance(first_message, MessageEnvelope)
-    captured = {}
+    asyncio.run(process_scan_message(service, first_message, execute_scan=_fake_scan))
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
+    request = PolicyEvaluationRequested.from_envelope(policy_message)
 
-    async def capture_policy_request(request: PolicyHandoffRequest) -> PolicyHandoffDecision:
-        captured["policy_context"] = request.policy_context
-        captured["item_metadata"] = request.item_metadata
-        return await _fake_policy_engine_without_dianna(request)
-
-    asyncio.run(process_scan_message(service, first_message, execute_scan=_fake_scan, evaluate_policy=capture_policy_request))
-
-    assert captured["policy_context"]["integration_config"]["policy"]["policy_id"] == "integration-policy"
-    assert captured["policy_context"]["scope_policy"]["policy_id"] == "scope-policy"
-    assert captured["policy_context"]["resolved_policy"]["policy_id"] == "scope-policy"
-    assert captured["policy_context"]["resolved_policy"]["delivery"]["scan_targets"] == [{"connector": "scope-scan"}]
-    assert captured["item_metadata"]["integration"]["integration_id"] == integration.integration_id
-    assert captured["item_metadata"]["scope"]["scope_id"] == scope.scope_id
+    assert request.policy_context["integration_config"]["policy"]["policy_id"] == "integration-policy"
+    assert request.policy_context["scope_policy"]["policy_id"] == "scope-policy"
+    assert request.policy_context["resolved_policy"]["policy_id"] == "scope-policy"
+    assert request.policy_context["resolved_policy"]["delivery"]["scan_targets"] == [{"connector": "scope-scan"}]
+    assert request.item_metadata["integration"]["integration_id"] == integration.integration_id
+    assert request.item_metadata["scope"]["scope_id"] == scope.scope_id
 
 
 def test_policy_worker_processes_message_and_requests_follow_on_work() -> None:
@@ -291,15 +387,15 @@ def test_policy_worker_processes_message_and_requests_follow_on_work() -> None:
     )
     scan_message = bus.snapshot()[0]
     asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan))
-    item = service.list_job_items(job_id=created.job.job_id)[0]
-    asyncio.run(service.request_policy_evaluation(item.job_item_id))
-    policy_message = bus.snapshot()[-1]
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
 
-    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=_fake_policy))
+    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=_fake_policy_engine))
 
     item = service.list_job_items(job_id=created.job.job_id)[0]
     assert item.policy_stage.result is not None
-    assert item.policy_stage.result["request_dianna"] is True
+    assert item.policy_stage.result["dianna"]["state"] == "requested"
     assert item.delivery_requirements.wait_for_dianna is True
     published_types = [message.message_type for message in bus.snapshot() if isinstance(message, MessageEnvelope)]
     assert "dianna_analysis_requested" in published_types
@@ -314,7 +410,11 @@ def test_remediation_worker_processes_message_and_requests_delivery() -> None:
         service.submit_batch_job(BatchJobSubmitRequest(items=[{"object_identity": "/finance/bad.exe"}]))
     )
     scan_message = bus.snapshot()[0]
-    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan, evaluate_policy=_fake_policy_engine_without_dianna))
+    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan))
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
+    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=_fake_policy_engine_without_dianna))
 
     remediation_message = next(
         message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "remediation_requested"
@@ -329,6 +429,160 @@ def test_remediation_worker_processes_message_and_requests_delivery() -> None:
     assert "result_sink_emit_requested" in published_types
 
 
+def test_stub_remediation_executor_reports_tag_only() -> None:
+    from dsx_connect_ng.jobs.contracts import RemediationRequested
+    from dsx_connect_ng.workers.remediation_worker import stub_remediation_executor
+
+    request = RemediationRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/tag-me.bin",
+        remediation_plan={"action": "tag_only", "tag": True},
+        scan_result={"verdict": "Malicious"},
+    )
+
+    result = asyncio.run(stub_remediation_executor(request))
+
+    assert result.action == "tag_only"
+    assert result.target_path is None
+    assert result.details["tagApplied"] is True
+
+
+def test_build_legacy_connector_action_payload_uses_connector_action_override() -> None:
+    from dsx_connect_ng.jobs.contracts import RemediationRequested
+
+    request = RemediationRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        integration_id="integration-1",
+        scope_id="scope-1",
+        object_identity="/finance/bad.exe",
+        content_source={"mode": "original", "locator": "/finance/bad.exe"},
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={
+            "action": "quarantine",
+            "targetPath": "tenant-quarantine",
+            "tag": True,
+        },
+    )
+
+    payload = build_legacy_connector_action_payload(
+        request,
+        connector_action=request.as_connector_action_request(),
+        connector_url="http://127.0.0.1:8620/filesystem",
+    )
+
+    assert payload["location"] == "/finance/bad.exe"
+    assert payload["connector_url"] == "http://127.0.0.1:8620/filesystem"
+    assert payload["item_action"] == "movetag"
+    assert payload["item_action_move_metainfo"] == "tenant-quarantine"
+    assert payload["connector"]["item_action"] == "movetag"
+    assert payload["tags"] == {"Verdict": "Malicious"}
+    assert payload["requested_action"]["type"] == "movetag"
+    assert payload["scan_context"]["verdict"] == "Malicious"
+
+
+def test_normalize_connector_remediation_response_maps_legacy_payload() -> None:
+    response = normalize_connector_remediation_response(
+        {"status": "completed", "action": "move", "path": "/quarantine/bad.exe"},
+        fallback_action="move",
+    )
+
+    assert response.status == "success"
+    assert response.applied_action == "move"
+    assert response.target_path == "/quarantine/bad.exe"
+
+
+def test_build_remediation_executor_falls_back_to_stub_when_connector_action_fails(monkeypatch) -> None:
+    from dsx_connect_ng.jobs.contracts import RemediationRequested
+
+    control_plane = ControlPlaneService(repo=InMemoryControlPlaneRepository())
+    control_plane.create_integration(
+        IntegrationCreate(
+            integration_id="integration-1",
+            platform="filesystem",
+            platform_key="local-fs",
+            display_name="Filesystem",
+            config={
+                "reader": {
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8620",
+                        "connector_name": "filesystem",
+                    }
+                }
+            },
+        )
+    )
+    service = JobService(repo=InMemoryJobRepository(), bus=InMemoryJobBus(), control_plane=control_plane)
+
+    async def fail_connector_action(*_args, **_kwargs):
+        raise RuntimeError("connector unavailable")
+
+    monkeypatch.setattr("dsx_connect_ng.workers.remediation_worker.execute_connector_item_action", fail_connector_action)
+
+    request = RemediationRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        integration_id="integration-1",
+        object_identity="/finance/bad.exe",
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={"action": "delete"},
+    )
+
+    result = asyncio.run(build_remediation_executor(service)(request))
+
+    assert result.action == "delete"
+    assert result.details["worker"] == "remediation_stub"
+
+
+def test_build_remediation_executor_rejects_unsupported_connector_action() -> None:
+    from dsx_connect_ng.jobs.contracts import RemediationRequested
+
+    control_plane = ControlPlaneService(repo=InMemoryControlPlaneRepository())
+    control_plane.create_integration(
+        IntegrationCreate(
+            integration_id="integration-1",
+            platform="filesystem",
+            platform_key="local-fs",
+            display_name="Filesystem",
+            capability_remediate=True,
+            config={
+                "reader": {
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8620",
+                        "connector_name": "filesystem",
+                    }
+                },
+                "remediation": {
+                    "supports_delete": False,
+                    "supports_move": True,
+                    "supports_tag": False,
+                    "supports_movetag": False,
+                },
+            },
+        )
+    )
+    service = JobService(repo=InMemoryJobRepository(), bus=InMemoryJobBus(), control_plane=control_plane)
+
+    request = RemediationRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        integration_id="integration-1",
+        object_identity="/finance/bad.exe",
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={"action": "delete"},
+    )
+
+    executor = build_remediation_executor(service)
+
+    try:
+        asyncio.run(executor(request))
+    except TerminalScanError as exc:
+        assert exc.code == "connector_action_not_supported"
+    else:
+        raise AssertionError("expected TerminalScanError")
+
+
 def test_result_sink_worker_processes_message_and_completes_item() -> None:
     repo = InMemoryJobRepository()
     bus = InMemoryJobBus()
@@ -337,7 +591,11 @@ def test_result_sink_worker_processes_message_and_completes_item() -> None:
         service.submit_batch_job(BatchJobSubmitRequest(items=[{"object_identity": "/finance/bad.exe"}]))
     )
     scan_message = bus.snapshot()[0]
-    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan, evaluate_policy=_fake_policy_engine_without_dianna))
+    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan))
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
+    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=_fake_policy_engine_without_dianna))
     remediation_message = next(
         message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "remediation_requested"
     )
@@ -403,6 +661,10 @@ def test_result_sink_worker_completes_item_without_remediation_when_policy_goes_
     )
     scan_message = bus.snapshot()[0]
     asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_benign_scan))
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
+    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=stub_policy_engine))
     delivery_message = next(
         message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "result_sink_emit_requested"
     )
@@ -413,7 +675,10 @@ def test_result_sink_worker_completes_item_without_remediation_when_policy_goes_
     assert item.remediation_stage.state == "skipped"
     assert item.remediation_stage.result == {"reason": "benign_verdict"}
     assert item.dianna_stage.state == "skipped"
-    assert item.dianna_stage.result == {"reason": "not_auto_requested", "details": {"verdict": "Benign"}}
+    assert item.dianna_stage.result == {
+        "reason": "not_auto_requested",
+        "details": {"verdict": "Benign", "effective_verdict": "benign"},
+    }
     assert item.delivery_stage.state == "completed"
     assert item.state == "completed"
 
@@ -426,7 +691,11 @@ def test_dianna_worker_processes_message_and_unblocks_delivery() -> None:
         service.submit_batch_job(BatchJobSubmitRequest(items=[{"object_identity": "/finance/bad.exe"}]))
     )
     scan_message = bus.snapshot()[0]
-    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan, evaluate_policy=_fake_policy_engine))
+    asyncio.run(process_scan_message(service, scan_message, execute_scan=_fake_scan))
+    policy_message = next(
+        message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
+    )
+    asyncio.run(process_policy_message(service, policy_message, evaluate_policy=_fake_policy_engine))
 
     published_types = [message.message_type for message in bus.snapshot() if isinstance(message, MessageEnvelope)]
     assert "dianna_analysis_requested" in published_types
@@ -720,6 +989,7 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch) -> None:
         async def acquire(self, _request):
             return SimpleNamespace(
                 local_path=Path("/tmp/sample.txt"),
+                content_length=128,
                 details={"reader": "connector_proxy", "endpointUrl": "http://127.0.0.1:8620/filesystem/read_file"},
             )
 
@@ -776,7 +1046,7 @@ def test_execute_scan_via_dsxa_maps_auth_error_terminal(monkeypatch) -> None:
 
     class FakeReader:
         async def acquire(self, _request):
-            return SimpleNamespace(local_path=Path("/tmp/sample.txt"), details={"reader": "local_path"})
+            return SimpleNamespace(local_path=Path("/tmp/sample.txt"), content_length=128, details={"reader": "local_path"})
 
     with pytest.raises(TerminalScanError) as exc:
         asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
@@ -819,9 +1089,51 @@ def test_execute_scan_via_dsxa_maps_transport_error_retryable(monkeypatch) -> No
 
     class FakeReader:
         async def acquire(self, _request):
-            return SimpleNamespace(local_path=Path("/tmp/sample.txt"), details={"reader": "local_path"})
+            return SimpleNamespace(local_path=Path("/tmp/sample.txt"), content_length=128, details={"reader": "local_path"})
 
     with pytest.raises(RuntimeError) as exc:
         asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
 
     assert "scanner_transport_failure" in str(exc.value)
+
+
+def test_execute_scan_via_dsxa_skips_oversize_by_size_hint(monkeypatch) -> None:
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.max_file_size_bytes", 100)
+
+    request = SimpleNamespace(
+        read_hint={"sizeInBytes": 101},
+        scan_options={},
+        content_source=ContentSource(mode="original"),
+    )
+
+    class FakeReader:
+        async def acquire(self, _request):
+            raise AssertionError("reader should not be called for oversize size hint")
+
+    with pytest.raises(TerminalScanError) as exc:
+        asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
+
+    assert exc.value.code == "content_too_large"
+    assert exc.value.details["enforcement"] == "size_hint"
+
+
+def test_execute_scan_via_dsxa_skips_oversize_after_read(monkeypatch) -> None:
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.max_file_size_bytes", 100)
+
+    request = SimpleNamespace(
+        read_hint={},
+        scan_options={},
+        content_source=ContentSource(mode="original"),
+    )
+
+    class FakeReader:
+        async def acquire(self, _request):
+            return SimpleNamespace(local_path=Path("/tmp/sample.txt"), content_length=101, details={"reader": "local_path"})
+
+    with pytest.raises(TerminalScanError) as exc:
+        asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
+
+    assert exc.value.code == "content_too_large"
+    assert exc.value.details["enforcement"] == "read_result"

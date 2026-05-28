@@ -2,13 +2,14 @@ import asyncio
 
 from fastapi import HTTPException
 
+from dsx_connect_ng.config import RecoverySettings
 from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneRepository
 from dsx_connect_ng.jobs.bus import InMemoryJobBus, JobBus
 from dsx_connect_ng.jobs.contracts import MessageEnvelope
 
-from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobSubmitRequest, PolicyDecision, RemediationRequest, StageUpdateRequest
+from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobCreate, JobSubmitRequest, PolicyDecision, RemediationRequest, StageUpdateRequest
 from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 
@@ -162,6 +163,27 @@ def test_flush_outbox_reports_failed_retry() -> None:
     assert flushed.records[0].publish_state == "pending"
 
 
+def test_publish_outbox_record_claim_prevents_duplicate_publish() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    job = repo.create_job(JobCreate(job_type="scan.requested", state="accepted"))
+    outbox = repo.create_outbox_record(
+        job=job,
+        topic=job.job_type,
+        payload=job.as_envelope(state_override="queued").model_dump(mode="json"),
+    )
+
+    first_published, first_record = asyncio.run(service._publish_outbox_record(outbox))
+    second_published, second_record = asyncio.run(service._publish_outbox_record(outbox))
+
+    assert first_published is True
+    assert first_record.publish_state == "published"
+    assert second_published is True
+    assert second_record.publish_state == "published"
+    assert len(bus.snapshot()) == 1
+
+
 def test_submit_batch_job_creates_parent_and_items() -> None:
     repo = InMemoryJobRepository()
     bus = InMemoryJobBus()
@@ -189,6 +211,50 @@ def test_submit_batch_job_creates_parent_and_items() -> None:
     assert all(envelope.job_item_id for envelope in bus.snapshot())
     assert bus.snapshot()[0].payload["scan_options"]["selector"] == "/finance/a.pdf"
     assert bus.snapshot()[0].payload["content_source"]["mode"] == "original"
+    assert created.job.effective_recovery_mode == "batch"
+    assert created.job.recovery_mode_requested is None
+    assert created.job.recovery_policy_snapshot is not None
+    assert created.job.recovery_policy_snapshot["source"] == "settings_default"
+
+
+def test_submit_batch_job_persists_requested_recovery_mode() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                recovery_mode="item",
+                items=[{"object_identity": "/finance/a.pdf"}],
+            )
+        )
+    )
+
+    assert created.job.recovery_mode_requested == "item"
+    assert created.job.effective_recovery_mode == "item"
+    assert created.job.recovery_policy_snapshot is not None
+    assert created.job.recovery_policy_snapshot["source"] == "request"
+
+
+def test_submit_batch_job_resolves_adaptive_recovery_mode_once() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus, recovery_settings=RecoverySettings(mode="adaptive"))
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[{"object_identity": "/finance/a.pdf"}],
+            )
+        )
+    )
+
+    assert created.job.recovery_mode_requested is None
+    assert created.job.effective_recovery_mode == "batch"
+    assert created.job.recovery_policy_snapshot is not None
+    assert created.job.recovery_policy_snapshot["source"] == "settings_adaptive_default"
+    assert created.job.recovery_policy_snapshot["configuredMode"] == "adaptive"
 
 
 def test_submit_batch_job_tracks_partial_publish_failure() -> None:
@@ -455,6 +521,9 @@ def test_request_remediation_publishes_typed_message() -> None:
 
     assert updated.state == "queued"
     assert bus.snapshot()[-1].message_type == "remediation_requested"
+    assert bus.snapshot()[-1].integration_id is None
+    assert bus.snapshot()[-1].scope_id is None
+    assert bus.snapshot()[-1].payload["content_source"]["mode"] == "original"
     assert bus.snapshot()[-1].payload["remediation_plan"]["action"] == "quarantine"
     assert bus.snapshot()[-1].payload["scan_result"]["scanGuid"] == "scan-2"
 

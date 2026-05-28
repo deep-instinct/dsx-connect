@@ -23,6 +23,10 @@ Policy is responsible for:
 - producing final decisions
 - triggering workflows
 
+For the connector-facing execution contract that applies after policy chooses remediation, see:
+
+- `design/models/remediation-contract-model.md`
+
 ---
 
 ## Core Principle
@@ -188,6 +192,8 @@ This keeps the scan worker thin:
 - scan worker executes scan
 - policy decides applicability, preservation, and result emission
 - downstream side-effect workers execute only what policy requested
+
+Policy decides remediation intent. Connectors should not reinterpret that intent from connector-local policy settings.
 
 ---
 

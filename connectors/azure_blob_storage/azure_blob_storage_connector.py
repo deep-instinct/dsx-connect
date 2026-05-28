@@ -4,7 +4,7 @@ import time
 from starlette.responses import StreamingResponse, JSONResponse
 
 from connectors.azure_blob_storage.azure_blob_storage_client import AzureBlobClient
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -446,18 +446,14 @@ async def config_update_handler(payload: dict):
         config.filter = payload.get("filter", "")
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                config.item_action = ItemActionEnum(action_raw)
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     azure_updates: dict[str, str] = {}
     key_map = {

@@ -121,6 +121,10 @@ class JobRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def claim_outbox_record(self, outbox_id: str) -> OutboxRecord | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def mark_outbox_published(self, outbox_id: str) -> OutboxRecord | None:
         raise NotImplementedError
 
@@ -330,6 +334,19 @@ class InMemoryJobRepository(JobRepository):
 
     def get_outbox_record(self, outbox_id: str) -> OutboxRecord | None:
         return self._outbox.get(outbox_id)
+
+    def claim_outbox_record(self, outbox_id: str) -> OutboxRecord | None:
+        current = self._outbox.get(outbox_id)
+        if current is None or current.publish_state != "pending":
+            return None
+        merged = current.model_copy(
+            update={
+                "publish_state": "publishing",
+                "updated_at": utcnow(),
+            }
+        )
+        self._outbox[outbox_id] = merged
+        return merged
 
     def mark_outbox_published(self, outbox_id: str) -> OutboxRecord | None:
         current = self._outbox.get(outbox_id)

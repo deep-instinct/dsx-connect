@@ -73,12 +73,22 @@ def bootstrap_job_service(
     control_plane_service: ControlPlaneService | None = control_plane_bootstrap.service
     if control_plane_bootstrap.backend == "postgres":
         return JobServiceBootstrapResult(
-            service=JobService(repo=repo, bus=job_bus_bootstrap.bus, control_plane=control_plane_service),
+            service=JobService(
+                repo=repo,
+                bus=job_bus_bootstrap.bus,
+                control_plane=control_plane_service,
+                recovery_settings=settings.recovery,
+            ),
             backend="postgres",
             detail=f"follows_control_plane:{control_plane_bootstrap.backend}",
         )
     return JobServiceBootstrapResult(
-        service=JobService(repo=repo, bus=job_bus_bootstrap.bus, control_plane=control_plane_service),
+        service=JobService(
+            repo=repo,
+            bus=job_bus_bootstrap.bus,
+            control_plane=control_plane_service,
+            recovery_settings=settings.recovery,
+        ),
         backend="memory",
         detail=f"follows_control_plane:{control_plane_bootstrap.backend}",
     )

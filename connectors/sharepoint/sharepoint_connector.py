@@ -6,7 +6,7 @@ from typing import Any, Optional, Set
 import httpx
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -52,6 +52,22 @@ def _drive_base_path() -> str:
     if config.resolved_asset_base is not None:
         return config.resolved_asset_base.strip('/')
     return (config.asset or "").strip('/')
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None]:
+    requested = scan_request.requested_action
+    if requested is None or not requested.type:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
+
+    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
+    try:
+        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
+    except Exception:
+        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
+
+    destination = requested.destination or {}
+    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
+    return action, (str(target).strip() if target else None)
 
 
 def _normalize_drive_path(path: str) -> str:
@@ -507,27 +523,14 @@ async def config_update_handler(payload: dict):
             pass
         changed = True
 
-    if isinstance(payload.get("item_action"), str):
-        action_raw = payload.get("item_action", "").strip().lower().replace("move_tag", "movetag")
-        if action_raw:
-            try:
-                action_val = ItemActionEnum(action_raw)
-                config.item_action = action_val
-                try:
-                    connector.connector_running_model.item_action = action_val
-                except Exception:
-                    pass
-                changed = True
-            except Exception:
-                pass
-
-    if isinstance(payload.get("item_action_move_metainfo"), str):
-        config.item_action_move_metainfo = payload.get("item_action_move_metainfo", "").strip()
-        try:
-            connector.connector_running_model.item_action_move_metainfo = config.item_action_move_metainfo
-        except Exception:
-            pass
-        changed = True
+    changed = (
+        apply_requested_action_config_update(
+            payload,
+            connector_config=config,
+            connector_running_model=connector.connector_running_model,
+        )
+        or changed
+    )
 
     if isinstance(payload.get("sp_tenant_id"), str):
         config.sp_tenant_id = payload.get("sp_tenant_id", "").strip()
@@ -844,49 +847,56 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
         SimpleResponse: A response indicating that the remediation action was performed successfully,
             or an error if the action is not implemented.
     """
-    dsx_logging.debug(f"SharePoint item_action_handler action={config.item_action} target={scan_event_queue_info.location}")
+    requested_action, target_path = _resolve_requested_item_action(scan_event_queue_info)
+    dsx_logging.debug(f"SharePoint item_action_handler action={requested_action} target={scan_event_queue_info.location}")
     # DELETE
-    if config.item_action == ItemActionEnum.DELETE:
+    if requested_action == ItemActionEnum.DELETE:
         try:
             target_id = await sp_client.resolve_item_id(scan_event_queue_info.location)
             await sp_client.delete_file(target_id)
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.SUCCESS,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message="File deleted.",
                 description=f"Deleted item id {scan_event_queue_info.location}"
             )
         except Exception as e:
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.ERROR,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message=str(e)
             )
     # MOVE
-    if config.item_action in (ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG):
+    if requested_action in (ItemActionEnum.MOVE, ItemActionEnum.MOVE_TAG):
         try:
-            dest_raw = config.item_action_move_metainfo or ""
+            dest_raw = target_path or ""
             dest_folder = _normalize_drive_path(dest_raw)
             dest_folder = dest_folder.strip("/") if dest_folder else ""
             await sp_client.move_file(scan_event_queue_info.location, dest_folder)
             extra = ""
-            if config.item_action == ItemActionEnum.MOVE_TAG:
+            if requested_action == ItemActionEnum.MOVE_TAG:
                 extra = " Tagging skipped (not supported for SharePoint)."
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.SUCCESS,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message=f"File moved.{extra}",
                 description=f"Moved item {scan_event_queue_info.location} to {dest_folder or 'drive root'}"
             )
         except Exception as e:
             return ItemActionStatusResponse(
                 status=StatusResponseEnum.ERROR,
-                item_action=config.item_action,
+                item_action=requested_action,
                 message=str(e)
             )
+    if requested_action == ItemActionEnum.TAG:
+        return ItemActionStatusResponse(
+            status=StatusResponseEnum.NOTHING,
+            item_action=requested_action,
+            message="Item action tag not supported for SharePoint",
+        )
     return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING,
-                                    item_action=config.item_action,
-                                    message=f"Item action {config.item_action.value} not supported for SharePoint")
+                                    item_action=requested_action,
+                                    message=f"Item action {requested_action.value} not supported for SharePoint")
 
 
 @connector.read_file

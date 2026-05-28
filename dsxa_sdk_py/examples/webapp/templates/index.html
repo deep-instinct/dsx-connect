@@ -134,12 +134,29 @@
       display: grid;
       gap: 16px;
     }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     input[type="file"] {
       border: 1px dashed rgba(0, 52, 120, 0.3);
       background: rgba(255,255,255,0.8);
       border-radius: 18px;
       padding: 20px;
       width: 100%;
+    }
+    .upload-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
     }
     button {
       border: 0;
@@ -166,6 +183,16 @@
     button:disabled {
       opacity: 0.65;
       cursor: wait;
+    }
+    .selection-summary {
+      border: 1px dashed rgba(0, 52, 120, 0.2);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.68);
+      padding: 14px 16px;
+      color: var(--muted);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
     }
     .meta {
       color: var(--muted);
@@ -233,6 +260,12 @@
       color: var(--muted);
       font-family: "Avenir Next", "Segoe UI", sans-serif;
     }
+    .list-meta {
+      color: var(--muted);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-size: 13px;
+      margin: 0 0 12px;
+    }
     .list::-webkit-scrollbar {
       width: 12px;
       height: 12px;
@@ -282,6 +315,39 @@
     .modal-grid {
       display: grid;
       gap: 14px;
+    }
+    .config-section {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(0, 52, 120, 0.04);
+    }
+    .config-section h3 {
+      margin: 0;
+      font-size: 0.98rem;
+    }
+    .config-section p {
+      margin: 0;
+      color: var(--muted);
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .config-checkbox {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      font-family: "Avenir Next", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    .config-checkbox input[type="checkbox"] {
+      margin-top: 2px;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--navy);
     }
     .modal-actions {
       display: flex;
@@ -348,19 +414,26 @@
 
     <section class="panel uploader">
       <form id="upload-form">
-        <input id="files" name="files" type="file" multiple required />
-        <button id="submit" type="submit">Upload Files</button>
-        <div class="meta" id="status">Clean files will be written to the server intake folder after DSXA returns a benign verdict.</div>
+        <input id="files" name="files" type="file" multiple class="visually-hidden" />
+        <input id="folder-files" name="folder-files" type="file" multiple webkitdirectory directory class="visually-hidden" />
+        <div class="upload-controls">
+          <button id="pick-files" type="button">Upload Files</button>
+          <button id="pick-folder" type="button">Upload Folder</button>
+        </div>
+        <div id="selection-summary" class="selection-summary">No files selected yet.</div>
+        <div class="meta" id="status">Choose files or a folder to upload and scan immediately.</div>
       </form>
     </section>
 
     <section class="results">
       <article class="panel bucket">
         <h2>Accepted documents</h2>
+        <p id="accepted-meta" class="list-meta">Showing all accepted files in this batch.</p>
         <div id="accepted" class="list"><div class="empty">No accepted files yet.</div></div>
       </article>
       <article class="panel bucket">
         <h2>Rejected or held</h2>
+        <p id="rejected-meta" class="list-meta">Showing all rejected or held files in this batch.</p>
         <div id="rejected" class="list"><div class="empty">No rejected files yet.</div></div>
       </article>
     </section>
@@ -373,22 +446,46 @@
         <button id="config-close" class="icon-button button-secondary" type="button" aria-label="Close configuration">×</button>
       </div>
       <form id="config-form" class="modal-grid">
-        <label>
-          DSXA Base URL
-          <input id="config-base-url" type="text" />
-        </label>
-        <label>
-          Auth Token
-          <input id="config-auth-token" type="text" />
-        </label>
-        <label>
-          Protected Entity
-          <input id="config-protected-entity" type="number" min="1" />
-        </label>
-        <label>
-          Scan Concurrency
-          <input id="config-scan-concurrency" type="number" min="1" />
-        </label>
+        <section class="config-section">
+          <h3>Scanner Settings</h3>
+          <p>These values control how the webapp connects to DSXA and how many files it will upload and send to DSXA concurrently.</p>
+          <label>
+            DSXA Base URL
+            <input id="config-base-url" type="text" />
+          </label>
+          <label>
+            Auth Token
+            <input id="config-auth-token" type="text" />
+          </label>
+          <label>
+            Protected Entity
+            <input id="config-protected-entity" type="number" min="1" />
+          </label>
+          <label>
+            Scan Concurrency
+            <input id="config-scan-concurrency" type="number" min="1" />
+          </label>
+        </section>
+        <section class="config-section">
+          <h3>Intake Policy</h3>
+          <p>These values demonstrate sample-app admission rules that can be applied after DSXA returns a result. In particular, DSXA returns the file's true file type, not just its extension, so true file-type policy enforcement can be implemented here. These are webapp policy settings, not DSXA engine limits.</p>
+          <label class="config-checkbox">
+            <input id="config-block-executables" type="checkbox" />
+            <span>Block executable file types even if DSXA returns a benign verdict.</span>
+          </label>
+        </section>
+        <section class="config-section">
+          <h3>UI Settings</h3>
+          <p>These values only affect the sample webapp upload experience and result rendering. They do not change DSXA scan limits.</p>
+          <label>
+            Max Upload Files
+            <input id="config-max-upload-files" type="number" min="1" />
+          </label>
+          <label>
+            Max Visible Results
+            <input id="config-max-visible-results" type="number" min="1" />
+          </label>
+        </section>
         <div class="modal-actions">
           <button id="config-cancel" class="button-secondary" type="button">Cancel</button>
           <button id="config-save" type="submit">Save</button>
@@ -400,7 +497,7 @@
   <div id="stats-modal" class="modal-backdrop" aria-hidden="true">
     <div class="modal">
       <div class="modal-head">
-        <h2>Scan Time Stats</h2>
+        <h2>Most Recent Successful Batch</h2>
         <button id="stats-close" class="icon-button button-secondary" type="button" aria-label="Close stats">×</button>
       </div>
       <div id="stats-content">
@@ -412,10 +509,15 @@
   <script>
     const form = document.getElementById("upload-form");
     const input = document.getElementById("files");
-    const submit = document.getElementById("submit");
+    const folderInput = document.getElementById("folder-files");
+    const pickFiles = document.getElementById("pick-files");
+    const pickFolder = document.getElementById("pick-folder");
     const status = document.getElementById("status");
+    const selectionSummary = document.getElementById("selection-summary");
     const accepted = document.getElementById("accepted");
+    const acceptedMeta = document.getElementById("accepted-meta");
     const rejected = document.getElementById("rejected");
+    const rejectedMeta = document.getElementById("rejected-meta");
     const configModal = document.getElementById("config-modal");
     const configOpen = document.getElementById("config-open");
     const configClose = document.getElementById("config-close");
@@ -425,12 +527,38 @@
     const configAuthToken = document.getElementById("config-auth-token");
     const configProtectedEntity = document.getElementById("config-protected-entity");
     const configScanConcurrency = document.getElementById("config-scan-concurrency");
+    const configBlockExecutables = document.getElementById("config-block-executables");
+    const configMaxUploadFiles = document.getElementById("config-max-upload-files");
+    const configMaxVisibleResults = document.getElementById("config-max-visible-results");
     const statsModal = document.getElementById("stats-modal");
     const statsOpen = document.getElementById("stats-open");
     const statsClose = document.getElementById("stats-close");
     const statsContent = document.getElementById("stats-content");
+    let selectedFiles = [];
+    let selectedLabel = "";
     let latestResults = [];
     let latestWallTimeMs = null;
+    let latestScanConcurrency = null;
+    let maxVisibleResults = 100;
+
+    function updateSelectionSummary() {
+      if (!selectedFiles.length) {
+        selectionSummary.textContent = "No files selected yet.";
+        return;
+      }
+      const suffix = selectedFiles.length === 1 ? "" : "s";
+      const sample = selectedFiles.slice(0, 3).map((file) => file.webkitRelativePath || file.name).join(", ");
+      const moreCount = selectedFiles.length - Math.min(selectedFiles.length, 3);
+      const trailer = moreCount > 0 ? `, +${moreCount} more` : "";
+      const prefix = selectedLabel ? `${selectedLabel}: ` : "";
+      selectionSummary.textContent = `${prefix}${selectedFiles.length} file${suffix} selected. ${sample}${trailer}`;
+    }
+
+    function setSelectedFiles(files, label) {
+      selectedFiles = Array.from(files || []);
+      selectedLabel = label || "";
+      updateSelectionSummary();
+    }
 
     function openConfigModal() {
       configModal.classList.add("open");
@@ -459,6 +587,11 @@
       configAuthToken.value = payload.authToken || "";
       configProtectedEntity.value = String(payload.protectedEntity || 1);
       configScanConcurrency.value = String(payload.scanConcurrency || 4);
+      configBlockExecutables.checked = payload.blockExecutables !== false;
+      configMaxUploadFiles.value = String(payload.maxUploadFiles || 5000);
+      configMaxVisibleResults.value = String(payload.maxVisibleResults || 100);
+      latestScanConcurrency = Number.parseInt(String(payload.scanConcurrency || 4), 10) || 4;
+      maxVisibleResults = Math.max(1, Number.parseInt(String(payload.maxVisibleResults || 100), 10) || 100);
     }
 
     function truncateMiddle(value, maxLength = 56) {
@@ -501,6 +634,18 @@
       `).join("");
     }
 
+    function renderListMeta(target, visibleCount, totalCount, emptyText) {
+      if (!totalCount) {
+        target.textContent = emptyText;
+        return;
+      }
+      if (visibleCount >= totalCount) {
+        target.textContent = `Showing all ${totalCount} file${totalCount === 1 ? "" : "s"} in this batch.`;
+        return;
+      }
+      target.textContent = `Showing ${visibleCount} of ${totalCount} file${totalCount === 1 ? "" : "s"} in this batch.`;
+    }
+
     function formatMilliseconds(value) {
       return `${value.toFixed(2)} ms`;
     }
@@ -528,6 +673,7 @@
 
       const rows = [
         ["Files with scan timing", durationsMs.length],
+        ["Webapp scan concurrency", latestScanConcurrency != null ? latestScanConcurrency : "n/a"],
         ["Wall time", latestWallTimeMs != null ? formatMilliseconds(latestWallTimeMs) : "n/a"],
         ["Total scan time", formatMilliseconds(totalMs)],
         ["Average scan time", formatMilliseconds(averageMs)],
@@ -579,6 +725,9 @@
           authToken: configAuthToken.value.trim(),
           protectedEntity: Number.parseInt(configProtectedEntity.value, 10) || 1,
           scanConcurrency: Number.parseInt(configScanConcurrency.value, 10) || 4,
+          blockExecutables: configBlockExecutables.checked,
+          maxUploadFiles: Number.parseInt(configMaxUploadFiles.value, 10) || 5000,
+          maxVisibleResults: Number.parseInt(configMaxVisibleResults.value, 10) || 100,
         }),
       });
       const payload = await response.json();
@@ -586,23 +735,29 @@
         status.textContent = payload.detail || "Failed to update configuration.";
         return;
       }
+      latestScanConcurrency = Number.parseInt(String(payload.config?.scanConcurrency || 4), 10) || 4;
+      maxVisibleResults = Math.max(1, Number.parseInt(String(payload.config?.maxVisibleResults || 100), 10) || 100);
       status.textContent = payload.message;
       closeConfigModal();
     });
 
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      if (!input.files.length) {
+    async function uploadSelectedFiles() {
+      if (!selectedFiles.length) {
         status.textContent = "Select at least one file.";
         return;
       }
-      submit.disabled = true;
+      pickFiles.disabled = true;
+      pickFolder.disabled = true;
       status.textContent = "Scanning files with DSXA...";
+      latestResults = [];
+      latestWallTimeMs = null;
+      latestScanConcurrency = Number.parseInt(configScanConcurrency.value, 10) || latestScanConcurrency || 4;
+      statsContent.innerHTML = '<p class="stats-empty">Scan in progress. Stats will appear after the batch completes successfully.</p>';
       const startedAt = performance.now();
 
       const data = new FormData();
-      for (const file of input.files) {
-        data.append("files", file);
+      for (const file of selectedFiles) {
+        data.append("files", file, file.webkitRelativePath || file.name);
       }
 
       try {
@@ -614,15 +769,44 @@
         latestResults = [...payload.accepted, ...payload.rejected];
         latestWallTimeMs = performance.now() - startedAt;
         setCounts(payload.summary);
-        renderItems(accepted, payload.accepted, "No accepted files in this batch.");
-        renderItems(rejected, payload.rejected, "No rejected or held files in this batch.");
+        const visibleAccepted = payload.accepted.slice(-maxVisibleResults);
+        const visibleRejected = payload.rejected.slice(-maxVisibleResults);
+        renderItems(accepted, visibleAccepted, "No accepted files in this batch.");
+        renderItems(rejected, visibleRejected, "No rejected or held files in this batch.");
+        renderListMeta(acceptedMeta, visibleAccepted.length, payload.accepted.length, "No accepted files in this batch.");
+        renderListMeta(rejectedMeta, visibleRejected.length, payload.rejected.length, "No rejected or held files in this batch.");
         status.textContent = payload.message;
         form.reset();
+        selectedFiles = [];
+        selectedLabel = "";
+        updateSelectionSummary();
       } catch (error) {
         status.textContent = error.message || "Upload failed.";
       } finally {
-        submit.disabled = false;
+        pickFiles.disabled = false;
+        pickFolder.disabled = false;
       }
+    }
+
+    loadConfig().catch(() => {
+      maxVisibleResults = 100;
+    });
+
+    pickFiles.addEventListener("click", () => input.click());
+    pickFolder.addEventListener("click", () => folderInput.click());
+    input.addEventListener("change", async () => {
+      setSelectedFiles(input.files, "File batch");
+      folderInput.value = "";
+      await uploadSelectedFiles();
+    });
+    folderInput.addEventListener("change", async () => {
+      setSelectedFiles(folderInput.files, "Folder batch");
+      input.value = "";
+      await uploadSelectedFiles();
+    });
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
     });
   </script>
 </body>

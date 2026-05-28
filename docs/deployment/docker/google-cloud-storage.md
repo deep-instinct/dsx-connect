@@ -10,6 +10,27 @@
 
 ---
 
+## Full Scan and Monitoring Guidance
+
+Full scans establish baseline coverage across a bucket or prefix at a point in operational time.
+
+Because object storage remains active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring or event-driven protection maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
+---
+
 ## Minimal Deployment
 
 The following steps will install the connector with minimal configuration changes, supporting full-scan only. 
@@ -153,4 +174,3 @@ compliance/runtime constraints around Pub/Sub.
 For external callbacks into the connector, expose or tunnel the host port mapped to `8630` (compose default). 
 Upstream systems should hit that public address. Internally, set `DSXCONNECTOR_CONNECTOR_URL` to the Docker-service URL 
 (e.g., `http://google-cloud-storage-connector:8630`) so dsx-connect can reach the container.
-

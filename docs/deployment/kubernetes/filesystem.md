@@ -13,6 +13,27 @@ Unlike cloud connectors (S3, GCS, SharePoint, etc.), the Filesystem connector re
 The connector scans this internal directory.
 
 ---
+
+## Full Scan and Monitoring Guidance
+
+Full scans establish baseline coverage across the mounted filesystem scope at a point in operational time.
+
+Because the underlying filesystem may remain active during scanning, full scans should be treated as best-effort enumeration of a live data set rather than immutable point-in-time snapshots.
+
+Continuous monitoring or event-driven protection, where enabled and supported by the deployment model, maintains convergence by detecting:
+
+* newly created objects
+* modified objects
+* overwritten objects
+* post-scan changes
+
+Operationally:
+
+* full scans are recommended during lower repository activity when possible
+* monitoring should remain enabled for steady-state protection where the deployment supports it
+* protection coverage is achieved through the combination of baseline scanning and continuous monitoring
+
+---
 ## Storage Architecture
 
 In Kubernetes, this filesystem volume is typically provided using a **PersistentVolumeClaim (PVC)** backed by a **StorageClass**.

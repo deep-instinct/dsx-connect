@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import Any, AsyncIterable, TYPE_CHECKING
 
 from dsx_connect_ng.workers.errors import TerminalWorkerError
 
@@ -14,7 +14,9 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class ReadResult:
     local_path: Path | None = None
+    content_stream: AsyncIterable[bytes] | None = None
     content_length: int | None = None
+    cleanup_local_path: bool = False
     details: dict[str, Any] = field(default_factory=dict)
 
 

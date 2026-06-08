@@ -1,0 +1,37 @@
+data_dir: "${VECTOR_DATA_DIR:-/tmp/vector-dsx-connect-ng}"
+
+sources:
+  dsx_results:
+    type: file
+    include:
+      - "${DSX_RESULTS_PATH:-/tmp/dsx-connect-ng-results.jsonl}"
+    read_from: beginning
+
+transforms:
+  parse_result_event:
+    type: remap
+    inputs:
+      - dsx_results
+    source: |
+      . = parse_json!(.message)
+
+  normalize_result_event:
+    type: remap
+    inputs:
+      - parse_result_event
+    source: |
+      .result_family = .event_type
+      .verdict = .payload.verdict ?? .workflow_summary.scan.verdict ?? null
+      .chronicle_log_type = "VECTOR_DEV"
+
+sinks:
+  chronicle:
+    type: gcp_chronicle_unstructured
+    inputs:
+      - normalize_result_event
+    customer_id: "${CHRONICLE_CUSTOMER_ID}"
+    credentials_path: "${GOOGLE_APPLICATION_CREDENTIALS}"
+    log_type: "{{ chronicle_log_type }}"
+    fallback_log_type: VECTOR_DEV
+    acknowledgements:
+      enabled: true

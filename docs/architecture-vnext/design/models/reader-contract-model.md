@@ -119,7 +119,43 @@ This is already represented in `scan_item_requested`.
 
 - `scan_options`
   - scan-specific parameters such as protected entity or password
-  - not ownership of read semantics
+  - also carries operator/API item payload fields that affect how the reader fetches content
+
+---
+
+## Proxy Reader Path Normalization
+
+The connector proxy reader bridges NG scan jobs to connector `read_file` handlers. Batch item payload fields are preserved in `scan_options`, so reader-relevant path aliases must be treated as first-class read inputs.
+
+Accepted path aliases, in priority order within each source:
+
+- `path`
+- `file_path`
+- `filePath`
+- `local_path`
+- `localPath`
+- `selector`
+- `location`
+
+Path resolution order for the legacy connector `read_file` payload is:
+
+1. `read_hint.location` or the first path alias in `read_hint`
+2. `scan_options.location` or the first path alias in `scan_options`
+3. `content_source.locator`
+4. `object_identity`
+
+The resulting value becomes the legacy connector payload `location`.
+
+Connector examples:
+
+- Filesystem: `location` is a local filesystem path, for example `/tmp/dsx-connect-ng/proxy-reader-sample.txt`
+- GCS: `location` is the object key inside the configured bucket, for example `BadMojoResume` or `folder/BadMojoResume`
+
+The legacy payload also includes:
+
+- `metainfo`: `read_hint.metainfo`, object identity hints, the resolved location, then `object_identity`
+- `size_in_bytes`: optional size hint from `read_hint` or `scan_options`
+- `scan_job_id`: the NG job id
 
 ---
 
@@ -138,7 +174,11 @@ The Reader returns a normalized result with one or more of:
 For the current phase, the implemented shape is:
 
 - `local_path`
+- `content_length`
+- `cleanup_local_path`
 - `details`
+
+`cleanup_local_path` defines ownership. When `true`, the scan worker owns the staged file and must delete it after the scan attempt finishes, including scanner failure and post-read oversize rejection. Local, cached, and connector local-stub artifacts remain non-owned and must not be deleted by the worker.
 
 ---
 

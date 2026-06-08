@@ -9,7 +9,7 @@ from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneReposito
 from dsx_connect_ng.jobs.bus import InMemoryJobBus, JobBus
 from dsx_connect_ng.jobs.contracts import MessageEnvelope
 
-from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobCreate, JobSubmitRequest, PolicyDecision, RemediationRequest, StageUpdateRequest
+from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobCreate, JobSubmitRequest, PolicyDecision, RemediationRequest, ScanResult, StageUpdateRequest
 from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 
@@ -20,6 +20,68 @@ class FailingJobBus(JobBus):
 
     async def status(self) -> dict:
         return {"backend": "failing"}
+
+
+class CallbackJobBus(JobBus):
+    def __init__(self, callback):
+        self.callback = callback
+        self.published: list[MessageEnvelope] = []
+
+    async def publish(self, job) -> None:
+        self.published.append(job)
+        await self.callback(job)
+
+    async def status(self) -> dict:
+        return {"backend": "callback"}
+
+
+class BulkCapableInMemoryJobRepository(InMemoryJobRepository):
+    def create_job_items_and_outbox_records(self, *, job, job_items, topic: str, payloads: list[dict]) -> int:
+        for item in job_items:
+            self._job_items[item.job_item_id] = item
+        for payload in payloads:
+            self.create_outbox_record(job=job, topic=topic, payload=payload)
+        return len(job_items)
+
+
+class CountingJobRepository(InMemoryJobRepository):
+    def __init__(self) -> None:
+        super().__init__()
+        self.single_stage_updates = 0
+        self.multi_stage_updates = 0
+        self.bulk_stage_updates = 0
+        self.job_state_updates = 0
+        self.item_state_updates = 0
+        self.bulk_outbox_claims = 0
+        self.bulk_outbox_published = 0
+
+    def update_job_item_stage(self, *args, **kwargs):
+        self.single_stage_updates += 1
+        return super().update_job_item_stage(*args, **kwargs)
+
+    def update_job_item_stages(self, *args, **kwargs):
+        self.multi_stage_updates += 1
+        return super().update_job_item_stages(*args, **kwargs)
+
+    def update_job_items_stages_bulk(self, *args, **kwargs):
+        self.bulk_stage_updates += 1
+        return super().update_job_items_stages_bulk(*args, **kwargs)
+
+    def update_job_state(self, *args, **kwargs):
+        self.job_state_updates += 1
+        return super().update_job_state(*args, **kwargs)
+
+    def update_job_item_state(self, *args, **kwargs):
+        self.item_state_updates += 1
+        return super().update_job_item_state(*args, **kwargs)
+
+    def claim_outbox_records(self, outbox_ids):
+        self.bulk_outbox_claims += 1
+        return super().claim_outbox_records(outbox_ids)
+
+    def mark_outbox_published_many(self, outbox_ids):
+        self.bulk_outbox_published += 1
+        return super().mark_outbox_published_many(outbox_ids)
 
 
 def build_control_plane_service() -> ControlPlaneService:
@@ -217,6 +279,607 @@ def test_submit_batch_job_creates_parent_and_items() -> None:
     assert created.job.recovery_policy_snapshot["source"] == "settings_default"
 
 
+def test_submit_batch_job_can_defer_publish_to_outbox_relay() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    assert created.job.state == "publish_pending"
+    assert created.job.error == {"code": "batch_publish_pending"}
+    assert created.item_summary.total == 2
+    assert created.item_summary.publish_pending == 2
+    assert bus.snapshot() == []
+    assert len(repo.list_outbox_records(publish_state="pending")) == 2
+
+    flushed = asyncio.run(service.flush_outbox(limit=2))
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+
+    assert flushed.published == 2
+    assert refreshed.job.state == "queued"
+    assert refreshed.job.error is None
+    assert refreshed.item_summary.queued == 2
+    assert len(bus.snapshot()) == 2
+
+
+def test_flush_outbox_uses_bulk_state_updates_for_low_persistence_scan_only_batch() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": f"/finance/{index}.pdf", "payload": {"scanOnly": True}}
+                    for index in range(5)
+                ],
+            )
+        )
+    )
+
+    flushed = asyncio.run(service.flush_outbox(limit=5))
+
+    assert flushed.published == 5
+    assert len(bus.snapshot()) == 5
+    assert repo.bulk_outbox_claims == 1
+    assert repo.bulk_outbox_published == 1
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+    assert refreshed.item_summary.publish_pending == 5
+
+
+def test_scan_publish_does_not_regress_fast_completed_scan_only_item() -> None:
+    repo = InMemoryJobRepository()
+    service: JobService
+
+    async def complete_during_publish(envelope: MessageEnvelope) -> None:
+        if envelope.message_type != "scan_item_requested" or envelope.job_item_id is None:
+            return
+        service.complete_scan_only(
+            envelope.job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+        )
+
+    bus = CallbackJobBus(complete_during_publish)
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {
+                        "object_identity": "/finance/a.pdf",
+                        "payload": {"scanOnly": True},
+                    }
+                ],
+            )
+        )
+    )
+
+    flushed = asyncio.run(service.flush_outbox(limit=1))
+
+    assert flushed.published == 1
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+    assert item.state == "completed"
+    assert item.scan_stage.state == "completed"
+    assert item.delivery_stage.state == "skipped"
+
+
+def test_replay_nonterminal_scan_only_batch_requeues_missing_scan_outbox() -> None:
+    repo = BulkCapableInMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                ],
+            )
+        )
+    )
+    asyncio.run(service.flush_outbox(limit=10))
+    first, second = service.list_job_items(job_id=created.job.job_id)
+    service.complete_scan_only(
+        first.job_item_id,
+        StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+    )
+
+    replayed = service.replay_nonterminal_scan_only_batches()
+
+    assert replayed == 1
+    refreshed = service.list_job_items(job_id=created.job.job_id)
+    assert refreshed[0].state == "completed"
+    assert refreshed[1].state == "publish_pending"
+    assert refreshed[1].error == {"code": "scan_only_batch_replay"}
+    pending = repo.list_outbox_records(publish_state="pending")
+    assert len(pending) == 1
+    assert pending[0].payload["job_item_id"] == second.job_item_id
+
+
+def test_replay_nonterminal_scan_only_batch_does_not_duplicate_pending_outbox() -> None:
+    repo = BulkCapableInMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                ],
+            )
+        )
+    )
+
+    replayed = service.replay_nonterminal_scan_only_batches()
+
+    assert replayed == 0
+    assert len(repo.list_outbox_records(publish_state="pending")) == 2
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+    assert refreshed.item_summary.publish_pending == 2
+
+
+def test_submit_batch_job_defaults_to_deferred_publish_when_bulk_outbox_is_available() -> None:
+    repo = BulkCapableInMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    assert created.job.state == "publish_pending"
+    assert created.job.error == {"code": "batch_publish_pending"}
+    assert created.item_summary.publish_pending == 2
+    assert bus.snapshot() == []
+    assert len(repo.list_outbox_records(publish_state="pending")) == 2
+
+
+def test_submit_batch_job_can_force_immediate_publish_when_bulk_outbox_is_available() -> None:
+    repo = BulkCapableInMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "immediate"},
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    assert created.job.state == "queued"
+    assert created.item_summary.queued == 2
+    assert len(bus.snapshot()) == 2
+
+
+def test_flush_outbox_respects_active_scan_item_limit() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                    {"object_identity": "/finance/c.pdf"},
+                ],
+            )
+        )
+    )
+
+    first_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    blocked_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+
+    assert first_flush.attempted == 2
+    assert first_flush.published == 2
+    assert first_flush.active_scan_items == 0
+    assert first_flush.publish_capacity == 2
+    assert blocked_flush.attempted == 0
+    assert blocked_flush.active_scan_items == 2
+    assert blocked_flush.publish_capacity == 0
+    assert refreshed.item_summary.queued == 2
+    assert refreshed.item_summary.publish_pending == 1
+    assert len(bus.snapshot()) == 2
+
+
+def test_flush_outbox_active_limit_ignores_coarse_scan_only_queued_rows() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/c.pdf", "payload": {"scanOnly": True}},
+                ],
+            )
+        )
+    )
+
+    first_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    second_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+
+    assert first_flush.attempted == 2
+    assert first_flush.published == 2
+    assert second_flush.attempted == 1
+    assert second_flush.published == 1
+    assert second_flush.active_scan_items == 0
+    assert second_flush.publish_capacity == 2
+    assert refreshed.item_summary.queued == 0
+    assert refreshed.item_summary.publish_pending == 3
+    assert len(bus.snapshot()) == 3
+    assert repo.item_state_updates == 0
+
+
+def test_flush_outbox_active_limit_counts_item_recovery_scan_only_queued_rows() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                recovery_mode="item",
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/c.pdf", "payload": {"scanOnly": True}},
+                ],
+            )
+        )
+    )
+
+    first_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    blocked_flush = asyncio.run(service.flush_outbox(limit=10, max_active_scan_items=2))
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+
+    assert first_flush.attempted == 2
+    assert first_flush.published == 2
+    assert blocked_flush.attempted == 0
+    assert blocked_flush.active_scan_items == 2
+    assert blocked_flush.publish_capacity == 0
+    assert refreshed.item_summary.queued == 2
+    assert refreshed.item_summary.publish_pending == 1
+    assert len(bus.snapshot()) == 2
+
+
+def test_flush_outbox_publishes_fairly_across_deferred_jobs() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/old/a.pdf"},
+                    {"object_identity": "/old/b.pdf"},
+                    {"object_identity": "/old/c.pdf"},
+                ],
+            )
+        )
+    )
+    asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[
+                    {"object_identity": "/new/a.pdf"},
+                    {"object_identity": "/new/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    flushed = asyncio.run(service.flush_outbox(limit=3))
+    published_objects = [message.object_identity for message in bus.snapshot()]
+
+    assert flushed.published == 3
+    assert published_objects == ["/old/a.pdf", "/new/a.pdf", "/old/b.pdf"]
+
+
+def test_cancel_job_marks_queued_backlog_cancelled() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    cancelled = service.cancel_job(created.job.job_id)
+
+    assert cancelled.job.state == "cancelled"
+    assert cancelled.item_summary.cancelled == 2
+    assert all(item.error["code"] == "job_cancelled" for item in service.list_job_items(job_id=created.job.job_id))
+
+
+def test_cancel_job_marks_scanning_items_cancelled() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(BatchJobSubmitRequest(items=[{"object_identity": "/finance/a.pdf"}]))
+    )
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+    service.update_scan_stage(item.job_item_id, StageUpdateRequest(state="running"))
+
+    cancelled = service.cancel_job(created.job.job_id)
+    refreshed = service.list_job_items(job_id=created.job.job_id)[0]
+
+    assert cancelled.job.state == "cancelled"
+    assert refreshed.state == "cancelled"
+    assert refreshed.error["code"] == "job_cancelled"
+
+
+def test_flush_outbox_skips_cancelled_deferred_items() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"publishMode": "deferred"},
+                items=[{"object_identity": "/finance/a.pdf"}],
+            )
+        )
+    )
+    service.cancel_job(created.job.job_id)
+
+    flushed = asyncio.run(service.flush_outbox(limit=10))
+    refreshed = service.get_batch_job_or_404(created.job.job_id)
+
+    assert flushed.published == 1
+    assert bus.snapshot() == []
+    assert refreshed.job.state == "cancelled"
+    assert refreshed.item_summary.cancelled == 1
+
+
+def test_job_progress_reports_counts_throughput_and_latency() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+    first_item = service.list_job_items(job_id=created.job.job_id)[0]
+    asyncio.run(service.advance_scan_stage(first_item.job_item_id, StageUpdateRequest(state="running")))
+    asyncio.run(
+        service.advance_scan_stage(
+            first_item.job_item_id,
+            StageUpdateRequest(
+                state="completed",
+                result=ScanResult(verdict="Benign", scanGuid="scan-1").model_dump(mode="json"),
+                metadata={
+                    "readerElapsedMs": 10.0,
+                    "dsxaElapsedMs": 120.0,
+                    "requestElapsedMs": 140.0,
+                    "scannerEngineElapsedMs": 1.0,
+                    "streamReadElapsedMs": 25.0,
+                    "scannerResponseWaitElapsedMs": 95.0,
+                },
+            ),
+        )
+    )
+
+    snapshot = service.get_job_progress(created.job.job_id)
+
+    assert snapshot.job_id == created.job.job_id
+    assert snapshot.total_items == 2
+    assert snapshot.terminal_items == 0
+    assert snapshot.percent_complete == 0.0
+    assert snapshot.item_summary.scanned == 1
+    assert snapshot.item_summary.queued == 1
+    assert snapshot.backlog.queued == 1
+    assert snapshot.latency.reader_elapsed_ms.avg_ms == 10.0
+    assert snapshot.latency.stream_read_elapsed_ms.avg_ms == 25.0
+    assert snapshot.latency.scanner_response_wait_elapsed_ms.avg_ms == 95.0
+    assert snapshot.latency.scanner_engine_elapsed_ms.avg_ms == 1.0
+    assert snapshot.latency.dsxa_elapsed_ms.avg_ms == 120.0
+    assert snapshot.latency.request_elapsed_ms.avg_ms == 140.0
+    assert snapshot.throughput.total.completed_items == 0
+    assert snapshot.derived_from_item_count == 2
+    assert any(hint.code == "scanner_api_latency_dominates" for hint in snapshot.bottleneck_hints)
+
+
+def test_job_progress_reports_runtime_scan_leases_without_durable_scanning_state() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+
+    service.mark_scan_runtime_started(job_id=created.job.job_id, job_item_id=item.job_item_id)
+    snapshot = service.get_job_progress(created.job.job_id)
+
+    assert snapshot.item_summary.scanning == 0
+    assert snapshot.runtime.scan_leases_active == 1
+    assert snapshot.backlog.scanning == 1
+
+
+def test_job_progress_reports_terminal_percent_and_recent_throughput() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+    for item in service.list_job_items(job_id=created.job.job_id):
+        asyncio.run(service.advance_scan_stage(item.job_item_id, StageUpdateRequest(state="running")))
+        asyncio.run(
+            service.advance_scan_stage(
+                item.job_item_id,
+                StageUpdateRequest(
+                    state="completed",
+                    result=ScanResult(verdict="Benign", scanGuid=f"scan-{item.item_index}").model_dump(mode="json"),
+                ),
+            )
+        )
+        service.update_delivery_stage(item.job_item_id, StageUpdateRequest(state="skipped"))
+
+    snapshot = service.get_job_progress(created.job.job_id)
+
+    assert snapshot.total_items == 2
+    assert snapshot.terminal_items == 2
+    assert snapshot.percent_complete == 100.0
+    assert snapshot.throughput.total.completed_items == 2
+    assert snapshot.throughput.total.items_per_second is not None
+    assert snapshot.throughput.recent_60s.completed_items == 2
+    assert snapshot.throughput.total.terminal_items == 2
+    assert snapshot.throughput.total.cancelled_items == 0
+
+
+def test_job_progress_reports_cancelled_items_separately_from_completed_items() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+    items = service.list_job_items(job_id=created.job.job_id)
+    service.update_scan_stage(items[0].job_item_id, StageUpdateRequest(state="completed"))
+    service.update_remediation_stage(items[0].job_item_id, StageUpdateRequest(state="skipped"))
+    service.update_delivery_stage(items[0].job_item_id, StageUpdateRequest(state="completed"))
+    service.cancel_job(created.job.job_id)
+
+    snapshot = service.get_job_progress(created.job.job_id)
+
+    assert snapshot.terminal_items == 2
+    assert snapshot.item_summary.completed == 1
+    assert snapshot.item_summary.cancelled == 1
+    assert snapshot.throughput.total.completed_items == 1
+    assert snapshot.throughput.total.cancelled_items == 1
+    assert snapshot.throughput.total.terminal_items == 2
+
+
+def test_refresh_parent_preserves_cancelled_job_state() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                ],
+            )
+        )
+    )
+    items = service.list_job_items(job_id=created.job.job_id)
+    service.cancel_job(created.job.job_id)
+
+    service.update_scan_stage(items[0].job_item_id, StageUpdateRequest(state="completed"))
+    service.update_remediation_stage(items[0].job_item_id, StageUpdateRequest(state="skipped"))
+    service.update_delivery_stage(items[0].job_item_id, StageUpdateRequest(state="completed"))
+
+    refreshed = service.get_job_or_404(created.job.job_id)
+    assert refreshed.state == "cancelled"
+    assert refreshed.error is not None
+    assert refreshed.error["code"] == "job_cancelled"
+
+
+def test_job_progress_recent_throughput_is_not_limited_to_sampled_items() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/finance/b.pdf"},
+                    {"object_identity": "/finance/c.pdf"},
+                ],
+            )
+        )
+    )
+    items = service.list_job_items(job_id=created.job.job_id)
+    service.update_scan_stage(items[2].job_item_id, StageUpdateRequest(state="completed"))
+    service.update_remediation_stage(items[2].job_item_id, StageUpdateRequest(state="skipped"))
+    service.update_delivery_stage(items[2].job_item_id, StageUpdateRequest(state="completed"))
+
+    snapshot = service.get_job_progress(created.job.job_id, item_limit=1)
+
+    assert snapshot.derived_from_item_count == 1
+    assert snapshot.throughput.total.completed_items == 1
+    assert snapshot.throughput.recent_60s.completed_items == 1
+    assert snapshot.throughput.recent_60s.terminal_items == 1
+
+
 def test_submit_batch_job_persists_requested_recovery_mode() -> None:
     repo = InMemoryJobRepository()
     bus = InMemoryJobBus()
@@ -235,6 +898,27 @@ def test_submit_batch_job_persists_requested_recovery_mode() -> None:
     assert created.job.effective_recovery_mode == "item"
     assert created.job.recovery_policy_snapshot is not None
     assert created.job.recovery_policy_snapshot["source"] == "request"
+
+
+def test_submit_batch_job_includes_effective_recovery_mode_in_scan_request() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+
+    asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                recovery_mode="item",
+                items=[{"object_identity": "/finance/a.pdf"}],
+            )
+        )
+    )
+
+    message = bus.snapshot()[0]
+
+    assert isinstance(message, MessageEnvelope)
+    assert message.message_type == "scan_item_requested"
+    assert message.payload["scan_options"]["effectiveRecoveryMode"] == "item"
 
 
 def test_submit_batch_job_resolves_adaptive_recovery_mode_once() -> None:
@@ -823,8 +1507,11 @@ def test_policy_completion_can_finish_with_scan_result_only_and_skip_workflow_su
                     "delivery": {
                         "request_now": False,
                         "wait_for_dianna": False,
+                        "targets": [{"connector": "legacy-summary"}],
                         "scan_targets": [{"connector": "scan-sharepoint"}],
+                        "scan_targets_configured": True,
                         "workflow_summary_targets": [],
+                        "workflow_summary_targets_configured": True,
                     },
                     "content_preservation": {"mode": "none", "reason": "not_needed"},
                     "result_delivery_policy": {
@@ -845,8 +1532,202 @@ def test_policy_completion_can_finish_with_scan_result_only_and_skip_workflow_su
     assert len(deliveries) == 1
     assert deliveries[0].payload["result_type"] == "scan_result"
     assert updated.delivery_stage.state == "skipped"
-    assert updated.delivery_stage.result == {"reason": "workflow_summary_not_requested"}
+    assert updated.delivery_stage.result == {
+        "reason": "auxiliary_result_delivery_not_required",
+        "result_type": "scan_result",
+    }
     assert updated.state == "completed"
+
+
+def test_scan_only_policy_completion_uses_single_multi_stage_update() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {
+                        "object_identity": "/finance/a.pdf",
+                        "payload": {},
+                    }
+                ]
+            )
+        )
+    )
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+
+    asyncio.run(
+        service.advance_scan_stage(
+            item.job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+        )
+    )
+    repo.single_stage_updates = 0
+    repo.multi_stage_updates = 0
+
+    updated = asyncio.run(
+        service.advance_policy_stage(
+            item.job_item_id,
+            StageUpdateRequest(
+                state="completed",
+                result={
+                    "policy_stage_result": {"policy_id": "policy-1"},
+                    "remediation": {"state": "skipped", "reason": "benign_verdict"},
+                    "dianna": {"state": "skipped", "reason": "not_auto_requested", "details": {"verdict": "Benign"}},
+                    "delivery": {
+                        "request_now": False,
+                        "wait_for_dianna": False,
+                        "scan_targets": [{"connector": "scan-sharepoint"}],
+                        "scan_targets_configured": True,
+                        "workflow_summary_targets": [],
+                        "workflow_summary_targets_configured": True,
+                    },
+                    "content_preservation": {"mode": "none", "reason": "not_needed"},
+                    "result_delivery_policy": {
+                        "scan": "all_results",
+                        "remediation": "all_outcomes",
+                        "dianna": "completed_only",
+                    },
+                },
+            ),
+        )
+    )
+
+    assert updated.state == "completed"
+    assert repo.single_stage_updates == 0
+    assert repo.multi_stage_updates == 1
+
+
+def test_complete_scan_only_defers_parent_refresh_until_progress_poll() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {
+                        "object_identity": "/finance/a.pdf",
+                        "payload": {"scanOnly": True},
+                    }
+                ]
+            )
+        )
+    )
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+    repo.job_state_updates = 0
+
+    updated = service.complete_scan_only(
+        item.job_item_id,
+        StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+    )
+
+    assert updated.state == "completed"
+    assert repo.job_state_updates == 0
+    parent = repo.get_job(created.job.job_id)
+    assert parent is not None
+    assert parent.state == "queued"
+
+    progress = service.get_job_progress(created.job.job_id)
+
+    assert progress.state == "completed"
+    assert repo.job_state_updates == 1
+
+
+def test_complete_scan_only_bulk_uses_single_bulk_stage_update() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                ]
+            )
+        )
+    )
+    items = service.list_job_items(job_id=created.job.job_id)
+    repo.single_stage_updates = 0
+    repo.multi_stage_updates = 0
+    repo.bulk_stage_updates = 0
+    repo.job_state_updates = 0
+
+    updated_count = service.complete_scan_only_bulk(
+        [
+            (
+                created.job.job_id,
+                items[0].job_item_id,
+                StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+            ),
+            (
+                created.job.job_id,
+                items[1].job_item_id,
+                StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-2"}),
+            ),
+        ]
+    )
+
+    refreshed = service.list_job_items(job_id=created.job.job_id)
+    assert updated_count == 2
+    assert repo.single_stage_updates == 0
+    assert repo.multi_stage_updates == 0
+    assert repo.bulk_stage_updates == 1
+    assert repo.job_state_updates == 1
+    assert all(item.state == "completed" for item in refreshed)
+    assert all(item.scan_stage.state == "completed" for item in refreshed)
+    assert all(item.delivery_stage.state == "skipped" for item in refreshed)
+    parent = service.get_job_or_404(created.job.job_id)
+    assert parent.state == "completed"
+    assert parent.completed_at is not None
+
+
+def test_complete_scan_only_bulk_can_defer_parent_refresh() -> None:
+    repo = CountingJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"scanOnly": True}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"scanOnly": True}},
+                ]
+            )
+        )
+    )
+    items = service.list_job_items(job_id=created.job.job_id)
+    repo.bulk_stage_updates = 0
+    repo.job_state_updates = 0
+
+    updated_count = service.complete_scan_only_bulk(
+        [
+            (
+                created.job.job_id,
+                items[0].job_item_id,
+                StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+            ),
+            (
+                created.job.job_id,
+                items[1].job_item_id,
+                StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-2"}),
+            ),
+        ],
+        refresh_parent=False,
+    )
+
+    assert updated_count == 2
+    assert repo.bulk_stage_updates == 1
+    assert repo.job_state_updates == 0
+    parent = service.get_job_or_404(created.job.job_id)
+    assert parent.state == "queued"
+
+    progress = service.get_job_progress(created.job.job_id)
+
+    assert progress.state == "completed"
+    assert repo.job_state_updates == 1
 
 
 def test_policy_completion_auto_requests_remediation_when_plan_present() -> None:

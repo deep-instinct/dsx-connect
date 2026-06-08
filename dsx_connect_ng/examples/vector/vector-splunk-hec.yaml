@@ -1,0 +1,51 @@
+data_dir: "${VECTOR_DATA_DIR:-/tmp/vector-dsx-connect-ng}"
+
+sources:
+  dsx_results:
+    type: file
+    include:
+      - "${DSX_RESULTS_PATH:-/tmp/dsx-connect-ng-results.jsonl}"
+    read_from: beginning
+
+transforms:
+  parse_result_event:
+    type: remap
+    inputs:
+      - dsx_results
+    source: |
+      . = parse_json!(.message)
+
+  normalize_result_event:
+    type: remap
+    inputs:
+      - parse_result_event
+    source: |
+      .result_family = .event_type
+      .verdict = .payload.verdict ?? .workflow_summary.scan.verdict ?? null
+      .destination = .delivery_target.connector ?? .delivery_target.destination ?? null
+      .sourcetype = "dsx_connect_ng:result"
+      .source = "dsx_connect_ng"
+      .index = "dsx_connect"
+
+sinks:
+  splunk:
+    type: splunk_hec_logs
+    inputs:
+      - normalize_result_event
+    endpoint: "${SPLUNK_HEC_ENDPOINT}"
+    default_token: "${SPLUNK_HEC_TOKEN}"
+    endpoint_target: event
+    sourcetype: "{{ sourcetype }}"
+    source: "{{ source }}"
+    index: "{{ index }}"
+    indexed_fields:
+      - result_family
+      - integration_id
+      - object_identity
+      - file_hash
+      - scan_guid
+    encoding:
+      codec: json
+    acknowledgements:
+      enabled: true
+      indexer_acknowledgements_enabled: true

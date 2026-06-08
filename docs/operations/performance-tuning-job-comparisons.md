@@ -62,6 +62,101 @@ Do not tune without one.
 
 ---
 
+## DSX-Connect NG Local Batch Defaults
+
+For large local `dsx_connect_ng` batch scans, use deferred publish by default.
+
+Deferred publish means the API persists the parent job, job items, and outbox rows first.
+The relay then publishes scan messages gradually, honoring the active scan-item cap.
+This prevents a large batch submit from flooding RabbitMQ and keeps API operations such as Swagger, progress polling, and cancel responsive.
+
+Recommended local stack for 10k-item validation:
+
+```bash
+dsx-connect-ng-local \
+  --with-postgres-docker \
+  --with-rabbit-docker \
+  --scan-worker-prefetch-count 100 \
+  --policy-worker-prefetch-count 100 \
+  --result-sink-worker-prefetch-count 100 \
+  --relay-max-active-scan-items 100 \
+  --no-stream-logs \
+  foreground
+```
+
+Equivalent source checkout invocation:
+
+```bash
+./.venv/bin/python dsx_connect_ng/dsx_connect_ng/local/dsx_connect_ng_local.py \
+  --with-postgres-docker \
+  --with-rabbit-docker \
+  --scan-worker-prefetch-count 100 \
+  --policy-worker-prefetch-count 100 \
+  --result-sink-worker-prefetch-count 100 \
+  --relay-max-active-scan-items 100 \
+  --no-stream-logs \
+  foreground
+```
+
+Recommended validation command:
+
+```bash
+./.venv/bin/python scripts/validate_ng_batch_proxy_reader.py \
+  --scan-only \
+  --sample-kind benign \
+  --item-count 10000 \
+  --submit-timeout-seconds 600 \
+  --poll \
+  --poll-mode progress \
+  --poll-timeout-seconds 3600 \
+  --poll-interval-seconds 10
+```
+
+`validate_ng_batch_proxy_reader.py` now enables deferred publish by default.
+Use `--no-defer-publish` only for small diagnostic runs where inline publish behavior is the thing being tested.
+
+Completion semantics:
+
+- Scan/result telemetry relay is auxiliary. DSXA reports authoritative malicious scan outcomes to DSX Console; DSX Connect may still relay scan results, DIANNA results, and scan stats to Vector, SIEMs, or other configured sinks.
+- A batch should not remain non-terminal just because auxiliary scan-result telemetry is still being emitted or retried.
+- Required durable work still gates workflow completion: scan completion, policy decisions needed for remediation, and remediation actions when configured.
+
+Operational knobs:
+
+| Setting | Recommended local value | Purpose |
+| --- | ---: | --- |
+| `--relay-max-active-scan-items` | `100` | Caps queued/scanning/scanned scan items so cancellation drains the latest active batch instead of a huge Rabbit backlog. |
+| `--scan-worker-prefetch-count` | `100` | Allows the scan worker to keep enough work in flight to exercise reader/DSXA throughput. |
+| `--policy-worker-prefetch-count` | `100` | Lets policy evaluation keep pace with the active scan slice instead of serializing `scanned -> deliver/completed` transitions. |
+| `--result-sink-worker-prefetch-count` | `100` | Lets result emission keep pace when scan, remediation, DIANNA, or workflow-summary results are enabled. |
+| `--no-stream-logs` | enabled | Writes logs to files without pushing high-volume worker logs through the terminal. |
+| `--poll-mode progress` | enabled for large jobs | Polls aggregate progress instead of fetching thousands of job-item records repeatedly. |
+| `--submit-timeout-seconds` | `600` for 10k | Allows initial persistence of large batches without treating local DB pressure as a client timeout. |
+
+For Colima-backed Docker on a development machine, verify the VM allocation rather than host RAM:
+
+```bash
+colima list
+```
+
+For 10k-item local testing, `6GiB` is workable but tight for Postgres plus RabbitMQ under load.
+Prefer around `10-12GiB` if the host has enough headroom:
+
+```bash
+colima stop
+colima start --cpu 4 --memory 10 --disk 80
+```
+
+or:
+
+```bash
+colima start --cpu 6 --memory 12 --disk 80
+```
+
+Restart the local DSX-Connect NG stack after changing Colima resources.
+
+---
+
 ## Step 2 — Increase Scan Request Worker Concurrency
 
 Concurrency is the primary throughput lever.

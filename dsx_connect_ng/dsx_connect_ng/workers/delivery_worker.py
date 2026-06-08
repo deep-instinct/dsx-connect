@@ -29,9 +29,10 @@ async def process_result_sink_message(
     if request.result_type != "workflow_summary":
         await execute_result_sink(request)
         return
-    await service.advance_delivery_stage(
+    service.update_delivery_stage(
         request.job_item_id,
         DeliveryStageUpdateRequest(state="running").as_stage_update_request(),
+        refresh_parent=False,
     )
     result = await execute_result_sink(request)
     await service.advance_delivery_stage(

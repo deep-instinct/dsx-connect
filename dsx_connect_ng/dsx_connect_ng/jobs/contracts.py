@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import posixpath
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -337,20 +338,49 @@ class RemediationRequested(BaseModel):
                 tags={k: str(v) for k, v in (plan.get("tags") or {"Verdict": "Malicious"}).items()},
             )
         if action == "quarantine":
+            quarantine_target = plan.get("quarantineTarget") or {}
             move_target = (
                 plan.get("targetPath")
                 or plan.get("target_path")
-                or ((plan.get("quarantineTarget") or {}).get("path"))
-                or ((plan.get("quarantineTarget") or {}).get("prefix"))
+                or (quarantine_target.get("path"))
+                or (quarantine_target.get("prefix"))
             )
             tag_enabled = bool(plan.get("tag"))
+            resolved_filename = _resolved_quarantine_filename(
+                self.content_source.locator or self.object_identity,
+                self.job_item_id,
+                suffix_length=int(quarantine_target.get("suffix_length") or 10),
+            )
+            destination: dict[str, Any] = {}
+            if move_target:
+                destination["path"] = str(move_target)
+            destination["filename"] = resolved_filename
             return ConnectorRemediationRequest(
                 action="movetag" if tag_enabled else "move",
-                destination={"path": str(move_target)} if move_target else {},
+                destination=destination,
                 tags={k: str(v) for k, v in (plan.get("tags") or {"Verdict": "Malicious"}).items()} if tag_enabled else {},
-                details={"quarantine_target": plan.get("quarantineTarget") or {}},
+                details={
+                    "quarantine_target": quarantine_target,
+                    "resolved_filename": resolved_filename,
+                },
             )
         return ConnectorRemediationRequest(action="nothing")
+
+
+def _quarantine_suffix_token(job_item_id: str, *, suffix_length: int) -> str:
+    normalized = str(job_item_id).strip()
+    if normalized.startswith("job_item_"):
+        normalized = normalized[len("job_item_"):]
+    token = "".join(ch for ch in normalized if ch.isalnum()).lower()
+    if token:
+        return token[: max(1, suffix_length)]
+    return normalized[: max(1, suffix_length)] or "quarantine"
+
+
+def _resolved_quarantine_filename(source_locator: str, job_item_id: str, *, suffix_length: int) -> str:
+    base_name = posixpath.basename(str(source_locator).rstrip("/")) or "quarantine-object"
+    suffix = _quarantine_suffix_token(job_item_id, suffix_length=suffix_length)
+    return f"{base_name}_{suffix}"
 
 
 class RemediationCompleted(BaseModel):

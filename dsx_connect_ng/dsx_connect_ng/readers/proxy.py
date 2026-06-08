@@ -6,7 +6,7 @@ import os
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any, AsyncIterable, Awaitable, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -19,7 +19,8 @@ from dsx_connect_ng.readers.contracts import ArtifactRef, ConnectorProxyReadRequ
 from shared.auth.hmac import make_hmac_header
 
 
-ConnectorProxyExecutor = Callable[[ConnectorProxyReadRequest], Awaitable[ConnectorProxyReadResponse]]
+ConnectorProxyExecutor = Callable[[ConnectorProxyReadRequest], Awaitable[ConnectorProxyReadResponse | ReadResult]]
+_READ_PATH_KEYS = ("path", "file_path", "filePath", "local_path", "localPath", "selector", "location")
 
 
 @dataclass(frozen=True)
@@ -37,10 +38,11 @@ def _coalesce_local_proxy_candidates(request: ConnectorProxyReadRequest) -> list
     candidates: list[str] = []
     if request.content_source.locator:
         candidates.append(request.content_source.locator)
-    for key in ("path", "file_path", "filePath", "local_path", "localPath", "selector", "location"):
-        value = request.read_hint.get(key)
-        if isinstance(value, str) and value.strip():
-            candidates.append(value.strip())
+    for source in (request.read_hint, request.options):
+        for key in _READ_PATH_KEYS:
+            value = source.get(key)
+            if isinstance(value, str) and value.strip():
+                candidates.append(value.strip())
     if request.object_identity:
         candidates.append(request.object_identity)
     deduped: list[str] = []
@@ -50,6 +52,20 @@ def _coalesce_local_proxy_candidates(request: ConnectorProxyReadRequest) -> list
             deduped.append(value)
             seen.add(value)
     return deduped
+
+
+def _first_non_empty_string(*values: Any) -> str | None:
+    for value in values:
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _first_int(*values: Any) -> int | None:
+    for value in values:
+        if isinstance(value, int):
+            return value
+    return None
 
 
 def resolve_connector_proxy_runtime_config(
@@ -97,26 +113,60 @@ def resolve_connector_proxy_runtime_config(
 
 
 def build_legacy_connector_read_payload(request: ConnectorProxyReadRequest, *, connector_url: str | None = None) -> dict[str, Any]:
-    size_in_bytes = request.read_hint.get("sizeInBytes")
-    if not isinstance(size_in_bytes, int):
-        size_in_bytes = request.read_hint.get("size_in_bytes")
-    location = (
-        request.read_hint.get("location")
-        or request.content_source.locator
-        or request.object_identity
+    size_in_bytes = _first_int(
+        request.read_hint.get("sizeInBytes"),
+        request.read_hint.get("size_in_bytes"),
+        request.options.get("sizeInBytes"),
+        request.options.get("size_in_bytes"),
     )
-    metainfo = (
+    read_hint_path = _first_non_empty_string(*(request.read_hint.get(key) for key in _READ_PATH_KEYS))
+    options_path = _first_non_empty_string(*(request.options.get(key) for key in _READ_PATH_KEYS))
+    location = _first_non_empty_string(
+        request.read_hint.get("location")
+        or read_hint_path,
+        request.options.get("location")
+        or options_path,
+        request.content_source.locator,
+        request.object_identity,
+    )
+    metainfo = _first_non_empty_string(
         request.read_hint.get("metainfo")
         or request.read_hint.get("objectIdentity")
-        or request.object_identity
+        or request.read_hint.get("object_identity"),
+        request.options.get("metainfo")
+        or request.options.get("objectIdentity")
+        or request.options.get("object_identity"),
+        location,
+        request.object_identity,
     )
     return {
         "location": str(location),
         "metainfo": str(metainfo),
         "connector_url": connector_url,
-        "size_in_bytes": size_in_bytes if isinstance(size_in_bytes, int) else None,
+        "size_in_bytes": size_in_bytes,
         "scan_job_id": request.job_id,
     }
+
+
+def _raise_structured_connector_json_error(payload: dict[str, Any], *, endpoint_url: str) -> None:
+    status = str(payload.get("status") or "").lower()
+    error_code = payload.get("errorCode") or payload.get("error_code") or payload.get("code")
+    error_message = payload.get("errorMessage") or payload.get("error_message") or payload.get("message") or payload.get("description")
+    if status not in {"error", "failed", "failure"} and not error_code:
+        return
+    code = str(error_code or "connector_proxy_read_failed")
+    normalized = code.lower()
+    if "not_found" in normalized or "notfound" in normalized or "not found" in str(error_message).lower():
+        code = "object_not_found"
+    elif "permission" in normalized or "forbidden" in normalized:
+        code = "permission_error"
+    elif "auth" in normalized or "unauthorized" in normalized:
+        code = "auth_error"
+    raise TerminalScanError(
+        code,
+        str(error_message or "connector proxy returned structured read error"),
+        details={"endpointUrl": endpoint_url, "response": payload},
+    )
 
 
 def _build_auth_headers(config: ConnectorProxyRuntimeConfig, *, method: str, url: str, body: bytes) -> dict[str, str]:
@@ -179,6 +229,8 @@ def _connector_http_read_sync(request: ConnectorProxyReadRequest, config: Connec
             if "application/json" in content_type:
                 raw = response.read()
                 payload = json.loads(raw.decode("utf-8") or "{}")
+                if isinstance(payload, dict):
+                    _raise_structured_connector_json_error(payload, endpoint_url=config.endpoint_url)
                 raise TerminalScanError(
                     "connector_proxy_unexpected_json_response",
                     "connector proxy returned JSON instead of file content",
@@ -213,8 +265,10 @@ def _connector_http_read_sync(request: ConnectorProxyReadRequest, config: Connec
             raise RuntimeError(f"connector proxy transient read failure: http {exc.code}") from exc
         if exc.code == 404:
             raise TerminalScanError("object_not_found", "connector proxy reported object not found", details=details) from exc
-        if exc.code in (401, 403):
-            raise TerminalScanError("auth_error", "connector proxy authentication/authorization failed", details=details) from exc
+        if exc.code == 401:
+            raise TerminalScanError("auth_error", "connector proxy authentication failed", details=details) from exc
+        if exc.code == 403:
+            raise TerminalScanError("permission_error", "connector proxy authorization failed", details=details) from exc
         raise TerminalScanError("connector_proxy_read_failed", f"connector proxy read failed with http {exc.code}", details=details) from exc
     except URLError as exc:
         raise RuntimeError(f"connector proxy transport failure: {exc}") from exc
@@ -222,6 +276,94 @@ def _connector_http_read_sync(request: ConnectorProxyReadRequest, config: Connec
 
 async def http_connector_proxy_read(request: ConnectorProxyReadRequest, config: ConnectorProxyRuntimeConfig) -> ConnectorProxyReadResponse:
     return await asyncio.to_thread(_connector_http_read_sync, request, config)
+
+
+def _connector_http_stream_request(
+    request: ConnectorProxyReadRequest,
+    config: ConnectorProxyRuntimeConfig,
+) -> tuple[Request, dict[str, Any]]:
+    payload = build_legacy_connector_read_payload(request, connector_url=config.endpoint_url.rsplit("/", 1)[0])
+    body = json.dumps(payload).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/octet-stream, application/json",
+        **_build_auth_headers(config, method="POST", url=config.endpoint_url, body=body),
+    }
+    return Request(config.endpoint_url, data=body, headers=headers, method="POST"), payload
+
+
+async def _connector_http_stream_chunks(
+    request: ConnectorProxyReadRequest,
+    config: ConnectorProxyRuntimeConfig,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> AsyncIterable[bytes]:
+    req, _payload = _connector_http_stream_request(request, config)
+    response = None
+    try:
+        response = await asyncio.to_thread(urlopen, req, timeout=config.timeout_seconds)
+        content_type = response.headers.get("Content-Type", "")
+        if "application/json" in content_type:
+            raw = await asyncio.to_thread(response.read)
+            payload = json.loads(raw.decode("utf-8") or "{}")
+            if isinstance(payload, dict):
+                _raise_structured_connector_json_error(payload, endpoint_url=config.endpoint_url)
+            raise TerminalScanError(
+                "connector_proxy_unexpected_json_response",
+                "connector proxy returned JSON instead of file content",
+                details={"endpointUrl": config.endpoint_url, "response": payload},
+            )
+        while True:
+            chunk = await asyncio.to_thread(response.read, chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    except HTTPError as exc:
+        raw = await asyncio.to_thread(exc.read)
+        details: dict[str, Any] = {"endpointUrl": config.endpoint_url, "statusCode": exc.code}
+        if raw:
+            try:
+                details["response"] = json.loads(raw.decode("utf-8"))
+            except Exception:
+                details["responseText"] = raw.decode("utf-8", errors="replace")
+        if exc.code in (429, 500, 502, 503, 504):
+            raise RuntimeError(f"connector proxy transient read failure: http {exc.code}") from exc
+        if exc.code == 404:
+            raise TerminalScanError("object_not_found", "connector proxy reported object not found", details=details) from exc
+        if exc.code == 401:
+            raise TerminalScanError("auth_error", "connector proxy authentication failed", details=details) from exc
+        if exc.code == 403:
+            raise TerminalScanError("permission_error", "connector proxy authorization failed", details=details) from exc
+        raise TerminalScanError("connector_proxy_read_failed", f"connector proxy read failed with http {exc.code}", details=details) from exc
+    except URLError as exc:
+        raise RuntimeError(f"connector proxy transport failure: {exc}") from exc
+    finally:
+        if response is not None:
+            await asyncio.to_thread(response.close)
+
+
+async def http_connector_proxy_stream(
+    request: ConnectorProxyReadRequest,
+    config: ConnectorProxyRuntimeConfig,
+) -> ReadResult:
+    _req, payload = _connector_http_stream_request(request, config)
+    size_in_bytes = payload.get("size_in_bytes")
+    return ReadResult(
+        content_stream=_connector_http_stream_chunks(request, config),
+        content_length=size_in_bytes if isinstance(size_in_bytes, int) else None,
+        details={
+            "reader": "connector_proxy",
+            "source": "connector_proxy_http_stream",
+            "endpointUrl": config.endpoint_url,
+            "proxyResponse": {
+                "mode": "stream",
+                "details": {
+                    "source": "connector_proxy_http_stream",
+                    "endpointUrl": config.endpoint_url,
+                },
+            },
+        },
+    )
 
 
 async def local_stub_connector_read(request: ConnectorProxyReadRequest) -> ConnectorProxyReadResponse:
@@ -250,12 +392,20 @@ async def local_stub_connector_read(request: ConnectorProxyReadRequest) -> Conne
 
 
 class ConnectorProxyReader(Reader):
-    def __init__(self, execute_proxy_read: ConnectorProxyExecutor) -> None:
+    def __init__(self, execute_proxy_read: ConnectorProxyExecutor, *, prefer_stream: bool = False) -> None:
         self.execute_proxy_read = execute_proxy_read
+        self.prefer_stream = prefer_stream
 
     async def acquire(self, request: ScanItemRequested) -> ReadResult:
+        if self.prefer_stream:
+            proxy_request = ConnectorProxyReadRequest.from_scan_request(request, preferred_modes=["stream", "artifact_ref"])
+            response = await self.execute_proxy_read(proxy_request)
+            if isinstance(response, ReadResult):
+                return response
         proxy_request = ConnectorProxyReadRequest.from_scan_request(request)
         response = await self.execute_proxy_read(proxy_request)
+        if isinstance(response, ReadResult):
+            return response
         if response.mode != "artifact_ref":
             raise TerminalScanError(
                 "connector_proxy_response_mode_unsupported",
@@ -280,6 +430,7 @@ class ConnectorProxyReader(Reader):
         return ReadResult(
             local_path=path,
             content_length=response.content_length,
+            cleanup_local_path=response.details.get("source") == "connector_proxy_http",
             details={
                 "reader": "connector_proxy",
                 "resolvedPath": str(path),
@@ -295,4 +446,4 @@ def build_connector_proxy_reader(
     control_plane: ControlPlaneService | None,
 ) -> ConnectorProxyReader:
     config = resolve_connector_proxy_runtime_config(request, control_plane=control_plane)
-    return ConnectorProxyReader(lambda proxy_request: http_connector_proxy_read(proxy_request, config))
+    return ConnectorProxyReader(lambda proxy_request: http_connector_proxy_stream(proxy_request, config), prefer_stream=True)

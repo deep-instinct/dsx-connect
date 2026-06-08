@@ -175,3 +175,4 @@ Monitoring should remain:
 For connector-facing change watermark and version metadata expectations, see:
 
 - [Version and Change Watermark Model](version-and-change-watermark-model.md)
+- [Connector Deployment and Control Plane Ownership Model](connector-deployment-model.md)

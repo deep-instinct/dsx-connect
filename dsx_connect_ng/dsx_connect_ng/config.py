@@ -32,6 +32,7 @@ class PostgresSettings(BaseSettings):
 ControlPlaneBackend = Literal["auto", "memory", "postgres"]
 JobBusBackend = Literal["auto", "memory", "rabbitmq"]
 ScannerMode = Literal["stub", "dsxa", "auto"]
+ScannerTransport = Literal["binary_stream", "by_path"]
 ResultSinkBackend = Literal["stdout", "json_lines"]
 
 
@@ -47,6 +48,7 @@ class RabbitMQSettings(BaseSettings):
     dead_letter_exchange: str = "dsx.ng.jobs.dlx"
     retry_max_attempts: int = 5
     retry_delay_ms: int = 5000
+    publisher_confirms: bool = True
 
 
 class RelaySettings(BaseSettings):
@@ -57,6 +59,7 @@ class RelaySettings(BaseSettings):
 
     batch_size: int = 100
     poll_interval_seconds: float = 5.0
+    max_active_scan_items: int | None = None
 
 
 class ScannerSettings(BaseSettings):
@@ -72,6 +75,9 @@ class ScannerSettings(BaseSettings):
     max_file_size_bytes: int = 2 * 1024 * 1024 * 1024
     verify_tls: bool = True
     timeout_seconds: float = 30.0
+    transport: ScannerTransport = "binary_stream"
+    by_path_poll_interval_seconds: float = 0.05
+    by_path_poll_timeout_seconds: float = 900.0
 
 
 class ReaderSettings(BaseSettings):

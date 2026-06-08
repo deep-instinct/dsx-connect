@@ -4,6 +4,7 @@ from types import SimpleNamespace
 
 from dsx_connect_ng.jobs.contracts import MessageEnvelope
 from dsx_connect_ng.workers.consumer import (
+    connect_robust_with_retry,
     decode_envelope,
     dispatch_body,
     dlq_queue_name,
@@ -72,6 +73,30 @@ def test_should_retry_respects_max_attempts() -> None:
     assert should_retry(headers=None, max_attempts=3) is True
     assert should_retry(headers={"x-dsx-retry-attempt": 2}, max_attempts=3) is True
     assert should_retry(headers={"x-dsx-retry-attempt": 3}, max_attempts=3) is False
+
+
+def test_connect_robust_with_retry_retries_initial_broker_failure() -> None:
+    state = SimpleNamespace(attempts=0)
+    connection = object()
+
+    class FakeAioPika:
+        @staticmethod
+        async def connect_robust(_url: str):
+            state.attempts += 1
+            if state.attempts == 1:
+                raise RuntimeError("broker starting")
+            return connection
+
+    result = asyncio.run(
+        connect_robust_with_retry(
+            FakeAioPika,
+            "amqp://localhost",
+            retry_interval_seconds=0,
+        )
+    )
+
+    assert result is connection
+    assert state.attempts == 2
 
 
 def test_successful_dispatch_should_ack_message() -> None:

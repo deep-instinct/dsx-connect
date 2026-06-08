@@ -1,4 +1,7 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query, Request
+from starlette.concurrency import run_in_threadpool
 
 from dsx_connect_ng.api.job_bus_dependencies import get_job_bus
 from dsx_connect_ng.api.job_service_dependencies import get_job_service
@@ -13,6 +16,7 @@ from dsx_connect_ng.jobs.models import (
     DiannaStageUpdateRequest,
     DiannaAnalysisRequest,
     JobItemRecord,
+    JobProgressSnapshot,
     JobRecord,
     JobSubmitRequest,
     OutboxFlushResult,
@@ -73,7 +77,7 @@ async def execution_topology() -> dict:
     }
 
 @router.get("/jobs", response_model=list[JobRecord])
-async def list_jobs(
+def list_jobs(
     integration_id: str | None = Query(default=None),
     state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
@@ -87,7 +91,7 @@ async def submit_job(
     payload: JobSubmitRequest,
     service: JobService = Depends(get_job_service),
 ) -> JobRecord:
-    return await service.submit_job(payload)
+    return await run_in_threadpool(lambda: asyncio.run(service.submit_job(payload)))
 
 
 @router.post("/jobs/batch", response_model=BatchJobRecord)
@@ -95,11 +99,11 @@ async def submit_batch_job(
     payload: BatchJobSubmitRequest,
     service: JobService = Depends(get_job_service),
 ) -> BatchJobRecord:
-    return await service.submit_batch_job(payload)
+    return await run_in_threadpool(lambda: asyncio.run(service.submit_batch_job(payload)))
 
 
 @router.get("/jobs/{job_id}", response_model=JobRecord)
-async def get_job(
+def get_job(
     job_id: str,
     service: JobService = Depends(get_job_service),
 ) -> JobRecord:
@@ -107,15 +111,37 @@ async def get_job(
 
 
 @router.get("/jobs/{job_id}/batch", response_model=BatchJobRecord)
-async def get_batch_job(
+def get_batch_job(
     job_id: str,
     service: JobService = Depends(get_job_service),
 ) -> BatchJobRecord:
     return service.get_batch_job_or_404(job_id)
 
 
+@router.post("/jobs/{job_id}/cancel", response_model=BatchJobRecord)
+def cancel_job(
+    job_id: str,
+    service: JobService = Depends(get_job_service),
+) -> BatchJobRecord:
+    return service.cancel_job(job_id)
+
+
+@router.get("/jobs/{job_id}/progress", response_model=JobProgressSnapshot)
+def get_job_progress(
+    job_id: str,
+    item_limit: int = Query(
+        default=100,
+        ge=1,
+        le=5000,
+        description="Number of item rows to sample for latency/throughput derivation; counts always use full job summary.",
+    ),
+    service: JobService = Depends(get_job_service),
+) -> JobProgressSnapshot:
+    return service.get_job_progress(job_id, item_limit=item_limit)
+
+
 @router.get("/jobs/{job_id}/items", response_model=list[JobItemRecord])
-async def list_job_items(
+def list_job_items(
     job_id: str,
     state: str | None = Query(default=None),
     limit: int = Query(default=1000, ge=1, le=5000),
@@ -125,7 +151,7 @@ async def list_job_items(
 
 
 @router.get("/job-items/{job_item_id}", response_model=JobItemRecord)
-async def get_job_item(
+def get_job_item(
     job_item_id: str,
     service: JobService = Depends(get_job_service),
 ) -> JobItemRecord:
@@ -160,7 +186,7 @@ async def update_policy_stage(
 
 
 @router.post("/job-items/{job_item_id}/delivery-stage", response_model=JobItemRecord)
-async def update_delivery_stage(
+def update_delivery_stage(
     job_item_id: str,
     payload: DeliveryStageUpdateRequest,
     service: JobService = Depends(get_job_service),
@@ -214,7 +240,7 @@ async def request_remediation(
 
 
 @router.get("/outbox", response_model=list[OutboxRecord])
-async def list_outbox(
+def list_outbox(
     publish_state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     service: JobService = Depends(get_job_service),
@@ -223,7 +249,7 @@ async def list_outbox(
 
 
 @router.get("/outbox/{outbox_id}", response_model=OutboxRecord)
-async def get_outbox(
+def get_outbox(
     outbox_id: str,
     service: JobService = Depends(get_job_service),
 ) -> OutboxRecord:

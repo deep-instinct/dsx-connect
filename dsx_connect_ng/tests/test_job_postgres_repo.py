@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 
-from dsx_connect_ng.jobs.models import JobCreate, JobItemCreate, StageRecord
+from dsx_connect_ng.jobs.models import JobCreate, JobItemCreate, StageRecord, utcnow
 psycopg = pytest.importorskip("psycopg")
 from dsx_connect_ng.jobs.postgres_repo import PostgresJobRepository, apply_schema
 
@@ -154,3 +154,70 @@ def test_postgres_job_repository_updates_stage(postgres_repo: PostgresJobReposit
     assert updated is not None
     assert updated.scan_stage.state == "running"
     assert updated.state == "scanning"
+
+
+def test_postgres_job_repository_bulk_updates_stages(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.batch",
+            state="accepted",
+            idempotency_key=f"idem-bulk-stage-{suffix}",
+        )
+    )
+    first = postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity=f"/finance/{suffix}-a.pdf",
+            state="publish_pending",
+        )
+    )
+    second = postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=1,
+            object_identity=f"/finance/{suffix}-b.pdf",
+            state="publish_pending",
+        )
+    )
+    completed_at = utcnow()
+
+    updated_count = postgres_repo.update_job_items_stages_bulk(
+        [
+            {
+                "job_id": job.job_id,
+                "job_item_id": first.job_item_id,
+                "stage_records": {
+                    "scan_stage": StageRecord(state="completed", result={"scanGuid": "scan-1"}),
+                    "policy_stage": StageRecord(state="skipped"),
+                    "remediation_stage": StageRecord(state="skipped"),
+                    "delivery_stage": StageRecord(state="skipped"),
+                    "dianna_stage": StageRecord(state="skipped"),
+                },
+                "state": "completed",
+                "error": None,
+                "completed_at": completed_at,
+            },
+            {
+                "job_id": job.job_id,
+                "job_item_id": second.job_item_id,
+                "stage_records": {
+                    "scan_stage": StageRecord(state="completed", result={"scanGuid": "scan-2"}),
+                    "policy_stage": StageRecord(state="skipped"),
+                    "remediation_stage": StageRecord(state="skipped"),
+                    "delivery_stage": StageRecord(state="skipped"),
+                    "dianna_stage": StageRecord(state="skipped"),
+                },
+                "state": "completed",
+                "error": None,
+                "completed_at": completed_at,
+            },
+        ]
+    )
+
+    rows = postgres_repo.list_job_items(job_id=job.job_id)
+    assert updated_count == 2
+    assert {row.state for row in rows} == {"completed"}
+    assert {row.scan_stage.result["scanGuid"] for row in rows} == {"scan-1", "scan-2"}
+    assert all(row.completed_at is not None for row in rows)

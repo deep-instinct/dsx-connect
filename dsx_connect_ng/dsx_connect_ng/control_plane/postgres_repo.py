@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import threading
 import uuid
 
 import psycopg
@@ -28,9 +30,27 @@ def apply_schema(db_url: str) -> None:
 class PostgresControlPlaneRepository(ControlPlaneRepository):
     def __init__(self, db_url: str) -> None:
         self.db_url = db_url
+        self._local = threading.local()
 
+    def _thread_connection(self):
+        conn = getattr(self._local, "conn", None)
+        if conn is None or conn.closed:
+            conn = psycopg.connect(self.db_url, row_factory=dict_row)
+            self._local.conn = conn
+        return conn
+
+    @contextmanager
     def _connect(self):
-        return psycopg.connect(self.db_url, row_factory=dict_row)
+        conn = self._thread_connection()
+        try:
+            yield conn
+        except Exception:
+            if not conn.closed:
+                conn.rollback()
+            raise
+        else:
+            if not conn.closed:
+                conn.commit()
 
     def list_integrations(self) -> list[IntegrationRecord]:
         with self._connect() as conn, conn.cursor() as cur:

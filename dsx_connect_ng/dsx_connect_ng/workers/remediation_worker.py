@@ -26,9 +26,10 @@ async def process_remediation_message(
     execute_remediation: RemediationExecutor,
 ) -> None:
     request = RemediationRequested.from_envelope(envelope)
-    await service.advance_remediation_stage(
+    service.update_remediation_stage(
         request.job_item_id,
         RemediationStageUpdateRequest(state="running").as_stage_update_request(),
+        refresh_parent=False,
     )
     result = await execute_remediation(request)
     await service.advance_remediation_stage(

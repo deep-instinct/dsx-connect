@@ -181,5 +181,7 @@ The connector contract should be intentionally narrow:
 
 For version-aware enumeration and mutable-repository consistency expectations, see:
 
+- [Asset Discovery Model](asset-discovery-model.md)
 - [Version and Change Watermark Model](version-and-change-watermark-model.md)
 - [Remediation Contract Model](remediation-contract-model.md)
+- [Connector Deployment and Control Plane Ownership Model](connector-deployment-model.md)

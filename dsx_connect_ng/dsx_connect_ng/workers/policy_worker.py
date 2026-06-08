@@ -19,9 +19,10 @@ async def process_policy_message(
     evaluate_policy: PolicyEngine,
 ) -> None:
     request = PolicyEvaluationRequested.from_envelope(envelope)
-    await service.advance_policy_stage(
+    service.update_policy_stage(
         request.job_item_id,
         PolicyStageUpdateRequest(state="running").as_stage_update_request(),
+        refresh_parent=False,
     )
     decision = await evaluate_policy(request.as_policy_handoff_request())
     await service.advance_policy_stage(

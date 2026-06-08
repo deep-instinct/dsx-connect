@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from typing import Awaitable, Callable
 
 from dsx_connect_ng.control_plane.config_models import PolicyRuntimeConfig, resolve_policy_runtime_config
@@ -81,10 +83,15 @@ def _default_remediation_plan_for_verdict(policy_config: PolicyRuntimeConfig, ef
     plan: dict[str, Any] = {"action": "quarantine"}
     if malicious_policy.quarantine_target:
         target = malicious_policy.quarantine_target
-        target_path = target.get("targetPath") or target.get("target_path") or target.get("path") or target.get("prefix")
+        target_data = target.model_dump(mode="json")
+        target_path = (
+            target.target_path
+            or target.path
+            or target.prefix
+        )
         if target_path is not None:
             plan["targetPath"] = target_path
-        plan["quarantineTarget"] = target
+        plan["quarantineTarget"] = target_data
     plan["tag"] = bool(malicious_policy.tag_on_quarantine)
     return plan
 
@@ -99,12 +106,21 @@ def _targets_from_policy_config(policy_config: PolicyRuntimeConfig, fallback_tar
             dianna_targets=fallback_targets,
             workflow_summary_targets=fallback_targets,
         )
+    workflow_summary_targets = (
+        fallback_targets
+        if delivery.workflow_summary_targets is None
+        else delivery.workflow_summary_targets
+    )
     return DeliveryDispatchDecision(
-        targets=delivery.workflow_summary_targets or fallback_targets,
-        scan_targets=delivery.scan_targets or fallback_targets,
-        remediation_targets=delivery.remediation_targets or fallback_targets,
-        dianna_targets=delivery.dianna_targets or fallback_targets,
-        workflow_summary_targets=delivery.workflow_summary_targets or fallback_targets,
+        targets=workflow_summary_targets,
+        scan_targets=fallback_targets if delivery.scan_targets is None else delivery.scan_targets,
+        remediation_targets=fallback_targets if delivery.remediation_targets is None else delivery.remediation_targets,
+        dianna_targets=fallback_targets if delivery.dianna_targets is None else delivery.dianna_targets,
+        workflow_summary_targets=workflow_summary_targets,
+        scan_targets_configured=delivery.scan_targets is not None,
+        remediation_targets_configured=delivery.remediation_targets is not None,
+        dianna_targets_configured=delivery.dianna_targets is not None,
+        workflow_summary_targets_configured=delivery.workflow_summary_targets is not None,
     )
 
 
@@ -171,7 +187,11 @@ def _build_stub_handoff_decision(handoff: PolicyHandoffRequest, decision: Policy
 
 
 def policy_decision_from_handoff_decision(handoff: PolicyHandoffDecision) -> PolicyDecision:
-    summary_targets = handoff.delivery.workflow_summary_targets or handoff.delivery.targets
+    summary_targets = (
+        handoff.delivery.workflow_summary_targets
+        if handoff.delivery.workflow_summary_targets_configured
+        else handoff.delivery.workflow_summary_targets or handoff.delivery.targets
+    )
     target = summary_targets[0] if summary_targets else {}
     return PolicyDecision(
         remediation_plan=handoff.remediation.details.get("remediation_plan", {}),

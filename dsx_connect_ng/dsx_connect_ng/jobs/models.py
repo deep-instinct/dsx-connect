@@ -148,6 +148,10 @@ class DeliveryDispatchDecision(BaseModel):
     remediation_targets: list[dict[str, Any]] = Field(default_factory=list)
     dianna_targets: list[dict[str, Any]] = Field(default_factory=list)
     workflow_summary_targets: list[dict[str, Any]] = Field(default_factory=list)
+    scan_targets_configured: bool = False
+    remediation_targets_configured: bool = False
+    dianna_targets_configured: bool = False
+    workflow_summary_targets_configured: bool = False
 
 
 class HealthSignal(BaseModel):
@@ -565,6 +569,80 @@ class JobItemSummary(BaseModel):
     cancelled: int = 0
 
 
+class ThroughputWindow(BaseModel):
+    seconds: int | None = None
+    items_per_second: float | None = None
+    completed_items: int = 0
+    terminal_items: int = 0
+    failed_items: int = 0
+    cancelled_items: int = 0
+
+
+class JobThroughputSnapshot(BaseModel):
+    total: ThroughputWindow = Field(default_factory=ThroughputWindow)
+    recent_60s: ThroughputWindow = Field(default_factory=lambda: ThroughputWindow(seconds=60))
+    recent_300s: ThroughputWindow = Field(default_factory=lambda: ThroughputWindow(seconds=300))
+
+
+class LatencySummary(BaseModel):
+    count: int = 0
+    avg_ms: float | None = None
+    p95_ms: float | None = None
+
+
+class JobLatencySnapshot(BaseModel):
+    reader_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    stream_read_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    scanner_response_wait_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    scanner_engine_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    dsxa_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    request_elapsed_ms: LatencySummary = Field(default_factory=LatencySummary)
+    scan_stage_ms: LatencySummary = Field(default_factory=LatencySummary)
+    queue_wait_ms: LatencySummary = Field(default_factory=LatencySummary)
+
+
+class JobBacklogSnapshot(BaseModel):
+    accepted: int = 0
+    publish_pending: int = 0
+    queued: int = 0
+    scanning: int = 0
+    scanned: int = 0
+    policy_pending: int = 0
+    remediation_pending: int = 0
+    delivery_pending: int = 0
+
+
+class JobRuntimeSnapshot(BaseModel):
+    scan_leases_active: int = 0
+
+
+class BottleneckHint(BaseModel):
+    code: str
+    severity: Literal["info", "warning", "critical"] = "info"
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class JobProgressSnapshot(BaseModel):
+    job_id: str
+    state: str
+    item_summary: JobItemSummary
+    total_items: int = 0
+    terminal_items: int = 0
+    percent_complete: float | None = None
+    elapsed_seconds: float | None = None
+    eta_seconds: float | None = None
+    estimated_completion_at: datetime | None = None
+    last_activity_at: datetime | None = None
+    throughput: JobThroughputSnapshot = Field(default_factory=JobThroughputSnapshot)
+    latency: JobLatencySnapshot = Field(default_factory=JobLatencySnapshot)
+    backlog: JobBacklogSnapshot = Field(default_factory=JobBacklogSnapshot)
+    runtime: JobRuntimeSnapshot = Field(default_factory=JobRuntimeSnapshot)
+    bottleneck_hints: list[BottleneckHint] = Field(default_factory=list)
+    derived_from_item_count: int = 0
+    derived_from_item_limit: int = 0
+
+
 class BatchJobRecord(BaseModel):
     job: JobRecord
     item_summary: JobItemSummary
@@ -587,4 +665,18 @@ class OutboxFlushResult(BaseModel):
     attempted: int = 0
     published: int = 0
     failed: int = 0
+    active_scan_items: int | None = None
+    max_active_scan_items: int | None = None
+    publish_capacity: int | None = None
+    list_elapsed_ms: float | None = None
+    publish_elapsed_ms: float | None = None
+    total_elapsed_ms: float | None = None
+    selected_job_ids: list[str] = Field(default_factory=list)
+    selected_topics: dict[str, int] = Field(default_factory=dict)
+    oldest_pending_age_ms: float | None = None
+    newest_pending_age_ms: float | None = None
+    first_outbox_created_at: datetime | None = None
+    last_outbox_created_at: datetime | None = None
+    first_published_at: datetime | None = None
+    last_published_at: datetime | None = None
     records: list[OutboxRecord] = Field(default_factory=list)

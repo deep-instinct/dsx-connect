@@ -119,6 +119,11 @@ def test_remediation_requested_translates_quarantine_tag_plan_to_connector_actio
             "action": "quarantine",
             "targetPath": "tenant-quarantine",
             "tag": True,
+            "quarantineTarget": {
+                "path": "tenant-quarantine",
+                "collision_strategy": "suffix_random",
+                "suffix_length": 10,
+            },
         },
     )
 

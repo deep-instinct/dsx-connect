@@ -87,3 +87,7 @@ The initial application scaffold lives under:
 - [dsx_connect_ng/dsx_connect_ng/api/routes/control_plane.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/control_plane.py:1)
 - [dsx_connect_ng/dsx_connect_ng/api/routes/execution.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/execution.py:1)
 - [dsx_connect_ng/dsx_connect_ng/api/routes/ui.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/ui.py:1)
+
+For the first thin operator UI built on top of this split, see:
+
+- [Rudimentary Operator UI Plan](/Users/logangilbert/PycharmProjects/dsx-connect/docs/architecture-vnext/design/rudimentary-operator-ui-plan.md:1)

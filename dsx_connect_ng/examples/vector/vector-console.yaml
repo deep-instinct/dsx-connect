@@ -1,0 +1,43 @@
+data_dir: "${VECTOR_DATA_DIR:-/tmp/vector-dsx-connect-ng}"
+
+sources:
+  dsx_results:
+    type: file
+    include:
+      - "${DSX_RESULTS_PATH:-/tmp/dsx-connect-ng-results.jsonl}"
+    read_from: beginning
+
+transforms:
+  parse_result_event:
+    type: remap
+    inputs:
+      - dsx_results
+    source: |
+      . = parse_json!(.message)
+
+  normalize_result_event:
+    type: remap
+    inputs:
+      - parse_result_event
+    source: |
+      .result_family = .event_type
+      .verdict = .payload.verdict ?? .workflow_summary.scan.verdict ?? null
+      .destination = .delivery_target.connector ?? .delivery_target.destination ?? null
+      .search = {
+        "job_id": .job_id,
+        "job_item_id": .job_item_id,
+        "integration_id": .integration_id,
+        "object_identity": .object_identity,
+        "file_hash": .file_hash,
+        "scan_guid": .scan_guid,
+        "result_family": .result_family,
+        "verdict": .verdict
+      }
+
+sinks:
+  console:
+    type: console
+    inputs:
+      - normalize_result_event
+    encoding:
+      codec: json

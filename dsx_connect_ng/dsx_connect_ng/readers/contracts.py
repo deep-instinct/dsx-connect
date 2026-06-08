@@ -67,7 +67,7 @@ class ConnectorProxyReadRequest(BaseModel):
             object_identity=request.object_identity,
             content_source=request.content_source,
             read_hint=request.read_hint,
-            options=options or {},
+            options=options if options is not None else request.scan_options,
             preferred_modes=preferred_modes or ["stream", "artifact_ref", "buffer"],
         )
 

@@ -37,7 +37,11 @@ def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
                 "wait_for_dianna_on_auto_request": True,
                 "malicious_verdict": {
                     "action": "quarantine",
-                    "quarantine_target": {"prefix": "tenant-quarantine"},
+                    "quarantine_target": {
+                        "prefix": "tenant-quarantine",
+                        "collision_strategy": "suffix_random",
+                        "suffix_length": 10,
+                    },
                 },
                 "non_compliant_treatment": "treat_as_malicious",
                 "result_delivery_policy": {
@@ -74,6 +78,49 @@ def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
     assert config.delivery is not None
     assert config.delivery.scan_targets == [{"connector": "scope-scan"}]
     assert config.content_preservation_mode_by_verdict == {"malicious": "cached"}
+
+
+def test_parse_policy_runtime_config_supports_quarantine_collision_strategy() -> None:
+    config = resolve_policy_runtime_config(
+        {
+            "policy": {
+                "malicious_verdict": {
+                    "action": "quarantine",
+                    "quarantine_target": {
+                        "path": "tenant-quarantine",
+                        "collision_strategy": "suffix_random",
+                        "suffix_length": 10,
+                        "preserve_relative_path": True,
+                    },
+                },
+            }
+        }
+    )
+
+    assert config.malicious_verdict is not None
+    assert config.malicious_verdict.quarantine_target is not None
+    assert config.malicious_verdict.quarantine_target.collision_strategy == "suffix_random"
+    assert config.malicious_verdict.quarantine_target.suffix_length == 10
+    assert config.malicious_verdict.quarantine_target.preserve_relative_path is True
+
+
+def test_quarantine_target_defaults_to_not_preserving_relative_path() -> None:
+    config = resolve_policy_runtime_config(
+        {
+            "policy": {
+                "malicious_verdict": {
+                    "action": "quarantine",
+                    "quarantine_target": {
+                        "path": "tenant-quarantine",
+                    },
+                },
+            }
+        }
+    )
+
+    assert config.malicious_verdict is not None
+    assert config.malicious_verdict.quarantine_target is not None
+    assert config.malicious_verdict.quarantine_target.preserve_relative_path is False
 
 
 def test_parse_integration_runtime_config_with_remediation_capabilities() -> None:

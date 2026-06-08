@@ -12,6 +12,7 @@ ProxyAuthMode = Literal["none", "static_header", "dsx_hmac"]
 PolicyVerdict = Literal["benign", "suspicious", "malicious"]
 PolicyRemediationAction = Literal["detect_only", "quarantine", "delete", "tag_only"]
 PolicyFallbackTreatment = Literal["treat_as_benign", "treat_as_malicious"]
+QuarantineCollisionStrategy = Literal["overwrite", "suffix_random", "fail"]
 
 
 class ProxyReaderConfig(BaseModel):
@@ -61,9 +62,19 @@ class PolicyDeliveryTargetsConfig(BaseModel):
     workflow_summary_targets: list[dict[str, Any]] | None = None
 
 
+class QuarantineTargetConfig(BaseModel):
+    path: str | None = None
+    prefix: str | None = None
+    target_path: str | None = None
+    repository: str | None = None
+    preserve_relative_path: bool = False
+    collision_strategy: QuarantineCollisionStrategy = "suffix_random"
+    suffix_length: int = Field(default=10, ge=1, le=64)
+
+
 class MaliciousVerdictPolicyConfig(BaseModel):
     action: PolicyRemediationAction = "detect_only"
-    quarantine_target: dict[str, Any] | None = None
+    quarantine_target: QuarantineTargetConfig | None = None
     tag_on_quarantine: bool = True
 
 

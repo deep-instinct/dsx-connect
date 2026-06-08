@@ -23,9 +23,10 @@ async def process_dianna_message(
     execute_dianna: DiannaExecutor,
 ) -> None:
     request = DiannaAnalysisRequested.from_envelope(envelope)
-    await service.advance_dianna_stage(
+    service.update_dianna_stage(
         request.job_item_id,
         DiannaStageUpdateRequest(state="running").as_stage_update_request(),
+        refresh_parent=False,
     )
     result = await execute_dianna(request)
     await service.advance_dianna_stage(

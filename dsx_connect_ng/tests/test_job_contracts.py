@@ -109,5 +109,5 @@ def test_remediation_requested_builds_normalized_connector_request() -> None:
     connector_request = message.as_connector_remediation_request()
 
     assert connector_request.action == "movetag"
-    assert connector_request.destination == {"path": "tenant-quarantine"}
+    assert connector_request.destination == {"path": "tenant-quarantine", "filename": "bad.exe_item4"}
     assert connector_request.tags == {"Verdict": "Malicious"}

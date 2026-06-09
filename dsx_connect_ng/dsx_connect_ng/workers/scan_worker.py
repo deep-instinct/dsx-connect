@@ -1209,7 +1209,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--scan-batch-trust-items",
         action=argparse.BooleanOptionalAction,
-        default=os.environ.get("DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS", "false").lower()
+        default=os.environ.get("DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS", "true").lower()
         in {"1", "true", "yes", "on"},
         help="Skip per-item DB reads around scan-only pooled scans and trust the claimed message payload.",
     )

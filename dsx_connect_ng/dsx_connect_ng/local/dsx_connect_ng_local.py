@@ -96,7 +96,7 @@ DSX_CONNECT_NG_LOCAL__SCAN_BATCH_WINDOW_SIZE=100
 DSX_CONNECT_NG_LOCAL__SCAN_BATCH_WINDOW_WAIT_SECONDS=0.5
 DSX_CONNECT_NG_LOCAL__SCAN_BATCH_CONCURRENCY=6
 DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ACK_MODE=scanned
-DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS=false
+DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS=true
 DSX_CONNECT_NG_LOCAL__POLICY_PREFETCH_COUNT=1
 DSX_CONNECT_NG_LOCAL__RESULT_SINK_PREFETCH_COUNT=1
 DSX_CONNECT_NG_RESULT_SINK__BACKEND=stdout
@@ -185,7 +185,7 @@ def _service_specs(state_dir: Path, *, extra_env: dict[str, str] | None = None) 
                     str(base_child_env.get("DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ACK_MODE", "scanned")),
                     (
                         "--scan-batch-trust-items"
-                        if _env_bool(base_child_env.get("DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS"), default=False)
+                        if _env_bool(base_child_env.get("DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS"), default=True)
                         else "--no-scan-batch-trust-items"
                     ),
                 ],
@@ -525,7 +525,7 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_BATCH_WINDOW_WAIT_SECONDS"] = str(ctx.obj.get("scan_batch_window_wait_seconds", 0.5))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_BATCH_CONCURRENCY"] = str(ctx.obj.get("scan_batch_concurrency", 6))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ACK_MODE"] = str(ctx.obj.get("scan_batch_ack_mode", "scanned"))
-    overrides["DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS"] = str(ctx.obj.get("scan_batch_trust_items", False)).lower()
+    overrides["DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS"] = str(ctx.obj.get("scan_batch_trust_items", True)).lower()
     overrides["DSX_CONNECT_NG_LOCAL__POLICY_PREFETCH_COUNT"] = str(ctx.obj.get("policy_worker_prefetch_count", 1))
     overrides["DSX_CONNECT_NG_LOCAL__RESULT_SINK_PREFETCH_COUNT"] = str(ctx.obj.get("result_sink_worker_prefetch_count", 1))
     relay_max_active_scan_items = ctx.obj.get("relay_max_active_scan_items")
@@ -709,7 +709,7 @@ def main(
     scan_batch_window_wait_seconds: float = typer.Option(0.5, "--scan-batch-window-wait-seconds", min=0.001, help="maximum wait for partial scan-only completions before bulk persistence"),
     scan_batch_concurrency: int = typer.Option(6, "--scan-batch-concurrency", min=0, help="concurrent read/scan coroutines inside each scan-only batch window; 0 uses scan prefetch"),
     scan_batch_ack_mode: str = typer.Option("scanned", "--scan-batch-ack-mode", help="scan-only batch ack mode: completed, scanned, or accepted"),
-    scan_batch_trust_items: bool = typer.Option(False, "--scan-batch-trust-items/--no-scan-batch-trust-items", help="skip per-item DB reads around scan-only pooled scans"),
+    scan_batch_trust_items: bool = typer.Option(True, "--scan-batch-trust-items/--no-scan-batch-trust-items", help="skip per-item DB reads around scan-only pooled scans"),
     policy_worker_prefetch_count: int = typer.Option(1, "--policy-worker-prefetch-count", min=1, help="number of in-flight policy messages the local policy worker may process concurrently"),
     result_sink_worker_prefetch_count: int = typer.Option(1, "--result-sink-worker-prefetch-count", min=1, help="number of in-flight result-sink messages the local result-sink worker may process concurrently"),
     relay_max_active_scan_items: int | None = typer.Option(None, "--relay-max-active-scan-items", min=1, help="maximum queued/scanning/scanned items before the relay pauses publishing"),

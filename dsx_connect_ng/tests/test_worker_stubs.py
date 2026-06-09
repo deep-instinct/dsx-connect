@@ -778,6 +778,55 @@ def test_scan_only_batch_coordinator_can_trust_claimed_items() -> None:
     assert completed_updates[0][1] == "item-1"
 
 
+def test_scan_only_batch_coordinator_trusted_items_complete_after_cancel_during_scan() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {"object_identity": "/finance/cancel-during-trusted-batch.pdf", "payload": {"scanOnly": True}},
+                ]
+            )
+        )
+    )
+    message = bus.snapshot()[0]
+    assert isinstance(message, MessageEnvelope)
+
+    async def cancel_then_return_result(request, _reader) -> ScanResult:
+        service.cancel_job(request.job_id)
+        return ScanResult(
+            verdict="Benign",
+            scanGuid="scan-after-trusted-batch-cancel",
+            fileType="TextFileType",
+            scanDurationUs=1000,
+        )
+
+    async def run_batch() -> None:
+        coordinator = ScanOnlyBatchCoordinator(
+            service,
+            execute_scan=cancel_then_return_result,
+            batch_size=1,
+            max_wait_seconds=1.0,
+            scan_concurrency=1,
+            scan_only_runtime_leases=False,
+            service_io_threaded=False,
+            trust_items=True,
+        )
+        await coordinator.add(message)
+        await coordinator.flush_all()
+
+    asyncio.run(run_batch())
+
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+    job = service.get_job_or_404(created.job.job_id)
+    assert job.state == "cancelled"
+    assert item.state == "completed"
+    assert item.scan_stage.state == "completed"
+    assert item.scan_stage.result["scan_guid"] == "scan-after-trusted-batch-cancel"
+
+
 def test_scan_worker_clears_runtime_lease_after_terminal_scan_failure() -> None:
     repo = CountingRuntimeJobRepository()
     bus = InMemoryJobBus()

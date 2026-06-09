@@ -333,7 +333,9 @@ Initial operational defaults:
 
 - default mode: `batch`
 - default batch size: `100`
+- default scan-only batch worker trust: enabled for coarse `batch` recovery
 - prefer `item` for archive-heavy or explicitly large-object workloads
+- disable trusted scan-batch items for strict item-level cancellation or recovery fidelity
 
 This matches observed 1g behavior:
 
@@ -341,6 +343,17 @@ This matches observed 1g behavior:
 - Reader-native optimization should attack the hot path
 - coarse replay is acceptable for many small-file scans
 - fine replay is needed for long-running large-object scans
+
+Trusted scan-only batch mode means the scan worker treats the RabbitMQ scan message as accepted item intent and skips per-item DB reads and cancellation checks before and after DSXA in the pooled scan hot path.
+This is consistent with `batch` recovery because accepted membership and terminal outcomes remain durable, while in-flight cancellation precision is deliberately coarser.
+Strict `item` recovery should opt out with `--no-scan-batch-trust-items`.
+
+Cancel behavior follows the same tradeoff.
+In trusted batch mode, cancellation should stop new work from being published or claimed, but it should not be expected to interrupt every file already inside a scan worker's in-memory batch immediately.
+Those files may finish scanning and persist terminal outcomes before the cancellation is fully reflected.
+Making cancel immediate at file granularity requires pre/post per-item durable checks or equivalent item-level tracking in the hot path, which is costly for the common case and only valuable for the rare case where an operator cancels an active scan.
+
+Local `1000` file scan-only benchmarks improved from roughly `67 files/s` after submit to roughly `94 files/s` after submit when trusted scan-batch items were enabled after set-based completion persistence.
 
 ## Summary
 

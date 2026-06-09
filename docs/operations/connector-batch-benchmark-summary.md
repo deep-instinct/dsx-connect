@@ -162,6 +162,22 @@ This significantly reduced completion persistence timing, but did not immediatel
 The important conclusion is that scan-only completion persistence is no longer the measured hot spot in those follow-up runs.
 One post-change run showed relay publish averaging `377.5ms` per `100` messages, and another showed DSXA wait p95 above `2s`; those effects dominate the remaining local variance.
 
+Enabling trusted scan-batch items then removed the remaining per-item DB reads around scan start and completion.
+In trusted mode, the scan worker treats the RabbitMQ scan message as already-valid accepted item intent and skips the pre/post `get_job_item` and cancellation checks inside the pooled scan hot path.
+This is appropriate for coarse scan-only recovery, where the durable contract is accepted item membership plus terminal outcomes.
+Strict item-level recovery can still disable it with `--no-scan-batch-trust-items`.
+The cancellation behavior is intentionally coarser in this mode: cancel should stop new publish/claim work, but files already claimed into an in-memory scan batch may finish before the cancel is fully reflected.
+Immediate file-level cancel requires per-item tracking/checks in the scan hot path, which is expensive for the common path and usually not worth paying for the rare case where an operator cancels an active scan.
+
+| Path | Shape | Result |
+| --- | --- | --- |
+| NG full stack, native reader, scan-only, deferred publish, trusted items | `4` scan workers x `2` scan concurrency | `1000` files in `10.920s` progress elapsed, `91.571 files/s` progress throughput, `93.871 files/s` after submit, `88.720 files/s` total |
+
+The trusted-items run completed `1000/1000` items with no failures.
+Completion flushes remained cheap: `60` flushes, average `17.605ms`, p95 `40.868ms`.
+Relay publish was back in the normal range: `10` flushes of `100`, average `196.936ms` publish time per `100`.
+This is the strongest local evidence that per-item DB read/check overhead was still a meaningful hot-path cost after completion persistence was optimized.
+
 Important observations:
 
 * RabbitMQ scan workers are event-driven once work reaches RabbitMQ.
@@ -170,6 +186,8 @@ Important observations:
 * Scan-only fast path keeps `policy_pending`, remediation, and delivery at zero, confirming policy/result-sink are no longer the measured bottleneck for scan-only tests.
 * Per-item synchronous Postgres updates in the scan hot path are too granular for high-throughput small-file batches.
 * Scan-only completion persistence must use real set-based bulk updates, not one `UPDATE` per item hidden behind `executemany`.
+* For coarse scan-only batches, scan workers should trust accepted scan messages by default and avoid pre/post per-item DB reads.
+* Trusted batch cancellation is cooperative rather than immediate at file granularity; use strict item-level mode when immediate cancellation is more important than throughput.
 * Parent job state should remain a derived summary for scan-only batch completion and should not be refreshed on every small completion flush.
 * Parent job state can be refreshed when a batch is observed complete, not after every item.
 
@@ -187,8 +205,9 @@ Near-term direction:
 3. Continue publishing only up to an active-item cap so cancellation remains responsive.
 4. Keep scan-only progress parent refresh deferred to progress reads or batch completion.
 5. Keep scan-only completion writes set-based.
-6. Benchmark `--scan-batch-trust-items` separately when coarse cancellation/recovery is acceptable.
-7. Add runtime counters/metrics if operators need live `queued`/`scanning` visibility without restoring synchronous durable writes.
+6. Default trusted scan-batch items for coarse scan-only recovery; use `--no-scan-batch-trust-items` for strict item-level cancellation/recovery checks.
+7. Document operator-facing cancel semantics clearly: cancel stops future work quickly, while already claimed in-memory batch items may complete.
+8. Add runtime counters/metrics if operators need live `queued`/`scanning` visibility without restoring synchronous durable writes.
 
 Current local test command:
 
@@ -202,6 +221,7 @@ dsx-connect-ng-local \
   --scan-batch-window-wait-seconds 0.5 \
   --scan-batch-concurrency 2 \
   --scan-batch-ack-mode scanned \
+  --scan-batch-trust-items \
   --no-scan-only-runtime-leases \
   foreground
 ```

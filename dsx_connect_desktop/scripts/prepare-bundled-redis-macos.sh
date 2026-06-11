@@ -12,15 +12,23 @@ if ! command -v brew >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! brew --prefix redis >/dev/null 2>&1; then
+if ! brew list --versions redis >/dev/null 2>&1; then
   brew install redis
 fi
 
 REDIS_PREFIX="${DSXCONNECT_DESKTOP_REDIS_PREFIX:-$(brew --prefix redis)}"
-REDIS_SERVER="${REDIS_PREFIX}/bin/redis-server"
+REDIS_SERVER="${DSXCONNECT_DESKTOP_REDIS_SERVER:-${REDIS_PREFIX}/bin/redis-server}"
 
 if [[ ! -x "${REDIS_SERVER}" ]]; then
-  echo "redis-server not found at ${REDIS_SERVER}" >&2
+  REDIS_SERVER="$(brew list redis 2>/dev/null | awk '/\/redis-server$/ { print; exit }')"
+fi
+
+if [[ -z "${REDIS_SERVER}" || ! -x "${REDIS_SERVER}" ]]; then
+  REDIS_SERVER="$(command -v redis-server || true)"
+fi
+
+if [[ -z "${REDIS_SERVER}" || ! -x "${REDIS_SERVER}" ]]; then
+  echo "redis-server not found after installing Homebrew redis" >&2
   exit 1
 fi
 

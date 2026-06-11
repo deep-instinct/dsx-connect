@@ -47,11 +47,10 @@ for req in "${REPO_ROOT}"/connectors/*/requirements.txt; do
 done
 
 "${BUNDLED_PYTHON}" -m pip install \
-  "${REPO_ROOT}/shared" \
   "${REPO_ROOT}/dsxa_sdk_py" \
   "${REPO_ROOT}/dsx_connect_sdk"
 
-"${BUNDLED_PYTHON}" - <<'PY'
+PYTHONPATH="${REPO_ROOT}" "${BUNDLED_PYTHON}" - <<'PY'
 import aiohttp
 import celery
 import fastapi

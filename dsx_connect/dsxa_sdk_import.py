@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+import importlib
 
 
 def ensure_sdk_on_path() -> None:
@@ -14,3 +15,8 @@ def ensure_sdk_on_path() -> None:
         path_str = str(path)
         if path_str not in sys.path:
             sys.path.insert(0, path_str)
+
+    existing = sys.modules.get("dsxa_sdk_py")
+    if existing is not None and not hasattr(existing, "DSXAClient"):
+        sys.modules.pop("dsxa_sdk_py", None)
+        importlib.invalidate_caches()

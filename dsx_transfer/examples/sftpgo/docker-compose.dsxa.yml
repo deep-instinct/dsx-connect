@@ -1,0 +1,27 @@
+services:
+  dsx-transfer:
+    command:
+      - python
+      - -m
+      - dsx_transfer.cli
+      - serve
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8088"
+      - --policy-id
+      - dsxa-sftpgo-demo
+      - --scanner-mode
+      - dsxa
+      - --dsxa-base-url
+      - "${DSXA_BASE_URL:-http://host.docker.internal:15000}"
+      - --dsxa-auth-token
+      - "${DSXA_AUTH_TOKEN:-}"
+      - --file-type-action
+      - windows_executables=block
+      - --sftpgo-storage-root
+      - /srv/sftpgo
+      - --sftpgo-container-root
+      - /srv/sftpgo
+      - --audit-jsonl
+      - /srv/sftpgo/dsx-transfer-audit.jsonl

@@ -1,0 +1,38 @@
+services:
+  dsx-transfer:
+    build:
+      context: ../../..
+      dockerfile: dsx_transfer/examples/sftpgo/Dockerfile.dsx-transfer
+    container_name: dsx-transfer-ui-sidecar
+    ports:
+      - "8088:8088"
+    volumes:
+      - sftpgo-ui-data:/srv/sftpgo
+    environment:
+      DSXA_BASE_URL: "${DSXA_BASE_URL:-}"
+      DSXA_AUTH_TOKEN: "${DSXA_AUTH_TOKEN:-}"
+
+  sftpgo:
+    image: drakkan/sftpgo:v2.7.3
+    container_name: dsx-transfer-sftpgo-ui
+    ports:
+      - "2022:2022"
+      - "8080:8080"
+    volumes:
+      - sftpgo-ui-data:/srv/sftpgo
+      - sftpgo-ui-state:/var/lib/sftpgo
+    environment:
+      SFTPGO_DATA_PROVIDER__CREATE_DEFAULT_ADMIN: "true"
+      SFTPGO_DEFAULT_ADMIN_USERNAME: "admin"
+      SFTPGO_DEFAULT_ADMIN_PASSWORD: "admin-password"
+      SFTPGO_DATA_PROVIDER__USERS_BASE_DIR: "/srv/sftpgo/data"
+      SFTPGO_COMMON__UPLOAD_MODE: "0"
+      SFTPGO_COMMON__ACTIONS__EXECUTE_ON: "upload"
+      SFTPGO_COMMON__ACTIONS__EXECUTE_SYNC: "upload"
+      SFTPGO_COMMON__ACTIONS__HOOK: "http://dsx-transfer:8088/api/v1/sftpgo/hooks/upload"
+    depends_on:
+      - dsx-transfer
+
+volumes:
+  sftpgo-ui-data:
+  sftpgo-ui-state:

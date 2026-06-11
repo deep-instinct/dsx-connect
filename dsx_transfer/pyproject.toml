@@ -1,0 +1,32 @@
+[project]
+name = "dsx-transfer"
+version = "0.1.0"
+description = "Guarded file transfer contracts and tooling for DSX"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Deep Instinct" }
+]
+dependencies = [
+  "fastapi>=0.115.0",
+  "pydantic>=2.9.0",
+  "typer>=0.12.0",
+  "uvicorn>=0.30.0",
+  "dsxa-sdk-py>=0.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+dsx-transfer = "dsx_transfer.cli:main"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dsx_transfer*"]

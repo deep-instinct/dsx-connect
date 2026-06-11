@@ -1,0 +1,40 @@
+#!/usr/bin/env expect
+
+set timeout 20
+set local_path [lindex $argv 0]
+set remote_name [lindex $argv 1]
+
+if {$local_path eq "" || $remote_name eq ""} {
+    puts stderr "usage: sftp_put.expect LOCAL_PATH REMOTE_NAME"
+    exit 2
+}
+
+spawn sftp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P 2022 demo@127.0.0.1
+expect {
+    -nocase "password:" {
+        send "demo-password\r"
+    }
+    timeout {
+        puts stderr "timed out waiting for password prompt"
+        exit 3
+    }
+}
+expect {
+    "sftp>" {
+        send "put $local_path $remote_name\r"
+    }
+    timeout {
+        puts stderr "timed out waiting for sftp prompt"
+        exit 4
+    }
+}
+expect {
+    "sftp>" {
+        send "bye\r"
+    }
+    timeout {
+        puts stderr "timed out waiting for put result"
+        exit 5
+    }
+}
+expect eof

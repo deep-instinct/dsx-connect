@@ -36,9 +36,11 @@ npm start
 
 ## Notes
 
-- It uses the repo Python environment when available, preferring `.venv/bin/python` on Unix-like systems.
+- Packaged macOS builds include bundled Python and Redis runtimes under the app resources and use them for core and connector services.
+- macOS CI/release builds publish both `no-python` and `full` variants. Use `full` for zero-prerequisite end-user installs.
+- Development runs use the repo Python environment when available, preferring `.venv/bin/python` on Unix-like systems.
 - This launcher hosts the existing DSX-Connect UI and does not duplicate frontend application code.
-- Redis must be available on `PATH` unless you point the local runtime at an explicit Redis binary.
+- Development runs require Redis on `PATH` unless you point the local runtime at an explicit Redis binary.
 - Connector and core shutdown behavior can be controlled with:
   - `DSXCONNECT_STOP_ON_EXIT`
   - `DSXCONNECT_STOP_CONNECTORS_ON_EXIT`

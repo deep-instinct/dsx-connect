@@ -144,9 +144,26 @@ function exists(p) {
   }
 }
 
+function bundledPythonCandidates() {
+  return [
+    path.join(REPO_ROOT, 'bundled-python', 'bin', 'python3'),
+    path.join(REPO_ROOT, 'bundled-python', 'bin', 'python'),
+    path.join(REPO_ROOT, 'bundled-python', 'python.exe')
+  ];
+}
+
+function resolveBundledPython() {
+  for (const c of bundledPythonCandidates()) {
+    if (exists(c)) return c;
+  }
+  return null;
+}
+
 function resolvePython() {
+  const bundledPython = resolveBundledPython();
   const candidates = [
     process.env.DSXCONNECT_LOCAL_PYTHON,
+    bundledPython,
     path.join(REPO_ROOT, '.venv', 'bin', 'python'),
     path.join(REPO_ROOT, '.venv', 'Scripts', 'python.exe'),
     '/opt/homebrew/bin/python3',
@@ -185,11 +202,28 @@ function isExecutableFile(filePath) {
   }
 }
 
+function bundledRedisCandidates() {
+  return [
+    path.join(REPO_ROOT, 'bundled-redis', 'bin', 'redis-server'),
+    path.join(REPO_ROOT, 'bundled-redis', 'redis-server.exe')
+  ];
+}
+
+function resolveBundledRedisServer() {
+  for (const c of bundledRedisCandidates()) {
+    if (isExecutableFile(c)) return c;
+  }
+  return null;
+}
+
 function resolveRedisServerBinary() {
   const override = String(process.env.DSXCONNECT_LOCAL_REDIS_SERVER || '').trim();
   if (override) {
     return isExecutableFile(override) ? override : null;
   }
+
+  const bundledRedis = resolveBundledRedisServer();
+  if (bundledRedis) return bundledRedis;
 
   for (const candidate of [
     '/opt/homebrew/bin/redis-server',
@@ -207,9 +241,21 @@ function desktopProcessEnv() {
   const env = { ...process.env };
   const pathParts = ['/opt/homebrew/bin', '/usr/local/bin', '/opt/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
   env.PATH = [...pathParts, env.PATH || ''].filter(Boolean).join(path.delimiter);
+  const bundledPython = resolveBundledPython();
+  if (bundledPython && !env.DSXCONNECT_LOCAL_PYTHON) {
+    env.DSXCONNECT_LOCAL_PYTHON = bundledPython;
+  }
+  if (bundledPython) {
+    env.PYTHONNOUSERSITE = env.PYTHONNOUSERSITE || '1';
+  }
   const redisServer = resolveRedisServerBinary();
   if (redisServer && redisServer.includes(path.sep)) {
     env.DSXCONNECT_LOCAL_REDIS_SERVER = redisServer;
+  }
+  const bundledRedis = resolveBundledRedisServer();
+  if (bundledRedis) {
+    const redisLib = path.join(REPO_ROOT, 'bundled-redis', 'lib');
+    env.DYLD_FALLBACK_LIBRARY_PATH = [redisLib, env.DYLD_FALLBACK_LIBRARY_PATH || ''].filter(Boolean).join(path.delimiter);
   }
   return env;
 }
@@ -385,9 +431,9 @@ function ensureDesktopPrereqs() {
   if (!redisServer) {
     dialog.showErrorBox(
       'DSX-Connect Desktop',
-      'redis-server is required but was not found on PATH.\n\n' +
-      'Install Redis (for example: `brew install redis`) or set\n' +
-      '`DSXCONNECT_LOCAL_REDIS_SERVER=/full/path/to/redis-server` and relaunch.'
+      'redis-server is required but was not found in the app bundle or on PATH.\n\n' +
+      'Packaged builds should include bundled-redis/bin/redis-server. For development, install Redis ' +
+      'or set DSXCONNECT_LOCAL_REDIS_SERVER=/full/path/to/redis-server and relaunch.'
     );
     return false;
   }

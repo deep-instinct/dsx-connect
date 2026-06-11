@@ -63,31 +63,42 @@ xattr -dr com.apple.quarantine "/Applications/DSX-Connect Desktop.app"
 
 For normal end-user distribution, the app should be signed and notarized.
 
-### 2. Install Local Runtime Prerequisites
+### 2. Choose A macOS Artifact
 
-DSX-Connect Desktop currently requires a local Python runtime with the DSX-Connect Python dependencies and a local Redis server binary. Python and Redis are not fully bundled in the Desktop app yet.
+The macOS build publishes two artifact variants per architecture:
 
-For internal test builds, use the project virtual environment when running from the repository, or set a Python interpreter explicitly:
+- `no-python`: slim build for development or managed environments that provide Python dependencies and Redis externally.
+- `full`: bundled build for end users. It includes Python, DSX-Connect Python dependencies, and Redis.
+
+For normal user testing, use the `full` artifact.
+
+### 3. Install Local Runtime Prerequisites
+
+Packaged macOS DSX-Connect Desktop builds include bundled Python and Redis runtimes. Users should not need to install Python or Redis for the packaged macOS app.
+
+Development runs still use the project virtual environment when running from the repository, or an explicitly configured Python interpreter:
 
 ```bash
 export DSXCONNECT_LOCAL_PYTHON=/path/to/python
 ```
 
-If Python is installed outside the GUI app PATH, Desktop checks common macOS Python locations such as `/usr/local/bin/python3` and `/Library/Frameworks/Python.framework/Versions/Current/bin/python3`.
+If a packaged build does not include a bundled Python runtime, Desktop falls back to common macOS Python locations such as `/usr/local/bin/python3` and `/Library/Frameworks/Python.framework/Versions/Current/bin/python3`. That fallback is intended for development and diagnostics, not normal end-user distribution.
 
-On macOS, install Redis with Homebrew:
+If a packaged build does not include a bundled Redis runtime, Desktop falls back to common Redis locations and `PATH`. That fallback is intended for development and diagnostics, not normal end-user distribution.
+
+For development on macOS, install Redis with Homebrew:
 
 ```bash
 brew install redis
 ```
 
-Desktop checks common Homebrew and MacPorts locations, but you can also set the Redis binary path explicitly:
+Desktop checks common Homebrew and MacPorts locations, but you can also set the Redis binary path explicitly for development:
 
 ```bash
 export DSXCONNECT_LOCAL_REDIS_SERVER=/opt/homebrew/bin/redis-server
 ```
 
-If you launch Desktop from Finder or `/Applications`, remember that the app may not inherit your shell PATH. Setting `DSXCONNECT_LOCAL_REDIS_SERVER` or installing Redis in a standard Homebrew location avoids that issue.
+If you launch an unbundled development build from Finder or `/Applications`, remember that the app may not inherit your shell PATH. Setting `DSXCONNECT_LOCAL_REDIS_SERVER` or installing Redis in a standard Homebrew location avoids that issue.
 
 On Linux, install Redis from your package manager:
 

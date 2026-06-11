@@ -95,6 +95,20 @@
         ]
       },
       {
+        "from": "bundled-python",
+        "to": "bundled-python",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "bundled-redis",
+        "to": "bundled-redis",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
         "from": "../LICENSE",
         "to": "LICENSE"
       },

@@ -6,6 +6,10 @@ __pycache__/
 *.pyc
 node_modules/
 **/SHOST/
+dsx_connect_desktop/bundled-python/*
+!dsx_connect_desktop/bundled-python/.gitkeep
+dsx_connect_desktop/bundled-redis/*
+!dsx_connect_desktop/bundled-redis/.gitkeep
 
 # DSXA SDK test assets
 dsxa_sdk/tests/assets/samples/

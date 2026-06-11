@@ -25,6 +25,10 @@ else
   cp -R "${PYTHON_ROOT}/." "${OUT_DIR}/"
 fi
 
+# uv-managed Python installs are marked PEP 668 externally managed. This bundle
+# is a private app-local copy, so remove the marker before installing runtime deps.
+find "${OUT_DIR}/lib" -name EXTERNALLY-MANAGED -type f -delete
+
 BUNDLED_PYTHON="${OUT_DIR}/bin/python3"
 if [[ ! -x "${BUNDLED_PYTHON}" ]]; then
   BUNDLED_PYTHON="${OUT_DIR}/bin/python"

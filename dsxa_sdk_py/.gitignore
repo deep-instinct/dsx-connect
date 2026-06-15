@@ -6,3 +6,4 @@ __pycache__/
 /dsxa_sdk.egg-info/
 /tests/assets/samples/
 .env
+.demo_uploads

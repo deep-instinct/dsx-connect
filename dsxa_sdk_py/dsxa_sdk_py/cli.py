@@ -345,6 +345,7 @@ def scan_files(
         min=1,
         help="Maximum concurrent scans. Effective value is echoed in the final summary. (default: 4).",
     ),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress per-file scan output."),
 ):
     """
     Scan one or more explicit file paths concurrently using the async client.
@@ -363,6 +364,7 @@ def scan_files(
                 custom_metadata=custom_metadata,
                 password=password,
                 concurrency=concurrency,
+                quiet=quiet,
             )
         )
     except AuthenticationError as exc:
@@ -384,6 +386,7 @@ def scan_folder(
         min=1,
         help="Maximum concurrent scans. Effective value is echoed in the final summary. (default: 4).",
     ),
+    quiet: bool = typer.Option(False, "--quiet", help="Suppress per-file scan output."),
 ):
     """
     Scan all files under a folder (matching the given glob pattern) using the async client.
@@ -407,6 +410,7 @@ def scan_folder(
                 custom_metadata=custom_metadata,
                 password=password,
                 concurrency=concurrency,
+                quiet=quiet,
             )
         )
     except AuthenticationError as exc:
@@ -422,6 +426,7 @@ async def _scan_paths(
     custom_metadata: Optional[str],
     password: Optional[str],
     concurrency: int,
+    quiet: bool,
 ):
     client = get_async_client(ctx)
     sem = asyncio.Semaphore(max(1, concurrency))
@@ -441,7 +446,8 @@ async def _scan_paths(
                     password=password,
                     base64_header=(mode == ScanMode.BASE64),
                 )
-                typer.echo(f"{path}: {resp.verdict.value} (scan_guid={resp.scan_guid})")
+                if not quiet:
+                    typer.echo(f"{path}: {resp.verdict.value} (scan_guid={resp.scan_guid})")
                 success += 1
             except AuthenticationError as exc:
                 if not auth_hint_shown:

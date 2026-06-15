@@ -1,0 +1,4 @@
+include README.md
+include LICENSE
+include NOTICE.md
+recursive-include examples/webapp *.py *.html *.md Dockerfile *.yaml

@@ -165,6 +165,141 @@ async function pathExists(filePath) {
   }
 }
 
+async function ensureDirectory(dirPath) {
+  await vscode.workspace.fs.createDirectory(vscode.Uri.file(dirPath));
+}
+
+async function writeTextFile(filePath, content, options = {}) {
+  if (!options.overwrite && await pathExists(filePath)) {
+    return false;
+  }
+  await ensureDirectory(path.dirname(filePath));
+  await vscode.workspace.fs.writeFile(vscode.Uri.file(filePath), Buffer.from(content, "utf8"));
+  return true;
+}
+
+async function writeHarnessFiles(targetDir, options = {}) {
+  const sourceDir = path.join(targetDir, "source");
+  const destinationDir = path.join(targetDir, "destination");
+  const auditDir = path.join(targetDir, "audit");
+  const checkpointDir = path.join(targetDir, "checkpoints");
+  const configPath = path.join(targetDir, "dsx-transfer.local.yaml");
+  const readmePath = path.join(targetDir, "README.md");
+  const runScriptPath = path.join(targetDir, "run-local-transfer.sh");
+
+  await ensureDirectory(sourceDir);
+  await ensureDirectory(destinationDir);
+  await ensureDirectory(auditDir);
+  await ensureDirectory(checkpointDir);
+
+  const files = [
+    {
+      path: path.join(sourceDir, "hello.txt"),
+      content: "Hello from the DSX-Transfer local harness.\n",
+    },
+    {
+      path: path.join(sourceDir, "blocked-demo.txt"),
+      content: "This file is marked suspicious by object identity in the harness config.\n",
+    },
+    {
+      path: configPath,
+      content: localHarnessConfig(),
+    },
+    {
+      path: runScriptPath,
+      content: localHarnessRunScript(configPath),
+    },
+    {
+      path: readmePath,
+      content: localHarnessReadme(configPath, runScriptPath),
+    },
+  ];
+
+  const written = [];
+  const skipped = [];
+  for (const file of files) {
+    if (await writeTextFile(file.path, file.content, options)) {
+      written.push(file.path);
+    } else {
+      skipped.push(file.path);
+    }
+  }
+  return { configPath, readmePath, runScriptPath, written, skipped };
+}
+
+function localHarnessConfig() {
+  return `version: 1
+
+transfer:
+  id: local-harness
+  policy_id: local-static-demo
+
+source:
+  kind: filesystem
+  path: source
+
+destination:
+  kind: filesystem
+  uri: destination
+
+scanner:
+  mode: static
+  default_verdict: benign
+  verdicts_by_identity:
+    blocked-demo.txt: suspicious
+
+policy:
+  verdict_actions:
+    benign: allow
+    malicious: block
+    suspicious: block
+    unknown: block
+
+runtime:
+  audit_jsonl: audit/local-harness.jsonl
+  checkpoint: checkpoints/local-harness.json
+`;
+}
+
+function localHarnessRunScript(configPath) {
+  const relativeConfig = path.relative(workspaceRoot(), configPath).split(path.sep).join("/");
+  return `#!/usr/bin/env bash
+set -euo pipefail
+
+dsx-transfer migrate --config "${relativeConfig}"
+`;
+}
+
+function localHarnessReadme(configPath, runScriptPath) {
+  const relativeConfig = path.relative(workspaceRoot(), configPath).split(path.sep).join("/");
+  const relativeRunScript = path.relative(workspaceRoot(), runScriptPath).split(path.sep).join("/");
+  return `# DSX-Transfer Local Harness
+
+This folder is a small local DSX-Transfer integration harness.
+
+It uses:
+
+- filesystem source: \`source/\`
+- filesystem destination: \`destination/\`
+- static scanner mode
+- policy that allows benign files and blocks suspicious files
+
+Run it from the workspace root:
+
+\`\`\`bash
+dsx-transfer migrate --config ${relativeConfig}
+\`\`\`
+
+Or run:
+
+\`\`\`bash
+bash ${relativeRunScript}
+\`\`\`
+
+\`hello.txt\` should transfer. \`blocked-demo.txt\` is marked suspicious by config and should be blocked.
+`;
+}
+
 function diagnostic(uri, message, severity) {
   return new vscode.Diagnostic(
     new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER),
@@ -202,6 +337,38 @@ async function createConfig() {
   const doc = await vscode.workspace.openTextDocument(target);
   await vscode.window.showTextDocument(doc, { preview: false });
   vscode.window.showInformationMessage(`Created ${path.basename(target.fsPath)}.`);
+}
+
+async function addLocalHarness() {
+  output.show(true);
+  const targetDir = path.join(workspaceRoot(), ".dsx-transfer", "harness");
+  const existingConfig = path.join(targetDir, "dsx-transfer.local.yaml");
+  const overwrite = await pathExists(existingConfig)
+    ? await vscode.window.showWarningMessage(
+      "DSX-Transfer local harness already exists.",
+      "Open Existing",
+      "Overwrite",
+      "Cancel"
+    )
+    : "Overwrite";
+  if (overwrite === "Open Existing") {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(existingConfig));
+    await vscode.window.showTextDocument(doc, { preview: false });
+    return;
+  }
+  if (overwrite !== "Overwrite") {
+    return;
+  }
+
+  const result = await writeHarnessFiles(targetDir, { overwrite: true });
+  output.appendLine("DSX-Transfer local harness:");
+  output.appendLine(`- config: ${result.configPath}`);
+  output.appendLine(`- run script: ${result.runScriptPath}`);
+  output.appendLine(`- wrote ${result.written.length} file(s)`);
+
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(result.configPath));
+  await vscode.window.showTextDocument(doc, { preview: false });
+  vscode.window.showInformationMessage("Created DSX-Transfer local harness.");
 }
 
 async function validateConfig(options = {}) {
@@ -322,6 +489,7 @@ function activate(context) {
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider("dsxTransferReport", reportProvider));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.addLocalHarness", addLocalHarness));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.validateConfig", () => validateConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runTransfer", runTransfer));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.showSchema", showSchema));

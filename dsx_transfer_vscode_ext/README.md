@@ -5,6 +5,7 @@ This extension helps developers create, validate, and run `dsx-transfer.yaml` fr
 ## Commands
 
 - `DSX-Transfer: Create Config`
+- `DSX-Transfer: Add Local Harness`
 - `DSX-Transfer: Validate Config`
 - `DSX-Transfer: Run Transfer`
 - `DSX-Transfer: Show Config Schema`
@@ -20,6 +21,7 @@ dsx-transfer config schema
 ```
 
 `Create Config` opens the existing config, overwrites it, or cancels when the file already exists.
+`Add Local Harness` creates `.dsx-transfer/harness` with a filesystem-to-filesystem local demo config, sample files, a run script, and a short README.
 `Run Transfer` validates first, runs the transfer, and updates the `Last Report` view with summary, blocked objects, and failed objects.
 `Check Environment` reports the workspace, invocation mode, visible GCS credential variable, CLI availability, and config-file presence.
 

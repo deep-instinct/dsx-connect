@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Connect staggered shield mark</title>
+  <desc id="desc">Offset bidirectional arrows with a central DSX shield.</desc>
+  <rect width="128" height="128" rx="28" fill="#001F3F"/>
+  <path d="M16 42 48 24v36L16 42Z" fill="#DEFF5B"/>
+  <path d="M112 82 80 64v36l32-18Z" fill="#DEFF5B"/>
+  <path d="M64 44 79 51v13c0 12-5 21-15 27-10-6-15-15-15-27V51l15-7Z" fill="#DEFF5B"/>
+  <path d="M64 54 72 58v7c0 7-3 12-8 16-5-4-8-9-8-16v-7l8-4Z" fill="#001F3F"/>
+</svg>

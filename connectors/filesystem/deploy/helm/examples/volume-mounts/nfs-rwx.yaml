@@ -1,0 +1,33 @@
+# nfs-rwx.yaml
+# Static NFS PV/PVC for ReadWriteMany. Replace server and path.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-scan-pv
+spec:
+  storageClassName: ""
+  # Optional: specify NFS mount options if your server requires a specific version
+  # mountOptions:
+  #   - nfsvers=4.1   # or nfsvers=3
+  #   - proto=tcp
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    server: 192.168.0.66          # replace with your NFS server IP or DNS
+    path: /mnt/fileshare # replace with your exported path
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-scan-pvc
+spec:
+  storageClassName: ""
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  volumeName: nfs-scan-pv

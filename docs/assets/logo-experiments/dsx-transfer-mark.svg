@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="48" viewBox="0 0 120 48" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Transfer mark</title>
+  <desc id="desc">Two forward arrows around a central diamond.</desc>
+  <rect width="120" height="48" rx="8" fill="#111827"/>
+  <path d="M44 24 24 12v24l20-12Z" fill="#7DD3FC"/>
+  <path d="M96 24 76 12v24l20-12Z" fill="#7DD3FC"/>
+  <path d="M60 10 74 24 60 38 46 24 60 10Z" fill="#DEFF5B"/>
+  <path d="M60 16 68 24 60 32 52 24 60 16Z" fill="#111827" opacity=".85"/>
+</svg>

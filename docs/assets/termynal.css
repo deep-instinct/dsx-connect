@@ -1,0 +1,36 @@
+.termynal {
+  background: #111318;
+  color: #e5e5e5;
+  font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  overflow: auto;
+}
+
+.termynal .termynal-line {
+  display: block;
+  white-space: pre;
+}
+
+.termynal .termynal-input::before {
+  content: "$ ";
+  color: #6ab04c;
+}
+
+.termynal .termynal-output {
+  color: #d7dae0;
+}
+
+.termynal .termynal-cursor::after {
+  content: "|";
+  animation: termynal-blink 1s infinite;
+}
+
+@keyframes termynal-blink {
+  50% {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Transfer shield mark</title>
+  <desc id="desc">Directional arrows passing through a central DSX shield.</desc>
+  <rect width="128" height="128" rx="28" fill="#001F3F"/>
+  <path d="M43 64 13 46v36l30-18Z" fill="#DEFF5B"/>
+  <path d="M115 64 85 46v36l30-18Z" fill="#DEFF5B"/>
+  <path d="M34 57h56v14H34z" fill="#DEFF5B"/>
+  <path d="M64 31 89 42v18c0 18-9 31-25 39-16-8-25-21-25-39V42l25-11Z" fill="#001F3F"/>
+  <path d="M64 39 80 46v14c0 12-5 21-16 27-11-6-16-15-16-27V46l16-7Z" fill="#DEFF5B"/>
+  <path d="M64 49 72 53v8c0 7-3 12-8 16-5-4-8-9-8-16v-8l8-4Z" fill="#001F3F"/>
+</svg>

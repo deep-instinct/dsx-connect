@@ -77,6 +77,226 @@ This is only a placeholder and should remain a presentation-oriented surface.
 
 ## What The First UI Should Do
 
+The first usable console should be organized around a small set of tabbed operator views.
+The tabs should expose the product model directly:
+
+- **Assets**: what DSX-Connect can see and what is protected
+- **Scan Results**: what work has run and what it found
+- **Policy**: what rules exist and where they are applied
+
+This is intentionally top-down.
+The UI should begin from the operator's mental model and then use `/control-plane`, `/execution`, and `/ui` APIs to fill each view.
+It should not mirror internal worker stages or queue mechanics as the primary navigation.
+
+### Tabbed Console Model
+
+#### Assets
+
+Assets is the operational entry point.
+It should itself be tabbed into:
+
+- **Connectors**
+- **Protected**
+
+The **Connectors** tab shows deployed integrations and connector runtime status.
+It answers:
+
+- which connector integrations exist?
+- which connector type backs each integration?
+- is the connector endpoint healthy?
+- what capabilities does it advertise?
+- when did it last scan, sync, or report health?
+- what protected scopes are attached to it?
+
+Primary table columns:
+
+| Column | Meaning |
+| --- | --- |
+| Connector | Display name / integration id |
+| Type | Filesystem, S3, GCS, SharePoint, OneDrive, etc. |
+| Status | Healthy, degraded, unhealthy, unknown |
+| Protected scopes | Count of enabled scopes attached to the integration |
+| Capabilities | Reader, discovery, remediation, result sink, etc. |
+| Last activity | Last health check, scan, or job activity |
+
+Primary actions:
+
+- test connection
+- inspect configuration
+- create protected scope
+- run scan
+- disable integration
+
+Initial API:
+
+- `GET /api/v1/ui/assets/connectors`
+- `POST /api/v1/ui/integrations`
+- `PATCH /api/v1/ui/integrations/{integration_id}`
+- `POST /api/v1/ui/integrations/{integration_id}/enabled`
+
+This returns tab-aligned connector summaries built from integration records, scope counts, runtime config, connector capabilities, and core-side health probing.
+The create/update actions are UI workflow wrappers over the control-plane service, keeping the browser pointed at product-oriented `/ui` actions rather than raw `/control-plane` contracts.
+
+The **Protected** tab is the protected asset inventory and coverage view.
+It should be filterable into a table of assets by:
+
+- connector type
+- connector integration
+- asset type
+- coverage state: protected, unprotected, disabled, stale, unknown
+- policy
+- last scan state
+
+Protected should include both protected and unprotected assets.
+That matters because the operator needs to see coverage gaps, not just configured scopes.
+This view should be backed by core-side reconciliation of connector discovery results against protected scopes, as described in the [Asset Discovery Model](models/asset-discovery-model.md).
+
+Primary table columns:
+
+| Column | Meaning |
+| --- | --- |
+| Asset | Display name and normalized selector |
+| Connector | Integration that reported the asset |
+| Type | Bucket, prefix, folder, drive, site, share, local path, etc. |
+| Coverage | Protected, unprotected, disabled, stale, unknown |
+| Policy | Policy attached to the matching protected scope, if any |
+| Last scan | Latest job/result summary for this asset or scope |
+| Findings | Recent clean/malicious/suspicious/failed counts |
+
+Primary actions:
+
+- protect asset
+- unprotect or disable scope
+- assign policy
+- scan selected
+- inspect recent results
+
+Initial API:
+
+- `GET /api/v1/ui/assets/protected`
+- `POST /api/v1/ui/assets/protected`
+- `PATCH /api/v1/ui/scopes/{scope_id}`
+- `POST /api/v1/ui/scopes/{scope_id}/enabled`
+
+Supported query filters:
+
+- `connector_type`
+- `integration_id`
+- `type`
+- `source`
+- `coverage_state`
+- `limit`
+- `cursor`
+
+The response aggregates discovered assets across matching integrations and includes coverage state, matching protected scope, attached policy, unsupported integrations, failed integrations, and per-integration cursors.
+The create and toggle actions use the same protected-scope validation as control-plane APIs, but expose the UI concept as "protect asset" rather than "create scope."
+
+#### Scan Results
+
+Scan Results shows job history, active scan progress, findings, and remediation outcomes.
+It should be oriented around jobs first, with drilldown into items and stage results.
+
+Primary table columns:
+
+| Column | Meaning |
+| --- | --- |
+| Job | Job id, label, or submitted action |
+| Target | Integration, protected scope, or selected assets |
+| State | Accepted, running, completed, failed, cancelled, cancelling |
+| Progress | Terminal count / expected count |
+| Findings | Clean, malicious, suspicious, failed, cancelled |
+| Remediation | Pending, completed, failed, skipped |
+| Started / finished | Timing summary |
+
+The job detail view should show:
+
+- progress summary
+- item outcomes
+- scan-result details
+- policy decision
+- remediation action and result
+- result-sink delivery state when enabled
+- raw job/item JSON for debugging
+
+Cancel should be presented with the true semantics:
+
+- cancellation stops future publish/claim work quickly
+- files already claimed into an in-memory scan batch may complete
+- immediate file-level cancellation is intentionally not guaranteed in the high-throughput trusted batch mode
+
+That tradeoff should be visible in product language but not over-explained in the main table.
+The detail view can expose a short note such as "Stopping: in-flight files may finish."
+
+Initial API:
+
+- `GET /api/v1/ui/scan-results`
+
+Supported query filters:
+
+- `integration_id`
+- `state`
+- `limit`
+- `item_limit`
+
+The response returns tab-oriented job summaries with target metadata, progress counts, sampled finding counts, remediation state counts, timing, latest item stages, failure reason, and cooperative cancel semantics.
+
+#### Policy
+
+Policy shows definitions and assignments.
+Policy should be managed as a control-plane concept that applies to protected assets/scopes, not as connector-owned behavior.
+This follows the [Policy Attachment Model](models/policy-attachment-model.md).
+
+Primary policy definition columns:
+
+| Column | Meaning |
+| --- | --- |
+| Policy | Name / id |
+| Status | Draft, active, disabled |
+| Outcome rules | Summary of malicious, suspicious, unknown, unscannable actions |
+| Assigned assets | Count of protected scopes/assets using the policy |
+| Updated | Last changed timestamp |
+
+Policy detail should show:
+
+- normalized outcomes: allow, block, quarantine, hold for review, allow with audit flag, skip with reason
+- quarantine target and fallback behavior where applicable
+- assigned protected scopes/assets
+- recent scan/remediation results governed by the policy
+
+Primary actions:
+
+- create policy
+- edit policy
+- enable/disable policy
+- assign to protected assets
+- inspect affected assets
+
+Initial APIs:
+
+- `GET /api/v1/ui/policies`
+- `PUT /api/v1/ui/scopes/{scope_id}/policy`
+
+`GET /ui/policies` is currently an aggregation over integration-level policy defaults and protected-scope `post_scan_policy`.
+It groups assignments by explicit `policy_id` when available, and otherwise uses generated ids for inline scope or integration policies.
+The response includes policy definition, outcome-rule summary, assigned protected assets, assignment source, and updated timestamp.
+
+`PUT /ui/scopes/{scope_id}/policy` is the initial assignment action for the Protected assets table.
+It updates the protected scope's `post_scan_policy` through the normal control-plane validation path.
+This is intentionally not yet a full standalone policy-definition store; that can come after the UI clarifies the authoring and versioning workflow.
+
+### Navigation Principles
+
+The first UI should be dense and operational:
+
+- tables first, cards only for summaries or repeated objects
+- filters visible and predictable
+- detail pages or drawers for inspection
+- raw JSON available for debugging, but not the main experience
+- statuses should be normalized across views
+
+The UI should avoid treating backend implementation details as first-class product tabs.
+Queues, outbox rows, stage mutations, worker topology, and raw runtime internals can be available under diagnostics, but the primary workflow is Assets -> Scan Results -> Policy.
+
 ### 1. Integrations
 
 Support:

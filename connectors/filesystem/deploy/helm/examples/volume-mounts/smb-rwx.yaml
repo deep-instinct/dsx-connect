@@ -1,0 +1,42 @@
+# smb-rwx.yaml
+# Requires the SMB CSI driver: https://github.com/kubernetes-csi/csi-driver-smb
+apiVersion: v1
+kind: Secret
+metadata:
+  name: smb-credentials
+type: Opaque
+stringData:
+  username: "YOUR_USER"
+  password: "YOUR_PASS"
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: smb-scan-pv
+spec:
+  capacity:
+    storage: 500Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: smb.csi.k8s.io
+    volumeHandle: smb-scan-vol-001              # unique ID for the PV
+    volumeAttributes:
+      source: "//smb-server.example.com/share"  # UNC path
+    nodeStageSecretRef:
+      name: smb-credentials
+      namespace: default
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: smb-scan-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 500Gi
+  volumeName: smb-scan-pv
+

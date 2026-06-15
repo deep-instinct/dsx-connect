@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Transfer staggered shield outline mark</title>
+  <desc id="desc">Outlined offset directional arrows with a central DSX shield.</desc>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#DEFF5B" stroke="#001F3F" stroke-width="8"/>
+  <path d="M48 42 16 24v36l32-18Z" fill="#DEFF5B" stroke="#001F3F" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M112 82 80 64v36l32-18Z" fill="#DEFF5B" stroke="#001F3F" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M64 44 79 51v13c0 12-5 21-15 27-10-6-15-15-15-27V51l15-7Z" fill="#DEFF5B"/>
+  <path d="M64 54 72 58v7c0 7-3 12-8 16-5-4-8-9-8-16v-7l8-4Z" fill="#001F3F"/>
+</svg>

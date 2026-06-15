@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Transfer lens outline mark</title>
+  <desc id="desc">Outlined directional arrows passing through a central DSX scan lens.</desc>
+  <rect x="4" y="4" width="120" height="120" rx="26" fill="#DEFF5B" stroke="#001F3F" stroke-width="8"/>
+  <path d="M43 64 14 47v34l29-17Z" fill="#DEFF5B" stroke="#001F3F" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M114 64 85 47v34l29-17Z" fill="#DEFF5B" stroke="#001F3F" stroke-width="7" stroke-linejoin="round"/>
+  <path d="M35 57h54v14H35z" fill="#001F3F"/>
+  <circle cx="64" cy="64" r="23" fill="#DEFF5B" stroke="#001F3F" stroke-width="7"/>
+  <circle cx="64" cy="64" r="8" fill="#001F3F"/>
+</svg>

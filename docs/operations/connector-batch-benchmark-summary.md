@@ -245,7 +245,7 @@ Current validator command:
 Expected diagnostic caveat: scan-only progress may show `scanned: 0`, `scan_stage_ms: null`, and `queue_wait_ms: null` because those depended on transient durable stage updates that were intentionally removed from the hot path.
 Live in-flight scans should instead be visible via `runtime.scan_leases_active` and `backlog.scanning`.
 
-## Scan Worker Concurrency Matrix
+## Final Local Scan-Only Tuning Baseline
 
 The local launcher has two relevant scan-worker concurrency layers:
 
@@ -264,24 +264,77 @@ These are not interchangeable:
 * More worker processes add Python process overhead but can help if one event loop, one HTTP client pool, or CPU-bound reader work becomes the bottleneck.
 * RabbitMQ prefetch must be high enough to keep each worker's local batch window and scan slots full.
 
-Suggested next test matrix for the `1kdocs` corpus:
+The strongest local baseline after trusted scan-batch items is:
 
-| Worker processes | Scan concurrency per worker | Total scan concurrency |
-| ---: | ---: | ---: |
-| `4` | `2` | `8` |
-| `4` | `3` | `12` |
-| `4` | `4` | `16` |
-| `6` | `1` | `6` |
-| `6` | `2` | `12` |
+```bash
+LOG_LEVEL=INFO \
+DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ITEM_LOGGING=false \
+DSX_CONNECT_NG_LOCAL__WORKER_ACK_LOGGING=false \
+./.venv/bin/python -m dsx_connect_ng.local.dsx_connect_ng_local \
+  --with-postgres-docker \
+  --with-rabbit-docker \
+  --scan-worker-count 4 \
+  --scan-worker-prefetch-count 1000 \
+  --scan-batch-window-size 100 \
+  --scan-batch-window-wait-seconds 0.5 \
+  --scan-batch-concurrency 2 \
+  --scan-batch-ack-mode scanned \
+  --scan-batch-trust-items \
+  --no-scan-only-runtime-leases \
+  foreground
+```
 
-For each run, capture:
+With the `1kdocs` corpus this shape completed `1000/1000` items with no failures and reached:
 
-* total files/sec
-* `runtime.scan_leases_active`
-* `backlog.publish_pending`
-* `backlog.queued`
-* DSXA request latency
-* API responsiveness while the batch is running
+| Corpus | Worker processes | Scan concurrency per worker | Total scan concurrency | Progress elapsed | After-submit throughput | Total throughput |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `1kdocs` | `4` | `2` | `8` | `10.920s` | `93.871 files/s` | `88.720 files/s` |
+
+With the larger `/Users/logangilbert/Documents/SAMPLES/10kdocs` corpus, which currently contains `9663` files, the same `4 x 2` shape amortized startup and poll jitter better:
+
+| Corpus | Worker processes | Scan concurrency per worker | Total scan concurrency | Progress elapsed | After-submit throughput | Total throughput | Recent 60s at finish |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `10kdocs` | `4` | `2` | `8` | `85.532s` | `117.216 files/s` | `112.311 files/s` | `127.267 files/s` |
+
+A follow-up `4 x 3` run did not improve throughput:
+
+| Corpus | Worker processes | Scan concurrency per worker | Total scan concurrency | Progress elapsed | After-submit throughput | Total throughput | Recent 60s at finish |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `10kdocs` | `4` | `3` | `12` | `90.604s` | `110.749 files/s` | `106.040 files/s` | `119.083 files/s` |
+
+The `4 x 3` run completed `9663/9663` with no failures, but it raised final sampled DSXA wall time to about `150.8ms` average and `227.7ms` p95.
+The prior `4 x 2` 10k run finished faster, with final sampled DSXA wall time around `103.9ms` average and `215.4ms` p95.
+
+DSXA container stats during the `4 x 3` run showed memory was not the limiting resource:
+
+| Metric | Value |
+| --- | ---: |
+| DSXA CPU average | `381.673%` |
+| DSXA CPU p50 | `440.340%` |
+| DSXA CPU p95 | `483.470%` |
+| DSXA CPU max | `489.630%` |
+| DSXA memory average | `2.675 GiB` |
+| DSXA memory p95 | `2.703 GiB` |
+| DSXA memory max | `2.737 GiB` |
+| Docker memory limit | `11.680 GiB` |
+
+Earlier `4 x 2` DSXA stats had the same shape: CPU near the local ceiling and memory flat around `2.7 GiB`.
+The local DSXA container and Helm values have no explicit resource limits; the effective local ceiling is the Docker/Colima allocation, which was `6` CPUs and about `11.68 GiB` memory.
+
+The local conclusion is:
+
+* `4` scan workers x `2` scan concurrency is the current single-DSXA local sweet spot.
+* Increasing per-worker scan concurrency to `3` adds DSXA wait/queueing and regresses throughput.
+* Memory is not the local bottleneck.
+* DSXA CPU and scanner-side admission/execution capacity are the likely local limit.
+* Further local code tuning is unlikely to produce a large jump without changing the scanner topology or available CPU.
+
+Remaining useful experiments:
+
+* Increase Docker/Colima CPU allocation and rerun `4 x 2`; if throughput rises, the local limit is confirmed as CPU-side scanner capacity.
+* Test multiple DSXA pods behind a load balancer in cluster deployment. That is the expected path past the current single-DSXA local knee.
+
+For future tuning runs, continue capturing total files/sec, `runtime.scan_leases_active`, `backlog.publish_pending`, `backlog.queued`, DSXA request latency, and DSXA container or pod CPU/memory.
 
 ## Architectural Implication
 

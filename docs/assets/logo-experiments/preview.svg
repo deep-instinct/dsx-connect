@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="360" viewBox="0 0 820 360" role="img" aria-labelledby="title desc">
+  <title id="title">DSX logo experiments preview</title>
+  <desc id="desc">Preview sheet for DSX Connect and DSX Transfer SVG logo experiments.</desc>
+  <rect width="820" height="360" fill="#F8FAFC"/>
+  <text x="32" y="44" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" font-weight="650" fill="#111827">DSX logo experiments</text>
+  <text x="32" y="72" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" fill="#475569">Connect: bidirectional. Transfer: directional.</text>
+
+  <g transform="translate(32 108)">
+    <rect width="356" height="84" rx="12" fill="#E5E7EB"/>
+    <text x="18" y="28" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#111827">Connect mark</text>
+    <g transform="translate(18 36)">
+      <rect width="120" height="48" rx="8" fill="#111827"/>
+      <path d="M24 24 44 12v24L24 24Z" fill="#7DD3FC"/>
+      <path d="M96 24 76 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M60 10 74 24 60 38 46 24 60 10Z" fill="#DEFF5B"/>
+      <path d="M60 16 68 24 60 32 52 24 60 16Z" fill="#111827" opacity=".85"/>
+    </g>
+    <text x="160" y="65" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" fill="#111827">◀ ◈ ▶</text>
+  </g>
+
+  <g transform="translate(432 108)">
+    <rect width="356" height="84" rx="12" fill="#E5E7EB"/>
+    <text x="18" y="28" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="14" font-weight="600" fill="#111827">Transfer mark</text>
+    <g transform="translate(18 36)">
+      <rect width="120" height="48" rx="8" fill="#111827"/>
+      <path d="M44 24 24 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M96 24 76 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M60 10 74 24 60 38 46 24 60 10Z" fill="#DEFF5B"/>
+      <path d="M60 16 68 24 60 32 52 24 60 16Z" fill="#111827" opacity=".85"/>
+    </g>
+    <text x="160" y="65" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="24" fill="#111827">▶ ◈ ▶</text>
+  </g>
+
+  <g transform="translate(32 224)">
+    <rect width="360" height="72" rx="10" fill="#0F172A"/>
+    <g transform="translate(20 12)">
+      <path d="M8 24 28 12v24L8 24Z" fill="#7DD3FC"/>
+      <path d="M80 24 60 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M44 10 58 24 44 38 30 24 44 10Z" fill="#DEFF5B"/>
+      <path d="M44 16 52 24 44 32 36 24 44 16Z" fill="#0F172A" opacity=".85"/>
+    </g>
+    <text x="126" y="44" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="600" fill="#E5E7EB">DSX</text>
+    <text x="188" y="44" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="300" fill="#7DD3FC">Connect</text>
+  </g>
+
+  <g transform="translate(432 224)">
+    <rect width="370" height="72" rx="10" fill="#0F172A"/>
+    <g transform="translate(20 12)">
+      <path d="M28 24 8 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M80 24 60 12v24l20-12Z" fill="#7DD3FC"/>
+      <path d="M44 10 58 24 44 38 30 24 44 10Z" fill="#DEFF5B"/>
+      <path d="M44 16 52 24 44 32 36 24 44 16Z" fill="#0F172A" opacity=".85"/>
+    </g>
+    <text x="126" y="44" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="600" fill="#E5E7EB">DSX</text>
+    <text x="188" y="44" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="300" fill="#7DD3FC">Transfer</text>
+  </g>
+</svg>

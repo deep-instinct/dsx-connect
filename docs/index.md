@@ -103,6 +103,7 @@ So you can quickly find what you need.
 ### 🔧 Operations
 
 * [Performance Tuning](operations/performance-tuning-job-comparisons.md)
+* [Quarantine and Remediation](operations/quarantine-and-remediation.md)
 * [Syslog Forwarding](operations/syslog.md)
 
 ### 👩‍💻 Developer's Guide

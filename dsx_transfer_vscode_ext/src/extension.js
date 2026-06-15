@@ -53,6 +53,8 @@ class ReportTreeProvider {
     );
     treeItem.description = item.description;
     treeItem.tooltip = item.tooltip || item.description || item.label;
+    treeItem.contextValue = item.contextValue;
+    treeItem.command = item.command;
     return treeItem;
   }
 
@@ -70,6 +72,12 @@ function outcomeTreeItem(outcome) {
   return {
     label: item.object_identity || item.source_uri || "object",
     description: decision.verdict || outcome.state,
+    contextValue: "reportOutcome",
+    command: {
+      command: "dsxTransfer.openReportItemJson",
+      title: "Open Report Item JSON",
+      arguments: [outcome],
+    },
     tooltip: JSON.stringify(outcome, null, 2),
     children: [
       { label: `Action: ${decision.action || outcome.state}` },
@@ -547,6 +555,20 @@ async function showSchema() {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+async function openReportItemJson(item) {
+  if (!item?.item) {
+    vscode.window.showWarningMessage("No DSX-Transfer report item selected.");
+    return;
+  }
+  const identity = item.item.object_identity || "report-item";
+  const doc = await vscode.workspace.openTextDocument({
+    language: "json",
+    content: JSON.stringify(item, null, 2),
+  });
+  await vscode.window.showTextDocument(doc, { preview: false });
+  vscode.window.showInformationMessage(`Opened DSX-Transfer report item: ${identity}.`);
+}
+
 function activate(context) {
   output = vscode.window.createOutputChannel("DSX-Transfer");
   diagnostics = vscode.languages.createDiagnosticCollection("dsx-transfer");
@@ -563,6 +585,7 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runTransfer", runTransfer));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.showSchema", showSchema));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.checkEnvironment", checkEnvironment));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openReportItemJson", openReportItemJson));
   context.subscriptions.push(vscode.workspace.onDidSaveTextDocument((document) => {
     if (document.uri.scheme !== "file") return;
     if (path.resolve(document.uri.fsPath) !== path.resolve(configUri().fsPath)) return;

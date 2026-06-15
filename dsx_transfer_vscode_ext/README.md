@@ -13,6 +13,7 @@ This extension helps developers create, validate, and run `dsx-transfer.yaml` fr
 - `DSX-Transfer: Run Transfer`
 - `DSX-Transfer: Show Config Schema`
 - `DSX-Transfer: Check Environment`
+- `DSX-Transfer: Open Report Item JSON`
 
 ## CLI Mapping
 
@@ -30,6 +31,7 @@ dsx-transfer config schema
 `Run Local Harness` runs `.dsx-transfer/harness/dsx-transfer.local.yaml` directly and updates the `Last Report` view.
 `Run Transfer` validates first, runs the transfer, and updates the `Last Report` view with summary, blocked objects, and failed objects.
 `Check Environment` reports the workspace, invocation mode, visible GCS credential variable, CLI availability, and config-file presence.
+`Open Report Item JSON` opens the selected blocked or failed report item as formatted JSON from the `Last Report` view.
 
 ## Source-Tree Settings
 

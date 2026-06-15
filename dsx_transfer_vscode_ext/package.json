@@ -20,6 +20,7 @@
     "onCommand:dsxTransfer.runTransfer",
     "onCommand:dsxTransfer.showSchema",
     "onCommand:dsxTransfer.checkEnvironment",
+    "onCommand:dsxTransfer.openReportItemJson",
     "onView:dsxTransferReport"
   ],
   "main": "./src/extension.js",
@@ -110,6 +111,10 @@
       {
         "command": "dsxTransfer.checkEnvironment",
         "title": "DSX-Transfer: Check Environment"
+      },
+      {
+        "command": "dsxTransfer.openReportItemJson",
+        "title": "DSX-Transfer: Open Report Item JSON"
       }
     ],
     "viewsContainers": {
@@ -151,6 +156,13 @@
           "command": "dsxTransfer.openConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dsxTransfer.openReportItemJson",
+          "when": "view == dsxTransferReport && viewItem == reportOutcome",
+          "group": "inline@1"
         }
       ]
     }

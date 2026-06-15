@@ -34,6 +34,21 @@ def test_filesystem_source_builds_transfer_plan(tmp_path: Path) -> None:
     assert plan.items[0].destination_uri == "file:///tmp/destination/a.txt"
 
 
+def test_empty_filesystem_source_builds_empty_transfer_plan(tmp_path: Path) -> None:
+    source_root = tmp_path / "source"
+    source_root.mkdir()
+
+    source = FilesystemSourceAdapter(source_root)
+    plan = asyncio.run(
+        source.plan(
+            destination_uri="gs://clean-bucket/archive",
+            transfer_id="transfer-empty",
+        )
+    )
+
+    assert plan.items == []
+
+
 def test_transfer_engine_allows_benign_files(tmp_path: Path) -> None:
     source_root = tmp_path / "source"
     destination_root = tmp_path / "destination"
@@ -55,6 +70,7 @@ def test_transfer_engine_allows_benign_files(tmp_path: Path) -> None:
     )
 
     assert report.allowed_count == 2
+    assert report.planned_count == 2
     assert report.blocked_count == 0
     assert report.failed_count == 0
     assert (destination_root / "a.txt").read_bytes() == b"alpha"

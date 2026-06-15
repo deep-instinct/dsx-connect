@@ -4,6 +4,7 @@
 
 - filesystem source adapter
 - filesystem sink adapter
+- GCS sink adapter
 - static verdict scan gate
 - DSXA stream scan gate seam
 - Guarded Transfer policy evaluator
@@ -18,8 +19,7 @@
 1. Add report output separate from append-only audit.
 2. Add bounded item-level concurrency.
 3. Add live DSXA integration test mode.
-4. Add GCS sink adapter for filesystem -> GCS.
-5. Add by-path scanner mode for large-file/special deployments.
+4. Add by-path scanner mode for large-file/special deployments.
 
 ## Then
 

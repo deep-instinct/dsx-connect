@@ -32,6 +32,9 @@ Implemented runnable path:
 
 - filesystem source adapter
 - filesystem sink adapter
+- GCS sink adapter
+- shared object storage capability contracts
+- GCS writer wrapper over the GCS connector client
 - transfer engine
 - Guarded Transfer policy evaluator
 - static verdict scan gate
@@ -50,7 +53,13 @@ PYTHONPATH=dsx_transfer ./.venv/bin/python -m pytest dsx_transfer/tests
 Install editable:
 
 ```bash
-./.venv/bin/python -m pip install -e ./dsx_transfer
+./.venv/bin/python -m pip install -e ./dsxa_sdk_py -e ./dsx_transfer
+```
+
+When running directly from source without installing editable packages, include both package roots:
+
+```bash
+PYTHONPATH=dsx_transfer:dsxa_sdk_py ./.venv/bin/python -m dsx_transfer.cli --help
 ```
 
 Manual local run:
@@ -68,6 +77,113 @@ dsx-transfer migrate \
   --file-type-action windows_executables=block \
   --audit-jsonl ~/Documents/dsx-transfer/dests/audit.jsonl \
   --checkpoint ~/Documents/dsx-transfer/dests/checkpoint.json
+```
+
+Shared config run:
+
+```bash
+dsx-transfer migrate --config dsx-transfer.yaml
+```
+
+Config support commands:
+
+```bash
+dsx-transfer config init --preset filesystem-to-gcs --output dsx-transfer.yaml
+dsx-transfer config validate --config dsx-transfer.yaml
+dsx-transfer config schema
+```
+
+`dsx-transfer.yaml` is the portable handoff object between the CLI, local UI, VS Code extension, and future automation. Relative filesystem paths in the config resolve from the config file directory. Secrets should stay out of the file; use Google ADC, `GOOGLE_APPLICATION_CREDENTIALS`, workload identity, or environment-provided DSXA auth values.
+
+For cloud storage providers, DSX-Transfer should use the same provider capability wrappers as connectors. The current GCS sink path is:
+
+```text
+GcsSinkAdapter -> GCSWriter -> GCSClient -> google-cloud-storage
+```
+
+`GcsSinkAdapter` calls `GCSWriter.validate()`, which delegates to `GCSClient.ensure_ready()`, during construction so missing SDK, credentials, or bucket access fail before source scanning. The source path should mirror this with the existing `GCSDiscoverer` and `GCSReader` wrappers:
+
+```text
+GcsSourceAdapter -> GCSDiscoverer + GCSReader -> GCSClient -> google-cloud-storage
+```
+
+Example:
+
+```yaml
+version: 1
+
+transfer:
+  id: fs-to-gcs-demo
+  policy_id: block-malicious
+
+source:
+  kind: filesystem
+  path: /mnt/source-share
+
+destination:
+  kind: gcs
+  uri: gs://customer-clean-bucket/archive
+
+scanner:
+  mode: dsxa
+  dsxa:
+    base_url: https://scanner.example.com
+
+policy:
+  verdict_actions:
+    benign: allow
+    malicious: block
+    suspicious: block
+    unknown: block
+  file_type_actions:
+    windows_executables: block
+
+runtime:
+  audit_jsonl: .dsx-transfer/audit/fs-to-gcs-demo.jsonl
+  checkpoint: .dsx-transfer/checkpoints/fs-to-gcs-demo.json
+```
+
+Filesystem to GCS run:
+
+```bash
+dsx-transfer migrate \
+  --source /mnt/source-share \
+  --destination gs://customer-clean-bucket/archive \
+  --destination-kind gcs \
+  --transfer-id fs-to-gcs-demo \
+  --policy-id block-malicious \
+  --scanner-mode dsxa \
+  --dsxa-base-url https://scanner.example.com \
+  --dsxa-auth-token "$DSXA_AUTH_TOKEN" \
+  --audit-jsonl /tmp/dsx-transfer-fs-to-gcs-audit.jsonl \
+  --checkpoint /tmp/dsx-transfer-fs-to-gcs-checkpoint.json
+```
+
+`--destination-kind` defaults to `auto`, so any destination beginning with `gs://` is treated as GCS. GCS transfers require credentials discoverable by `google-cloud-storage`, such as Application Default Credentials, `GOOGLE_APPLICATION_CREDENTIALS`, or workload identity.
+
+For a local demo:
+
+```bash
+gcloud auth application-default login
+```
+
+Or use a service account key:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+```
+
+DSX-Transfer creates the GCS client before scanning so missing credentials fail fast instead of scanning every file and failing each allowed write.
+
+For source-tree runs, use:
+
+```bash
+PYTHONPATH=dsx_transfer:dsxa_sdk_py ./.venv/bin/python -m dsx_transfer.cli migrate \
+  --source /mnt/source-share \
+  --destination gs://customer-clean-bucket/archive \
+  --transfer-id fs-to-gcs-demo \
+  --scanner-mode dsxa \
+  --dsxa-base-url https://scanner.example.com
 ```
 
 Run the decision service:

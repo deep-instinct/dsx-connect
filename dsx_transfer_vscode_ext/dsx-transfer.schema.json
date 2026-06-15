@@ -1,0 +1,293 @@
+{
+  "$defs": {
+    "DestinationSection": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "auto",
+          "enum": [
+            "auto",
+            "filesystem",
+            "gcs"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "title": "DestinationSection",
+      "type": "object"
+    },
+    "DsxaScannerSection": {
+      "additionalProperties": false,
+      "properties": {
+        "auth_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth Token"
+        },
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "protected_entity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Protected Entity"
+        },
+        "verify_tls": {
+          "default": true,
+          "title": "Verify Tls",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "base_url"
+      ],
+      "title": "DsxaScannerSection",
+      "type": "object"
+    },
+    "PolicySection": {
+      "additionalProperties": false,
+      "properties": {
+        "file_type_actions": {
+          "additionalProperties": {
+            "enum": [
+              "allow",
+              "block",
+              "exclude",
+              "quarantine",
+              "manual_review",
+              "error"
+            ],
+            "type": "string"
+          },
+          "title": "File Type Actions",
+          "type": "object"
+        },
+        "verdict_actions": {
+          "additionalProperties": {
+            "enum": [
+              "allow",
+              "block",
+              "exclude",
+              "quarantine",
+              "manual_review",
+              "error"
+            ],
+            "type": "string"
+          },
+          "title": "Verdict Actions",
+          "type": "object"
+        }
+      },
+      "title": "PolicySection",
+      "type": "object"
+    },
+    "RuntimeSection": {
+      "additionalProperties": false,
+      "properties": {
+        "audit_jsonl": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Audit Jsonl"
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "format": "path",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checkpoint"
+        }
+      },
+      "title": "RuntimeSection",
+      "type": "object"
+    },
+    "ScannerSection": {
+      "additionalProperties": false,
+      "properties": {
+        "default_verdict": {
+          "default": "benign",
+          "enum": [
+            "benign",
+            "malicious",
+            "suspicious",
+            "unknown",
+            "error"
+          ],
+          "title": "Default Verdict",
+          "type": "string"
+        },
+        "detect_eicar_test_file": {
+          "default": false,
+          "title": "Detect Eicar Test File",
+          "type": "boolean"
+        },
+        "dsxa": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DsxaScannerSection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "file_types_by_identity": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "File Types By Identity",
+          "type": "object"
+        },
+        "mode": {
+          "default": "static",
+          "enum": [
+            "static",
+            "dsxa"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "verdicts_by_identity": {
+          "additionalProperties": {
+            "enum": [
+              "benign",
+              "malicious",
+              "suspicious",
+              "unknown",
+              "error"
+            ],
+            "type": "string"
+          },
+          "title": "Verdicts By Identity",
+          "type": "object"
+        }
+      },
+      "title": "ScannerSection",
+      "type": "object"
+    },
+    "SourceSection": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "filesystem",
+          "default": "filesystem",
+          "enum": [
+            "filesystem"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "format": "path",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "SourceSection",
+      "type": "object"
+    },
+    "TransferSection": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "policy_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Policy Id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "TransferSection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "destination": {
+      "$ref": "#/$defs/DestinationSection"
+    },
+    "policy": {
+      "$ref": "#/$defs/PolicySection"
+    },
+    "runtime": {
+      "$ref": "#/$defs/RuntimeSection"
+    },
+    "scanner": {
+      "$ref": "#/$defs/ScannerSection"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceSection"
+    },
+    "transfer": {
+      "$ref": "#/$defs/TransferSection"
+    },
+    "version": {
+      "const": 1,
+      "default": 1,
+      "enum": [
+        1
+      ],
+      "title": "Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "transfer",
+    "source",
+    "destination"
+  ],
+  "title": "DsxTransferConfig",
+  "type": "object"
+}

@@ -56,6 +56,49 @@ dsx-transfer migrate \
   --resume-state .dsx-transfer-state
 ```
 
+The CLI, MVP UI, VS Code extension, and future CI checks should share one portable transfer config:
+
+```bash
+dsx-transfer config init --preset filesystem-to-gcs --output dsx-transfer.yaml
+dsx-transfer config validate --config dsx-transfer.yaml
+dsx-transfer config schema
+dsx-transfer migrate --config dsx-transfer.yaml
+```
+
+```yaml
+version: 1
+
+transfer:
+  id: fs-to-gcs-demo
+  policy_id: block-malicious
+
+source:
+  kind: filesystem
+  path: /mnt/source-share
+
+destination:
+  kind: gcs
+  uri: gs://customer-clean-bucket/archive
+
+scanner:
+  mode: dsxa
+  dsxa:
+    base_url: https://scanner.example.com
+
+policy:
+  verdict_actions:
+    benign: allow
+    malicious: block
+    suspicious: block
+    unknown: block
+
+runtime:
+  audit_jsonl: .dsx-transfer/audit/fs-to-gcs-demo.jsonl
+  checkpoint: .dsx-transfer/checkpoints/fs-to-gcs-demo.json
+```
+
+Secrets should remain outside the config. GCS credentials should come from Google ADC, `GOOGLE_APPLICATION_CREDENTIALS`, or workload identity.
+
 Likely first pairs:
 
 - mounted filesystem or file share -> GCS
@@ -418,6 +461,7 @@ Current runnable path:
 
 - filesystem source adapter
 - filesystem sink adapter
+- GCS sink adapter
 - transfer engine
 - static verdict scan gate for deterministic tests and demos
 - Typer CLI entry point: `dsx-transfer migrate`
@@ -433,6 +477,43 @@ PYTHONPATH=dsx_transfer ./.venv/bin/python -m dsx_transfer.cli migrate \
   --verdict bad.exe=malicious \
   --audit-jsonl /tmp/dsx-transfer-audit.jsonl \
   --checkpoint /tmp/dsx-transfer-checkpoint.json
+```
+
+Example filesystem to GCS run:
+
+```bash
+PYTHONPATH=dsx_transfer:dsxa_sdk_py ./.venv/bin/python -m dsx_transfer.cli migrate \
+  --source /mnt/source-share \
+  --destination gs://customer-clean-bucket/archive \
+  --transfer-id fs-to-gcs-demo \
+  --policy-id block-malicious \
+  --scanner-mode dsxa \
+  --dsxa-base-url https://scanner.example.com \
+  --dsxa-auth-token "$DSXA_AUTH_TOKEN" \
+  --audit-jsonl /tmp/dsx-transfer-fs-to-gcs-audit.jsonl \
+  --checkpoint /tmp/dsx-transfer-fs-to-gcs-checkpoint.json
+```
+
+Any `gs://` destination is inferred as GCS unless `--destination-kind` is set explicitly. Runtime GCS uploads require `google-cloud-storage` and credentials available to the Google client library.
+
+For a local demo:
+
+```bash
+gcloud auth application-default login
+```
+
+Or use a service account key:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+```
+
+DSX-Transfer creates the GCS client before scanning so missing credentials fail fast instead of scanning every file and failing each allowed write.
+
+For DSXA mode from a source checkout, install both sibling packages or include both package roots:
+
+```bash
+./.venv/bin/python -m pip install -e ./dsxa_sdk_py -e ./dsx_transfer
 ```
 
 Run the initial tests with:

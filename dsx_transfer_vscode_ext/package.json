@@ -1,0 +1,116 @@
+{
+  "name": "dsx_transfer_vscode_ext",
+  "displayName": "DSX-Transfer",
+  "description": "Create, validate, and run DSX-Transfer configs from VS Code.",
+  "version": "0.1.0",
+  "publisher": "deep-instinct",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:dsxTransfer.createConfig",
+    "onCommand:dsxTransfer.validateConfig",
+    "onCommand:dsxTransfer.runTransfer",
+    "onCommand:dsxTransfer.showSchema",
+    "onCommand:dsxTransfer.checkEnvironment",
+    "onView:dsxTransferReport"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "DSX-Transfer",
+      "properties": {
+        "dsxTransfer.executable": {
+          "type": "string",
+          "default": "dsx-transfer",
+          "description": "DSX-Transfer executable. Ignored when dsxTransfer.useModuleInvocation is true and dsxTransfer.pythonPath is set."
+        },
+        "dsxTransfer.configPath": {
+          "type": "string",
+          "default": "dsx-transfer.yaml",
+          "description": "Workspace-relative DSX-Transfer config path."
+        },
+        "dsxTransfer.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python executable for source-tree/module invocation, for example ./.venv/bin/python."
+        },
+        "dsxTransfer.useModuleInvocation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run DSX-Transfer as python -m dsx_transfer.cli instead of using the dsx-transfer console script."
+        },
+        "dsxTransfer.modulePythonPath": {
+          "type": "string",
+          "default": ".:dsx_transfer:dsxa_sdk_py",
+          "description": "PYTHONPATH used when dsxTransfer.useModuleInvocation is true."
+        },
+        "dsxTransfer.extraEnv": {
+          "type": "object",
+          "default": {},
+          "description": "Additional environment variables for DSX-Transfer commands."
+        }
+      }
+    },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "dsx-transfer.yaml",
+          "dsx-transfer.yml"
+        ],
+        "url": "./dsx-transfer.schema.json"
+      }
+    ],
+    "yamlValidation": [
+      {
+        "fileMatch": "dsx-transfer.y{a,}ml",
+        "url": "./dsx-transfer.schema.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "dsxTransfer.createConfig",
+        "title": "DSX-Transfer: Create Config"
+      },
+      {
+        "command": "dsxTransfer.validateConfig",
+        "title": "DSX-Transfer: Validate Config"
+      },
+      {
+        "command": "dsxTransfer.runTransfer",
+        "title": "DSX-Transfer: Run Transfer"
+      },
+      {
+        "command": "dsxTransfer.showSchema",
+        "title": "DSX-Transfer: Show Config Schema"
+      },
+      {
+        "command": "dsxTransfer.checkEnvironment",
+        "title": "DSX-Transfer: Check Environment"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsxTransfer",
+          "title": "DSX-Transfer",
+          "icon": "resources/dsx-transfer.svg"
+        }
+      ]
+    },
+    "views": {
+      "dsxTransfer": [
+        {
+          "id": "dsxTransferReport",
+          "name": "Last Report"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "check": "node --check src/extension.js"
+  }
+}

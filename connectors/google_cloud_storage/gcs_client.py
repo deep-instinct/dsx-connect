@@ -159,6 +159,12 @@ class GCSClient:
             if path.is_file():
                 self.upload_file(path, path.name, bucket)
 
+    def ensure_ready(self, bucket: str | None = None) -> None:
+        client = self._get_client()
+        if bucket:
+            bucket_obj = client.bucket(bucket)
+            list(client.list_blobs(bucket_obj, max_results=1))
+
     def calculate_sha256(self, bucket: str, key: str) -> str:
         try:
             content = self.get_object(bucket, key)

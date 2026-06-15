@@ -13,6 +13,7 @@ from dsx_transfer.models import (
     TransferPlatformContext,
     TransferPlan,
 )
+from shared.object_storage import ObjectDiscoverer, ObjectInfo, ObjectReader, ObjectRef, ObjectScope, ObjectWriter
 
 
 class SourceAdapter(ABC):

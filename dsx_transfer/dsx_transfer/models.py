@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 def utcnow() -> datetime:
@@ -124,22 +124,32 @@ class TransferReport(BaseModel):
     started_at: datetime = Field(default_factory=utcnow)
     completed_at: datetime = Field(default_factory=utcnow)
 
+    @computed_field
+    @property
+    def planned_count(self) -> int:
+        return len(self.outcomes)
+
+    @computed_field
     @property
     def allowed_count(self) -> int:
         return sum(1 for outcome in self.outcomes if outcome.state == "allowed")
 
+    @computed_field
     @property
     def blocked_count(self) -> int:
         return sum(1 for outcome in self.outcomes if outcome.state == "blocked")
 
+    @computed_field
     @property
     def failed_count(self) -> int:
         return sum(1 for outcome in self.outcomes if outcome.state == "failed")
 
+    @computed_field
     @property
     def skipped_count(self) -> int:
         return sum(1 for outcome in self.outcomes if outcome.state == "skipped")
 
+    @computed_field
     @property
     def excluded_count(self) -> int:
         return sum(1 for outcome in self.outcomes if outcome.state == "excluded")

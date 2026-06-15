@@ -62,7 +62,7 @@ class ReportTreeProvider {
     if (item) {
       return item.children || [];
     }
-    return this.items.length ? this.items : [{ label: "No transfer report yet." }];
+    return this.items;
   }
 }
 

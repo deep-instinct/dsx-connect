@@ -37,3 +37,12 @@ shared/deploy/certs/*.key
 /archives/
 /SHOST/
 *.egg-info/
+
+# Local DSX-Transfer runs
+/.dsx-transfer/
+/dsx-transfer*.yaml
+/destination/
+/tmp.log
+
+# Local workspace settings
+/.vscode/

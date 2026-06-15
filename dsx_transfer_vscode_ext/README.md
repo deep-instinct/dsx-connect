@@ -4,7 +4,9 @@ This extension helps developers create, validate, and run `dsx-transfer.yaml` fr
 
 ## Commands
 
+- `DSX-Transfer: Open Config`
 - `DSX-Transfer: Create Config`
+- `DSX-Transfer: Open Local Harness`
 - `DSX-Transfer: Add Local Harness`
 - `DSX-Transfer: Run Local Harness`
 - `DSX-Transfer: Validate Config`
@@ -21,7 +23,9 @@ dsx-transfer migrate --config dsx-transfer.yaml
 dsx-transfer config schema
 ```
 
+`Open Config` opens the configured `dsx-transfer.yaml` or offers to create it.
 `Create Config` opens the existing config, overwrites it, or cancels when the file already exists.
+`Open Local Harness` opens `.dsx-transfer/harness/dsx-transfer.local.yaml` or offers to create it.
 `Add Local Harness` creates `.dsx-transfer/harness` with a filesystem-to-filesystem local demo config, sample files, a run script, and a short README.
 `Run Local Harness` runs `.dsx-transfer/harness/dsx-transfer.local.yaml` directly and updates the `Last Report` view.
 `Run Transfer` validates first, runs the transfer, and updates the `Last Report` view with summary, blocked objects, and failed objects.

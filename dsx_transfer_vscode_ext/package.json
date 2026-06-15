@@ -11,7 +11,9 @@
     "Other"
   ],
   "activationEvents": [
+    "onCommand:dsxTransfer.openConfig",
     "onCommand:dsxTransfer.createConfig",
+    "onCommand:dsxTransfer.openLocalHarness",
     "onCommand:dsxTransfer.addLocalHarness",
     "onCommand:dsxTransfer.runLocalHarness",
     "onCommand:dsxTransfer.validateConfig",
@@ -74,8 +76,16 @@
     ],
     "commands": [
       {
+        "command": "dsxTransfer.openConfig",
+        "title": "DSX-Transfer: Open Config"
+      },
+      {
         "command": "dsxTransfer.createConfig",
         "title": "DSX-Transfer: Create Config"
+      },
+      {
+        "command": "dsxTransfer.openLocalHarness",
+        "title": "DSX-Transfer: Open Local Harness"
       },
       {
         "command": "dsxTransfer.addLocalHarness",
@@ -116,6 +126,31 @@
         {
           "id": "dsxTransferReport",
           "name": "Last Report"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "dsxTransferReport",
+        "contents": "Create a config or run the local harness to see transfer results here.\n[Open Config](command:dsxTransfer.openConfig)\n[Add Local Harness](command:dsxTransfer.addLocalHarness)\n[Run Local Harness](command:dsxTransfer.runLocalHarness)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dsxTransfer.runTransfer",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dsxTransfer.validateConfig",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@2"
+        },
+        {
+          "command": "dsxTransfer.openConfig",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@3"
         }
       ]
     }

@@ -6,17 +6,22 @@
   <title>DSX-Connect NG Operator Console</title>
   <style>
     :root {
-      --ink: #10212b;
-      --muted: #556975;
-      --line: rgba(16, 33, 43, 0.12);
-      --bg: #f4efe6;
-      --panel: rgba(255, 252, 246, 0.92);
-      --panel-strong: #fffaf2;
-      --accent: #0d7c66;
-      --accent-2: #d96f32;
-      --danger: #b23a32;
-      --warning: #c07e11;
-      --shadow: 0 16px 40px rgba(35, 49, 56, 0.12);
+      --bg: #f6f7f8;
+      --surface: #ffffff;
+      --surface-2: #eef3f1;
+      --ink: #17242b;
+      --muted: #5d6d75;
+      --line: #d9e0e3;
+      --line-strong: #b9c6cb;
+      --accent: #0f7a67;
+      --accent-soft: #dcefeb;
+      --warn: #9a6b10;
+      --warn-soft: #f5ecd4;
+      --danger: #a33a34;
+      --danger-soft: #f3dddd;
+      --good: #176b51;
+      --good-soft: #dceee7;
+      --shadow: 0 12px 28px rgba(25, 36, 42, 0.08);
     }
 
     * {
@@ -25,105 +30,201 @@
 
     body {
       margin: 0;
+      background: var(--bg);
       color: var(--ink);
-      background:
-        radial-gradient(circle at top left, rgba(217, 111, 50, 0.18), transparent 28%),
-        radial-gradient(circle at top right, rgba(13, 124, 102, 0.14), transparent 24%),
-        linear-gradient(180deg, #f7f2e9 0%, var(--bg) 100%);
-      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     }
 
-    .shell {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 28px 20px 48px;
+    button, input, select, textarea {
+      font: inherit;
     }
 
-    .hero {
-      display: grid;
-      gap: 16px;
-      margin-bottom: 24px;
-      padding: 24px;
+    button {
+      min-height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      padding: 7px 11px;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 650;
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: #fff;
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: 34px;
       border: 1px solid var(--line);
-      border-radius: 28px;
-      background: linear-gradient(145deg, rgba(255, 250, 242, 0.92), rgba(247, 242, 233, 0.86));
-      box-shadow: var(--shadow);
+      border-radius: 6px;
+      padding: 7px 9px;
+      background: #fff;
+      color: var(--ink);
     }
 
-    .eyebrow {
-      color: var(--accent);
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
       font-size: 12px;
       font-weight: 700;
-      letter-spacing: 0.18em;
-      text-transform: uppercase;
     }
 
-    h1, h2, h3 {
+    h1, h2, h3, p {
       margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      font-weight: 600;
-      letter-spacing: -0.03em;
     }
 
     h1 {
-      font-size: clamp(2rem, 5vw, 3.75rem);
-      line-height: 0.95;
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    h2 {
+      font-size: 16px;
+      line-height: 1.25;
+    }
+
+    h3 {
+      font-size: 14px;
+      line-height: 1.3;
     }
 
     p {
-      margin: 0;
       color: var(--muted);
-      line-height: 1.55;
+      font-size: 13px;
+      line-height: 1.45;
     }
 
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
     }
 
-    .stat {
-      padding: 16px 18px;
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.68);
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 9px;
+      text-align: left;
+      vertical-align: top;
     }
 
-    .stat-label {
-      display: block;
+    th {
+      background: var(--surface-2);
+      color: #41545d;
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.16em;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    td.actions {
+      width: 1%;
+      white-space: nowrap;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .brand {
+      display: grid;
+      gap: 2px;
+    }
+
+    .brand small {
       color: var(--muted);
-    }
-
-    .stat-value {
-      display: block;
-      margin-top: 8px;
-      font-size: 28px;
       font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: 10px;
     }
 
-    .layout {
-      display: grid;
-      gap: 18px;
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
-    .row {
+    .shell {
       display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 18px;
-      align-items: start;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 16px;
+      padding: 16px 20px 28px;
+      max-width: 1680px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .main, .side {
+      min-width: 0;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .tabs, .subtabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .tab, .subtab {
+      background: var(--surface);
+    }
+
+    .tab[aria-selected="true"], .subtab[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: #075646;
     }
 
     .panel {
-      padding: 20px;
       border: 1px solid var(--line);
-      border-radius: 24px;
-      background: var(--panel);
+      border-radius: 8px;
+      background: var(--surface);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      overflow: hidden;
     }
 
     .panel-header {
@@ -131,509 +232,589 @@
       justify-content: space-between;
       align-items: flex-start;
       gap: 12px;
-      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
     }
 
-    .panel-actions {
+    .panel-body {
+      padding: 14px 16px;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+      gap: 10px;
+      align-items: end;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fbfcfc;
+    }
+
+    .toolbar.scan {
+      grid-template-columns: repeat(3, minmax(130px, 1fr)) auto;
+    }
+
+    .toolbar.policy {
+      grid-template-columns: minmax(150px, 1fr) auto;
+    }
+
+    .table-wrap {
+      overflow: auto;
+    }
+
+    .cards {
+      display: grid;
+      gap: 10px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .card-top {
       display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-    }
-
-    button {
-      border: 0;
-      border-radius: 999px;
-      padding: 10px 14px;
-      background: var(--ink);
-      color: #fff;
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 120ms ease, opacity 120ms ease;
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-    }
-
-    button.secondary {
-      background: var(--panel-strong);
-      color: var(--ink);
-      border: 1px solid var(--line);
-    }
-
-    button.ghost {
-      background: transparent;
-      color: var(--ink);
-      border: 1px solid var(--line);
-    }
-
-    button.warn {
-      background: var(--accent-2);
-    }
-
-    button.danger {
-      background: var(--danger);
-    }
-
-    form {
-      display: grid;
-      gap: 12px;
-    }
-
-    .grid-2, .grid-3 {
-      display: grid;
-      gap: 12px;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
     }
 
     .grid-2 {
+      display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
     }
 
     .grid-3 {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    label {
       display: grid;
-      gap: 6px;
-      font-size: 13px;
-      color: var(--muted);
-      font-weight: 600;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 11px 12px;
-      background: rgba(255, 255, 255, 0.72);
-      color: var(--ink);
-      font: inherit;
-    }
-
-    textarea {
-      min-height: 110px;
-      resize: vertical;
-      font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
-      font-size: 12px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
     }
 
     .checks {
       display: flex;
       flex-wrap: wrap;
-      gap: 10px 14px;
+      gap: 8px 12px;
     }
 
     .checks label {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      font-size: 13px;
+      gap: 6px;
       color: var(--ink);
-      font-weight: 600;
+      font-size: 12px;
+      font-weight: 650;
     }
 
     .checks input {
       width: auto;
-      margin: 0;
+      min-height: 0;
     }
 
-    .list {
-      display: grid;
-      gap: 12px;
-    }
-
-    .card {
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: rgba(255, 255, 255, 0.68);
-    }
-
-    .card-top {
+    .actions-row {
       display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      align-items: flex-start;
-    }
-
-    .meta {
-      display: flex;
+      align-items: center;
       flex-wrap: wrap;
       gap: 8px;
-      margin-top: 10px;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      padding: 0 16px 14px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfcfc;
+      padding: 10px;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 22px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     .pill {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 5px 10px;
-      border-radius: 999px;
+      min-height: 22px;
       border: 1px solid var(--line);
-      background: rgba(255, 250, 242, 0.95);
-      font-size: 12px;
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #fff;
       color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
     }
 
     .pill.good {
-      background: rgba(13, 124, 102, 0.12);
-      color: #0b6a58;
-      border-color: rgba(13, 124, 102, 0.25);
-    }
-
-    .pill.bad {
-      background: rgba(178, 58, 50, 0.12);
-      color: var(--danger);
-      border-color: rgba(178, 58, 50, 0.22);
+      border-color: #b6d9cc;
+      background: var(--good-soft);
+      color: var(--good);
     }
 
     .pill.warn {
-      background: rgba(192, 126, 17, 0.12);
-      color: var(--warning);
-      border-color: rgba(192, 126, 17, 0.22);
+      border-color: #e4cf9d;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .pill.bad {
+      border-color: #dfb2ae;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .mono {
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .empty {
+      padding: 22px;
+      color: var(--muted);
+      text-align: center;
+      background: #fbfcfc;
     }
 
     .detail {
-      margin-top: 14px;
-      padding: 14px;
-      border-radius: 16px;
-      background: rgba(246, 241, 233, 0.9);
-      border: 1px dashed var(--line);
+      border: 1px dashed var(--line-strong);
+      border-radius: 8px;
+      background: #fbfcfc;
+      padding: 10px;
       overflow: auto;
     }
 
     pre {
       margin: 0;
-      color: var(--ink);
       white-space: pre-wrap;
       word-break: break-word;
-      font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
       font-size: 12px;
-      line-height: 1.55;
-    }
-
-    .empty {
-      padding: 18px;
-      border: 1px dashed var(--line);
-      border-radius: 18px;
-      color: var(--muted);
-      text-align: center;
-      background: rgba(255, 255, 255, 0.42);
+      line-height: 1.45;
     }
 
     .status-line {
-      min-height: 20px;
-      font-size: 13px;
+      min-height: 18px;
       color: var(--muted);
+      font-size: 12px;
     }
 
     .status-line.error {
       color: var(--danger);
     }
 
-    .mono {
-      font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
-      font-size: 12px;
+    .hidden {
+      display: none !important;
     }
 
-    @media (max-width: 1100px) {
-      .row {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 720px) {
+    @media (max-width: 1180px) {
       .shell {
-        padding: 16px 14px 40px;
-      }
-
-      .panel, .hero {
-        padding: 16px;
-        border-radius: 20px;
-      }
-
-      .grid-2, .grid-3 {
         grid-template-columns: 1fr;
       }
 
-      .panel-header, .card-top {
+      .side {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        align-items: flex-start;
         flex-direction: column;
+      }
+
+      .shell {
+        padding: 12px;
+      }
+
+      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3, .metric-row, .side {
+        grid-template-columns: 1fr;
+      }
+
+      th, td {
+        padding: 8px;
       }
     }
   </style>
 </head>
 <body>
-  <div class="shell">
-    <section class="hero">
-      <div class="eyebrow">DSX-Connect NG</div>
-      <h1>Operator Console</h1>
-      <p>
-        Thin browser UI over the real 2g control-plane and execution APIs.
-        This is intentionally operational, not product-polished.
-      </p>
-      <div class="stats" id="hero-stats">
-        <div class="stat">
-          <span class="stat-label">Integrations</span>
-          <span class="stat-value" id="stat-integrations">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Scopes</span>
-          <span class="stat-value" id="stat-scopes">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Jobs</span>
-          <span class="stat-value" id="stat-jobs">0</span>
-        </div>
-        <div class="stat">
-          <span class="stat-label">Healthy Connectors</span>
-          <span class="stat-value" id="stat-healthy">0</span>
-        </div>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <small>DSX-Connect NG</small>
+        <h1>Operator Console</h1>
       </div>
-    </section>
+      <div class="statusbar">
+        <span class="pill" id="stat-integrations">0 integrations</span>
+        <span class="pill" id="stat-scopes">0 scopes</span>
+        <span class="pill" id="stat-jobs">0 jobs</span>
+        <span class="pill good" id="stat-healthy">0 healthy</span>
+        <button id="refresh-all" type="button">Refresh</button>
+      </div>
+    </header>
 
-    <div class="layout">
-      <div class="row">
+    <div class="shell">
+      <main class="main">
+        <nav class="tabs" aria-label="Primary views">
+          <button class="tab" type="button" data-tab="assets" aria-selected="true">Assets</button>
+          <button class="tab" type="button" data-tab="scan-results" aria-selected="false">Scan Results</button>
+          <button class="tab" type="button" data-tab="policy" aria-selected="false">Policy</button>
+        </nav>
+
+        <section class="view" id="view-assets">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Assets</h2>
+                <p>Connector inventory reconciled with protected scopes.</p>
+              </div>
+              <nav class="subtabs" aria-label="Assets views">
+                <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+                <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+              </nav>
+            </div>
+
+            <div class="asset-pane" id="asset-pane-connectors">
+              <div class="metric-row">
+                <div class="metric"><span>Connectors</span><strong id="metric-connectors">0</strong></div>
+                <div class="metric"><span>Healthy</span><strong id="metric-healthy">0</strong></div>
+                <div class="metric"><span>Enabled</span><strong id="metric-enabled">0</strong></div>
+                <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Connector</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Protected Scopes</th>
+                      <th>Reader</th>
+                      <th>Capabilities</th>
+                      <th>Endpoint</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="connectors-body"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="asset-pane hidden" id="asset-pane-protected">
+              <div class="toolbar">
+                <label>Connector Type
+                  <input id="protected-filter-connector-type" placeholder="gcs, filesystem">
+                </label>
+                <label>Integration
+                  <select id="protected-filter-integration"></select>
+                </label>
+                <label>Asset Type
+                  <select id="protected-filter-type">
+                    <option value="bucket">bucket</option>
+                    <option value="folder">folder</option>
+                    <option value="path">path</option>
+                  </select>
+                </label>
+                <label>Source
+                  <select id="protected-filter-source">
+                    <option value="configured_asset">configured_asset</option>
+                    <option value="inventory_enumeration">inventory_enumeration</option>
+                  </select>
+                </label>
+                <label>Coverage
+                  <select id="protected-filter-coverage">
+                    <option value="">all</option>
+                    <option value="protected">protected</option>
+                    <option value="unprotected">unprotected</option>
+                    <option value="disabled">disabled</option>
+                    <option value="unknown">unknown</option>
+                  </select>
+                </label>
+                <button class="primary" id="refresh-protected-assets" type="button">Apply</button>
+              </div>
+              <div class="metric-row">
+                <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
+                <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
+                <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
+                <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Asset</th>
+                      <th>Connector</th>
+                      <th>Type</th>
+                      <th>Coverage</th>
+                      <th>Policy</th>
+                      <th>Last Scan</th>
+                      <th>Findings</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody id="protected-assets-body"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="view-scan-results">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Scan Results</h2>
+                <p>Job progress, findings, remediation, and cooperative cancel behavior.</p>
+              </div>
+              <button id="refresh-scan-results" type="button">Refresh</button>
+            </div>
+            <div class="toolbar scan">
+              <label>Integration
+                <select id="scan-results-filter-integration"></select>
+              </label>
+              <label>State
+                <select id="scan-results-filter-state">
+                  <option value="">all</option>
+                  <option value="accepted">accepted</option>
+                  <option value="publish_pending">publish_pending</option>
+                  <option value="running">running</option>
+                  <option value="completed">completed</option>
+                  <option value="failed">failed</option>
+                  <option value="cancelled">cancelled</option>
+                </select>
+              </label>
+              <label>Item Sample
+                <select id="scan-results-filter-item-limit">
+                  <option value="25">25</option>
+                  <option value="100" selected>100</option>
+                  <option value="500">500</option>
+                  <option value="1000">1000</option>
+                </select>
+              </label>
+              <button class="primary" id="apply-scan-results" type="button">Apply</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Job</th>
+                    <th>Target</th>
+                    <th>State</th>
+                    <th>Progress</th>
+                    <th>Findings</th>
+                    <th>Remediation</th>
+                    <th>Cancel</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="scan-results-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Result Detail</h2>
+                <p>Latest sampled items and raw job context.</p>
+              </div>
+            </div>
+            <div class="panel-body" id="scan-result-detail">
+              <div class="empty">Select a scan result.</div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view hidden" id="view-policy">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2>Policy</h2>
+                <p>Definitions and assignments applied to protected assets.</p>
+              </div>
+              <button id="refresh-policies" type="button">Refresh</button>
+            </div>
+            <div class="toolbar policy">
+              <label>Integration
+                <select id="policy-filter-integration"></select>
+              </label>
+              <button class="primary" id="apply-policy-filter" type="button">Apply</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Policy</th>
+                    <th>Status</th>
+                    <th>Outcome Rules</th>
+                    <th>Assigned Assets</th>
+                    <th>Assignments</th>
+                    <th>Updated</th>
+                  </tr>
+                </thead>
+                <tbody id="policies-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="side">
         <section class="panel">
           <div class="panel-header">
             <div>
-              <div class="eyebrow">Create</div>
-              <h2>Integration</h2>
-              <p>Start with a practical form and keep advanced runtime fields available in raw JSON.</p>
+              <h2>Create Integration</h2>
+              <p>Register a connector-backed integration.</p>
             </div>
           </div>
-          <form id="integration-form">
-            <div class="grid-3">
-              <label>Display Name
-                <input name="display_name" placeholder="GCS Tenant A" required>
-              </label>
-              <label>Platform
-                <input name="platform" placeholder="gcs" required>
-              </label>
+          <div class="panel-body">
+            <form class="cards" id="integration-form">
+              <div class="grid-2">
+                <label>Display Name
+                  <input name="display_name" placeholder="GCS Tenant A" required>
+                </label>
+                <label>Platform
+                  <input name="platform" placeholder="gcs" required>
+                </label>
+              </div>
               <label>Platform Key
                 <input name="platform_key" placeholder="project-or-tenant-id" required>
               </label>
+              <div class="grid-2">
+                <label>Reader
+                  <select name="reader_strategy">
+                    <option value="proxy">proxy</option>
+                    <option value="native">native</option>
+                  </select>
+                </label>
+                <label>Connector Name
+                  <input name="connector_name" placeholder="google-cloud-storage-connector">
+                </label>
+              </div>
+              <label>Proxy Base URL
+                <input name="proxy_base_url" placeholder="http://127.0.0.1:8630">
+              </label>
+              <div class="checks">
+                <label><input type="checkbox" name="enabled" checked> Enabled</label>
+                <label><input type="checkbox" name="capability_discover" checked> Discover</label>
+                <label><input type="checkbox" name="capability_monitor" checked> Monitor</label>
+                <label><input type="checkbox" name="capability_read"> Read</label>
+                <label><input type="checkbox" name="capability_remediate" checked> Remediate</label>
+              </div>
+              <label>Advanced Config JSON
+                <textarea name="advanced_config_json" placeholder='{"policy": {"policy_id": "default"}}'></textarea>
+              </label>
+              <button class="primary" type="submit">Create</button>
+              <div class="status-line" id="integration-form-status"></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Protect Asset</h2>
+              <p>Create a protected scope and attach policy.</p>
             </div>
-            <div class="grid-3">
-              <label>Reader Strategy
+          </div>
+          <div class="panel-body">
+            <form class="cards" id="scope-form">
+              <label>Integration
+                <select name="integration_id" id="scope-integration-id" required></select>
+              </label>
+              <label>Display Name
+                <input name="display_name" placeholder="Bucket A" required>
+              </label>
+              <label>Selector
+                <input name="resource_selector" placeholder="bucket-a/prefix" required>
+              </label>
+              <div class="grid-2">
+                <label>Scope Type
+                  <select name="scope_type">
+                    <option value="path">path</option>
+                    <option value="identity">identity</option>
+                  </select>
+                </label>
+                <label>Mode
+                  <select name="mode">
+                    <option value="full_scan">full_scan</option>
+                    <option value="monitor">monitor</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid-2">
+                <label>Policy ID
+                  <input name="policy_id" placeholder="policy-quarantine">
+                </label>
+                <label>Malicious Action
+                  <select name="malicious_action">
+                    <option value="detect_only">detect_only</option>
+                    <option value="quarantine">quarantine</option>
+                    <option value="delete">delete</option>
+                    <option value="tag_only">tag_only</option>
+                  </select>
+                </label>
+              </div>
+              <label>Advanced Policy JSON
+                <textarea name="advanced_policy_json" placeholder='{"auto_dianna_on_verdicts": ["malicious"]}'></textarea>
+              </label>
+              <div class="checks">
+                <label><input type="checkbox" name="enabled" checked> Enabled</label>
+              </div>
+              <button class="primary" type="submit">Protect</button>
+              <div class="status-line" id="scope-form-status"></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <div>
+              <h2>Run Scan</h2>
+              <p>Submit selected scope through the UI scan endpoint.</p>
+            </div>
+          </div>
+          <div class="panel-body">
+            <form class="cards" id="scan-scope-form">
+              <label>Scope
+                <select name="scope_id" id="scan-scope-id" required></select>
+              </label>
+              <label>Path Override
+                <input name="path" placeholder="defaults to scope selector">
+              </label>
+              <label>Reader
                 <select name="reader_strategy">
                   <option value="proxy">proxy</option>
                   <option value="native">native</option>
                 </select>
               </label>
-              <label>Proxy Base URL
-                <input name="proxy_base_url" placeholder="http://127.0.0.1:8630">
-              </label>
-              <label>Connector Name
-                <input name="connector_name" placeholder="google-cloud-storage-connector">
-              </label>
-            </div>
-            <div class="checks">
-              <label><input type="checkbox" name="enabled" checked> Enabled</label>
-              <label><input type="checkbox" name="capability_discover" checked> Discover</label>
-              <label><input type="checkbox" name="capability_monitor" checked> Monitor</label>
-              <label><input type="checkbox" name="capability_enumerate"> Enumerate</label>
-              <label><input type="checkbox" name="capability_read"> Read</label>
-              <label><input type="checkbox" name="capability_remediate" checked> Remediate</label>
-            </div>
-            <div class="checks">
-              <label><input type="checkbox" name="supports_delete"> Delete</label>
-              <label><input type="checkbox" name="supports_move" checked> Move</label>
-              <label><input type="checkbox" name="supports_tag" checked> Tag</label>
-              <label><input type="checkbox" name="supports_movetag" checked> Move+Tag</label>
-            </div>
-            <label>Advanced Config JSON
-              <textarea name="advanced_config_json" placeholder='{"policy": {"malicious_verdict": {"action": "quarantine"}}}'></textarea>
-            </label>
-            <div class="panel-actions">
-              <button type="submit">Create Integration</button>
-            </div>
-            <div class="status-line" id="integration-form-status"></div>
-          </form>
+              <button class="primary" type="submit">Start Scan</button>
+              <div class="status-line" id="scan-scope-form-status"></div>
+            </form>
+          </div>
         </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Create</div>
-              <h2>Protected Scope</h2>
-              <p>Attach scope mode and post-scan policy to an existing integration.</p>
-            </div>
-          </div>
-          <form id="scope-form">
-            <div class="grid-2">
-              <label>Integration
-                <select name="integration_id" id="scope-integration-id" required></select>
-              </label>
-              <label>Display Name
-                <input name="display_name" placeholder="Bucket B1" required>
-              </label>
-            </div>
-            <div class="grid-3">
-              <label>Scope Type
-                <select name="scope_type">
-                  <option value="path">path</option>
-                  <option value="identity">identity</option>
-                </select>
-              </label>
-              <label>Mode
-                <select name="mode">
-                  <option value="full_scan">full_scan</option>
-                  <option value="monitor">monitor</option>
-                </select>
-              </label>
-              <label>Malicious Action
-                <select name="malicious_action">
-                  <option value="detect_only">detect_only</option>
-                  <option value="quarantine">quarantine</option>
-                  <option value="delete">delete</option>
-                  <option value="tag_only">tag_only</option>
-                </select>
-              </label>
-            </div>
-            <div class="grid-2">
-              <label>Resource Selector
-                <input name="resource_selector" placeholder="bucket-a/prefix or /path/to/root" required>
-              </label>
-              <label>Quarantine Target Path
-                <input name="quarantine_path" placeholder="ng-e2e/quarantine">
-              </label>
-            </div>
-            <div class="checks">
-              <label><input type="checkbox" name="enabled" checked> Enabled</label>
-              <label><input type="checkbox" name="tag_on_quarantine" checked> Tag On Quarantine</label>
-            </div>
-            <label>Advanced Policy JSON
-              <textarea name="advanced_policy_json" placeholder='{"result_delivery_policy": {"scan": "malicious_only"}}'></textarea>
-            </label>
-            <div class="panel-actions">
-              <button type="submit">Create Scope</button>
-            </div>
-            <div class="status-line" id="scope-form-status"></div>
-          </form>
-        </section>
-      </div>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="eyebrow">Act</div>
-            <h2>Scan Item</h2>
-            <p>Submit one object through the selected protected scope using the same batch execution API.</p>
-          </div>
-        </div>
-        <form id="scan-item-form">
-          <div class="grid-2">
-            <label>Integration
-              <select name="integration_id" id="scan-integration-id" required></select>
-            </label>
-            <label>Scope
-              <select name="scope_id" id="scan-scope-id" required></select>
-            </label>
-          </div>
-          <div class="grid-2">
-            <label>Object Identity
-              <input name="object_identity" placeholder="BadMojoResume" required>
-            </label>
-            <label>Reader Path
-              <input name="path" placeholder="defaults to object identity">
-            </label>
-          </div>
-          <label>Item Payload JSON
-            <textarea name="item_payload_json" placeholder='{"readerStrategy": "proxy"}'></textarea>
-          </label>
-          <div class="panel-actions">
-            <button type="submit">Start Scan</button>
-          </div>
-          <div class="status-line" id="scan-item-form-status"></div>
-        </form>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="eyebrow">Discover</div>
-            <h2>Assets</h2>
-            <p>Connector-visible inventory reconciled against protected scopes.</p>
-          </div>
-          <div class="panel-actions">
-            <button class="secondary" id="refresh-assets" type="button">Refresh</button>
-          </div>
-        </div>
-        <div class="grid-2">
-          <label>Integration
-            <select id="asset-integration-id"></select>
-          </label>
-          <label>Asset Type
-            <select id="asset-type">
-              <option value="bucket">configured bucket</option>
-            </select>
-          </label>
-          <label>Discovery Source
-            <select id="asset-source">
-              <option value="configured_asset">configured asset</option>
-              <option value="inventory_enumeration">inventory enumeration</option>
-            </select>
-          </label>
-        </div>
-        <div class="list" id="assets-list"></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="eyebrow">Observe</div>
-            <h2>Integrations</h2>
-            <p>Connector health is probed from core using the configured proxy endpoint.</p>
-          </div>
-          <div class="panel-actions">
-            <button class="secondary" id="refresh-integrations" type="button">Refresh</button>
-          </div>
-        </div>
-        <div class="list" id="integrations-list"></div>
-      </section>
-
-      <div class="row">
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Observe</div>
-              <h2>Scopes</h2>
-              <p>Current protected scopes with effective operator intent.</p>
-            </div>
-            <div class="panel-actions">
-              <button class="secondary" id="refresh-scopes" type="button">Refresh</button>
-            </div>
-          </div>
-          <div class="list" id="scopes-list"></div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <div class="eyebrow">Observe</div>
-              <h2>Jobs</h2>
-              <p>Latest workflow activity. Click a job to inspect item-stage details.</p>
-            </div>
-            <div class="panel-actions">
-              <button class="secondary" id="refresh-jobs" type="button">Refresh</button>
-            </div>
-          </div>
-          <div class="list" id="jobs-list"></div>
-        </section>
-      </div>
-
-      <section class="panel">
-        <div class="panel-header">
-          <div>
-            <div class="eyebrow">Inspect</div>
-            <h2>Job Detail</h2>
-            <p>Machine-oriented stage state, surfaced without trying to hide the raw workflow shape.</p>
-          </div>
-        </div>
-        <div id="job-detail" class="empty">Select a job to inspect its items and stage results.</div>
-      </section>
+      </aside>
     </div>
   </div>
 
@@ -641,22 +822,24 @@
     const state = {
       integrations: [],
       scopes: [],
-      jobs: [],
-      jobSummaries: [],
-      assets: [],
-      assetDiscovery: null,
-      selectedJobId: null,
+      connectorRows: [],
+      protectedAssets: [],
+      protectedAssetsLoaded: false,
+      scanResults: [],
+      policies: [],
+      activeTab: "assets",
+      activeAssetsTab: "connectors",
+      selectedScanResult: null,
     };
 
     const endpoints = {
       overview: "/api/v1/ui/overview",
-      integrations: "/api/v1/ui/integrations",
-      scopes: "/api/v1/control-plane/scopes",
-      jobs: "/api/v1/execution/jobs?limit=50",
-      uiJobs: "/api/v1/ui/jobs?limit=50",
-      createIntegration: "/api/v1/control-plane/integrations",
-      createScope: "/api/v1/control-plane/scopes",
-      submitBatch: "/api/v1/execution/jobs/batch",
+      connectors: "/api/v1/ui/assets/connectors",
+      protectedAssets: "/api/v1/ui/assets/protected",
+      scanResults: "/api/v1/ui/scan-results",
+      policies: "/api/v1/ui/policies",
+      createIntegration: "/api/v1/ui/integrations",
+      createScope: "/api/v1/ui/assets/protected",
     };
 
     async function fetchJson(url, options = {}) {
@@ -676,400 +859,17 @@
       return response.json();
     }
 
-    function pillClassForHealth(status) {
-      if (status === "healthy") return "pill good";
-      if (status === "unhealthy") return "pill bad";
-      return "pill warn";
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
     }
 
-    function pillClassForEnabled(enabled) {
-      return enabled ? "pill good" : "pill warn";
-    }
-
-    function pillClassForState(stateValue) {
-      if (["completed", "healthy", "succeeded"].includes(stateValue)) return "pill good";
-      if (["failed", "cancelled", "unhealthy"].includes(stateValue)) return "pill bad";
-      if (["running", "scanning", "remediating", "delivering_result", "queued", "accepted", "publish_pending"].includes(stateValue)) return "pill warn";
-      return "pill";
-    }
-
-    function renderHero() {
-      document.getElementById("stat-integrations").textContent = String(state.integrations.length);
-      document.getElementById("stat-scopes").textContent = String(state.scopes.length);
-      document.getElementById("stat-jobs").textContent = String(state.jobs.length);
-      const healthy = state.integrations.filter((row) => row.health.status === "healthy").length;
-      document.getElementById("stat-healthy").textContent = String(healthy);
-    }
-
-    function renderIntegrations() {
-      const root = document.getElementById("integrations-list");
-      root.innerHTML = "";
-      if (!state.integrations.length) {
-        root.innerHTML = '<div class="empty">No integrations configured yet.</div>';
-        return;
-      }
-      for (const row of state.integrations) {
-        const card = document.createElement("article");
-        card.className = "card";
-        const capabilities = row.integration.remediation_capabilities || {};
-        const toggleLabel = row.integration.enabled ? "Disable" : "Enable";
-        const toggleClass = row.integration.enabled ? "danger" : "secondary";
-        card.innerHTML = `
-          <div class="card-top">
-            <div>
-              <h3>${escapeHtml(row.integration.display_name)}</h3>
-              <p>${escapeHtml(row.integration.platform)} · <span class="mono">${escapeHtml(row.integration.platform_key)}</span></p>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForEnabled(row.integration.enabled)}">${row.integration.enabled ? "enabled" : "disabled"}</span>
-              <span class="${pillClassForHealth(row.health.status)}">${escapeHtml(row.health.status)}</span>
-            </div>
-          </div>
-          <div class="meta">
-            <span class="pill">scopes ${row.scope_count}</span>
-            <span class="pill">reader ${escapeHtml(row.reader_strategy || "unknown")}</span>
-            <span class="pill">move ${capabilities.supports_move ? "yes" : "no"}</span>
-            <span class="pill">tag ${capabilities.supports_tag ? "yes" : "no"}</span>
-            <span class="pill">movetag ${capabilities.supports_movetag ? "yes" : "no"}</span>
-          </div>
-          <div class="detail">
-            <pre>${escapeHtml(JSON.stringify({
-              integration_id: row.integration.integration_id,
-              proxy_base_url: row.proxy_base_url,
-              connector_name: row.connector_name,
-              health: row.health,
-            }, null, 2))}</pre>
-          </div>
-          <div class="panel-actions">
-            <button class="${toggleClass}" type="button" data-action="toggle-integration" data-id="${escapeHtml(row.integration.integration_id)}" data-enabled="${row.integration.enabled ? "false" : "true"}">${toggleLabel}</button>
-          </div>
-        `;
-        root.appendChild(card);
-      }
-    }
-
-    function renderScopes() {
-      const root = document.getElementById("scopes-list");
-      root.innerHTML = "";
-      if (!state.scopes.length) {
-        root.innerHTML = '<div class="empty">No scopes configured yet.</div>';
-        return;
-      }
-      for (const scope of state.scopes) {
-        const card = document.createElement("article");
-        card.className = "card";
-        const malicious = scope.post_scan_policy?.malicious_verdict?.action || "detect_only";
-        const quarantine = scope.post_scan_policy?.malicious_verdict?.quarantine_target?.path || null;
-        const toggleLabel = scope.enabled ? "Disable" : "Enable";
-        const toggleClass = scope.enabled ? "danger" : "secondary";
-        card.innerHTML = `
-          <div class="card-top">
-            <div>
-              <h3>${escapeHtml(scope.display_name)}</h3>
-              <p>${escapeHtml(scope.mode)} · <span class="mono">${escapeHtml(scope.normalized_selector)}</span></p>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForEnabled(scope.enabled)}">${scope.enabled ? "enabled" : "disabled"}</span>
-              <span class="pill">${escapeHtml(scope.scope_type)}</span>
-            </div>
-          </div>
-          <div class="meta">
-            <span class="pill">integration ${escapeHtml(scope.integration_id)}</span>
-            <span class="pill">malicious ${escapeHtml(malicious)}</span>
-            ${quarantine ? `<span class="pill">quarantine ${escapeHtml(quarantine)}</span>` : ""}
-          </div>
-          <div class="panel-actions">
-            <button class="secondary" type="button" data-action="scan-scope" data-id="${escapeHtml(scope.scope_id)}">Scan Scope</button>
-            <button class="${toggleClass}" type="button" data-action="toggle-scope" data-id="${escapeHtml(scope.scope_id)}" data-enabled="${scope.enabled ? "false" : "true"}">${toggleLabel}</button>
-          </div>
-        `;
-        root.appendChild(card);
-      }
-    }
-
-    function renderAssets() {
-      const root = document.getElementById("assets-list");
-      root.innerHTML = "";
-      const discovery = state.assetDiscovery;
-      if (discovery) {
-        const summary = document.createElement("article");
-        summary.className = "card";
-        summary.innerHTML = `
-          <div class="card-top">
-            <div>
-              <h3>${escapeHtml(discovery.asset_type || "assets")}</h3>
-              <p>${escapeHtml(discovery.message || `${(discovery.assets || []).length} asset(s) loaded`)}</p>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForState(discovery.status)}">${escapeHtml(discovery.status || "unknown")}</span>
-            </div>
-          </div>
-          <div class="meta">
-            <span class="pill">source ${escapeHtml(discovery.source || "unknown")}</span>
-            ${discovery.required_permission ? `<span class="pill">requires ${escapeHtml(discovery.required_permission)}</span>` : ""}
-          </div>
-        `;
-        root.appendChild(summary);
-      }
-      if (!state.assets.length) {
-        root.insertAdjacentHTML("beforeend", '<div class="empty">No discovered assets loaded.</div>');
-        return;
-      }
-      for (const asset of state.assets) {
-        const card = document.createElement("article");
-        card.className = "card";
-        const canAdd = asset.coverage_state === "unprotected";
-        card.innerHTML = `
-          <div class="card-top">
-            <div>
-              <h3>${escapeHtml(asset.display_name || asset.selector)}</h3>
-              <p><span class="mono">${escapeHtml(asset.selector)}</span></p>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForState(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span>
-            </div>
-          </div>
-          <div class="meta">
-            <span class="pill">type ${escapeHtml(discovery?.asset_type || document.getElementById("asset-type").value)}</span>
-            ${asset.matching_scope_id ? `<span class="pill">scope ${escapeHtml(asset.matching_scope_id)}</span>` : ""}
-          </div>
-          <div class="panel-actions">
-            <button type="button" data-action="create-scope" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}" ${canAdd ? "" : "disabled"}>Create Scope</button>
-            <button class="secondary" type="button" data-action="prefill-scope" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}" ${canAdd ? "" : "disabled"}>Edit First</button>
-          </div>
-        `;
-        root.appendChild(card);
-      }
-    }
-
-    function renderJobs() {
-      const root = document.getElementById("jobs-list");
-      root.innerHTML = "";
-      if (!state.jobSummaries.length) {
-        root.innerHTML = '<div class="empty">No jobs yet.</div>';
-        return;
-      }
-      for (const summary of state.jobSummaries) {
-        const job = summary.job;
-        const counts = summary.item_summary || {};
-        const card = document.createElement("article");
-        card.className = "card";
-        card.innerHTML = `
-          <div class="card-top">
-            <div>
-              <h3>${escapeHtml(job.job_type)}</h3>
-              <p><span class="mono">${escapeHtml(job.job_id)}</span></p>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForState(job.state)}">${escapeHtml(job.state)}</span>
-            </div>
-          </div>
-          <div class="meta">
-            <span class="pill">items ${counts.total || 0}</span>
-            <span class="pill good">completed ${counts.completed || 0}</span>
-            <span class="pill warn">scanning ${counts.scanning || 0}</span>
-            <span class="pill bad">failed ${counts.failed || 0}</span>
-          </div>
-          ${summary.failure_reason ? `<div class="detail"><pre>${escapeHtml(summary.failure_reason)}</pre></div>` : ""}
-          <div class="panel-actions">
-            <button class="${job.job_id === state.selectedJobId ? "warn" : "secondary"}" type="button" data-action="inspect-job" data-id="${escapeHtml(job.job_id)}">Inspect</button>
-          </div>
-        `;
-        card.querySelector("[data-action='inspect-job']").addEventListener("click", () => {
-          state.selectedJobId = job.job_id;
-          renderJobs();
-          loadJobDetail(job.job_id);
-        });
-        root.appendChild(card);
-      }
-    }
-
-    async function loadOverview() {
-      const overview = await fetchJson(endpoints.overview);
-      state.integrations = overview.integrations || [];
-      state.scopes = overview.scopes || [];
-      state.jobs = overview.jobs || [];
-      state.jobSummaries = overview.job_summaries || [];
-      renderHero();
-      renderIntegrations();
-      renderScopes();
-      renderJobs();
-      populateIntegrationSelect();
-      populateScanControls();
-      populateAssetControls();
-    }
-
-    function populateIntegrationSelect() {
-      const select = document.getElementById("scope-integration-id");
-      const current = select.value;
-      select.innerHTML = "";
-      for (const row of state.integrations) {
-        const option = document.createElement("option");
-        option.value = row.integration.integration_id;
-        option.textContent = `${row.integration.display_name} (${row.integration.integration_id})`;
-        select.appendChild(option);
-      }
-      if (current) {
-        select.value = current;
-      }
-    }
-
-    function populateScanControls() {
-      const integrationSelect = document.getElementById("scan-integration-id");
-      const scopeSelect = document.getElementById("scan-scope-id");
-      const currentIntegration = integrationSelect.value;
-      const currentScope = scopeSelect.value;
-      integrationSelect.innerHTML = "";
-      for (const row of state.integrations) {
-        const option = document.createElement("option");
-        option.value = row.integration.integration_id;
-        option.textContent = `${row.integration.display_name} (${row.integration.integration_id})`;
-        integrationSelect.appendChild(option);
-      }
-      if (currentIntegration) {
-        integrationSelect.value = currentIntegration;
-      }
-      const selectedIntegration = integrationSelect.value;
-      scopeSelect.innerHTML = "";
-      for (const scope of state.scopes.filter((scope) => scope.integration_id === selectedIntegration)) {
-        const option = document.createElement("option");
-        option.value = scope.scope_id;
-        option.textContent = `${scope.display_name} (${scope.scope_id})`;
-        scopeSelect.appendChild(option);
-      }
-      if (currentScope) {
-        scopeSelect.value = currentScope;
-      }
-    }
-
-    function populateAssetControls() {
-      const select = document.getElementById("asset-integration-id");
-      const current = select.value;
-      select.innerHTML = "";
-      for (const row of state.integrations) {
-        const option = document.createElement("option");
-        option.value = row.integration.integration_id;
-        option.textContent = `${row.integration.display_name} (${row.integration.integration_id})`;
-        select.appendChild(option);
-      }
-      if (current) {
-        select.value = current;
-      }
-    }
-
-    async function loadAssets() {
-      const integrationId = document.getElementById("asset-integration-id").value;
-      const assetType = document.getElementById("asset-type").value;
-      const assetSource = document.getElementById("asset-source").value;
-      if (!integrationId) {
-        state.assets = [];
-        state.assetDiscovery = null;
-        renderAssets();
-        return;
-      }
-      const payload = await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(integrationId)}/assets?type=${encodeURIComponent(assetType)}&source=${encodeURIComponent(assetSource)}&limit=100`);
-      state.assetDiscovery = payload;
-      state.assets = payload.assets || [];
-      renderAssets();
-    }
-
-    async function refreshAssetsQuietly() {
-      if (!document.getElementById("asset-integration-id").value) {
-        return;
-      }
-      try {
-        await loadAssets();
-      } catch (error) {
-        document.getElementById("assets-list").innerHTML = `<div class="empty">Failed to refresh assets: ${escapeHtml(error.message)}</div>`;
-      }
-    }
-
-    function buildScopePayloadFromAsset({ integrationId, selector, displayName }) {
-      return {
-        integration_id: integrationId,
-        display_name: displayName || selector,
-        scope_type: "path",
-        resource_selector: selector,
-        mode: "full_scan",
-        enabled: true,
-        post_scan_policy: {
-          malicious_verdict: {
-            action: "detect_only",
-          },
-        },
-      };
-    }
-
-    async function createScopeFromAssetButton(button) {
-      const selector = button.dataset.selector;
-      const displayName = button.dataset.name || selector;
-      const integrationId = document.getElementById("asset-integration-id").value;
-      if (!integrationId || !selector) {
-        setStatus("scope-form-status", "Scope creation requires an integration and asset selector.", true);
-        return;
-      }
-      button.disabled = true;
-      button.textContent = "Creating...";
-      setStatus("scope-form-status", `Creating protected scope for ${selector}...`);
-      try {
-        await fetchJson(endpoints.createScope, {
-          method: "POST",
-          body: JSON.stringify(buildScopePayloadFromAsset({ integrationId, selector, displayName })),
-        });
-        setStatus("scope-form-status", `Protected scope created for ${selector}.`);
-        await loadOverview();
-        await refreshAssetsQuietly();
-      } catch (error) {
-        button.disabled = false;
-        button.textContent = "Retry";
-        setStatus("scope-form-status", `Create failed: ${error.message}`, true);
-      }
-    }
-
-    async function loadJobDetail(jobId) {
-      const detail = document.getElementById("job-detail");
-      detail.className = "detail";
-      detail.innerHTML = "<pre>Loading job items…</pre>";
-      try {
-        const [job, items] = await Promise.all([
-          fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}`),
-          fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/items?limit=500`),
-        ]);
-        const stageRows = items.map((item) => `
-          <article class="card">
-            <div class="card-top">
-              <div>
-                <h3>${escapeHtml(item.object_identity)}</h3>
-                <p><span class="mono">${escapeHtml(item.job_item_id)}</span></p>
-              </div>
-              <div class="meta">
-                <span class="${pillClassForState(item.state)}">${escapeHtml(item.state)}</span>
-              </div>
-            </div>
-            <div class="meta">
-              <span class="${pillClassForState(item.scan_stage.state)}">scan ${escapeHtml(item.scan_stage.state)}</span>
-              <span class="${pillClassForState(item.policy_stage.state)}">policy ${escapeHtml(item.policy_stage.state)}</span>
-              <span class="${pillClassForState(item.remediation_stage.state)}">remediation ${escapeHtml(item.remediation_stage.state)}</span>
-              <span class="${pillClassForState(item.delivery_stage.state)}">delivery ${escapeHtml(item.delivery_stage.state)}</span>
-              <span class="${pillClassForState(item.dianna_stage.state)}">dianna ${escapeHtml(item.dianna_stage.state)}</span>
-            </div>
-            ${item.error ? `<div class="detail"><pre>${escapeHtml(JSON.stringify(item.error, null, 2))}</pre></div>` : ""}
-          </article>
-        `).join("");
-        detail.innerHTML = `
-          <div class="meta">
-            <span class="${pillClassForState(job.state)}">${escapeHtml(job.state)}</span>
-            <span class="pill">items ${items.length}</span>
-            <span class="pill">integration ${escapeHtml(job.integration_id || "none")}</span>
-            <span class="pill">scope ${escapeHtml(job.scope_id || "none")}</span>
-          </div>
-          <div class="list">${stageRows || '<div class="empty">No items for this job.</div>'}</div>
-          <div class="detail"><pre>${escapeHtml(JSON.stringify({ job, items }, null, 2))}</pre></div>
-        `;
-      } catch (error) {
-        detail.className = "empty";
-        detail.textContent = `Failed to load job detail: ${error.message}`;
-      }
+    function parseOptionalJson(value) {
+      if (!value.trim()) return {};
+      return JSON.parse(value);
     }
 
     function mergeObjects(base, extra) {
@@ -1084,51 +884,424 @@
       return merged;
     }
 
-    function parseOptionalJson(value) {
-      if (!value.trim()) {
-        return {};
-      }
-      return JSON.parse(value);
-    }
-
     function setStatus(id, message, isError = false) {
       const node = document.getElementById(id);
       node.textContent = message;
       node.className = isError ? "status-line error" : "status-line";
     }
 
-    function escapeHtml(value) {
-      return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;");
+    function pillClass(value) {
+      const normalized = String(value || "").toLowerCase();
+      if (["healthy", "enabled", "completed", "protected", "clean", "active"].includes(normalized)) return "pill good";
+      if (["failed", "cancelled", "unhealthy", "disabled", "malicious"].includes(normalized)) return "pill bad";
+      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only"].includes(normalized)) return "pill warn";
+      return "pill";
     }
+
+    function renderEmptyRow(target, colspan, message) {
+      target.innerHTML = `<tr><td colspan="${colspan}"><div class="empty">${escapeHtml(message)}</div></td></tr>`;
+    }
+
+    function selectTab(tabName) {
+      state.activeTab = tabName;
+      document.querySelectorAll(".tab").forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.tab === tabName));
+      });
+      document.querySelectorAll(".view").forEach((view) => {
+        view.classList.toggle("hidden", view.id !== `view-${tabName}`);
+      });
+    }
+
+    function selectAssetsTab(tabName) {
+      state.activeAssetsTab = tabName;
+      document.querySelectorAll(".subtab").forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.assetsTab === tabName));
+      });
+      document.querySelectorAll(".asset-pane").forEach((pane) => {
+        pane.classList.toggle("hidden", pane.id !== `asset-pane-${tabName}`);
+      });
+      if (tabName === "protected" && !state.protectedAssetsLoaded) {
+        loadProtectedAssets().catch(showProtectedAssetsError);
+      }
+    }
+
+    function renderTopStats() {
+      const healthy = state.connectorRows.filter((row) => row.health?.status === "healthy").length;
+      document.getElementById("stat-integrations").textContent = `${state.integrations.length} integrations`;
+      document.getElementById("stat-scopes").textContent = `${state.scopes.length} scopes`;
+      document.getElementById("stat-jobs").textContent = `${state.scanResults.length} jobs`;
+      document.getElementById("stat-healthy").textContent = `${healthy} healthy`;
+      document.getElementById("metric-connectors").textContent = String(state.connectorRows.length);
+      document.getElementById("metric-healthy").textContent = String(healthy);
+      document.getElementById("metric-enabled").textContent = String(state.connectorRows.filter((row) => row.integration.enabled).length);
+      document.getElementById("metric-scopes").textContent = String(state.scopes.length);
+    }
+
+    function renderConnectors() {
+      const body = document.getElementById("connectors-body");
+      body.innerHTML = "";
+      if (!state.connectorRows.length) {
+        renderEmptyRow(body, 8, "No connectors configured.");
+        return;
+      }
+      for (const row of state.connectorRows) {
+        const integration = row.integration;
+        const capabilities = integration.remediation_capabilities || {};
+        const endpoint = row.proxy_base_url || "not configured";
+        body.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td>
+              <strong>${escapeHtml(integration.display_name)}</strong><br>
+              <span class="mono">${escapeHtml(integration.integration_id)}</span>
+            </td>
+            <td>${escapeHtml(integration.platform)}</td>
+            <td><span class="${pillClass(row.health?.status)}">${escapeHtml(row.health?.status || "unknown")}</span></td>
+            <td>${row.scope_count}</td>
+            <td>${escapeHtml(row.reader_strategy || "unknown")}</td>
+            <td>
+              <span class="pill">move ${capabilities.supports_move ? "yes" : "no"}</span>
+              <span class="pill">tag ${capabilities.supports_tag ? "yes" : "no"}</span>
+            </td>
+            <td><span class="mono">${escapeHtml(endpoint)}</span></td>
+            <td class="actions">
+              <button type="button" data-action="toggle-integration" data-id="${escapeHtml(integration.integration_id)}" data-enabled="${integration.enabled ? "false" : "true"}">${integration.enabled ? "Disable" : "Enable"}</button>
+            </td>
+          </tr>
+        `);
+      }
+    }
+
+    function renderProtectedAssets(payload = null) {
+      const body = document.getElementById("protected-assets-body");
+      const assets = state.protectedAssets;
+      const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
+      const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
+      document.getElementById("metric-assets").textContent = String(assets.length);
+      document.getElementById("metric-protected").textContent = String(protectedCount);
+      document.getElementById("metric-unprotected").textContent = String(unprotectedCount);
+      document.getElementById("metric-unsupported").textContent = String((payload?.unsupported_integrations || []).length);
+      body.innerHTML = "";
+      if (!assets.length) {
+        renderEmptyRow(body, 8, "No assets returned for this filter.");
+        return;
+      }
+      for (const asset of assets) {
+        const policyId = asset.policy?.policy_id || asset.policy?.malicious_verdict?.action || "none";
+        const lastScan = asset.last_scan;
+        const findings = asset.findings || {};
+        const findingText = Object.keys(findings).length
+          ? `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`
+          : "none";
+        const lastScanText = lastScan
+          ? `${lastScan.state} ${lastScan.terminal_items || 0}/${lastScan.total_items || 0}`
+          : "never";
+        body.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td>
+              <strong>${escapeHtml(asset.display_name || asset.selector)}</strong><br>
+              <span class="mono">${escapeHtml(asset.selector)}</span>
+            </td>
+            <td>${escapeHtml(asset.integration_display_name)}<br><span class="mono">${escapeHtml(asset.integration_id)}</span></td>
+            <td>${escapeHtml(asset.asset_type)}</td>
+            <td><span class="${pillClass(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span></td>
+            <td>${escapeHtml(policyId)}</td>
+            <td>${lastScan ? `<span class="${pillClass(lastScan.state)}">${escapeHtml(lastScanText)}</span><br><span class="mono">${escapeHtml(lastScan.job_id)}</span>` : "never"}</td>
+            <td>${escapeHtml(findingText)}</td>
+            <td class="actions">
+              ${asset.coverage_state === "unprotected"
+                ? `<button type="button" data-action="prefill-scope" data-integration="${escapeHtml(asset.integration_id)}" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}">Protect</button>`
+                : `<button type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>`}
+            </td>
+          </tr>
+        `);
+      }
+    }
+
+    function renderScanResults() {
+      const body = document.getElementById("scan-results-body");
+      body.innerHTML = "";
+      if (!state.scanResults.length) {
+        renderEmptyRow(body, 8, "No scan results match this filter.");
+        renderTopStats();
+        return;
+      }
+      for (const result of state.scanResults) {
+        const job = result.job;
+        const progress = result.progress || {};
+        const findings = result.findings || {};
+        const remediation = result.remediation || {};
+        const progressText = `${progress.terminal_items || 0}/${progress.total_items || 0} (${progress.percent_complete ?? 0}%)`;
+        const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`;
+        const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
+        body.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td><strong>${escapeHtml(job.job_type)}</strong><br><span class="mono">${escapeHtml(job.job_id)}</span></td>
+            <td>${escapeHtml(result.target?.label || "unknown")}<br><span class="mono">${escapeHtml(result.target?.integration_id || "")}</span></td>
+            <td><span class="${pillClass(job.state)}">${escapeHtml(job.state)}</span></td>
+            <td>${escapeHtml(progressText)}</td>
+            <td>${escapeHtml(findingText)}</td>
+            <td>${escapeHtml(remediationText)}</td>
+            <td>${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}<br><span class="muted">in-flight files may finish</span></td>
+            <td class="actions"><button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(job.job_id)}">Inspect</button></td>
+          </tr>
+        `);
+      }
+      renderTopStats();
+    }
+
+    function renderPolicies() {
+      const body = document.getElementById("policies-body");
+      body.innerHTML = "";
+      if (!state.policies.length) {
+        renderEmptyRow(body, 6, "No policy assignments match this filter.");
+        return;
+      }
+      for (const policy of state.policies) {
+        const rules = policy.outcome_rules || {};
+        const assignments = (policy.assignments || [])
+          .map((assignment) => `${assignment.scope_display_name} (${assignment.source})`)
+          .join(", ");
+        body.insertAdjacentHTML("beforeend", `
+          <tr>
+            <td><strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span></td>
+            <td><span class="${pillClass(policy.status)}">${escapeHtml(policy.status)}</span></td>
+            <td>
+              <span class="pill">${escapeHtml(rules.malicious_action || "detect_only")}</span>
+              ${(rules.auto_dianna_on_verdicts || []).map((item) => `<span class="pill">dianna ${escapeHtml(item)}</span>`).join(" ")}
+            </td>
+            <td>${policy.assigned_assets || 0}</td>
+            <td>${escapeHtml(assignments || "none")}</td>
+            <td>${escapeHtml(policy.updated_at || "")}</td>
+          </tr>
+        `);
+      }
+    }
+
+    function renderScanResultDetail(jobId) {
+      const result = state.scanResults.find((item) => item.job.job_id === jobId);
+      const target = document.getElementById("scan-result-detail");
+      if (!result) {
+        target.innerHTML = '<div class="empty">Result not found.</div>';
+        return;
+      }
+      const latest = (result.latest_items || []).map((item) => `
+        <tr>
+          <td>${escapeHtml(item.object_identity)}</td>
+          <td><span class="${pillClass(item.state)}">${escapeHtml(item.state)}</span></td>
+          <td>${escapeHtml(item.scan)}</td>
+          <td>${escapeHtml(item.policy)}</td>
+          <td>${escapeHtml(item.remediation)}</td>
+          <td>${escapeHtml(item.failure_reason || "")}</td>
+        </tr>
+      `).join("");
+      target.innerHTML = `
+        <div class="cards">
+          <div class="card">
+            <div class="card-top">
+              <div>
+                <h3>${escapeHtml(result.target?.label || result.job.job_id)}</h3>
+                <p>${escapeHtml(result.cancel?.message || "")}</p>
+              </div>
+              <span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Policy</th><th>Remediation</th><th>Failure</th></tr></thead>
+              <tbody>${latest || '<tr><td colspan="6"><div class="empty">No sampled items.</div></td></tr>'}</tbody>
+            </table>
+          </div>
+          <div class="detail"><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></div>
+        </div>
+      `;
+    }
+
+    function populateSelects() {
+      const integrationOptions = ['<option value="">all</option>'].concat(
+        state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
+      ).join("");
+      document.getElementById("protected-filter-integration").innerHTML = integrationOptions;
+      document.getElementById("scan-results-filter-integration").innerHTML = integrationOptions;
+      document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
+      document.getElementById("scope-integration-id").innerHTML = state.integrations
+        .map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
+        .join("");
+      document.getElementById("scan-scope-id").innerHTML = state.scopes
+        .map((scope) => `<option value="${escapeHtml(scope.scope_id)}">${escapeHtml(scope.display_name)} (${escapeHtml(scope.scope_id)})</option>`)
+        .join("");
+    }
+
+    async function loadOverview() {
+      const overview = await fetchJson(endpoints.overview);
+      state.integrations = overview.integrations || [];
+      state.scopes = overview.scopes || [];
+      populateSelects();
+      renderTopStats();
+    }
+
+    async function loadConnectors() {
+      const payload = await fetchJson(endpoints.connectors);
+      state.connectorRows = payload.connectors || [];
+      state.integrations = state.connectorRows;
+      renderConnectors();
+      populateSelects();
+      renderTopStats();
+    }
+
+    async function loadProtectedAssets() {
+      const params = new URLSearchParams();
+      const connectorType = document.getElementById("protected-filter-connector-type").value.trim();
+      const integrationId = document.getElementById("protected-filter-integration").value;
+      const assetType = document.getElementById("protected-filter-type").value;
+      const source = document.getElementById("protected-filter-source").value;
+      const coverage = document.getElementById("protected-filter-coverage").value;
+      if (connectorType) params.set("connector_type", connectorType);
+      if (integrationId) params.set("integration_id", integrationId);
+      if (assetType) params.set("type", assetType);
+      if (source) params.set("source", source);
+      if (coverage) params.set("coverage_state", coverage);
+      const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
+      state.protectedAssets = payload.assets || [];
+      state.protectedAssetsLoaded = true;
+      renderProtectedAssets(payload);
+    }
+
+    function showProtectedAssetsError(error) {
+      state.protectedAssetsLoaded = false;
+      document.getElementById("protected-assets-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div></td></tr>`;
+    }
+
+    async function loadScanResults() {
+      const params = new URLSearchParams();
+      const integrationId = document.getElementById("scan-results-filter-integration").value;
+      const stateFilter = document.getElementById("scan-results-filter-state").value;
+      const itemLimit = document.getElementById("scan-results-filter-item-limit").value;
+      if (integrationId) params.set("integration_id", integrationId);
+      if (stateFilter) params.set("state", stateFilter);
+      params.set("item_limit", itemLimit);
+      const payload = await fetchJson(`${endpoints.scanResults}?${params.toString()}`);
+      state.scanResults = payload.results || [];
+      renderScanResults();
+    }
+
+    async function loadPolicies() {
+      const params = new URLSearchParams();
+      const integrationId = document.getElementById("policy-filter-integration").value;
+      if (integrationId) params.set("integration_id", integrationId);
+      const payload = await fetchJson(`${endpoints.policies}?${params.toString()}`);
+      state.policies = payload.policies || [];
+      renderPolicies();
+    }
+
+    async function refreshAll() {
+      await loadOverview();
+      await loadConnectors();
+      await loadScanResults();
+      await loadPolicies();
+      if (state.activeAssetsTab === "protected") {
+        await loadProtectedAssets();
+      }
+    }
+
+    function buildPolicyFromScopeForm(form) {
+      const policy = {
+        malicious_verdict: {
+          action: form.malicious_action.value,
+        },
+      };
+      if (form.policy_id.value.trim()) {
+        policy.policy_id = form.policy_id.value.trim();
+      }
+      return mergeObjects(policy, parseOptionalJson(form.advanced_policy_json.value));
+    }
+
+    document.querySelectorAll(".tab").forEach((button) => {
+      button.addEventListener("click", () => selectTab(button.dataset.tab));
+    });
+
+    document.querySelectorAll(".subtab").forEach((button) => {
+      button.addEventListener("click", () => selectAssetsTab(button.dataset.assetsTab));
+    });
+
+    document.getElementById("refresh-all").addEventListener("click", () => {
+      refreshAll().catch((error) => alert(`Refresh failed: ${error.message}`));
+    });
+    document.getElementById("refresh-protected-assets").addEventListener("click", () => {
+      loadProtectedAssets().catch(showProtectedAssetsError);
+    });
+    document.getElementById("refresh-scan-results").addEventListener("click", () => {
+      loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
+    });
+    document.getElementById("apply-scan-results").addEventListener("click", () => {
+      loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
+    });
+    document.getElementById("refresh-policies").addEventListener("click", () => {
+      loadPolicies().catch((error) => alert(`Policy refresh failed: ${error.message}`));
+    });
+    document.getElementById("apply-policy-filter").addEventListener("click", () => {
+      loadPolicies().catch((error) => alert(`Policy refresh failed: ${error.message}`));
+    });
+
+    document.getElementById("connectors-body").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action='toggle-integration']");
+      if (!button) return;
+      button.disabled = true;
+      try {
+        await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(button.dataset.id)}/enabled`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
+        });
+        await loadConnectors();
+      } catch (error) {
+        alert(`Integration update failed: ${error.message}`);
+        button.disabled = false;
+      }
+    });
+
+    document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
+      const prefill = event.target.closest("[data-action='prefill-scope']");
+      if (prefill) {
+        const form = document.getElementById("scope-form");
+        form.integration_id.value = prefill.dataset.integration;
+        form.display_name.value = prefill.dataset.name || prefill.dataset.selector;
+        form.resource_selector.value = prefill.dataset.selector;
+        form.policy_id.value = "";
+        form.malicious_action.value = "detect_only";
+        selectTab("assets");
+        setStatus("scope-form-status", `Ready to protect ${prefill.dataset.selector}.`);
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      const scan = event.target.closest("[data-action='scan-asset-scope']");
+      if (scan && scan.dataset.scope) {
+        document.getElementById("scan-scope-id").value = scan.dataset.scope;
+        document.getElementById("scan-scope-form").requestSubmit();
+      }
+    });
+
+    document.getElementById("scan-results-body").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='inspect-scan-result']");
+      if (!button) return;
+      renderScanResultDetail(button.dataset.id);
+    });
 
     document.getElementById("integration-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      setStatus("integration-form-status", "Creating integration…");
+      setStatus("integration-form-status", "Creating integration...");
       try {
-        const extra = parseOptionalJson(form.advanced_config_json.value);
         let config = {
           reader: {
             default_strategy: form.reader_strategy.value,
           },
-          remediation: {
-            supports_delete: form.supports_delete.checked,
-            supports_move: form.supports_move.checked,
-            supports_tag: form.supports_tag.checked,
-            supports_movetag: form.supports_movetag.checked,
-          },
         };
-        if (form.proxy_base_url.value || form.connector_name.value) {
+        if (form.proxy_base_url.value.trim() || form.connector_name.value.trim()) {
           config.reader.proxy = {
-            base_url: form.proxy_base_url.value || null,
-            connector_name: form.connector_name.value || null,
+            base_url: form.proxy_base_url.value.trim() || null,
+            connector_name: form.connector_name.value.trim() || null,
           };
         }
-        config = mergeObjects(config, extra);
+        config = mergeObjects(config, parseOptionalJson(form.advanced_config_json.value));
         await fetchJson(endpoints.createIntegration, {
           method: "POST",
           body: JSON.stringify({
@@ -1138,7 +1311,6 @@
             enabled: form.enabled.checked,
             capability_discover: form.capability_discover.checked,
             capability_monitor: form.capability_monitor.checked,
-            capability_enumerate: form.capability_enumerate.checked,
             capability_read: form.capability_read.checked,
             capability_remediate: form.capability_remediate.checked,
             config,
@@ -1149,12 +1321,9 @@
         form.capability_discover.checked = true;
         form.capability_monitor.checked = true;
         form.capability_remediate.checked = true;
-        form.supports_move.checked = true;
-        form.supports_tag.checked = true;
-        form.supports_movetag.checked = true;
         form.reader_strategy.value = "proxy";
         setStatus("integration-form-status", "Integration created.");
-        await loadOverview();
+        await refreshAll();
       } catch (error) {
         setStatus("integration-form-status", `Create failed: ${error.message}`, true);
       }
@@ -1163,22 +1332,8 @@
     document.getElementById("scope-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      setStatus("scope-form-status", "Creating scope…");
+      setStatus("scope-form-status", "Creating protected scope...");
       try {
-        const extra = parseOptionalJson(form.advanced_policy_json.value);
-        let postScanPolicy = {
-          malicious_verdict: {
-            action: form.malicious_action.value,
-          },
-        };
-        if (form.quarantine_path.value) {
-          postScanPolicy.malicious_verdict.quarantine_target = {
-            path: form.quarantine_path.value,
-            preserve_relative_path: false,
-          };
-          postScanPolicy.malicious_verdict.tag_on_quarantine = form.tag_on_quarantine.checked;
-        }
-        postScanPolicy = mergeObjects(postScanPolicy, extra);
         await fetchJson(endpoints.createScope, {
           method: "POST",
           body: JSON.stringify({
@@ -1188,169 +1343,51 @@
             resource_selector: form.resource_selector.value,
             mode: form.mode.value,
             enabled: form.enabled.checked,
-            post_scan_policy: postScanPolicy,
+            post_scan_policy: buildPolicyFromScopeForm(form),
           }),
         });
         form.reset();
         form.enabled.checked = true;
-        form.tag_on_quarantine.checked = true;
-        form.mode.value = "full_scan";
         form.scope_type.value = "path";
+        form.mode.value = "full_scan";
         form.malicious_action.value = "detect_only";
-        setStatus("scope-form-status", "Scope created.");
-        await loadOverview();
-        await refreshAssetsQuietly();
+        setStatus("scope-form-status", "Protected scope created.");
+        await refreshAll();
+        if (state.activeAssetsTab === "protected") {
+          await loadProtectedAssets();
+        }
       } catch (error) {
         setStatus("scope-form-status", `Create failed: ${error.message}`, true);
       }
     });
 
-    document.getElementById("scan-integration-id").addEventListener("change", populateScanControls);
-
-    document.getElementById("scan-item-form").addEventListener("submit", async (event) => {
+    document.getElementById("scan-scope-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      setStatus("scan-item-form-status", "Starting scan...");
+      setStatus("scan-scope-form-status", "Starting scan...");
       try {
-        const objectIdentity = form.object_identity.value.trim();
-        let itemPayload = mergeObjects({ readerStrategy: "proxy" }, parseOptionalJson(form.item_payload_json.value));
-        itemPayload.path = form.path.value.trim() || objectIdentity;
-        const batch = await fetchJson(endpoints.submitBatch, {
-          method: "POST",
-          body: JSON.stringify({
-            integration_id: form.integration_id.value,
-            scope_id: form.scope_id.value,
-            items: [
-              {
-                object_identity: objectIdentity,
-                payload: itemPayload,
-              },
-            ],
-          }),
-        });
-        const jobId = batch.job.job_id;
-        setStatus("scan-item-form-status", `Scan started: ${jobId}`);
-        form.object_identity.value = "";
-        form.path.value = "";
-        form.item_payload_json.value = "";
-        state.selectedJobId = jobId;
-        await loadOverview();
-        await loadJobDetail(jobId);
-      } catch (error) {
-        setStatus("scan-item-form-status", `Scan failed: ${error.message}`, true);
-      }
-    });
-
-    document.getElementById("refresh-integrations").addEventListener("click", loadOverview);
-    document.getElementById("refresh-scopes").addEventListener("click", loadOverview);
-    document.getElementById("refresh-jobs").addEventListener("click", async () => {
-      state.jobSummaries = await fetchJson(endpoints.uiJobs);
-      state.jobs = state.jobSummaries.map((summary) => summary.job);
-      renderHero();
-      renderJobs();
-    });
-    document.getElementById("refresh-assets").addEventListener("click", () => {
-      loadAssets().catch((error) => {
-        document.getElementById("assets-list").innerHTML = `<div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div>`;
-      });
-    });
-    document.getElementById("asset-integration-id").addEventListener("change", () => {
-      loadAssets().catch((error) => {
-        document.getElementById("assets-list").innerHTML = `<div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div>`;
-      });
-    });
-    document.getElementById("asset-type").addEventListener("change", () => {
-      loadAssets().catch((error) => {
-        document.getElementById("assets-list").innerHTML = `<div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div>`;
-      });
-    });
-    document.getElementById("asset-source").addEventListener("change", () => {
-      loadAssets().catch((error) => {
-        document.getElementById("assets-list").innerHTML = `<div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div>`;
-      });
-    });
-
-    document.getElementById("integrations-list").addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-action='toggle-integration']");
-      if (!button) return;
-      button.disabled = true;
-      button.textContent = "Updating...";
-      try {
-        await fetchJson(`/api/v1/control-plane/integrations/${encodeURIComponent(button.dataset.id)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
-        });
-        await loadOverview();
-      } catch (error) {
-        button.disabled = false;
-        button.textContent = "Retry";
-        alert(`Integration update failed: ${error.message}`);
-      }
-    });
-
-    document.getElementById("assets-list").addEventListener("click", async (event) => {
-      const createButton = event.target.closest("[data-action='create-scope']");
-      if (createButton) {
-        await createScopeFromAssetButton(createButton);
-        return;
-      }
-      const button = event.target.closest("[data-action='prefill-scope']");
-      if (!button) return;
-      const scopeForm = document.getElementById("scope-form");
-      scopeForm.integration_id.value = document.getElementById("asset-integration-id").value;
-      scopeForm.display_name.value = button.dataset.name || button.dataset.selector;
-      scopeForm.resource_selector.value = button.dataset.selector;
-      scopeForm.scope_type.value = "path";
-      scopeForm.mode.value = "full_scan";
-      scopeForm.malicious_action.value = "detect_only";
-      scopeForm.quarantine_path.value = "";
-      scopeForm.advanced_policy_json.value = "";
-      scopeForm.enabled.checked = true;
-      scopeForm.tag_on_quarantine.checked = true;
-      setStatus("scope-form-status", `Scope form populated for ${button.dataset.selector}.`);
-      scopeForm.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-
-    document.getElementById("scopes-list").addEventListener("click", async (event) => {
-      const scanButton = event.target.closest("[data-action='scan-scope']");
-      if (scanButton) {
-        scanButton.disabled = true;
-        scanButton.textContent = "Starting...";
-        try {
-          const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scanButton.dataset.id)}/scan`, {
-            method: "POST",
-            body: JSON.stringify({ reader_strategy: "proxy" }),
-          });
-          const jobId = batch.job.job_id;
-          state.selectedJobId = jobId;
-          await loadOverview();
-          await loadJobDetail(jobId);
-        } catch (error) {
-          scanButton.disabled = false;
-          scanButton.textContent = "Retry Scan";
-          alert(`Scope scan failed: ${error.message}`);
+        const scopeId = form.scope_id.value;
+        const payload = {
+          reader_strategy: form.reader_strategy.value,
+        };
+        if (form.path.value.trim()) {
+          payload.path = form.path.value.trim();
         }
-        return;
-      }
-      const button = event.target.closest("[data-action='toggle-scope']");
-      if (!button) return;
-      button.disabled = true;
-      button.textContent = "Updating...";
-      try {
-        await fetchJson(`/api/v1/control-plane/scopes/${encodeURIComponent(button.dataset.id)}`, {
-          method: "PATCH",
-          body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
+        const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
+          method: "POST",
+          body: JSON.stringify(payload),
         });
-        await loadOverview();
+        setStatus("scan-scope-form-status", `Scan started: ${batch.job.job_id}`);
+        form.path.value = "";
+        await loadScanResults();
+        selectTab("scan-results");
       } catch (error) {
-        button.disabled = false;
-        button.textContent = "Retry";
-        alert(`Scope update failed: ${error.message}`);
+        setStatus("scan-scope-form-status", `Scan failed: ${error.message}`, true);
       }
     });
 
-    loadOverview().catch((error) => {
-      document.getElementById("integrations-list").innerHTML = `<div class="empty">Failed to load operator console data: ${escapeHtml(error.message)}</div>`;
+    refreshAll().catch((error) => {
+      document.getElementById("connectors-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load console data: ${escapeHtml(error.message)}</div></td></tr>`;
     });
   </script>
 </body>

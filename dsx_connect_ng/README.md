@@ -4,6 +4,8 @@
 
 It exists to implement the next-generation control plane and worker model without coupling new architecture decisions to the current `dsx_connect` runtime.
 
+Package-local docs now live under [docs/index.md](docs/index.md).
+
 ## Goals
 
 - keep next-generation implementation isolated from legacy `dsx_connect`

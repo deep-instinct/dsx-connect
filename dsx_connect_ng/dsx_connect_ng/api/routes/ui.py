@@ -14,8 +14,15 @@ from pydantic import BaseModel, Field
 from dsx_connect_ng.api.dependencies import get_control_plane_service
 from dsx_connect_ng.api.job_service_dependencies import get_job_service
 from dsx_connect_ng.config import settings
-from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config
-from dsx_connect_ng.control_plane.models import IntegrationRecord, ProtectedScopeRecord
+from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config, resolve_policy_runtime_config
+from dsx_connect_ng.control_plane.models import (
+    IntegrationCreate,
+    IntegrationRecord,
+    IntegrationUpdate,
+    ProtectedScopeCreate,
+    ProtectedScopeRecord,
+    ProtectedScopeUpdate,
+)
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.models import BatchJobRecord, BatchJobSubmitRequest, JobItemRecord, JobItemSummary, JobRecord
 from dsx_connect_ng.jobs.service import JobService
@@ -61,11 +68,75 @@ class UIJobSummary(BaseModel):
     failure_reason: str | None = None
 
 
+class UIScanResultProgressSummary(BaseModel):
+    total_items: int = 0
+    terminal_items: int = 0
+    percent_complete: float | None = None
+    completed_items: int = 0
+    failed_items: int = 0
+    cancelled_items: int = 0
+
+
+class UIScanResultFindingsSummary(BaseModel):
+    clean: int = 0
+    malicious: int = 0
+    suspicious: int = 0
+    unknown: int = 0
+    failed: int = 0
+    cancelled: int = 0
+    sampled_items: int = 0
+    sample_limit: int = 0
+
+
+class UIScanResultRemediationSummary(BaseModel):
+    pending: int = 0
+    running: int = 0
+    completed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    not_required: int = 0
+
+
+class UIScanResultTargetSummary(BaseModel):
+    integration_id: str | None = None
+    scope_id: str | None = None
+    object_identity: str | None = None
+    source: str | None = None
+    label: str | None = None
+
+
+class UICancelSemantics(BaseModel):
+    mode: str = "cooperative"
+    message: str = "Cancel stops future work quickly; files already claimed into an in-memory scan batch may finish."
+    immediate_file_level_cancel: bool = False
+
+
+class UIScanResultSummary(BaseModel):
+    job: JobRecord
+    target: UIScanResultTargetSummary
+    progress: UIScanResultProgressSummary
+    findings: UIScanResultFindingsSummary
+    remediation: UIScanResultRemediationSummary
+    started_at: str
+    finished_at: str | None = None
+    cancel: UICancelSemantics = Field(default_factory=UICancelSemantics)
+    latest_items: list[UIJobItemStageSummary] = Field(default_factory=list)
+    failure_reason: str | None = None
+
+
+class UIScanResultsResponse(BaseModel):
+    results: list[UIScanResultSummary] = Field(default_factory=list)
+
+
 class UIOverview(BaseModel):
     integrations: list[UIIntegrationSummary] = Field(default_factory=list)
     scopes: list[ProtectedScopeRecord] = Field(default_factory=list)
     jobs: list[JobRecord] = Field(default_factory=list)
     job_summaries: list[UIJobSummary] = Field(default_factory=list)
+
+
+class UIAssetsConnectorsResponse(BaseModel):
+    connectors: list[UIIntegrationSummary] = Field(default_factory=list)
 
 
 class UIScopeScanRequest(BaseModel):
@@ -93,6 +164,62 @@ class UIAssetDiscoveryResponse(BaseModel):
     unsupported: bool = False
     message: str | None = None
     required_permission: str | None = None
+
+
+class UIProtectedAssetSummary(BaseModel):
+    integration_id: str
+    integration_display_name: str
+    platform: str
+    asset_type: str
+    id: str
+    display_name: str | None = None
+    selector: str
+    coverage_state: str = "unknown"
+    matching_scope_id: str | None = None
+    policy: dict[str, Any] = Field(default_factory=dict)
+    last_scan: dict[str, Any] | None = None
+    findings: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class UIAssetsProtectedResponse(BaseModel):
+    assets: list[UIProtectedAssetSummary] = Field(default_factory=list)
+    unsupported_integrations: list[str] = Field(default_factory=list)
+    failed_integrations: list[dict[str, Any]] = Field(default_factory=list)
+    next_cursors: dict[str, str | None] = Field(default_factory=dict)
+
+
+class UIPolicyAssignmentSummary(BaseModel):
+    integration_id: str
+    integration_display_name: str
+    scope_id: str
+    scope_display_name: str
+    selector: str
+    enabled: bool
+    source: str = "scope"
+
+
+class UIPolicySummary(BaseModel):
+    policy_id: str
+    display_name: str
+    status: str = "active"
+    definition: dict[str, Any] = Field(default_factory=dict)
+    outcome_rules: dict[str, Any] = Field(default_factory=dict)
+    assigned_assets: int = 0
+    assignments: list[UIPolicyAssignmentSummary] = Field(default_factory=list)
+    updated_at: str | None = None
+
+
+class UIPoliciesResponse(BaseModel):
+    policies: list[UIPolicySummary] = Field(default_factory=list)
+
+
+class UIScopePolicyUpdateRequest(BaseModel):
+    policy: dict[str, Any] = Field(default_factory=dict)
+
+
+class UIToggleEnabledRequest(BaseModel):
+    enabled: bool
 
 
 def _failure_reason_from_item(item: JobItemRecord) -> str | None:
@@ -131,6 +258,111 @@ def _summarize_job(job_service: JobService, job: JobRecord) -> UIJobSummary:
         job=job,
         item_summary=batch.item_summary,
         latest_items=[_summarize_job_item(item) for item in items],
+        failure_reason=failure_reason,
+    )
+
+
+def _verdict_bucket(verdict: str | None) -> str:
+    normalized = str(verdict or "").strip().lower()
+    if normalized in {"benign", "clean", "allowed", "allow"}:
+        return "clean"
+    if normalized in {"malicious", "malware", "infected", "non-compliant", "non_compliant"}:
+        return "malicious"
+    if normalized in {"suspicious"}:
+        return "suspicious"
+    return "unknown"
+
+
+def _summarize_findings(items: list[JobItemRecord], *, sample_limit: int) -> UIScanResultFindingsSummary:
+    findings = UIScanResultFindingsSummary(sampled_items=len(items), sample_limit=sample_limit)
+    for item in items:
+        if item.state == "failed":
+            findings.failed += 1
+            continue
+        if item.state == "cancelled":
+            findings.cancelled += 1
+            continue
+        if item.scan_stage.state != "completed":
+            findings.unknown += 1
+            continue
+        bucket = _verdict_bucket((item.scan_stage.result or {}).get("verdict"))
+        if bucket == "clean":
+            findings.clean += 1
+        elif bucket == "malicious":
+            findings.malicious += 1
+        elif bucket == "suspicious":
+            findings.suspicious += 1
+        else:
+            findings.unknown += 1
+    return findings
+
+
+def _summarize_remediation(items: list[JobItemRecord]) -> UIScanResultRemediationSummary:
+    summary = UIScanResultRemediationSummary()
+    for item in items:
+        state = item.remediation_stage.state
+        if state == "pending":
+            if item.scan_stage.state in {"pending", "running"} or item.state in {"accepted", "publish_pending", "queued", "scanning"}:
+                summary.not_required += 1
+            else:
+                summary.pending += 1
+        elif state == "running":
+            summary.running += 1
+        elif state == "completed":
+            summary.completed += 1
+        elif state == "failed":
+            summary.failed += 1
+        elif state == "skipped":
+            summary.skipped += 1
+    return summary
+
+
+def _scan_result_target(job: JobRecord) -> UIScanResultTargetSummary:
+    payload = job.payload or {}
+    label = (
+        payload.get("scopeSelector")
+        or payload.get("selector")
+        or payload.get("path")
+        or job.object_identity
+        or job.scope_id
+        or job.integration_id
+    )
+    return UIScanResultTargetSummary(
+        integration_id=job.integration_id,
+        scope_id=job.scope_id,
+        object_identity=job.object_identity,
+        source=payload.get("source"),
+        label=str(label) if label is not None else None,
+    )
+
+
+def _summarize_scan_result(job_service: JobService, job: JobRecord, *, item_limit: int) -> UIScanResultSummary:
+    progress = job_service.get_job_progress(job.job_id, item_limit=item_limit)
+    items = job_service.list_job_items(job_id=job.job_id, limit=item_limit)
+    failure_reason = None
+    if job.error:
+        failure_reason = str(job.error.get("reason") or job.error.get("code") or job.error.get("message") or "failed")
+    if failure_reason is None:
+        for item in items:
+            failure_reason = _failure_reason_from_item(item)
+            if failure_reason:
+                break
+    return UIScanResultSummary(
+        job=job,
+        target=_scan_result_target(job),
+        progress=UIScanResultProgressSummary(
+            total_items=progress.total_items,
+            terminal_items=progress.terminal_items,
+            percent_complete=progress.percent_complete,
+            completed_items=progress.item_summary.completed,
+            failed_items=progress.item_summary.failed,
+            cancelled_items=progress.item_summary.cancelled,
+        ),
+        findings=_summarize_findings(items, sample_limit=item_limit),
+        remediation=_summarize_remediation(items),
+        started_at=job.created_at.isoformat(),
+        finished_at=job.completed_at.isoformat() if job.completed_at is not None else None,
+        latest_items=[_summarize_job_item(item) for item in items[:5]],
         failure_reason=failure_reason,
     )
 
@@ -299,6 +531,21 @@ def _summarize_integration(
     )
 
 
+def _list_ui_integration_summaries(service: ControlPlaneService) -> list[UIIntegrationSummary]:
+    integrations = service.list_integrations()
+    scopes = service.list_scopes()
+    scopes_by_integration: dict[str, list[ProtectedScopeRecord]] = {}
+    for scope in scopes:
+        scopes_by_integration.setdefault(scope.integration_id, []).append(scope)
+    return [
+        _summarize_integration(
+            integration,
+            scopes=scopes_by_integration.get(integration.integration_id, []),
+        )
+        for integration in integrations
+    ]
+
+
 def _selector_key(value: str | None) -> str:
     return str(value or "").strip().strip("/")
 
@@ -355,6 +602,161 @@ def _summarize_assets(
     )
 
 
+def _scope_policy(scopes_by_id: dict[str, ProtectedScopeRecord], scope_id: str | None) -> dict[str, Any]:
+    if not scope_id:
+        return {}
+    scope = scopes_by_id.get(scope_id)
+    return scope.post_scan_policy if scope is not None else {}
+
+
+def _latest_jobs_by_scope(job_service: JobService, *, integration_ids: set[str], limit_per_integration: int = 200) -> dict[str, JobRecord]:
+    latest: dict[str, JobRecord] = {}
+    for integration_id in integration_ids:
+        for job in job_service.list_jobs(integration_id=integration_id, limit=limit_per_integration):
+            if not job.scope_id:
+                continue
+            existing = latest.get(job.scope_id)
+            if existing is None or job.created_at > existing.created_at:
+                latest[job.scope_id] = job
+    return latest
+
+
+def _protected_asset_last_scan(job_service: JobService, job: JobRecord | None, *, item_limit: int = 100) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    if job is None:
+        return None, {}
+    progress = job_service.get_job_progress(job.job_id, item_limit=item_limit)
+    job = job_service.get_job_or_404(job.job_id)
+    items = job_service.list_job_items(job_id=job.job_id, limit=item_limit)
+    findings = _summarize_findings(items, sample_limit=item_limit)
+    last_scan = {
+        "job_id": job.job_id,
+        "state": job.state,
+        "job_type": job.job_type,
+        "started_at": job.created_at.isoformat(),
+        "finished_at": job.completed_at.isoformat() if job.completed_at is not None else None,
+        "total_items": progress.total_items,
+        "terminal_items": progress.terminal_items,
+        "percent_complete": progress.percent_complete,
+        "completed_items": progress.item_summary.completed,
+        "failed_items": progress.item_summary.failed,
+        "cancelled_items": progress.item_summary.cancelled,
+    }
+    return last_scan, findings.model_dump(mode="json")
+
+
+def _summarize_protected_assets_for_integration(
+    *,
+    integration: IntegrationRecord,
+    asset_response: UIAssetDiscoveryResponse,
+    scopes_by_id: dict[str, ProtectedScopeRecord],
+    job_service: JobService,
+    latest_jobs_by_scope: dict[str, JobRecord],
+) -> list[UIProtectedAssetSummary]:
+    assets: list[UIProtectedAssetSummary] = []
+    for asset in asset_response.assets:
+        last_scan, findings = _protected_asset_last_scan(
+            job_service,
+            latest_jobs_by_scope.get(asset.matching_scope_id or ""),
+        )
+        assets.append(
+            UIProtectedAssetSummary(
+                integration_id=integration.integration_id,
+                integration_display_name=integration.display_name,
+                platform=integration.platform,
+                asset_type=asset_response.asset_type,
+                id=asset.id,
+                display_name=asset.display_name,
+                selector=asset.selector,
+                coverage_state=asset.coverage_state,
+                matching_scope_id=asset.matching_scope_id,
+                policy=_scope_policy(scopes_by_id, asset.matching_scope_id),
+                last_scan=last_scan,
+                findings=findings,
+                metadata=asset.metadata,
+            )
+        )
+    return assets
+
+
+def _policy_source(integration: IntegrationRecord, scope: ProtectedScopeRecord) -> str | None:
+    if scope.post_scan_policy:
+        return "scope"
+    runtime = parse_integration_runtime_config(integration.config)
+    if runtime.policy is not None:
+        return "integration"
+    return None
+
+
+def _policy_identity(integration: IntegrationRecord, scope: ProtectedScopeRecord, definition: dict[str, Any], source: str) -> str:
+    if definition.get("policy_id"):
+        return str(definition["policy_id"])
+    if source == "integration":
+        return f"integration:{integration.integration_id}"
+    return f"scope:{scope.scope_id}"
+
+
+def _policy_outcome_rules(definition: dict[str, Any]) -> dict[str, Any]:
+    malicious = definition.get("malicious_verdict") or {}
+    return {
+        "malicious_action": malicious.get("action"),
+        "auto_dianna_on_verdicts": definition.get("auto_dianna_on_verdicts") or [],
+        "non_compliant_treatment": definition.get("non_compliant_treatment"),
+        "not_scanned_treatment": definition.get("not_scanned_treatment"),
+        "remediation_verdicts": sorted((definition.get("remediation_plan_by_verdict") or {}).keys()),
+        "result_delivery_policy": definition.get("result_delivery_policy") or {},
+    }
+
+
+def _list_policy_summaries(control_plane: ControlPlaneService, *, integration_id: str | None = None) -> list[UIPolicySummary]:
+    integrations = control_plane.list_integrations()
+    if integration_id is not None:
+        integrations = [integration for integration in integrations if integration.integration_id == integration_id]
+    integrations_by_id = {integration.integration_id: integration for integration in integrations}
+    scopes = [
+        scope
+        for scope in control_plane.list_scopes()
+        if scope.integration_id in integrations_by_id
+    ]
+    policies: dict[str, UIPolicySummary] = {}
+    for scope in scopes:
+        integration = integrations_by_id[scope.integration_id]
+        source = _policy_source(integration, scope)
+        if source is None:
+            continue
+        resolved = resolve_policy_runtime_config(integration.config, scope.post_scan_policy)
+        definition = resolved.model_dump(mode="json", exclude_none=True)
+        if not definition:
+            continue
+        policy_id = _policy_identity(integration, scope, definition, source)
+        assignment = UIPolicyAssignmentSummary(
+            integration_id=integration.integration_id,
+            integration_display_name=integration.display_name,
+            scope_id=scope.scope_id,
+            scope_display_name=scope.display_name,
+            selector=scope.resource_selector,
+            enabled=scope.enabled,
+            source=source,
+        )
+        existing = policies.get(policy_id)
+        if existing is None:
+            existing = UIPolicySummary(
+                policy_id=policy_id,
+                display_name=str(definition.get("policy_id") or scope.display_name or integration.display_name),
+                status="active" if scope.enabled else "disabled",
+                definition=definition,
+                outcome_rules=_policy_outcome_rules(definition),
+                updated_at=scope.updated_at.isoformat(),
+            )
+            policies[policy_id] = existing
+        existing.assignments.append(assignment)
+        existing.assigned_assets = len(existing.assignments)
+        if assignment.enabled:
+            existing.status = "active"
+        if existing.updated_at is None or scope.updated_at.isoformat() > existing.updated_at:
+            existing.updated_at = scope.updated_at.isoformat()
+    return sorted(policies.values(), key=lambda policy: policy.display_name.lower())
+
+
 @router.get("", include_in_schema=False, response_class=HTMLResponse)
 async def operator_console() -> HTMLResponse:
     return HTMLResponse(_load_operator_console_html())
@@ -383,18 +785,40 @@ async def ui_status() -> dict:
 async def list_ui_integrations(
     service: ControlPlaneService = Depends(get_control_plane_service),
 ) -> list[UIIntegrationSummary]:
-    integrations = service.list_integrations()
-    scopes = service.list_scopes()
-    scopes_by_integration: dict[str, list[ProtectedScopeRecord]] = {}
-    for scope in scopes:
-        scopes_by_integration.setdefault(scope.integration_id, []).append(scope)
-    return [
-        _summarize_integration(
-            integration,
-            scopes=scopes_by_integration.get(integration.integration_id, []),
-        )
-        for integration in integrations
-    ]
+    return _list_ui_integration_summaries(service)
+
+
+@router.get("/assets/connectors", response_model=UIAssetsConnectorsResponse)
+async def list_asset_connectors(
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> UIAssetsConnectorsResponse:
+    return UIAssetsConnectorsResponse(connectors=_list_ui_integration_summaries(service))
+
+
+@router.post("/integrations", response_model=IntegrationRecord)
+async def create_ui_integration(
+    payload: IntegrationCreate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> IntegrationRecord:
+    return control_plane.create_integration(payload)
+
+
+@router.patch("/integrations/{integration_id}", response_model=IntegrationRecord)
+async def update_ui_integration(
+    integration_id: str,
+    payload: IntegrationUpdate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> IntegrationRecord:
+    return control_plane.update_integration(integration_id, payload)
+
+
+@router.post("/integrations/{integration_id}/enabled", response_model=IntegrationRecord)
+async def set_ui_integration_enabled(
+    integration_id: str,
+    payload: UIToggleEnabledRequest,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> IntegrationRecord:
+    return control_plane.update_integration(integration_id, IntegrationUpdate(enabled=payload.enabled))
 
 
 @router.get("/overview", response_model=UIOverview)
@@ -430,6 +854,28 @@ async def list_ui_jobs(
     return [_summarize_job(job_service, job) for job in jobs]
 
 
+@router.get("/scan-results", response_model=UIScanResultsResponse)
+async def list_scan_results(
+    integration_id: str | None = None,
+    state: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+    item_limit: int = Query(default=100, ge=1, le=1000),
+    job_service: JobService = Depends(get_job_service),
+) -> UIScanResultsResponse:
+    jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
+    return UIScanResultsResponse(
+        results=[_summarize_scan_result(job_service, job, item_limit=item_limit) for job in jobs]
+    )
+
+
+@router.get("/policies", response_model=UIPoliciesResponse)
+async def list_policies(
+    integration_id: str | None = None,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> UIPoliciesResponse:
+    return UIPoliciesResponse(policies=_list_policy_summaries(control_plane, integration_id=integration_id))
+
+
 @router.get("/integrations/{integration_id}/assets", response_model=UIAssetDiscoveryResponse)
 async def discover_integration_assets(
     integration_id: str,
@@ -458,6 +904,115 @@ async def discover_integration_assets(
         requested_type=asset_type,
         requested_source=source,
     )
+
+
+@router.get("/assets/protected", response_model=UIAssetsProtectedResponse)
+async def list_protected_assets(
+    connector_type: str | None = Query(default=None),
+    integration_id: str | None = Query(default=None),
+    asset_type: str = Query(default="bucket", alias="type"),
+    source: str = Query(default="configured_asset"),
+    coverage_state: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=1000),
+    cursor: str | None = Query(default=None),
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> UIAssetsProtectedResponse:
+    integrations = control_plane.list_integrations()
+    if integration_id is not None:
+        integrations = [integration for integration in integrations if integration.integration_id == integration_id]
+    if connector_type is not None:
+        integrations = [integration for integration in integrations if integration.platform == connector_type]
+
+    scopes = control_plane.list_scopes()
+    scopes_by_id = {scope.scope_id: scope for scope in scopes}
+    latest_jobs = _latest_jobs_by_scope(
+        job_service,
+        integration_ids={integration.integration_id for integration in integrations},
+    )
+    assets: list[UIProtectedAssetSummary] = []
+    unsupported_integrations: list[str] = []
+    failed_integrations: list[dict[str, Any]] = []
+    next_cursors: dict[str, str | None] = {}
+
+    for integration in integrations:
+        runtime = parse_integration_runtime_config(integration.config)
+        proxy = runtime.reader.proxy if runtime.reader is not None else None
+        try:
+            asset_payload = _fetch_connector_assets(
+                proxy.base_url if proxy is not None else None,
+                proxy.connector_name if proxy is not None else None,
+                asset_type=asset_type,
+                source=source,
+                limit=limit,
+                cursor=cursor,
+            )
+        except HTTPException as exc:
+            failed_integrations.append({"integration_id": integration.integration_id, "detail": exc.detail})
+            continue
+
+        asset_response = _summarize_assets(
+            integration_id=integration.integration_id,
+            asset_payload=asset_payload,
+            scopes=control_plane.list_scopes(integration_id=integration.integration_id),
+            requested_type=asset_type,
+            requested_source=source,
+        )
+        next_cursors[integration.integration_id] = asset_response.next_cursor
+        if asset_response.unsupported:
+            unsupported_integrations.append(integration.integration_id)
+        integration_assets = _summarize_protected_assets_for_integration(
+            integration=integration,
+            asset_response=asset_response,
+            scopes_by_id=scopes_by_id,
+            job_service=job_service,
+            latest_jobs_by_scope=latest_jobs,
+        )
+        if coverage_state is not None:
+            integration_assets = [asset for asset in integration_assets if asset.coverage_state == coverage_state]
+        assets.extend(integration_assets)
+
+    return UIAssetsProtectedResponse(
+        assets=assets,
+        unsupported_integrations=unsupported_integrations,
+        failed_integrations=failed_integrations,
+        next_cursors=next_cursors,
+    )
+
+
+@router.post("/assets/protected", response_model=ProtectedScopeRecord)
+async def create_protected_asset_scope(
+    payload: ProtectedScopeCreate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> ProtectedScopeRecord:
+    return control_plane.create_scope(payload)
+
+
+@router.patch("/scopes/{scope_id}", response_model=ProtectedScopeRecord)
+async def update_ui_scope(
+    scope_id: str,
+    payload: ProtectedScopeUpdate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> ProtectedScopeRecord:
+    return control_plane.update_scope(scope_id, payload)
+
+
+@router.post("/scopes/{scope_id}/enabled", response_model=ProtectedScopeRecord)
+async def set_ui_scope_enabled(
+    scope_id: str,
+    payload: UIToggleEnabledRequest,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> ProtectedScopeRecord:
+    return control_plane.update_scope(scope_id, ProtectedScopeUpdate(enabled=payload.enabled))
+
+
+@router.put("/scopes/{scope_id}/policy", response_model=ProtectedScopeRecord)
+async def update_scope_policy(
+    scope_id: str,
+    payload: UIScopePolicyUpdateRequest,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> ProtectedScopeRecord:
+    return control_plane.update_scope(scope_id, ProtectedScopeUpdate(post_scan_policy=payload.policy))
 
 
 @router.post("/scopes/{scope_id}/scan", response_model=BatchJobRecord)

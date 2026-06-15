@@ -12,6 +12,7 @@
   ],
   "activationEvents": [
     "onCommand:dsxTransfer.openConfig",
+    "onCommand:dsxTransfer.useActiveFileAsConfig",
     "onCommand:dsxTransfer.createConfig",
     "onCommand:dsxTransfer.openLocalHarness",
     "onCommand:dsxTransfer.addLocalHarness",
@@ -79,6 +80,10 @@
       {
         "command": "dsxTransfer.openConfig",
         "title": "DSX-Transfer: Open Config"
+      },
+      {
+        "command": "dsxTransfer.useActiveFileAsConfig",
+        "title": "DSX-Transfer: Use Active File as Config"
       },
       {
         "command": "dsxTransfer.createConfig",
@@ -156,6 +161,18 @@
           "command": "dsxTransfer.openConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@3"
+        },
+        {
+          "command": "dsxTransfer.useActiveFileAsConfig",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@4"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "dsxTransfer.useActiveFileAsConfig",
+          "when": "resourceFilename =~ /^dsx-transfer.*\\.ya?ml$/",
+          "group": "navigation"
         }
       ],
       "view/item/context": [

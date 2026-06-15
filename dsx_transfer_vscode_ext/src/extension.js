@@ -101,6 +101,14 @@ function resolveWorkspacePath(value) {
   return path.isAbsolute(value) ? value : path.join(workspaceRoot(), value);
 }
 
+function relativeWorkspacePath(filePath) {
+  const relative = path.relative(workspaceRoot(), filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return null;
+  }
+  return relative.split(path.sep).join("/");
+}
+
 function settings() {
   const cfg = config();
   return {
@@ -369,6 +377,27 @@ async function openConfig() {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+async function useActiveFileAsConfig(uri) {
+  const target = uri?.fsPath
+    ? uri
+    : vscode.window.activeTextEditor?.document?.uri;
+  if (!target || target.scheme !== "file") {
+    vscode.window.showWarningMessage("Open a dsx-transfer YAML file first.");
+    return;
+  }
+
+  const relative = relativeWorkspacePath(target.fsPath);
+  if (!relative) {
+    vscode.window.showWarningMessage("DSX-Transfer config must be inside the current workspace.");
+    return;
+  }
+
+  await config().update("configPath", relative, vscode.ConfigurationTarget.Workspace);
+  output.appendLine(`DSX-Transfer active config: ${relative}`);
+  vscode.window.showInformationMessage(`DSX-Transfer config set to ${relative}.`);
+  await validateConfig({ silent: true });
+}
+
 async function addLocalHarness() {
   output.show(true);
   const targetDir = path.join(workspaceRoot(), ".dsx-transfer", "harness");
@@ -577,6 +606,7 @@ function activate(context) {
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider("dsxTransferReport", reportProvider));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openConfig", openConfig));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.useActiveFileAsConfig", useActiveFileAsConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openLocalHarness", openLocalHarness));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.addLocalHarness", addLocalHarness));

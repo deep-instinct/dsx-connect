@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Connect icon</title>
+  <desc id="desc">DSX Connect double arrow shield icon.</desc>
+  <rect width="128" height="128" rx="28" fill="#001F3F"/>
+  <path d="M12 64 38 48v32L12 64Z" fill="#DEFF5B"/>
+  <path d="M116 64 90 48v32l26-16Z" fill="#DEFF5B"/>
+  <path d="M64 35 86 45v17c0 17-8 30-22 38-14-8-22-21-22-38V45l22-10Z" fill="#001F3F"/>
+  <path d="M64 42 80 49v14c0 12-5 22-16 28-11-6-16-16-16-28V49l16-7Z" fill="#DEFF5B"/>
+  <path d="M64 53 73 57v8c0 8-3 14-9 18-6-4-9-10-9-18v-8l9-4Z" fill="#001F3F"/>
+</svg>

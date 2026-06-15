@@ -1,7 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#C5C5C5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-  <path d="M4 7h10" />
-  <path d="m11 4 3 3-3 3" />
-  <path d="M20 17H10" />
-  <path d="m13 14-3 3 3 3" />
-  <path d="M6 12h12" />
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" role="img" aria-labelledby="title desc">
+  <title id="title">DSX Transfer</title>
+  <desc id="desc">Monochrome DSX Transfer directional arrow shield icon.</desc>
+  <path d="M8.4 12 3.6 9.2v5.6L8.4 12Z" fill="#C5C5C5"/>
+  <path d="M21.6 12 16.8 9.2v5.6l4.8-2.8Z" fill="#C5C5C5"/>
+  <path d="M12 6.2 16 8v3.2c0 3.2-1.5 5.7-4 7.2-2.5-1.5-4-4-4-7.2V8l4-1.8Z" fill="#2B2B2B"/>
+  <path d="M12 7.6 14.9 8.9v2.6c0 2.3-.9 4.1-2.9 5.2-2-1.1-2.9-2.9-2.9-5.2V8.9L12 7.6Z" fill="#C5C5C5"/>
+  <path d="M12 9.7 13.6 10.4v1.5c0 1.5-.6 2.6-1.6 3.3-1-.7-1.6-1.8-1.6-3.3v-1.5L12 9.7Z" fill="#2B2B2B"/>
 </svg>

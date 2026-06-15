@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
-  <title id="title">DSX Connect centered shield mark</title>
-  <desc id="desc">Centered bidirectional arrowheads with a central DSX shield.</desc>
-  <rect width="128" height="128" rx="28" fill="#001F3F"/>
-  <path d="M14 64 46 46v36L14 64Z" fill="#DEFF5B"/>
-  <path d="M114 64 82 46v36l32-18Z" fill="#DEFF5B"/>
-  <path d="M64 38 82 46v17c0 15-6 27-18 34-12-7-18-19-18-34V46l18-8Z" fill="#DEFF5B"/>
-  <path d="M64 51 73 55v8c0 8-3 14-9 18-6-4-9-10-9-18v-8l9-4Z" fill="#001F3F"/>
-</svg>

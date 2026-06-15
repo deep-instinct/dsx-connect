@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="96" height="40" viewBox="0 0 96 40" role="img" aria-labelledby="title desc">
-  <title id="title">DSX Transfer outline mark</title>
-  <desc id="desc">Two forward arrows around a diamond, using DSX lime fill and navy outline.</desc>
-  <g fill="#DEFF5B" stroke="#001F3F" stroke-width="2.4" stroke-linejoin="round" stroke-miterlimit="10">
-    <path d="M28 20 8 8v24l20-12Z"/>
-    <path d="M88 20 68 8v24l20-12Z"/>
-    <path d="M48 6 62 20 48 34 34 20 48 6Z"/>
-  </g>
-</svg>

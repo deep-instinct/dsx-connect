@@ -3,7 +3,7 @@ import asyncio
 from starlette.responses import StreamingResponse
 
 from connectors.aws_s3.aws_s3_client import AWSS3Client
-from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -32,6 +32,23 @@ config.asset_prefix_root = prefix
 connector = DSXConnector(config)
 
 aws_s3_client = AWSS3Client(s3_endpoint_url=config.s3_endpoint_url, s3_endpoint_verify=config.s3_endpoint_verify)
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, str | None, dict[str, str]]:
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+        default_tags={"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {},
+    )
+    return resolved.action, resolved.target, resolved.filename, dict(resolved.tags or {})
+
+
+def _resolve_destination_key(source_key: str, *, target_prefix: str, target_filename: str | None) -> str:
+    target_prefix = (target_prefix or "").strip("/")
+    if target_filename:
+        return f"{target_prefix}/{target_filename}" if target_prefix else target_filename
+    return f"{target_prefix}/{source_key}" if target_prefix else source_key
 
 
 def _redact_aws_secret_text(msg: str) -> str:
@@ -388,46 +405,55 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
             or an error if the action is not implemented.
     """
     full_path = scan_event_queue_info.metainfo
+    requested_action, target_prefix, target_filename, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
 
     if not aws_s3_client.key_exists(config.asset_bucket, scan_event_queue_info.location):
-        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                         message="Item action failed.",
                                         description=f"File does not exist at {full_path}")
 
-    if config.item_action == ItemActionEnum.DELETE:
+    if requested_action == ItemActionEnum.DELETE:
         dsx_logging.debug(f'Item action {ItemActionEnum.DELETE} on {full_path} invoked.')
         if aws_s3_client.delete_object(config.asset_bucket, scan_event_queue_info.location):
-            return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+            return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                             message="File deleted.",
                                             description=f"File deleted from {config.asset_bucket}: {scan_event_queue_info.location}")
-    elif config.item_action == ItemActionEnum.MOVE:
+    elif requested_action == ItemActionEnum.MOVE:
         dsx_logging.debug(f'Item action {ItemActionEnum.MOVE} on {full_path} invoked.')
-        dest_key = f"{config.item_action_move_metainfo}/{scan_event_queue_info.location}"
+        if not target_prefix:
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
+                                            message="Item action failed.",
+                                            description="Move action requires a destination path.")
+        dest_key = _resolve_destination_key(scan_event_queue_info.location, target_prefix=target_prefix, target_filename=target_filename)
         aws_s3_client.move_object(src_bucket=config.asset_bucket, src_key=scan_event_queue_info.location,
                                   dest_bucket=config.asset_bucket,
                                   dest_key=dest_key)
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File moved.",
                                         description=f"File moved from {config.asset_bucket}: {scan_event_queue_info.location} to {config.asset_bucket}: {dest_key}")
-    elif config.item_action == ItemActionEnum.TAG:
+    elif requested_action == ItemActionEnum.TAG:
         dsx_logging.debug(f'Item action {ItemActionEnum.TAG} on {full_path} invoked.')
-        aws_s3_client.tag_object(config.asset_bucket, scan_event_queue_info.location, tags={"Verdict": "Malicious"})
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+        aws_s3_client.tag_object(config.asset_bucket, scan_event_queue_info.location, tags=requested_tags)
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File tagged.",
                                         description=f"File tagged at {config.asset_bucket}: {scan_event_queue_info.location}")
-    elif config.item_action == ItemActionEnum.MOVE_TAG:
+    elif requested_action == ItemActionEnum.MOVE_TAG:
         dsx_logging.debug(f'Item action {ItemActionEnum.MOVE_TAG} on {full_path} invoked.')
-        dest_key = f"{config.item_action_move_metainfo}/{scan_event_queue_info.location}"
+        if not target_prefix:
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
+                                            message="Item action failed.",
+                                            description="Move/tag action requires a destination path.")
+        dest_key = _resolve_destination_key(scan_event_queue_info.location, target_prefix=target_prefix, target_filename=target_filename)
 
         aws_s3_client.move_object(src_bucket=config.asset_bucket, src_key=scan_event_queue_info.location,
                                   dest_bucket=config.asset_bucket, dest_key=dest_key)
 
-        aws_s3_client.tag_object(config.asset_bucket, dest_key, tags={"Verdict": "Malicious"})
+        aws_s3_client.tag_object(config.asset_bucket, dest_key, tags=requested_tags)
 
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
-                                        message=f'Item action {config.item_action} was invoked. File {full_path} successfully tagged.')
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
+                                        message=f'Item action {requested_action} was invoked. File {full_path} successfully tagged.')
 
-    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=config.item_action,
+    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=requested_action,
                                     message="Item action did nothing or not implemented")
 
 

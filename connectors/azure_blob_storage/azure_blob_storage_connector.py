@@ -4,7 +4,7 @@ import time
 from starlette.responses import StreamingResponse, JSONResponse
 
 from connectors.azure_blob_storage.azure_blob_storage_client import AzureBlobClient
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update, resolve_item_action_request
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -36,6 +36,23 @@ except Exception:
 connector = DSXConnector(config)
 
 abs_client = AzureBlobClient()
+
+
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, str | None, dict[str, str]]:
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+        default_tags={"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {},
+    )
+    return resolved.action, resolved.target, resolved.filename, dict(resolved.tags or {})
+
+
+def _resolve_destination_key(source_key: str, *, target_prefix: str, target_filename: str | None) -> str:
+    target_prefix = (target_prefix or "").strip("/")
+    if target_filename:
+        return f"{target_prefix}/{target_filename}" if target_prefix else target_filename
+    return f"{target_prefix}/{source_key}" if target_prefix else source_key
 
 
 def _azure_runtime_value(key: str) -> str:
@@ -255,36 +272,45 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
             or an error if the action is not implemented.
     """
     file_path = scan_event_queue_info.location
+    requested_action, target_prefix, target_filename, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
     if not abs_client.key_exists(config.asset_container, file_path):
-        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                         message="Item action failed.",
                                         description=f"File does not exist at {config.asset_container}: {file_path}")
 
-    if config.item_action == ItemActionEnum.DELETE:
+    if requested_action == ItemActionEnum.DELETE:
         abs_client.delete_blob(config.asset_container, file_path)
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File deleted.",
                                         description=f"File deleted from {config.asset_container}: {file_path}")
-    elif config.item_action == ItemActionEnum.MOVE:
-        dest_key = f"{config.item_action_move_metainfo}/{file_path}"
+    elif requested_action == ItemActionEnum.MOVE:
+        if not target_prefix:
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
+                                            message="Item action failed.",
+                                            description="Move action requires a destination path.")
+        dest_key = _resolve_destination_key(file_path, target_prefix=target_prefix, target_filename=target_filename)
         abs_client.move_blob(config.asset_container, file_path, config.asset_container, dest_key)
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File moved.",
                                         description=f"File moved from {config.asset_container}: {file_path} to {dest_key}")
-    elif config.item_action == ItemActionEnum.TAG:
-        abs_client.tag_blob(config.asset_container, file_path, {"Verdict": "Malicious"})
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+    elif requested_action == ItemActionEnum.TAG:
+        abs_client.tag_blob(config.asset_container, file_path, requested_tags)
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File tagged.",
                                         description=f"File tagged at {config.asset_container}: {file_path}")
-    elif config.item_action == ItemActionEnum.MOVE_TAG:
-        abs_client.tag_blob(config.asset_container, file_path, {"Verdict": "Malicious"})
-        dest_key = f"{config.item_action_move_metainfo}/{file_path}"
+    elif requested_action == ItemActionEnum.MOVE_TAG:
+        if not target_prefix:
+            return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
+                                            message="Item action failed.",
+                                            description="Move/tag action requires a destination path.")
+        abs_client.tag_blob(config.asset_container, file_path, requested_tags)
+        dest_key = _resolve_destination_key(file_path, target_prefix=target_prefix, target_filename=target_filename)
         abs_client.move_blob(config.asset_container, file_path, config.asset_container, dest_key)
-        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=config.item_action,
+        return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File tagged and moved",
                                         description=f"File moved from {config.asset_container}: {file_path} to {dest_key} and tagged.")
 
-    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=config.item_action,
+    return ItemActionStatusResponse(status=StatusResponseEnum.NOTHING, item_action=requested_action,
                                     message="Item action did nothing or not implemented")
 
 

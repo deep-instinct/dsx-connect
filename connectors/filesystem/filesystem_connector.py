@@ -5,14 +5,13 @@ import os
 import pathlib
 import shutil
 import time
-from uuid import uuid4
 
 import uvicorn
 
 from starlette.responses import StreamingResponse
 
 from shared.file_ops import get_filepaths_async
-from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, \
     ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
@@ -91,23 +90,13 @@ def _quarantine_paths() -> list[pathlib.Path]:
 
 
 def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, dict[str, str]]:
-    requested = scan_request.requested_action
-    if requested is None or not requested.type:
-        default_tags = {"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {}
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, default_tags
-
-    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
-    try:
-        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
-    except Exception:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, {"Verdict": "Malicious"}
-
-    destination = requested.destination or {}
-    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
-    tags = {str(k): str(v) for k, v in (requested.tags or {}).items()}
-    if action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) and not tags:
-        tags = {"Verdict": "Malicious"}
-    return action, (str(target).strip() if target else None), tags
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+        default_tags={"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {},
+    )
+    return resolved.action, resolved.target, dict(resolved.tags or {})
 
 
 def _tag_sidecar_path(path: pathlib.Path) -> pathlib.Path:
@@ -118,6 +107,36 @@ def _write_tag_sidecar(path: pathlib.Path, tags: dict[str, str]) -> pathlib.Path
     sidecar = _tag_sidecar_path(path)
     sidecar.write_text(json.dumps(tags, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     return sidecar
+
+
+def _quarantine_target_config(scan_request: ScanRequestModel) -> tuple[bool, str]:
+    requested = scan_request.requested_action
+    details = requested.details if requested and requested.details else {}
+    quarantine_target = details.get("quarantine_target") or {}
+    preserve_relative = bool(quarantine_target.get("preserve_relative_path", True))
+    resolved_filename = (
+        ((requested.destination or {}).get("filename")) if requested and requested.destination else None
+    ) or details.get("resolved_filename") or pathlib.Path(scan_request.location).name
+    return preserve_relative, str(resolved_filename)
+
+
+def _quarantine_destination_path(
+    destination_root: pathlib.Path,
+    source_path: pathlib.Path,
+    *,
+    preserve_relative_path: bool,
+    resolved_filename: str,
+) -> pathlib.Path:
+    dest_dir = destination_root
+    if preserve_relative_path:
+        try:
+            source_root = _normalize_path(config.asset)
+            relative_parent = source_path.relative_to(source_root).parent
+            dest_dir = destination_root / relative_parent
+        except Exception:
+            dest_dir = destination_root
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    return dest_dir / resolved_filename
 
 
 # given that this could potentially be a lengthy file iteration, make the iteration asynchronous...
@@ -422,6 +441,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
     file_path = scan_event_queue_info.location
     path_obj = _normalize_path(file_path)
     requested_action, target_path, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
+    preserve_relative_path, resolved_filename = _quarantine_target_config(scan_event_queue_info)
 
     if not path_obj.is_file():
         return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
@@ -446,18 +466,19 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
             dest_root = dest_root.resolve()
         dest_root.mkdir(parents=True, exist_ok=True)
 
-        def _unique_destination(base_dir: pathlib.Path, name: str) -> pathlib.Path:
-            candidate = base_dir / name
-            if not candidate.exists():
-                return candidate
-            stem = candidate.stem
-            suffix = candidate.suffix
-            while True:
-                alt = base_dir / f"{stem}-{uuid4().hex[:6]}{suffix}"
-                if not alt.exists():
-                    return alt
-
-        destination = _unique_destination(dest_root, path_obj.name)
+        try:
+            destination = _quarantine_destination_path(
+                dest_root,
+                path_obj,
+                preserve_relative_path=preserve_relative_path,
+                resolved_filename=resolved_filename,
+            )
+        except Exception as exc:
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.ERROR,
+                message=str(exc),
+                item_action=requested_action,
+            )
 
         try:
             path_obj.rename(destination)

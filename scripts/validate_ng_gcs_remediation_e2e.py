@@ -90,6 +90,28 @@ def join_key(*parts: str) -> str:
     return "/".join(part.strip("/") for part in parts if part and part.strip("/"))
 
 
+def derive_quarantined_key(*, item: dict[str, Any], source_key: str, fallback_quarantine_prefix: str) -> str:
+    remediation_result = (item.get("remediation_stage") or {}).get("result") or {}
+    details = remediation_result.get("details") or {}
+    requested_action = details.get("requestedAction") or {}
+    destination = requested_action.get("destination") or {}
+    quarantine_target = (requested_action.get("details") or {}).get("quarantine_target") or {}
+
+    target_prefix = (
+        destination.get("path")
+        or destination.get("prefix")
+        or remediation_result.get("targetPath")
+        or fallback_quarantine_prefix
+    )
+    resolved_filename = destination.get("filename")
+    preserve_relative_path = bool(quarantine_target.get("preserve_relative_path", True))
+
+    if preserve_relative_path and "/" in source_key:
+        relative_parent = source_key.rsplit("/", 1)[0]
+        return join_key(str(target_prefix), relative_parent, str(resolved_filename or source_key.rsplit("/", 1)[-1]))
+    return join_key(str(target_prefix), str(resolved_filename or source_key.rsplit("/", 1)[-1]))
+
+
 def build_integration_payload(
     *,
     integration_id: str,
@@ -129,6 +151,7 @@ def build_scope_policy(*, quarantine_prefix: str, tag_on_quarantine: bool) -> di
             "action": "quarantine",
             "quarantine_target": {
                 "path": quarantine_prefix,
+                "preserve_relative_path": False,
             },
             "tag_on_quarantine": tag_on_quarantine,
         }
@@ -301,9 +324,9 @@ def validate_outcome(
     gcs_client: "GCSClient",
     bucket: str,
     source_key: str,
-    quarantined_key: str,
     tag_on_quarantine: bool,
     item: dict[str, Any],
+    fallback_quarantine_prefix: str,
 ) -> dict[str, Any]:
     if item.get("state") != "completed":
         raise SystemExit(f"validation failed: expected completed item state, observed {item.get('state')}")
@@ -338,6 +361,12 @@ def validate_outcome(
             "validation failed: expected connector action movetag, "
             f"observed {json.dumps(remediation_result)}"
         )
+
+    quarantined_key = derive_quarantined_key(
+        item=item,
+        source_key=source_key,
+        fallback_quarantine_prefix=fallback_quarantine_prefix,
+    )
 
     if gcs_client.key_exists(bucket, source_key):
         raise SystemExit(f"validation failed: source object still exists after quarantine: gs://{bucket}/{source_key}")
@@ -400,11 +429,8 @@ def main() -> None:
     source_prefix = join_key(asset_prefix_root, args.source_prefix)
     quarantine_prefix = join_key(asset_prefix_root, args.quarantine_prefix)
     object_key = join_key(source_prefix, args.sample_name)
-    quarantined_key = join_key(quarantine_prefix, object_key)
-
     gcs_client = build_gcs_client(credentials_path=credentials_path)
     delete_if_exists(gcs_client=gcs_client, bucket=bucket, object_key=object_key)
-    delete_if_exists(gcs_client=gcs_client, bucket=bucket, object_key=quarantined_key)
     upload_sample(gcs_client=gcs_client, bucket=bucket, object_key=object_key)
 
     integration = ensure_integration(
@@ -443,9 +469,9 @@ def main() -> None:
         gcs_client=gcs_client,
         bucket=bucket,
         source_key=object_key,
-        quarantined_key=quarantined_key,
         tag_on_quarantine=args.tag_on_quarantine,
         item=item,
+        fallback_quarantine_prefix=quarantine_prefix,
     )
 
     result = {

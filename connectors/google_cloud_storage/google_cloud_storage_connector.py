@@ -4,9 +4,9 @@ import threading
 
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
 from connectors.google_cloud_storage.gcs_client import GCSClient
-from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
+from shared.models.connector_models import AssetDiscoveryItem, AssetDiscoveryResponse, ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 from connectors.google_cloud_storage.config import ConfigManager
@@ -44,23 +44,38 @@ _monitor_stop = threading.Event()
 
 
 def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, dict[str, str]]:
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+        default_tags={"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {},
+    )
+    return resolved.action, resolved.target, dict(resolved.tags or {})
+
+
+def _quarantine_target_config(scan_request: ScanRequestModel) -> tuple[bool, str]:
     requested = scan_request.requested_action
-    if requested is None or not requested.type:
-        default_tags = {"Verdict": "Malicious"} if config.item_action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) else {}
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, default_tags
+    details = requested.details if requested and requested.details else {}
+    quarantine_target = details.get("quarantine_target") or {}
+    preserve_relative = bool(quarantine_target.get("preserve_relative_path", True))
+    resolved_filename = (
+        ((requested.destination or {}).get("filename")) if requested and requested.destination else None
+    ) or details.get("resolved_filename") or scan_request.location.rsplit("/", 1)[-1]
+    return preserve_relative, str(resolved_filename)
 
-    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
-    try:
-        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
-    except Exception:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None, {"Verdict": "Malicious"}
 
-    destination = requested.destination or {}
-    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
-    tags = {str(k): str(v) for k, v in (requested.tags or {}).items()}
-    if action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) and not tags:
-        tags = {"Verdict": "Malicious"}
-    return action, (str(target).strip() if target else None), tags
+def _resolve_quarantine_object_key(
+    *,
+    source_key: str,
+    target_prefix: str,
+    preserve_relative_path: bool,
+    resolved_filename: str,
+) -> str:
+    target_prefix = target_prefix.rstrip("/")
+    source_parent = source_key.rsplit("/", 1)[0] if "/" in source_key else ""
+    if preserve_relative_path and source_parent:
+        return f"{target_prefix}/{source_parent}/{resolved_filename}"
+    return f"{target_prefix}/{resolved_filename}"
 
 
 def _should_monitor() -> bool:
@@ -337,6 +352,99 @@ async def preview_provider(limit: int) -> list[str]:
     return items
 
 
+@connector.asset_discovery
+async def asset_discovery_handler(
+    asset_type: str = "bucket",
+    source: str = "configured_asset",
+    limit: int = 100,
+    cursor: str | None = None,
+) -> AssetDiscoveryResponse:
+    normalized_type = (asset_type or "bucket").strip().lower()
+    if ":" in normalized_type:
+        normalized_type, requested_source = normalized_type.split(":", 1)
+    else:
+        requested_source = (source or "configured_asset").strip().lower()
+    if normalized_type not in {"bucket", "buckets"}:
+        return AssetDiscoveryResponse(
+            asset_type=normalized_type,
+            source=requested_source,
+            status="unsupported",
+            assets=[],
+            unsupported=True,
+            message=f"unsupported_asset_type:{normalized_type}",
+        )
+    configured_selector = (config.asset or config.asset_bucket or "").strip()
+    if requested_source == "configured_asset":
+        if not configured_selector:
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="configured_asset",
+                status="not_configured",
+                assets=[],
+                message="configured_asset_not_set",
+            )
+        bucket = config.asset_bucket or configured_selector.split("/", 1)[0]
+        metadata = {
+            "provider": "gcs",
+            "kind": "configured_bucket",
+            "bucket": bucket,
+        }
+        if getattr(config, "asset_prefix_root", ""):
+            metadata["prefix"] = config.asset_prefix_root
+            metadata["kind"] = "configured_bucket_prefix"
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="configured_asset",
+            status="success",
+            assets=[
+                AssetDiscoveryItem(
+                    id=configured_selector,
+                    display_name=configured_selector,
+                    selector=configured_selector,
+                    metadata=metadata,
+                )
+            ],
+        )
+    try:
+        buckets = gcs_client.buckets()
+    except Exception as exc:
+        dsx_logging.warning(f"GCS asset discovery failed: {exc}")
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="inventory_enumeration",
+            status="permission_denied" if "storage.buckets.list" in str(exc) or "403" in str(exc) else "error",
+            assets=[],
+            unsupported=False,
+            message=f"asset_discovery_failed:{exc}",
+            required_permission="storage.buckets.list",
+        )
+    start = 0
+    if cursor:
+        try:
+            start = max(0, int(cursor))
+        except ValueError:
+            start = 0
+    effective_limit = max(1, min(int(limit or 100), 1000))
+    selected = buckets[start:start + effective_limit]
+    next_index = start + len(selected)
+    next_cursor = str(next_index) if next_index < len(buckets) else None
+    return AssetDiscoveryResponse(
+        asset_type="bucket",
+        source="inventory_enumeration",
+        status="success",
+        assets=[
+            AssetDiscoveryItem(
+                id=bucket,
+                display_name=bucket,
+                selector=bucket,
+                metadata={"provider": "gcs"},
+            )
+            for bucket in selected
+        ],
+        next_cursor=next_cursor,
+    )
+
+
 @connector.config
 async def config_handler(base: ConnectorInstanceModel):
     try:
@@ -378,6 +486,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
     """
     file_path = scan_event_queue_info.location
     requested_action, target_prefix, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
+    preserve_relative_path, resolved_filename = _quarantine_target_config(scan_event_queue_info)
     if not gcs_client.key_exists(config.asset_bucket, file_path):
         return ItemActionStatusResponse(
             status=StatusResponseEnum.ERROR,
@@ -402,7 +511,20 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                 message="Item action failed.",
                 description="Move action requires a destination path.",
             )
-        dest_key = f"{target_prefix.rstrip('/')}/{file_path}"
+        try:
+            dest_key = _resolve_quarantine_object_key(
+                source_key=file_path,
+                target_prefix=target_prefix,
+                preserve_relative_path=preserve_relative_path,
+                resolved_filename=resolved_filename,
+            )
+        except Exception as exc:
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.ERROR,
+                item_action=ItemActionEnum.MOVE,
+                message="Item action failed.",
+                description=str(exc),
+            )
         gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
@@ -426,7 +548,20 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                 message="Item action failed.",
                 description="Move/tag action requires a destination path.",
             )
-        dest_key = f"{target_prefix.rstrip('/')}/{file_path}"
+        try:
+            dest_key = _resolve_quarantine_object_key(
+                source_key=file_path,
+                target_prefix=target_prefix,
+                preserve_relative_path=preserve_relative_path,
+                resolved_filename=resolved_filename,
+            )
+        except Exception as exc:
+            return ItemActionStatusResponse(
+                status=StatusResponseEnum.ERROR,
+                item_action=ItemActionEnum.MOVE_TAG,
+                message="Item action failed.",
+                description=str(exc),
+            )
         gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
         gcs_client.tag_object(config.asset_bucket, dest_key, requested_tags)
         return ItemActionStatusResponse(

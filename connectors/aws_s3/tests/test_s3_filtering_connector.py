@@ -2,7 +2,7 @@ import pytest
 
 boto3 = pytest.importorskip("boto3")
 
-from shared.models.connector_models import ScanRequestModel
+from shared.models.connector_models import ScanRequestModel, ItemActionEnum
 
 
 @pytest.mark.asyncio
@@ -64,3 +64,44 @@ async def test_full_scan_batch_filters(monkeypatch):
     resp = await s3c.full_scan_handler(batch=True, batch_size=2)
     assert resp.status.value == "success"
     assert batch_calls == [(["keep.txt", "sub/keep2.txt"], 2)]
+
+
+@pytest.mark.asyncio
+async def test_item_action_movetag_uses_requested_destination_filename(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    s3c.config.asset_bucket = "bucket-a"
+    s3c.config.item_action = ItemActionEnum.NOTHING
+
+    calls = []
+
+    monkeypatch.setattr(s3c.aws_s3_client, "key_exists", lambda bucket, key: True)
+    monkeypatch.setattr(
+        s3c.aws_s3_client,
+        "move_object",
+        lambda src_bucket, src_key, dest_bucket, dest_key: calls.append(("move", src_bucket, src_key, dest_bucket, dest_key)) or True,
+    )
+    monkeypatch.setattr(
+        s3c.aws_s3_client,
+        "tag_object",
+        lambda bucket, key, tags=None: calls.append(("tag", bucket, key, tags)) or True,
+    )
+
+    request = ScanRequestModel(
+        location="scan/eicar.txt",
+        metainfo="bucket-a/scan/eicar.txt",
+        requested_action={
+            "type": "movetag",
+            "destination": {"path": "quarantine", "filename": "eicar.txt_c23bbf85bc"},
+            "tags": {"Verdict": "Malicious"},
+        },
+    )
+
+    resp = await s3c.item_action_handler(request)
+
+    assert resp.status.value == "success"
+    assert resp.item_action == ItemActionEnum.MOVE_TAG
+    assert calls == [
+        ("move", "bucket-a", "scan/eicar.txt", "bucket-a", "quarantine/eicar.txt_c23bbf85bc"),
+        ("tag", "bucket-a", "quarantine/eicar.txt_c23bbf85bc", {"Verdict": "Malicious"}),
+    ]

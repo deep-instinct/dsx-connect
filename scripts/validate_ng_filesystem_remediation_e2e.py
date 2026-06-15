@@ -16,6 +16,18 @@ except ModuleNotFoundError:  # pragma: no cover - exercised when imported as scr
 TERMINAL_ITEM_STATES = {"completed", "failed", "cancelled"}
 
 
+def default_filesystem_state_root() -> Path:
+    local_root = Path.home() / ".dsx-connect-local"
+    candidates = [
+        local_root / "filesystem-connector-2g" / "data",
+        local_root / "filesystem-connector" / "data",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 def build_integration_payload(
     *,
     integration_id: str,
@@ -54,6 +66,7 @@ def build_scope_policy(*, quarantine_dir: Path, tag_on_quarantine: bool) -> dict
             "action": "quarantine",
             "quarantine_target": {
                 "path": str(quarantine_dir),
+                "preserve_relative_path": False,
             },
             "tag_on_quarantine": tag_on_quarantine,
         }
@@ -193,8 +206,14 @@ def get_batch_job(*, api_base_url: str, job_id: str) -> dict[str, Any]:
     return payload
 
 
-def expected_quarantine_path(*, quarantine_dir: Path, sample_name: str) -> Path:
-    return quarantine_dir / sample_name
+def expected_quarantine_path(*, item: dict[str, Any], quarantine_dir: Path, sample_name: str) -> Path:
+    remediation_result = (item.get("remediation_stage") or {}).get("result") or {}
+    details = remediation_result.get("details") or {}
+    requested_action = details.get("requestedAction") or {}
+    destination = requested_action.get("destination") or {}
+    target_dir = Path(str(destination.get("path") or remediation_result.get("targetPath") or quarantine_dir))
+    resolved_filename = str(destination.get("filename") or sample_name)
+    return target_dir / resolved_filename
 
 
 def expected_tag_sidecar_path(path: Path) -> Path:
@@ -211,10 +230,9 @@ def remove_if_exists(path: Path) -> None:
 def validate_outcome(
     *,
     sample_path: Path,
-    quarantined_path: Path,
-    tag_sidecar_path: Path,
     tag_on_quarantine: bool,
     item: dict[str, Any],
+    quarantine_dir: Path,
 ) -> dict[str, Any]:
     if item.get("state") != "completed":
         raise SystemExit(f"validation failed: expected completed item state, observed {item.get('state')}")
@@ -250,6 +268,13 @@ def validate_outcome(
             f"observed {json.dumps(remediation_result)}"
         )
 
+    quarantined_path = expected_quarantine_path(
+        item=item,
+        quarantine_dir=quarantine_dir,
+        sample_name=sample_path.name,
+    )
+    tag_sidecar_path = expected_tag_sidecar_path(quarantined_path)
+
     if sample_path.exists():
         raise SystemExit(f"validation failed: source file still exists after quarantine: {sample_path}")
     if not quarantined_path.exists():
@@ -274,7 +299,7 @@ def validate_outcome(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    default_state_root = Path.home() / ".dsx-connect-local" / "filesystem-connector" / "data"
+    default_state_root = default_filesystem_state_root()
     parser = argparse.ArgumentParser(
         description="Validate end-to-end dsx-connect-ng filesystem remediation with proxy read, policy, and quarantine."
     )
@@ -297,14 +322,10 @@ def main() -> None:
     scan_dir = Path(args.scan_dir).expanduser().resolve()
     quarantine_dir = Path(args.quarantine_dir).expanduser().resolve()
     sample_path = scan_dir / args.sample_name
-    quarantined_path = expected_quarantine_path(quarantine_dir=quarantine_dir, sample_name=args.sample_name)
-    tag_sidecar_path = expected_tag_sidecar_path(quarantined_path)
 
     scan_dir.mkdir(parents=True, exist_ok=True)
     quarantine_dir.mkdir(parents=True, exist_ok=True)
     remove_if_exists(sample_path)
-    remove_if_exists(quarantined_path)
-    remove_if_exists(tag_sidecar_path)
     sample_path.write_text(EICAR_SAMPLE, encoding="utf-8")
 
     integration = ensure_integration(
@@ -340,10 +361,9 @@ def main() -> None:
     batch_state = get_batch_job(api_base_url=args.api_base_url, job_id=job_id)
     verification = validate_outcome(
         sample_path=sample_path,
-        quarantined_path=quarantined_path,
-        tag_sidecar_path=tag_sidecar_path,
         tag_on_quarantine=args.tag_on_quarantine,
         item=item,
+        quarantine_dir=quarantine_dir,
     )
 
     result = {

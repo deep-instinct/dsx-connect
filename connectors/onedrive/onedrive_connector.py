@@ -8,7 +8,7 @@ import httpx
 from pydantic import SecretStr
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update, resolve_item_action_request
 from connectors.framework.auth_hmac import build_outbound_auth_header
 from shared.routes import service_url, API_PREFIX_V1, DSXConnectAPI
 from shared.dsx_logging import dsx_logging
@@ -96,20 +96,13 @@ def _normalize_drive_path(path: str) -> str:
     return f"{base_clean}/{raw}".strip("/")
 
 
-def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None]:
-    requested = scan_request.requested_action
-    if requested is None or not requested.type:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
-
-    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
-    try:
-        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
-    except Exception:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
-
-    destination = requested.destination or {}
-    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
-    return action, (str(target).strip() if target else None)
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, str | None]:
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+    )
+    return resolved.action, resolved.target, resolved.filename
 
 
 async def _kv_get(key: str) -> Optional[str]:
@@ -551,7 +544,7 @@ async def preview_provider(limit: int) -> list[str]:
 
 @connector.item_action
 async def item_action_handler(scan_info: ScanRequestModel) -> ItemActionStatusResponse:
-    requested_action, target_path = _resolve_requested_item_action(scan_info)
+    requested_action, target_path, target_filename = _resolve_requested_item_action(scan_info)
     dsx_logging.debug(f"OneDrive item_action_handler action={requested_action} target={scan_info.location}")
     if requested_action == ItemActionEnum.DELETE:
         try:
@@ -569,7 +562,7 @@ async def item_action_handler(scan_info: ScanRequestModel) -> ItemActionStatusRe
         try:
             dest_raw = target_path or ""
             dest_folder = _normalize_drive_path(dest_raw)
-            await client.move_file(scan_info.location, dest_folder)
+            await client.move_file(scan_info.location, dest_folder, new_name=target_filename)
             extra = ""
             if requested_action == ItemActionEnum.MOVE_TAG:
                 extra = " Tagging skipped (not supported for OneDrive)."
@@ -577,7 +570,10 @@ async def item_action_handler(scan_info: ScanRequestModel) -> ItemActionStatusRe
                 status=StatusResponseEnum.SUCCESS,
                 item_action=requested_action,
                 message=f"File moved.{extra}",
-                description=f"Moved item {scan_info.location} to {dest_folder or 'drive root'}"
+                description=(
+                    f"Moved item {scan_info.location} to "
+                    f"{(dest_folder + '/' + target_filename) if target_filename and dest_folder else (target_filename or dest_folder or 'drive root')}"
+                )
             )
         except Exception as exc:
             return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action, message=str(exc))

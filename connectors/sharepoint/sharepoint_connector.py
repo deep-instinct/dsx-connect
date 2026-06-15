@@ -6,7 +6,7 @@ from typing import Any, Optional, Set
 import httpx
 from starlette.responses import StreamingResponse
 
-from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update
+from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update, resolve_item_action_request
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -54,20 +54,13 @@ def _drive_base_path() -> str:
     return (config.asset or "").strip('/')
 
 
-def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None]:
-    requested = scan_request.requested_action
-    if requested is None or not requested.type:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
-
-    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
-    try:
-        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
-    except Exception:
-        return config.item_action, (config.item_action_move_metainfo or "").strip() or None
-
-    destination = requested.destination or {}
-    target = destination.get("path") or destination.get("prefix") or config.item_action_move_metainfo
-    return action, (str(target).strip() if target else None)
+def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, str | None]:
+    resolved = resolve_item_action_request(
+        scan_request,
+        default_action=config.item_action,
+        default_target=(config.item_action_move_metainfo or "").strip() or None,
+    )
+    return resolved.action, resolved.target, resolved.filename
 
 
 def _normalize_drive_path(path: str) -> str:
@@ -847,7 +840,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
         SimpleResponse: A response indicating that the remediation action was performed successfully,
             or an error if the action is not implemented.
     """
-    requested_action, target_path = _resolve_requested_item_action(scan_event_queue_info)
+    requested_action, target_path, target_filename = _resolve_requested_item_action(scan_event_queue_info)
     dsx_logging.debug(f"SharePoint item_action_handler action={requested_action} target={scan_event_queue_info.location}")
     # DELETE
     if requested_action == ItemActionEnum.DELETE:
@@ -872,7 +865,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
             dest_raw = target_path or ""
             dest_folder = _normalize_drive_path(dest_raw)
             dest_folder = dest_folder.strip("/") if dest_folder else ""
-            await sp_client.move_file(scan_event_queue_info.location, dest_folder)
+            await sp_client.move_file(scan_event_queue_info.location, dest_folder, new_name=target_filename)
             extra = ""
             if requested_action == ItemActionEnum.MOVE_TAG:
                 extra = " Tagging skipped (not supported for SharePoint)."
@@ -880,7 +873,10 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
                 status=StatusResponseEnum.SUCCESS,
                 item_action=requested_action,
                 message=f"File moved.{extra}",
-                description=f"Moved item {scan_event_queue_info.location} to {dest_folder or 'drive root'}"
+                description=(
+                    f"Moved item {scan_event_queue_info.location} to "
+                    f"{(dest_folder + '/' + target_filename) if target_filename and dest_folder else (target_filename or dest_folder or 'drive root')}"
+                )
             )
         except Exception as e:
             return ItemActionStatusResponse(

@@ -62,6 +62,7 @@ class ConnectorAPI(str, Enum):
     FULL_SCAN = "full_scan"
     WEBHOOK_EVENT = "webhook/event"
     REPO_CHECK = "repo_check"
+    ASSETS = "assets"
     ESTIMATE = "estimate"
     CONFIG = "config"
     READYZ = "readyz"

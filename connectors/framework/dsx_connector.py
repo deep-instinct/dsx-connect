@@ -5,6 +5,7 @@ from pathlib import Path
 import inspect
 import contextvars
 import uuid
+from dataclasses import dataclass
 
 from random import random
 from typing import Any
@@ -16,7 +17,7 @@ from typing import Callable, Awaitable, Optional
 from starlette.responses import StreamingResponse, JSONResponse, Response
 
 from connectors.framework.base_config import BaseConnectorConfig
-from shared.models.connector_models import ScanRequestModel, ConnectorInstanceModel, ConnectorStatusEnum, \
+from shared.models.connector_models import AssetDiscoveryResponse, ScanRequestModel, ConnectorInstanceModel, ConnectorStatusEnum, \
     ItemActionEnum
 from shared.routes import DSXConnectAPI, ConnectorAPI, service_url, API_PREFIX_V1, ConnectorPath, ScanPath, route_path, \
      format_route
@@ -45,6 +46,15 @@ _SCAN_ENQ_COUNTER: contextvars.ContextVar[int] = contextvars.ContextVar("scan_en
 # <end> API key config and validation
 
 connector_api = None
+
+
+@dataclass(frozen=True)
+class ResolvedItemActionRequest:
+    action: ItemActionEnum
+    target: str | None = None
+    filename: str | None = None
+    tags: dict[str, str] | None = None
+    preserve_relative_path: bool | None = None
 
 
 def _sanitize_display_icon(raw: str | None) -> str | None:
@@ -113,6 +123,57 @@ def _extract_requested_action_update(payload: dict[str, Any]) -> tuple[str | Non
         move_metainfo = destination.strip()
 
     return action, move_metainfo
+
+
+def resolve_item_action_request(
+    scan_request: ScanRequestModel,
+    *,
+    default_action: ItemActionEnum,
+    default_target: str | None = None,
+    default_tags: dict[str, str] | None = None,
+) -> ResolvedItemActionRequest:
+    requested = getattr(scan_request, "requested_action", None)
+    if requested is None or not requested.type:
+        return ResolvedItemActionRequest(
+            action=default_action,
+            target=(str(default_target).strip() if default_target else None),
+            filename=None,
+            tags=dict(default_tags or {}),
+            preserve_relative_path=None,
+        )
+
+    raw_type = str(requested.type).strip().lower().replace("move_tag", "movetag")
+    try:
+        action = ItemActionEnum.MOVE_TAG if raw_type == "movetag" else ItemActionEnum(raw_type)
+    except Exception:
+        return ResolvedItemActionRequest(
+            action=default_action,
+            target=(str(default_target).strip() if default_target else None),
+            filename=None,
+            tags=dict(default_tags or {}),
+            preserve_relative_path=None,
+        )
+
+    destination = requested.destination or {}
+    target = destination.get("path") or destination.get("prefix") or default_target
+    filename = destination.get("filename")
+    tags = {str(k): str(v) for k, v in (requested.tags or {}).items()}
+    if action in (ItemActionEnum.TAG, ItemActionEnum.MOVE_TAG) and not tags:
+        tags = dict(default_tags or {})
+
+    details = requested.details or {}
+    quarantine_target = details.get("quarantine_target") if isinstance(details, dict) else None
+    preserve_relative_path = None
+    if isinstance(quarantine_target, dict) and "preserve_relative_path" in quarantine_target:
+        preserve_relative_path = bool(quarantine_target.get("preserve_relative_path"))
+
+    return ResolvedItemActionRequest(
+        action=action,
+        target=(str(target).strip() if target else None),
+        filename=(str(filename).strip() if filename else None),
+        tags=tags,
+        preserve_relative_path=preserve_relative_path,
+    )
 
 
 def apply_requested_action_config_update(
@@ -210,6 +271,9 @@ class DSXConnector:
 
         # clean up URL if needed
         self.dsx_connect_url = str(connector_config.dsx_connect_url).rstrip('/')
+        self.register_with_core = bool(getattr(connector_config, "register_with_core", True))
+        if not self.register_with_core:
+            dsx_logging.info("Connector registration with 1g dsx-connect is disabled for this runtime.")
 
         self.connector_running_model = ConnectorInstanceModel(
             name=connector_config.name,
@@ -233,6 +297,7 @@ class DSXConnector:
         self.item_action_handler: Optional[Callable[[ScanRequestModel], ItemActionStatusResponse]] = None
         self.read_file_handler: Optional[Callable[[ScanRequestModel], StreamingResponse | StatusResponse]] = None
         self.webhook_handler: Optional[Callable[[ScanRequestModel], StatusResponse]] = None
+        self.asset_discovery_handler: Optional[Callable[..., Awaitable[AssetDiscoveryResponse] | AssetDiscoveryResponse]] = None
 
         # Allow sync OR async repo check that returns bool
         self.repo_check_connection_handler: Optional[Callable[[], bool | Awaitable[bool]]] = None
@@ -293,24 +358,33 @@ class DSXConnector:
                 # let plugin customize model (but NOT set READY)
                 self.connector_running_model = await self.startup_handler(self.connector_running_model)
 
-            # Try register once; if not READY, start background retry loop
-            register_resp = await self.register_connector(self.connector_running_model)
-            if register_resp.status == StatusResponseEnum.SUCCESS:
-                # Check repo before READY
+            if not self.register_with_core:
                 repo_ok = await self._safe_repo_check_ok()
                 if repo_ok:
                     self.connector_running_model.status = ConnectorStatusEnum.READY
-                    dsx_logging.info("Connector is READY (registration + repo check OK).")
-                    # Ensure heartbeat loop is running to refresh presence TTL in dsx-connect
-                    self._start_heartbeat()
+                    dsx_logging.info("Connector is READY (registration disabled, repo check OK).")
                 else:
                     self.connector_running_model.status = ConnectorStatusEnum.STARTING
-                    dsx_logging.info("Registration OK but repo check not ready; entering retry loop.")
-                    self._start_retry_loop()
+                    dsx_logging.info("Registration disabled and repo check not ready; connector remains STARTING.")
             else:
-                self.connector_running_model.status = ConnectorStatusEnum.STARTING
-                dsx_logging.warning(f"Connector registration failed: {register_resp.message}; entering retry loop.")
-                self._start_retry_loop()
+                # Try register once; if not READY, start background retry loop
+                register_resp = await self.register_connector(self.connector_running_model)
+                if register_resp.status == StatusResponseEnum.SUCCESS:
+                    # Check repo before READY
+                    repo_ok = await self._safe_repo_check_ok()
+                    if repo_ok:
+                        self.connector_running_model.status = ConnectorStatusEnum.READY
+                        dsx_logging.info("Connector is READY (registration + repo check OK).")
+                        # Ensure heartbeat loop is running to refresh presence TTL in dsx-connect
+                        self._start_heartbeat()
+                    else:
+                        self.connector_running_model.status = ConnectorStatusEnum.STARTING
+                        dsx_logging.info("Registration OK but repo check not ready; entering retry loop.")
+                        self._start_retry_loop()
+                else:
+                    self.connector_running_model.status = ConnectorStatusEnum.STARTING
+                    dsx_logging.warning(f"Connector registration failed: {register_resp.message}; entering retry loop.")
+                    self._start_retry_loop()
 
             # Hand control to FastAPI server
             yield
@@ -320,12 +394,15 @@ class DSXConnector:
             await self._cancel_heartbeat()
             await self._cancel_retry_loop()
 
-            # unregister
-            unregister_resp = await self.unregister_connector()
-            if unregister_resp.status == StatusResponseEnum.SUCCESS:
-                dsx_logging.info(f"Unregistered connector OK: {unregister_resp.message}")
+            if not self.register_with_core:
+                dsx_logging.info("Skipping connector unregister because registration is disabled.")
             else:
-                dsx_logging.warning(f"Connector unregistration failed: {unregister_resp.message}")
+                # unregister
+                unregister_resp = await self.unregister_connector()
+                if unregister_resp.status == StatusResponseEnum.SUCCESS:
+                    dsx_logging.info(f"Unregistered connector OK: {unregister_resp.message}")
+                else:
+                    dsx_logging.warning(f"Connector unregistration failed: {unregister_resp.message}")
 
             # plugin shutdown
             if self.shutdown_handler:
@@ -391,6 +468,11 @@ class DSXConnector:
     def preview(self, func: Callable[[int], Awaitable[list[str]]]):
         """Register a function to return up to N preview items (strings)."""
         self.preview_provider = func
+        return func
+
+    def asset_discovery(self, func: Callable[..., Awaitable[AssetDiscoveryResponse] | AssetDiscoveryResponse]):
+        """Register a non-mutating asset inventory provider."""
+        self.asset_discovery_handler = func
         return func
 
     def estimate(self, func: Callable[[], Awaitable[dict]]):
@@ -809,6 +891,12 @@ class DSXConnector:
         }
 
     async def register_connector(self, conn_model: ConnectorInstanceModel) -> StatusResponse:
+        if not self.register_with_core:
+            return StatusResponse(
+                status=StatusResponseEnum.SUCCESS,
+                message="Registration disabled",
+                description="register_with_core=false",
+            )
         try:
             payload = jsonable_encoder(conn_model)
             if self._sdk is not None:
@@ -894,6 +982,12 @@ class DSXConnector:
             await asyncio.sleep(sleep_for)
 
     async def unregister_connector(self) -> StatusResponse:
+        if not self.register_with_core:
+            return StatusResponse(
+                status=StatusResponseEnum.SUCCESS,
+                message="Unregistration disabled",
+                description="register_with_core=false",
+            )
         uuid_str = str(self.connector_running_model.uuid)
         try:
             if self._sdk is not None:
@@ -991,6 +1085,12 @@ class DSXAConnectorRouter(APIRouter):
                  description="Check repository connectivity",
                  dependencies=[Depends(require_dsx_hmac)],
                  )(self.get_repo_check)
+
+        self.get(route_path(ConnectorAPI.ASSETS.value),
+                 description="Discover visible platform assets",
+                 response_model=AssetDiscoveryResponse,
+                 dependencies=[Depends(require_dsx_hmac)],
+                 )(self.get_assets)
 
         # Optional estimation endpoint: returns count preflight if supported by connector.
         self.get(route_path(ConnectorAPI.ESTIMATE.value),
@@ -1223,6 +1323,35 @@ class DSXAConnectorRouter(APIRouter):
             except Exception as e:
                 dsx_logging.warning(f"preview provider failed: {e}")
         return status
+
+    async def get_assets(
+        self,
+        asset_type: str = Query(default="asset", alias="type"),
+        source: str = Query(default="configured_asset"),
+        limit: int = Query(default=100, ge=1, le=1000),
+        cursor: str | None = Query(default=None),
+    ) -> AssetDiscoveryResponse:
+        dsx_logging.debug(f"asset_discovery called (type={asset_type}, source={source}, limit={limit})")
+        if self._connector.asset_discovery_handler is None:
+            return AssetDiscoveryResponse(
+                asset_type=asset_type,
+                source=source,
+                status="unsupported",
+                assets=[],
+                unsupported=True,
+                message="asset_discovery_not_supported",
+            )
+        handler = self._connector.asset_discovery_handler
+        parameters = inspect.signature(handler).parameters
+        if "source" in parameters:
+            res = handler(asset_type, source, limit, cursor)
+        else:
+            res = handler(asset_type, limit, cursor)
+        if inspect.isawaitable(res):
+            res = await res  # type: ignore[assignment]
+        if isinstance(res, AssetDiscoveryResponse):
+            return res
+        return AssetDiscoveryResponse.model_validate(res)
 
     async def get_estimate(self, request: Request) -> dict:
         """

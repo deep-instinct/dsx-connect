@@ -52,6 +52,24 @@ class ConnectorInstanceModel(BaseModel):
     last_repo_check_message: Optional[str] = None  # human-readable
 
 
+class AssetDiscoveryItem(BaseModel):
+    id: str
+    display_name: str | None = None
+    selector: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class AssetDiscoveryResponse(BaseModel):
+    asset_type: str
+    source: str = "configured_asset"
+    status: str = "success"
+    assets: list[AssetDiscoveryItem] = Field(default_factory=list)
+    next_cursor: str | None = None
+    unsupported: bool = False
+    message: str | None = None
+    required_permission: str | None = None
+
+
 class ScanRequestModel(BaseModel):
     connector: ConnectorInstanceModel = None
     location: str
@@ -64,3 +82,6 @@ class ScanRequestModel(BaseModel):
     # For connector full scans, all enqueued items share a job id.
     # For single events (e.g., webhook), a unique job id represents a job of one.
     scan_job_id: str | None = None
+    # Logical per-item identifier used by the core workflow.
+    # When present, connectors can use this to create stable quarantine object names.
+    job_item_id: str | None = None

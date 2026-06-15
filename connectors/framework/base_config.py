@@ -28,6 +28,10 @@ class BaseConnectorConfig(BaseSettings):
         default="http://0.0.0.0:8586",
         description="Complete URL (http(s)://ip.add.ddr.ess|URL:port) of the dsx-connect entry point"
     )
+    register_with_core: bool = Field(
+        default=True,
+        description="Whether this connector should self-register with a 1g dsx-connect core.",
+    )
     item_action: ItemActionEnum = ItemActionEnum.NOTHING
     item_action_move_metainfo: str = "dsxconnect-quarantine"
     asset: str = ""

@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("azure.storage.blob")
 
-from shared.models.connector_models import ScanRequestModel
+from shared.models.connector_models import ScanRequestModel, ItemActionEnum
 
 
 @pytest.mark.asyncio
@@ -16,6 +16,8 @@ async def test_full_scan_filters(monkeypatch):
 
     async def fake_scan(req: ScanRequestModel):
         calls.append(req.location)
+        from shared.models.status_responses import StatusResponse, StatusResponseEnum
+        return StatusResponse(status=StatusResponseEnum.SUCCESS, message="ok")
 
     monkeypatch.setattr(ac.abs_client, "is_configured", lambda: True)
     monkeypatch.setattr(ac.connector, "scan_file_request", fake_scan)
@@ -65,3 +67,44 @@ async def test_full_scan_batch_filters(monkeypatch):
     resp = await ac.full_scan_handler(batch=True, batch_size=2)
     assert resp.status.value == "success"
     assert batch_calls == [(["sub1/a.txt", "sub1/b.txt"], 2)]
+
+
+@pytest.mark.asyncio
+async def test_item_action_movetag_uses_requested_destination_filename(monkeypatch):
+    import connectors.azure_blob_storage.azure_blob_storage_connector as ac
+
+    ac.config.asset_container = "container-a"
+    ac.config.item_action = ItemActionEnum.NOTHING
+
+    calls = []
+
+    monkeypatch.setattr(ac.abs_client, "key_exists", lambda container, key: True)
+    monkeypatch.setattr(
+        ac.abs_client,
+        "move_blob",
+        lambda src_container, src_key, dest_container, dest_key: calls.append(("move", src_container, src_key, dest_container, dest_key)) or True,
+    )
+    monkeypatch.setattr(
+        ac.abs_client,
+        "tag_blob",
+        lambda container, key, tags=None: calls.append(("tag", container, key, tags)) or True,
+    )
+
+    request = ScanRequestModel(
+        location="scan/eicar.txt",
+        metainfo="container-a/scan/eicar.txt",
+        requested_action={
+            "type": "movetag",
+            "destination": {"path": "quarantine", "filename": "eicar.txt_c23bbf85bc"},
+            "tags": {"Verdict": "Malicious"},
+        },
+    )
+
+    resp = await ac.item_action_handler(request)
+
+    assert resp.status.value == "success"
+    assert resp.item_action == ItemActionEnum.MOVE_TAG
+    assert calls == [
+        ("tag", "container-a", "scan/eicar.txt", {"Verdict": "Malicious"}),
+        ("move", "container-a", "scan/eicar.txt", "container-a", "quarantine/eicar.txt_c23bbf85bc"),
+    ]

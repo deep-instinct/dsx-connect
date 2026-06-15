@@ -13,6 +13,7 @@
   "activationEvents": [
     "onCommand:dsxTransfer.createConfig",
     "onCommand:dsxTransfer.addLocalHarness",
+    "onCommand:dsxTransfer.runLocalHarness",
     "onCommand:dsxTransfer.validateConfig",
     "onCommand:dsxTransfer.runTransfer",
     "onCommand:dsxTransfer.showSchema",
@@ -79,6 +80,10 @@
       {
         "command": "dsxTransfer.addLocalHarness",
         "title": "DSX-Transfer: Add Local Harness"
+      },
+      {
+        "command": "dsxTransfer.runLocalHarness",
+        "title": "DSX-Transfer: Run Local Harness"
       },
       {
         "command": "dsxTransfer.validateConfig",

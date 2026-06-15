@@ -109,6 +109,10 @@ function configUri() {
   return vscode.Uri.file(resolveWorkspacePath(settings().configPath));
 }
 
+function localHarnessConfigUri() {
+  return vscode.Uri.file(path.join(workspaceRoot(), ".dsx-transfer", "harness", "dsx-transfer.local.yaml"));
+}
+
 function buildCommand(args) {
   const current = settings();
   const env = { ...process.env, ...current.extraEnv };
@@ -371,8 +375,7 @@ async function addLocalHarness() {
   vscode.window.showInformationMessage("Created DSX-Transfer local harness.");
 }
 
-async function validateConfig(options = {}) {
-  const target = configUri();
+async function validateConfigPath(target, options = {}) {
   const result = await runCli(["config", "validate", "--config", target.fsPath]);
   let parsed;
   try {
@@ -402,6 +405,10 @@ async function validateConfig(options = {}) {
   return parsed;
 }
 
+async function validateConfig(options = {}) {
+  return validateConfigPath(configUri(), options);
+}
+
 function parseReport(stdout) {
   const lines = String(stdout || "").trim().split(/\r?\n/).filter(Boolean);
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -417,31 +424,54 @@ function parseReport(stdout) {
   return null;
 }
 
-async function runTransfer() {
+async function runTransferWithConfig(target, label = "DSX-Transfer") {
   output.show(true);
-  const validation = await validateConfig({ silent: true });
+  const validation = await validateConfigPath(target, { silent: true });
   if (!validation.valid) {
-    vscode.window.showErrorMessage("DSX-Transfer config is invalid. Fix diagnostics before running.");
+    vscode.window.showErrorMessage(`${label} config is invalid. Fix diagnostics before running.`);
     return;
   }
-  const result = await runCli(["migrate", "--config", configUri().fsPath]);
+  const result = await runCli(["migrate", "--config", target.fsPath]);
   const report = parseReport(result.stdout);
   if (report) {
     reportProvider.setReport(report);
     const summary = `planned ${report.planned_count ?? report.outcomes.length}, allowed ${report.allowed_count ?? 0}, blocked ${report.blocked_count ?? 0}, failed ${report.failed_count ?? 0}`;
-    output.appendLine(`DSX-Transfer summary: ${summary}`);
+    output.appendLine(`${label} summary: ${summary}`);
     if (result.ok) {
-      vscode.window.showInformationMessage(`DSX-Transfer complete: ${summary}.`);
+      vscode.window.showInformationMessage(`${label} complete: ${summary}.`);
     } else {
-      vscode.window.showErrorMessage(`DSX-Transfer finished with failures: ${summary}.`);
+      vscode.window.showErrorMessage(`${label} finished with failures: ${summary}.`);
     }
     return;
   }
   if (result.ok) {
-    vscode.window.showInformationMessage("DSX-Transfer command completed.");
+    vscode.window.showInformationMessage(`${label} command completed.`);
   } else {
-    vscode.window.showErrorMessage("DSX-Transfer command failed. See DSX-Transfer output.");
+    vscode.window.showErrorMessage(`${label} command failed. See DSX-Transfer output.`);
   }
+}
+
+async function runTransfer() {
+  return runTransferWithConfig(configUri(), "DSX-Transfer");
+}
+
+async function runLocalHarness() {
+  const target = localHarnessConfigUri();
+  if (!await pathExists(target.fsPath)) {
+    const choice = await vscode.window.showWarningMessage(
+      "DSX-Transfer local harness does not exist.",
+      "Create Harness",
+      "Cancel"
+    );
+    if (choice !== "Create Harness") {
+      return;
+    }
+    await addLocalHarness();
+    if (!await pathExists(target.fsPath)) {
+      return;
+    }
+  }
+  return runTransferWithConfig(target, "DSX-Transfer local harness");
 }
 
 async function checkEnvironment() {
@@ -490,6 +520,7 @@ function activate(context) {
   context.subscriptions.push(vscode.window.registerTreeDataProvider("dsxTransferReport", reportProvider));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.addLocalHarness", addLocalHarness));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runLocalHarness", runLocalHarness));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.validateConfig", () => validateConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runTransfer", runTransfer));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.showSchema", showSchema));

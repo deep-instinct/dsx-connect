@@ -1,0 +1,152 @@
+{
+  "name": "dsxa_assistant_vscode_ext",
+  "displayName": "DSXA Assistant",
+  "description": "Scan files with DSXA and help add malware scanning to applications.",
+  "version": "0.1.0",
+  "publisher": "deep-instinct",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "Testing"
+  ],
+  "activationEvents": [
+    "onCommand:dsxa.configure",
+    "onCommand:dsxa.healthCheck",
+    "onCommand:dsxa.scanCurrentFile",
+    "onCommand:dsxa.scanSelectedFiles",
+    "onCommand:dsxa.scanWorkspaceFolder",
+    "onCommand:dsxa.findIntegrationPoints",
+    "onCommand:dsxa.generateIntegrationPlan",
+    "onView:dsxaScanResults",
+    "onView:dsxaIntegrationPoints"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "DSXA Assistant",
+      "properties": {
+        "dsxa.baseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5000",
+          "description": "Base URL for DSXA."
+        },
+        "dsxa.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional DSXA auth token."
+        },
+        "dsxa.scanConcurrency": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "maximum": 32,
+          "description": "Concurrent file scans for folder/workspace scans."
+        },
+        "dsxa.maxFileSizeBytes": {
+          "type": "number",
+          "default": 2147483648,
+          "description": "Skip files larger than this size."
+        },
+        "dsxa.workspaceIncludeGlob": {
+          "type": "string",
+          "default": "**/*",
+          "description": "Files included by workspace scan."
+        },
+        "dsxa.workspaceExcludeGlob": {
+          "type": "string",
+          "default": "**/{node_modules,.git,.venv,venv,dist,build,target,__pycache__}/**",
+          "description": "Files excluded by workspace scan."
+        },
+        "dsxa.integrationMode": {
+          "type": "string",
+          "enum": [
+            "direct-dsxa",
+            "dsx-connect-ng"
+          ],
+          "default": "direct-dsxa",
+          "description": "Preferred generated integration pattern."
+        },
+        "dsxa.dsxConnectNgBaseUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8091/api/v1",
+          "description": "Base URL for DSX-Connect NG when using dsx-connect-ng integration mode."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "dsxa.configure",
+        "title": "DSXA: Configure Connection"
+      },
+      {
+        "command": "dsxa.healthCheck",
+        "title": "DSXA: Health Check"
+      },
+      {
+        "command": "dsxa.scanCurrentFile",
+        "title": "DSXA: Scan Current File"
+      },
+      {
+        "command": "dsxa.scanSelectedFiles",
+        "title": "DSXA: Scan Selected Files"
+      },
+      {
+        "command": "dsxa.scanWorkspaceFolder",
+        "title": "DSXA: Scan Workspace Folder"
+      },
+      {
+        "command": "dsxa.findIntegrationPoints",
+        "title": "DSXA: Find Application Integration Points"
+      },
+      {
+        "command": "dsxa.generateIntegrationPlan",
+        "title": "DSXA: Generate Integration Plan"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "dsxa.scanSelectedFiles",
+          "when": "resourceScheme == file",
+          "group": "navigation@90"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "dsxa.scanCurrentFile",
+          "when": "resourceScheme == file",
+          "group": "navigation@90"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dsxa",
+          "title": "DSXA",
+          "icon": "resources/dsxa.svg"
+        }
+      ]
+    },
+    "views": {
+      "dsxa": [
+        {
+          "id": "dsxaScanResults",
+          "name": "Scan Results"
+        },
+        {
+          "id": "dsxaIntegrationPoints",
+          "name": "Integration Points"
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@deep-instinct/dsxa-sdk-js": "file:../dsxa_sdk_js"
+  },
+  "scripts": {
+    "check": "node --check src/extension.js"
+  }
+}

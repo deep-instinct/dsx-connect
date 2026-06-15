@@ -320,6 +320,192 @@ bash ${relativeRunScript}
 `;
 }
 
+async function writePythonIntegrationSkeleton(targetDir, options = {}) {
+  const activeConfig = relativeWorkspacePath(configUri().fsPath) || settings().configPath;
+  const files = [
+    {
+      path: path.join(targetDir, "run_transfer.py"),
+      content: pythonIntegrationRunner(),
+    },
+    {
+      path: path.join(targetDir, "smoke_test.py"),
+      content: pythonIntegrationSmokeTest(),
+    },
+    {
+      path: path.join(targetDir, ".env.example"),
+      content: pythonIntegrationEnvExample(activeConfig),
+    },
+    {
+      path: path.join(targetDir, "README.md"),
+      content: pythonIntegrationReadme(activeConfig),
+    },
+  ];
+
+  const written = [];
+  const skipped = [];
+  for (const file of files) {
+    if (await writeTextFile(file.path, file.content, options)) {
+      written.push(file.path);
+    } else {
+      skipped.push(file.path);
+    }
+  }
+  return { targetDir, written, skipped };
+}
+
+function pythonIntegrationRunner() {
+  return `from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+
+def workspace_root() -> Path:
+    return Path(os.environ.get("DSX_TRANSFER_WORKSPACE", Path.cwd())).resolve()
+
+
+def config_path() -> Path:
+    value = os.environ.get("DSX_TRANSFER_CONFIG", "dsx-transfer.yaml")
+    path = Path(value)
+    if not path.is_absolute():
+        path = workspace_root() / path
+    return path
+
+
+def command() -> list[str]:
+    python = os.environ.get("DSX_TRANSFER_PYTHON", sys.executable)
+    if os.environ.get("DSX_TRANSFER_USE_MODULE", "1") == "1":
+        return [python, "-m", "dsx_transfer.cli", "migrate", "--config", str(config_path())]
+    executable = os.environ.get("DSX_TRANSFER_EXECUTABLE", "dsx-transfer")
+    return [executable, "migrate", "--config", str(config_path())]
+
+
+def run_transfer() -> dict:
+    env = os.environ.copy()
+    if env.get("DSX_TRANSFER_PYTHONPATH"):
+        env["PYTHONPATH"] = env["DSX_TRANSFER_PYTHONPATH"]
+    result = subprocess.run(
+        command(),
+        cwd=workspace_root(),
+        env=env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.stderr:
+        print(result.stderr, file=sys.stderr, end="")
+    if result.stdout:
+        print(result.stdout, end="")
+    report = parse_report(result.stdout)
+    if result.returncode != 0:
+        raise SystemExit(result.returncode)
+    return report
+
+
+def parse_report(stdout: str) -> dict:
+    for line in reversed([line for line in stdout.splitlines() if line.strip()]):
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and isinstance(parsed.get("outcomes"), list):
+            return parsed
+    return {}
+
+
+if __name__ == "__main__":
+    report = run_transfer()
+    if report:
+        print(
+            "summary:",
+            f"planned={report.get('planned_count', 0)}",
+            f"allowed={report.get('allowed_count', 0)}",
+            f"blocked={report.get('blocked_count', 0)}",
+            f"failed={report.get('failed_count', 0)}",
+        )
+`;
+}
+
+function pythonIntegrationSmokeTest() {
+  return `from __future__ import annotations
+
+import os
+from pathlib import Path
+
+import run_transfer
+
+
+def main() -> None:
+    os.environ.setdefault(
+        "DSX_TRANSFER_WORKSPACE",
+        str(Path(__file__).resolve().parents[3]),
+    )
+    os.environ.setdefault(
+        "DSX_TRANSFER_CONFIG",
+        ".dsx-transfer/harness/dsx-transfer.local.yaml",
+    )
+    report = run_transfer.run_transfer()
+    assert report.get("planned_count") == 2, report
+    assert report.get("allowed_count") == 1, report
+    assert report.get("blocked_count") == 1, report
+    assert report.get("failed_count") == 0, report
+    print("smoke test passed")
+
+
+if __name__ == "__main__":
+    main()
+`;
+}
+
+function pythonIntegrationEnvExample(activeConfig) {
+  return `DSX_TRANSFER_WORKSPACE=${workspaceRoot()}
+DSX_TRANSFER_CONFIG=${activeConfig}
+DSX_TRANSFER_USE_MODULE=1
+DSX_TRANSFER_PYTHON=${settings().pythonPath || ".venv/bin/python"}
+DSX_TRANSFER_PYTHONPATH=${settings().modulePythonPath || ".:dsx_transfer:dsxa_sdk_py"}
+# DSX_TRANSFER_EXECUTABLE=dsx-transfer
+# GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+`;
+}
+
+function pythonIntegrationReadme(activeConfig) {
+  return `# DSX-Transfer Python Integration Skeleton
+
+This skeleton shows how an application can invoke DSX-Transfer from Python while keeping transfer behavior in a normal \`dsx-transfer.yaml\` config.
+
+Generated files:
+
+- \`run_transfer.py\`: small Python wrapper around the DSX-Transfer CLI or module invocation
+- \`smoke_test.py\`: local harness smoke test
+- \`.env.example\`: environment variables to copy into your app or process manager
+
+Active config at generation time:
+
+\`\`\`text
+${activeConfig}
+\`\`\`
+
+Run from the workspace root:
+
+\`\`\`bash
+cd ${path.relative(workspaceRoot(), path.join(workspaceRoot(), ".dsx-transfer", "integration", "python")).split(path.sep).join("/")}
+DSX_TRANSFER_WORKSPACE=${workspaceRoot()} DSX_TRANSFER_CONFIG=${activeConfig} python run_transfer.py
+\`\`\`
+
+Smoke test against the local harness:
+
+\`\`\`bash
+python smoke_test.py
+\`\`\`
+
+Use this as a starting point for a scheduled job, background worker, or API endpoint. Keep source, destination, scanner, policy, audit, and checkpoint behavior in the DSX-Transfer config file.
+`;
+}
+
 function diagnostic(uri, message, severity) {
   return new vscode.Diagnostic(
     new vscode.Range(0, 0, 0, Number.MAX_SAFE_INTEGER),
@@ -446,6 +632,37 @@ async function openLocalHarness() {
   }
   const doc = await vscode.workspace.openTextDocument(target);
   await vscode.window.showTextDocument(doc, { preview: false });
+}
+
+async function addPythonIntegrationSkeleton() {
+  output.show(true);
+  const targetDir = path.join(workspaceRoot(), ".dsx-transfer", "integration", "python");
+  const readmePath = path.join(targetDir, "README.md");
+  const overwrite = await pathExists(readmePath)
+    ? await vscode.window.showWarningMessage(
+      "DSX-Transfer Python integration skeleton already exists.",
+      "Open Existing",
+      "Overwrite",
+      "Cancel"
+    )
+    : "Overwrite";
+  if (overwrite === "Open Existing") {
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(readmePath));
+    await vscode.window.showTextDocument(doc, { preview: false });
+    return;
+  }
+  if (overwrite !== "Overwrite") {
+    return;
+  }
+
+  const result = await writePythonIntegrationSkeleton(targetDir, { overwrite: true });
+  output.appendLine("DSX-Transfer Python integration skeleton:");
+  output.appendLine(`- path: ${result.targetDir}`);
+  output.appendLine(`- wrote ${result.written.length} file(s)`);
+
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(readmePath));
+  await vscode.window.showTextDocument(doc, { preview: false });
+  vscode.window.showInformationMessage("Created DSX-Transfer Python integration skeleton.");
 }
 
 async function validateConfigPath(target, options = {}) {
@@ -610,6 +827,7 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openLocalHarness", openLocalHarness));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.addLocalHarness", addLocalHarness));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.addPythonIntegrationSkeleton", addPythonIntegrationSkeleton));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runLocalHarness", runLocalHarness));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.validateConfig", () => validateConfig()));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.runTransfer", runTransfer));

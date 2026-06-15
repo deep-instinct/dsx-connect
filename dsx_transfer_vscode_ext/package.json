@@ -16,6 +16,7 @@
     "onCommand:dsxTransfer.createConfig",
     "onCommand:dsxTransfer.openLocalHarness",
     "onCommand:dsxTransfer.addLocalHarness",
+    "onCommand:dsxTransfer.addPythonIntegrationSkeleton",
     "onCommand:dsxTransfer.runLocalHarness",
     "onCommand:dsxTransfer.validateConfig",
     "onCommand:dsxTransfer.runTransfer",
@@ -98,6 +99,10 @@
         "title": "DSX-Transfer: Add Local Harness"
       },
       {
+        "command": "dsxTransfer.addPythonIntegrationSkeleton",
+        "title": "DSX-Transfer: Add Python Integration Skeleton"
+      },
+      {
         "command": "dsxTransfer.runLocalHarness",
         "title": "DSX-Transfer: Run Local Harness"
       },
@@ -166,6 +171,11 @@
           "command": "dsxTransfer.useActiveFileAsConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@4"
+        },
+        {
+          "command": "dsxTransfer.addPythonIntegrationSkeleton",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@5"
         }
       ],
       "editor/title": [

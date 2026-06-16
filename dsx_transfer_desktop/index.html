@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DSX-Transfer Desktop</title>
-  <link rel="stylesheet" href="./style.css?v=0.1.4" />
+  <link rel="stylesheet" href="./style.css?v=0.1.5" />
 </head>
 <body>
   <div class="app-shell">
@@ -61,6 +61,14 @@
           </select>
         </div>
       </section>
+
+      <section class="panel">
+        <div class="panel-title">File Types to Block</div>
+        <label class="checkbox-row">
+          <input id="blockWindowsExecutables" type="checkbox" />
+          Windows Executables
+        </label>
+      </section>
     </aside>
 
     <main class="content">
@@ -91,8 +99,7 @@
         </div>
 
         <div class="action-row">
-          <button id="runTransfer" type="button" class="primary">Run Guarded Transfer</button>
-          <button id="saveSettings" type="button">Save Settings</button>
+          <button id="runTransfer" type="button" class="primary">Scan and Copy Files |&gt;</button>
         </div>
         <div id="progressPanel" class="progress-panel" hidden>
           <div class="progress-head">
@@ -149,6 +156,6 @@
     </main>
   </div>
 
-  <script src="./renderer.js?v=0.1.4"></script>
+  <script src="./renderer.js?v=0.1.5"></script>
 </body>
 </html>

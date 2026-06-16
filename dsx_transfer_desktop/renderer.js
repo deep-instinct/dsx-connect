@@ -12,7 +12,8 @@ const fields = {
   actionBenign: $("actionBenign"),
   actionMalicious: $("actionMalicious"),
   actionUnknown: $("actionUnknown"),
-  actionError: $("actionError")
+  actionError: $("actionError"),
+  blockWindowsExecutables: $("blockWindowsExecutables")
 };
 
 function systemPrefersDark() {
@@ -58,6 +59,9 @@ function settingsFromForm() {
       suspicious: "block",
       unknown: fields.actionUnknown.value,
       error: fields.actionError.value
+    },
+    fileTypeBlocks: {
+      windowsExecutables: fields.blockWindowsExecutables.checked
     }
   };
 }
@@ -75,6 +79,7 @@ function applySettings(settings) {
   fields.actionMalicious.value = verdictActions.malicious || "block";
   fields.actionUnknown.value = verdictActions.unknown || "block";
   fields.actionError.value = verdictActions.error || "block";
+  fields.blockWindowsExecutables.checked = settings.fileTypeBlocks?.windowsExecutables !== false;
 }
 
 function setMetrics(summary = {}) {
@@ -183,12 +188,6 @@ async function pickFolder(purpose, target) {
   }
 }
 
-async function saveSettings() {
-  const saved = await window.dsxTransferDesktop.saveSettings(settingsFromForm());
-  applySettings(saved);
-  setStatus("Settings saved", "ok");
-}
-
 async function runTransfer() {
   const button = $("runTransfer");
   button.disabled = true;
@@ -218,7 +217,6 @@ async function init() {
   window.dsxTransferDesktop.onTransferProgress(updateProgress);
   $("pickSource").addEventListener("click", () => pickFolder("source", fields.sourcePath));
   $("pickDestination").addEventListener("click", () => pickFolder("destination", fields.destinationPath));
-  $("saveSettings").addEventListener("click", saveSettings);
   $("runTransfer").addEventListener("click", runTransfer);
 }
 

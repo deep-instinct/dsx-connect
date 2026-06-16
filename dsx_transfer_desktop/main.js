@@ -15,9 +15,9 @@ function createMainWindow() {
   const indexUrl = pathToFileURL(path.join(__dirname, "index.html")).toString();
   mainWindow = new BrowserWindow({
     width: 1180,
-    height: 820,
+    height: 740,
     minWidth: 960,
-    minHeight: 680,
+    minHeight: 600,
     title: APP_NAME,
     icon: APP_ICON_PATH,
     webPreferences: {
@@ -80,6 +80,9 @@ function defaultSettings() {
       suspicious: "block",
       unknown: "block",
       error: "block"
+    },
+    fileTypeBlocks: {
+      windowsExecutables: true
     },
     transferConcurrency: 4,
     themeMode: "auto",
@@ -163,6 +166,8 @@ function buildTransferConfig(request, paths) {
   for (const verdict of ["benign", "malicious", "suspicious", "unknown", "error"]) {
     lines.push(`    ${verdict}: ${yamlString(verdictActions[verdict] || "block")}`);
   }
+  lines.push("  file_type_blocks:");
+  lines.push(`    windows_executables: ${yamlBool(Boolean(settings.fileTypeBlocks?.windowsExecutables))}`);
   lines.push("");
   lines.push("runtime:");
   lines.push(`  audit_jsonl: ${yamlString(paths.auditPath)}`);

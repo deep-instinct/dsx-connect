@@ -81,6 +81,30 @@ function evaluatePolicy({ item, observation, policyId, verdictActions }) {
   };
 }
 
+function isWindowsExecutableFileType(fileType) {
+  const normalized = String(fileType || "").trim().toLowerCase();
+  if (!normalized) return false;
+  return (
+    normalized === "pe" ||
+    normalized === "exe" ||
+    normalized.includes("portable executable") ||
+    normalized.includes("windows executable") ||
+    normalized.includes("win32") ||
+    normalized.includes("win64")
+  );
+}
+
+function applyFileTypeBlocks(decision, fileTypeBlocks) {
+  if (fileTypeBlocks?.windowsExecutables && isWindowsExecutableFileType(decision.file_type)) {
+    return {
+      ...decision,
+      action: "block",
+      reason: `${decision.reason};file_type:windows_executable`
+    };
+  }
+  return decision;
+}
+
 function stateForAction(action) {
   if (action === "exclude") return "excluded";
   return "blocked";
@@ -178,6 +202,10 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
     error: "block",
     ...(settings.verdictActions || {})
   };
+  const fileTypeBlocks = {
+    windowsExecutables: true,
+    ...(settings.fileTypeBlocks || {})
+  };
 
   const startedAt = nowIso();
   const items = await listFiles(sourceRoot, destinationRoot);
@@ -242,7 +270,10 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
     try {
       const response = await scanFile({ filePath: item.metadata.source_path, settings });
       const observation = scanObservationFromDsxa(response);
-      const decision = evaluatePolicy({ item, observation, policyId, verdictActions });
+      const decision = applyFileTypeBlocks(
+        evaluatePolicy({ item, observation, policyId, verdictActions }),
+        fileTypeBlocks
+      );
       let bytesWritten = 0;
       let state = stateForAction(decision.action);
       if (decision.action === "allow") {

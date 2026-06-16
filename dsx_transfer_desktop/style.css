@@ -208,14 +208,14 @@ button:disabled {
 }
 
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-  font-weight: 750;
+  background: color-mix(in srgb, var(--allow) 78%, var(--surface));
+  border-color: color-mix(in srgb, var(--allow) 70%, var(--border));
+  color: #ffffff;
+  font-weight: 600;
 }
 
 button.primary:hover {
-  background: var(--accent-dark);
+  background: color-mix(in srgb, var(--allow) 88%, var(--surface));
 }
 
 .field-grid,

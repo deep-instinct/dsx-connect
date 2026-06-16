@@ -1,10 +1,9 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron");
 const fs = require("node:fs/promises");
-const fsSync = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
-const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
+const { runGuardedTransfer } = require("./transfer_runner");
 
 const APP_NAME = "DSX-Transfer Desktop";
 const SETTINGS_FILE = "settings.json";
@@ -109,41 +108,6 @@ async function writeSettings(settings) {
   await fs.writeFile(target, JSON.stringify(merged, null, 2), "utf8");
   await rebuildApplicationMenu();
   return merged;
-}
-
-function repoRoot() {
-  if (app.isPackaged) {
-    return process.resourcesPath;
-  }
-  return path.resolve(__dirname, "..");
-}
-
-function pythonCandidates() {
-  const root = repoRoot();
-  const candidates = [];
-  if (process.env.DSX_TRANSFER_DESKTOP_PYTHON) {
-    candidates.push(process.env.DSX_TRANSFER_DESKTOP_PYTHON);
-  }
-  candidates.push(path.join(root, ".venv", "bin", "python"));
-  candidates.push(path.join(root, ".venv", "Scripts", "python.exe"));
-  candidates.push("python3");
-  candidates.push("python");
-  return candidates;
-}
-
-function commandExists(command) {
-  if (path.isAbsolute(command) || command.includes(path.sep)) {
-    return fsSync.existsSync(command);
-  }
-  return true;
-}
-
-function resolvePython() {
-  const candidate = pythonCandidates().find(commandExists);
-  if (!candidate) {
-    throw new Error("No Python runtime found. Set DSX_TRANSFER_DESKTOP_PYTHON or run from a repo with .venv.");
-  }
-  return candidate;
 }
 
 function transferRunDir() {
@@ -298,26 +262,14 @@ async function runTransfer(request, sender) {
   const config = buildTransferConfig({ ...effectiveRequest, sourcePath, destinationPath }, paths);
   await fs.writeFile(paths.configPath, config, "utf8");
 
-  const python = resolvePython();
-  const root = repoRoot();
-  const pythonPathParts = [
-    path.join(root, "dsx_transfer"),
-    path.join(root, "dsxa_sdk_py"),
-    root,
-    process.env.PYTHONPATH || ""
-  ].filter(Boolean);
-
   const started = Date.now();
-  const args = ["-m", "dsx_transfer.cli", "migrate", "--config", paths.configPath, "--progress-jsonl"];
   await fs.writeFile(
     paths.runLogPath,
     [
       `started_at=${new Date(started).toISOString()}`,
       `run_dir=${runDir}`,
-      `python=${python}`,
-      `cwd=${root}`,
-      `command=${python} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`,
-      `pythonpath=${pythonPathParts.join(path.delimiter)}`,
+      `runner=node`,
+      `app_path=${__dirname}`,
       `config=${paths.configPath}`,
       `audit=${paths.auditPath}`,
       `checkpoint=${paths.checkpointPath}`,
@@ -328,50 +280,21 @@ async function runTransfer(request, sender) {
     "utf8"
   );
 
-  const child = spawn(python, args, {
-    cwd: root,
-    env: {
-      ...process.env,
-      PYTHONPATH: pythonPathParts.join(path.delimiter)
-    },
-    windowsHide: true
-  });
-
   let stdout = "";
   let stderr = "";
-  let progressBuffer = "";
-  child.stdout.on("data", (chunk) => {
-    stdout += chunk.toString();
-  });
-  child.stderr.on("data", (chunk) => {
-    const text = chunk.toString();
-    stderr += text;
-    progressBuffer += text;
-    const lines = progressBuffer.split(/\r?\n/);
-    progressBuffer = lines.pop() || "";
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      try {
-        const event = JSON.parse(trimmed);
-        if (event?.event === "transfer_progress") {
-          emitTransferProgress(sender, event);
-        }
-      } catch {
-        // Non-JSON stderr is retained for diagnostics but ignored by the progress UI.
-      }
-    }
-  });
-
-  const code = await new Promise((resolve) => {
-    child.on("error", (error) => {
-      stderr += `${error.stack || error.message || String(error)}\n`;
-      resolve(-1);
+  let code = 0;
+  let report = null;
+  try {
+    report = await runGuardedTransfer({
+      settings: { ...effectiveRequest, sourcePath, destinationPath },
+      paths,
+      onProgress: (event) => emitTransferProgress(sender, event)
     });
-    child.on("close", resolve);
-  });
-
-  const report = parseJsonReport(stdout);
+    stdout = JSON.stringify(report, null, 2);
+  } catch (error) {
+    code = 1;
+    stderr = `${error?.stack || error?.message || String(error)}\n`;
+  }
   const completed = Date.now();
   await fs.appendFile(
     paths.runLogPath,
@@ -391,7 +314,8 @@ async function runTransfer(request, sender) {
   const result = {
     ok: code === 0,
     code,
-    python,
+    commandKind: "node",
+    executable: process.execPath,
     configPath: paths.configPath,
     auditPath: paths.auditPath,
     checkpointPath: paths.checkpointPath,

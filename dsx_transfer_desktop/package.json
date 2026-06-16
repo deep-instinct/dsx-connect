@@ -1,6 +1,6 @@
 {
   "name": "dsx-transfer-desktop",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Desktop guarded file-share transfer app powered by dsx-transfer.",
   "main": "main.js",
   "author": "Deep Instinct",

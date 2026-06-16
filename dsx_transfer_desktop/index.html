@@ -4,74 +4,77 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DSX-Transfer Desktop</title>
-  <link rel="stylesheet" href="./style.css?v=0.1.6" />
+  <link rel="stylesheet" href="./style.css?v=0.1.7" />
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar">
+    <header class="titlebar">
       <div class="brand">
         <h1>DSX-Transfer Desktop</h1>
       </div>
+    </header>
 
-      <section id="dsxaPanel" class="panel">
-        <div class="panel-title">DSXA Connection</div>
-        <label>
-          Scanner URL
-          <input id="dsxaBaseUrl" type="text" placeholder="http://127.0.0.1:5000" />
-        </label>
-        <label>
-          Auth token
-          <input id="dsxaAuthToken" type="password" />
-        </label>
-        <div class="field-grid">
+    <div class="app-body">
+      <aside class="sidebar">
+        <section id="dsxaPanel" class="panel">
+          <div class="panel-title">DSXA Connection</div>
           <label>
-            Protected entity
-            <input id="dsxaProtectedEntity" type="number" min="1" value="1" />
+            Scanner URL
+            <input id="dsxaBaseUrl" type="text" placeholder="http://127.0.0.1:5000" />
           </label>
-          <label class="checkbox-row checkbox-row-bottom">
-            <input id="dsxaVerifyTls" type="checkbox" />
-            Verify TLS
+          <label>
+            Auth token
+            <input id="dsxaAuthToken" type="password" />
           </label>
-        </div>
-      </section>
+          <div class="field-grid">
+            <label>
+              Protected entity
+              <input id="dsxaProtectedEntity" type="number" min="1" value="1" />
+            </label>
+            <label class="checkbox-row checkbox-row-bottom">
+              <input id="dsxaVerifyTls" type="checkbox" />
+              Verify TLS
+            </label>
+          </div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-title">Verdict Actions</div>
-        <div class="verdict-grid">
-          <span>Benign</span>
-          <select id="actionBenign">
-            <option value="allow">Allow</option>
-            <option value="block">Block</option>
-          </select>
-          <span>Malicious</span>
-          <select id="actionMalicious">
-            <option value="block">Block</option>
-            <option value="allow">Allow</option>
-          </select>
-          <span>Unknown</span>
-          <select id="actionUnknown">
-            <option value="block">Block</option>
-            <option value="allow">Allow</option>
-          </select>
-          <span>Error</span>
-          <select id="actionError">
-            <option value="block">Block</option>
-            <option value="allow">Allow</option>
-          </select>
-        </div>
-      </section>
+        <section class="panel">
+          <div class="panel-title">Verdict Actions</div>
+          <div class="verdict-grid">
+            <span>Benign</span>
+            <select id="actionBenign">
+              <option value="allow">Allow</option>
+              <option value="block">Block</option>
+            </select>
+            <span>Malicious</span>
+            <select id="actionMalicious">
+              <option value="block">Block</option>
+              <option value="allow">Allow</option>
+            </select>
+            <span>Unknown</span>
+            <select id="actionUnknown">
+              <option value="block">Block</option>
+              <option value="allow">Allow</option>
+            </select>
+            <span>Error</span>
+            <select id="actionError">
+              <option value="block">Block</option>
+              <option value="allow">Allow</option>
+            </select>
+          </div>
+        </section>
 
-      <section class="panel">
-        <div class="panel-title">File Types to Block</div>
-        <label class="checkbox-row">
-          <input id="blockWindowsExecutables" type="checkbox" />
-          Windows Executables
-        </label>
-      </section>
-    </aside>
+        <section class="panel">
+          <div class="panel-title">File Types to Block</div>
+          <label class="checkbox-row">
+            <input id="blockWindowsExecutables" type="checkbox" />
+            Windows Executables
+          </label>
+        </section>
+      </aside>
 
-    <main class="content">
-      <section class="panel transfer-panel">
+      <main class="content">
+        <section class="panel transfer-panel">
         <div class="section-head">
           <div>
             <div class="panel-title">File Share Transfer</div>
@@ -108,9 +111,9 @@
           </div>
           <progress id="transferProgress" max="100" value="0"></progress>
         </div>
-      </section>
+        </section>
 
-      <section class="metrics">
+        <section class="metrics">
         <div class="metric">
           <span>Planned</span>
           <strong id="metricPlanned">0</strong>
@@ -127,9 +130,9 @@
           <span>Failed</span>
           <strong id="metricFailed">0</strong>
         </div>
-      </section>
+        </section>
 
-      <section class="panel results-panel">
+        <section class="panel results-panel">
         <div class="section-head">
           <div class="panel-title">Results</div>
           <div id="resultCount" class="subtitle">No transfer has run yet.</div>
@@ -152,10 +155,11 @@
             </tbody>
           </table>
         </div>
-      </section>
-    </main>
+        </section>
+      </main>
+    </div>
   </div>
 
-  <script src="./renderer.js?v=0.1.6"></script>
+  <script src="./renderer.js?v=0.1.7"></script>
 </body>
 </html>

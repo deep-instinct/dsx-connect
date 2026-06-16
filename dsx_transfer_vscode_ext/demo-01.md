@@ -1,6 +1,6 @@
 # Demo 01: New Filesystem-to-GCS Transfer
 
-Use this after running `DSX-Transfer: Create New Transfer`, choosing a directory, completing the wizard fields, and editing the generated `dsx-transfer.yaml`.
+Use this after running `DSX-Transfer: Create New Transfer`, choosing a directory, and editing the generated annotated `dsx-transfer.yaml`.
 
 ## 1. Make The Config Active
 

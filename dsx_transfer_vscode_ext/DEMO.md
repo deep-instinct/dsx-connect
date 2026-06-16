@@ -116,14 +116,7 @@ This is the main developer integration demo.
 
 1. Run `DSX-Transfer: Create New Transfer`.
 2. Choose a directory for the transfer workspace.
-3. Enter:
-
-- transfer id
-- filesystem source path
-- GCS destination URI
-- DSXA scanner URL
-
-4. Show the generated files:
+3. Show the generated files:
 
 ```text
 dsx-transfer.yaml
@@ -135,7 +128,9 @@ integration/python/.env.example
 integration/python/README.md
 ```
 
-5. Edit `dsx-transfer.yaml` if needed:
+4. Open `dsx-transfer.yaml`.
+5. Walk through the numbered comments in the generated YAML.
+6. Edit the destination:
 
 ```yaml
 destination:
@@ -143,7 +138,7 @@ destination:
   uri: gs://real-bucket/archive
 ```
 
-6. Confirm the generated scanner:
+7. Edit the scanner URL:
 
 ```yaml
 scanner:
@@ -152,7 +147,7 @@ scanner:
     base_url: https://scanner.example.com
 ```
 
-7. Set credentials in VS Code workspace settings:
+8. Set credentials in VS Code workspace settings:
 
 ```json
 {
@@ -162,9 +157,9 @@ scanner:
 }
 ```
 
-8. Run `DSX-Transfer: Validate Config`.
-9. Run `DSX-Transfer: Run Transfer`.
-10. In `Last Report`, show:
+9. Run `DSX-Transfer: Validate Config`.
+10. Run `DSX-Transfer: Run Transfer`.
+11. In `Last Report`, show:
 
 - planned count
 - allowed count
@@ -172,7 +167,7 @@ scanner:
 - failed count
 - DSXA scan decisions
 
-11. Confirm GCS contains the allowed files and does not contain blocked files.
+12. Confirm GCS contains the allowed files and does not contain blocked files.
 
 Run the generated Python skeleton:
 

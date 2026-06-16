@@ -5,6 +5,7 @@ Contract-first package for DSX-Transfer. The initial capability is Guarded Trans
 This is a sibling package to dsx-connect, intended to reuse shared DSX scanner, policy, audit, and job-state concepts without becoming a dsx-connect connector.
 
 See [docs/index.md](docs/index.md) for architecture notes, scanner and policy design, audit/checkpoint semantics, integration targets, and roadmap.
+See [docs/product-modes-and-diagrams.md](docs/product-modes-and-diagrams.md) for high-level diagrams covering enterprise transfer platform adapter mode and build-your-own guarded transfer mode.
 
 Initial transfer targets include local or mounted filesystem destinations and GCS destinations:
 
@@ -69,3 +70,22 @@ Local source-tree setup for DSXA mode:
 ```bash
 ./.venv/bin/python -m pip install -e ./dsxa_sdk_py -e ./dsx_transfer
 ```
+
+## Docs Site
+
+The DSX-Transfer docs have a package-local MkDocs site in this directory.
+
+Install the docs dependencies from the repo root:
+
+```bash
+./.venv/bin/python -m pip install -e './dsx_transfer[docs]'
+```
+
+Then serve the docs:
+
+```bash
+cd dsx_transfer
+../.venv/bin/python -m mkdocs serve
+```
+
+The Markdown extension import is named `pymdownx`, but the package to install is `pymdown-extensions`.

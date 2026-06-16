@@ -52,7 +52,8 @@ For DSX-Transfer, the relevant connector capabilities are usually:
 - `CredentialProvider` for platform auth
 - `CapabilityManifest` for supported operations and limits
 
-The shared model is documented in [connector-capability-model.md](../../../docs/architecture-vnext/design/connector-capability-model.md).
+The shared model is documented in the repo-level architecture-vnext design notes:
+`docs/architecture-vnext/design/connector-capability-model.md`.
 
 ## Native Engine vs Platform Adapter
 

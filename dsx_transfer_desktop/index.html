@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DSX-Transfer Desktop</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="eyebrow">Guarded transfer</div>
+        <h1>DSX-Transfer Desktop</h1>
+      </div>
+
+      <section id="dsxaPanel" class="panel">
+        <div class="panel-title">DSXA Connection</div>
+        <label>
+          Scanner URL
+          <input id="dsxaBaseUrl" type="text" placeholder="http://127.0.0.1:5000" />
+        </label>
+        <label>
+          Auth token
+          <input id="dsxaAuthToken" type="password" />
+        </label>
+        <div class="field-grid">
+          <label>
+            Protected entity
+            <input id="dsxaProtectedEntity" type="number" min="1" value="1" />
+          </label>
+          <label class="checkbox-row checkbox-row-bottom">
+            <input id="dsxaVerifyTls" type="checkbox" />
+            Verify TLS
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">Verdict Actions</div>
+        <div class="verdict-grid">
+          <span>Benign</span>
+          <select id="actionBenign">
+            <option value="allow">Allow</option>
+            <option value="block">Block</option>
+          </select>
+          <span>Malicious</span>
+          <select id="actionMalicious">
+            <option value="block">Block</option>
+            <option value="allow">Allow</option>
+          </select>
+          <span>Unknown</span>
+          <select id="actionUnknown">
+            <option value="block">Block</option>
+            <option value="allow">Allow</option>
+          </select>
+          <span>Error</span>
+          <select id="actionError">
+            <option value="block">Block</option>
+            <option value="allow">Allow</option>
+          </select>
+        </div>
+      </section>
+    </aside>
+
+    <main class="content">
+      <section class="panel transfer-panel">
+        <div class="section-head">
+          <div>
+            <div class="panel-title">File Share Transfer</div>
+            <div class="subtitle">Copy files only after the scanner and policy produce an allow decision.</div>
+          </div>
+          <div id="status" class="status">Ready</div>
+        </div>
+
+        <div class="path-row">
+          <div class="path-field">
+            <label>Source file share</label>
+            <div class="path-picker">
+              <input id="sourcePath" type="text" placeholder="/Volumes/source-share or C:\\Shares\\Source" />
+              <button id="pickSource" type="button">Browse</button>
+            </div>
+          </div>
+          <div class="path-field">
+            <label>Destination file share</label>
+            <div class="path-picker">
+              <input id="destinationPath" type="text" placeholder="/Volumes/destination-share or C:\\Shares\\Destination" />
+              <button id="pickDestination" type="button">Browse</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button id="runTransfer" type="button" class="primary">Run Guarded Transfer</button>
+          <button id="saveSettings" type="button">Save Settings</button>
+        </div>
+        <div id="progressPanel" class="progress-panel" hidden>
+          <div class="progress-head">
+            <span id="progressLabel">Preparing transfer</span>
+            <span id="progressPercent">0%</span>
+          </div>
+          <progress id="transferProgress" max="100" value="0"></progress>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <div class="metric">
+          <span>Planned</span>
+          <strong id="metricPlanned">0</strong>
+        </div>
+        <div class="metric metric-allow">
+          <span>Allowed</span>
+          <strong id="metricAllowed">0</strong>
+        </div>
+        <div class="metric metric-block">
+          <span>Blocked</span>
+          <strong id="metricBlocked">0</strong>
+        </div>
+        <div class="metric metric-fail">
+          <span>Failed</span>
+          <strong id="metricFailed">0</strong>
+        </div>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="section-head">
+          <div class="panel-title">Results</div>
+          <div id="resultCount" class="subtitle">No transfer has run yet.</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>State</th>
+                <th>Verdict</th>
+                <th>Action</th>
+                <th>Object</th>
+                <th>Bytes</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody">
+              <tr>
+                <td colspan="5" class="empty">Run a transfer to populate this table.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>

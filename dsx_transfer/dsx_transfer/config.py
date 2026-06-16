@@ -66,6 +66,7 @@ class RuntimeSection(BaseModel):
 
     audit_jsonl: Path | None = None
     checkpoint: Path | None = None
+    concurrency: int = Field(default=1, ge=1)
 
 
 class DsxTransferConfig(BaseModel):

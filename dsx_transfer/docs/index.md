@@ -238,6 +238,7 @@ dsx-transfer migrate \
 ## Docs
 
 - [What This Is](what-this-is.md)
+- [Product Modes and Diagrams](product-modes-and-diagrams.md)
 - [Architecture](architecture.md)
 - [Scanner and Policy](scanner-and-policy.md)
 - [Audit and Checkpointing](audit-and-checkpointing.md)

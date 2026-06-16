@@ -6,6 +6,8 @@ It should reuse shared DSX scanner, policy, event, and SDK code where practical,
 
 The package-local docs live under `dsx_transfer/docs/`. Treat those as the implementation-adjacent design notes as this moves from concept to code.
 
+For high-level product positioning diagrams, see [`dsx_transfer/docs/product-modes-and-diagrams.md`](../../dsx_transfer/docs/product-modes-and-diagrams.md).
+
 The core workflow is:
 
 ```text

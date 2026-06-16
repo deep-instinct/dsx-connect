@@ -200,6 +200,7 @@ def _resolve_migrate_settings(
     dsxa_verify_tls: bool,
     audit_jsonl: Path | None,
     checkpoint: Path | None,
+    concurrency: int | None,
 ) -> dict:
     settings = {
         "source": source,
@@ -220,6 +221,7 @@ def _resolve_migrate_settings(
         "dsxa_verify_tls": dsxa_verify_tls,
         "audit_jsonl": audit_jsonl,
         "checkpoint": checkpoint,
+        "concurrency": concurrency or 1,
     }
 
     if config is not None:
@@ -245,6 +247,7 @@ def _resolve_migrate_settings(
                 "dsxa_verify_tls": dsxa.verify_tls if dsxa else True,
                 "audit_jsonl": transfer_config.runtime.audit_jsonl,
                 "checkpoint": transfer_config.runtime.checkpoint,
+                "concurrency": transfer_config.runtime.concurrency,
             }
         )
 
@@ -284,6 +287,8 @@ def _resolve_migrate_settings(
             settings["audit_jsonl"] = audit_jsonl
         if checkpoint is not None:
             settings["checkpoint"] = checkpoint
+        if concurrency is not None:
+            settings["concurrency"] = concurrency
 
     missing = [name for name in ("source", "destination", "transfer_id") if settings[name] is None]
     if missing:
@@ -343,6 +348,11 @@ def migrate(
     ] = False,
     audit_jsonl: Annotated[Path | None, typer.Option("--audit-jsonl", help="Path to append JSONL audit events.")] = None,
     checkpoint: Annotated[Path | None, typer.Option("--checkpoint", help="Path to JSON checkpoint state.")] = None,
+    concurrency: Annotated[int | None, typer.Option("--concurrency", min=1, help="Maximum file transfer concurrency.")] = None,
+    progress_jsonl: Annotated[
+        bool,
+        typer.Option("--progress-jsonl/--no-progress-jsonl", help="Emit transfer progress events as JSON Lines on stderr."),
+    ] = False,
 ) -> None:
     try:
         settings = _resolve_migrate_settings(
@@ -365,6 +375,7 @@ def migrate(
             dsxa_verify_tls=dsxa_verify_tls,
             audit_jsonl=audit_jsonl,
             checkpoint=checkpoint,
+            concurrency=concurrency,
         )
     except TransferConfigError as exc:
         raise typer.BadParameter(str(exc)) from exc
@@ -385,6 +396,7 @@ def migrate(
         report = asyncio.run(
             _run_migrate(
                 **settings,
+                progress_jsonl=progress_jsonl,
             )
         )
     except RuntimeError as exc:
@@ -553,7 +565,25 @@ async def _run_migrate(
     dsxa_verify_tls: bool,
     audit_jsonl: Path | None,
     checkpoint: Path | None,
+    concurrency: int,
+    progress_jsonl: bool,
 ):
+    async def emit_progress(completed: int, total: int, outcome) -> None:
+        if not progress_jsonl:
+            return
+        event = {
+            "event": "transfer_progress",
+            "transfer_id": transfer_id,
+            "completed_items": completed,
+            "total_items": total,
+            "percent_complete": round((completed / total) * 100, 3) if total else 100.0,
+            "state": outcome.state,
+            "object_identity": outcome.item.object_identity,
+        }
+        sys.stderr.write(json.dumps(event, sort_keys=True))
+        sys.stderr.write("\n")
+        sys.stderr.flush()
+
     policy = GuardedTransferPolicy(
         policy_id=policy_id,
         verdict_actions=verdict_actions,
@@ -579,6 +609,8 @@ async def _run_migrate(
                 ),
                 audit_jsonl=audit_jsonl,
                 checkpoint=checkpoint,
+                concurrency=concurrency,
+                progress_callback=emit_progress if progress_jsonl else None,
             )
             return await engine.run(
                 destination_uri=_destination_uri(destination, destination_kind),
@@ -600,6 +632,8 @@ async def _run_migrate(
         scan_gate=scan_gate,
         audit_jsonl=audit_jsonl,
         checkpoint=checkpoint,
+        concurrency=concurrency,
+        progress_callback=emit_progress if progress_jsonl else None,
     )
     return await engine.run(
         destination_uri=_destination_uri(destination, destination_kind),
@@ -639,6 +673,8 @@ def _build_engine(
     scan_gate,
     audit_jsonl: Path | None,
     checkpoint: Path | None,
+    concurrency: int,
+    progress_callback=None,
 ) -> TransferEngine:
     engine = TransferEngine(
         source=FilesystemSourceAdapter(source),
@@ -646,6 +682,8 @@ def _build_engine(
         scan_gate=scan_gate,
         audit_sink=JsonLinesAuditSink(audit_jsonl) if audit_jsonl else None,
         checkpoint_store=JsonCheckpointStore(checkpoint) if checkpoint else None,
+        concurrency=concurrency,
+        progress_callback=progress_callback,
     )
     return engine
 

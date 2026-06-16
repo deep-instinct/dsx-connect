@@ -23,7 +23,7 @@ They may consume connector capabilities internally, but their primary role is to
 
 Architecture decision record:
 
-- [ADR-015: Transfer Platform Adapters for External Transfer Workflows](../../docs/architecture-vnext/adr/adr-015-transfer-platform-adapters.md)
+- `docs/architecture-vnext/adr/adr-015-transfer-platform-adapters.md`
 
 ## Vocabulary
 

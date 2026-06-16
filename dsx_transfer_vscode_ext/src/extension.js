@@ -9,8 +9,21 @@ let reportProvider;
 class ReportTreeProvider {
   constructor() {
     this.items = [];
+    this.workflow = null;
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+  }
+
+  setWorkflow(workflow) {
+    this.workflow = workflow;
+    this.items = [];
+    this._onDidChangeTreeData.fire();
+  }
+
+  updateWorkflow(changes) {
+    if (!this.workflow) return;
+    this.workflow = { ...this.workflow, ...changes };
+    this._onDidChangeTreeData.fire();
   }
 
   setReport(report) {
@@ -55,6 +68,7 @@ class ReportTreeProvider {
     treeItem.tooltip = item.tooltip || item.description || item.label;
     treeItem.contextValue = item.contextValue;
     treeItem.command = item.command;
+    treeItem.iconPath = item.iconPath;
     return treeItem;
   }
 
@@ -62,8 +76,69 @@ class ReportTreeProvider {
     if (item) {
       return item.children || [];
     }
+    if (!this.items.length && this.workflow) {
+      return workflowTreeItems(this.workflow);
+    }
     return this.items;
   }
+}
+
+function workflowTreeItems(workflow) {
+  const configName = path.basename(workflow.configPath);
+  return [
+    {
+      label: `1. Edit ${configName}`,
+      description: workflow.configOpened ? "done" : "start here",
+      tooltip: workflow.configPath,
+      iconPath: new vscode.ThemeIcon(workflow.configOpened ? "pass" : "edit"),
+      command: {
+        command: "dsxTransfer.workflowOpenConfig",
+        title: "Open Transfer Config",
+      },
+    },
+    workflowActionItem({
+      label: "2. Use Active File as Config",
+      enabled: workflow.configOpened,
+      done: workflow.active,
+      disabledReason: "open and edit the config first",
+      command: "dsxTransfer.workflowUseActiveConfig",
+    }),
+    workflowActionItem({
+      label: "3. Validate Config",
+      enabled: workflow.active,
+      done: workflow.validated,
+      disabledReason: "set the config active first",
+      command: "dsxTransfer.workflowValidateConfig",
+    }),
+    workflowActionItem({
+      label: "4. Run Transfer",
+      enabled: workflow.validated,
+      done: workflow.ran,
+      disabledReason: "validate the config first",
+      command: "dsxTransfer.workflowRunTransfer",
+    }),
+  ];
+}
+
+function workflowActionItem({ label, enabled, done, disabledReason, command }) {
+  if (!enabled && !done) {
+    return {
+      label,
+      description: disabledReason,
+      tooltip: disabledReason,
+      iconPath: new vscode.ThemeIcon("circle-slash"),
+    };
+  }
+  return {
+    label,
+    description: done ? "done" : "next",
+    tooltip: done ? label : "Click to continue",
+    iconPath: new vscode.ThemeIcon(done ? "pass" : "circle-large-outline"),
+    command: {
+      command,
+      title: label,
+    },
+  };
 }
 
 function outcomeTreeItem(outcome) {
@@ -687,6 +762,37 @@ Smoke test against the local harness:
 python smoke_test.py
 \`\`\`
 
+## How To Use This Code In Your Own Application
+
+Treat \`run_transfer.py\` as a small adapter between your application and the DSX-Transfer CLI.
+Your application should decide when a transfer runs, while \`dsx-transfer.yaml\` remains the source of truth for source, destination, scanner, policy, audit, and checkpoint behavior.
+
+Typical integration shape:
+
+\`\`\`python
+from pathlib import Path
+import os
+
+import run_transfer
+
+os.environ["DSX_TRANSFER_WORKSPACE"] = str(Path("/srv/my-app").resolve())
+os.environ["DSX_TRANSFER_CONFIG"] = "dsx-transfer.yaml"
+os.environ["DSX_TRANSFER_USE_MODULE"] = "1"
+
+report = run_transfer.run_transfer()
+
+if report.get("failed_count", 0):
+    raise RuntimeError(f"transfer failed: {report}")
+\`\`\`
+
+Recommended application responsibilities:
+
+- set environment variables from your process manager, job runner, or secret store
+- call \`run_transfer.run_transfer()\` from a scheduled job, background worker, queue consumer, or API handler
+- inspect the returned report and decide whether to retry, alert, or continue
+- keep credentials out of \`dsx-transfer.yaml\`; use environment variables such as \`GOOGLE_APPLICATION_CREDENTIALS\`
+- keep transfer policy in the YAML config so behavior is reviewable and reproducible outside your app
+
 Use this as a starting point for a scheduled job, background worker, or API endpoint. Keep source, destination, scanner, policy, audit, and checkpoint behavior in the DSX-Transfer config file.
 `;
 }
@@ -784,6 +890,13 @@ async function createTransferWorkspace() {
 
   const result = await writeTransferWorkspace(targetDir, { overwrite: true });
   await setActiveConfigPath(result.configPath);
+  reportProvider.setWorkflow({
+    configPath: result.configPath,
+    configOpened: false,
+    active: false,
+    validated: false,
+    ran: false,
+  });
   output.appendLine("DSX-Transfer workspace:");
   output.appendLine(`- directory: ${targetDir}`);
   output.appendLine(`- config: ${result.configPath}`);
@@ -793,6 +906,48 @@ async function createTransferWorkspace() {
   const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(result.configPath));
   await vscode.window.showTextDocument(doc, { preview: false });
   vscode.window.showInformationMessage("Created DSX-Transfer workspace. Edit the GCS URI and credentials before running.");
+}
+
+async function workflowOpenConfig() {
+  const workflow = reportProvider.workflow;
+  if (!workflow) {
+    await openConfig();
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(workflow.configPath));
+  await vscode.window.showTextDocument(doc, { preview: false });
+  reportProvider.updateWorkflow({ configOpened: true });
+}
+
+async function workflowUseActiveConfig() {
+  const workflow = reportProvider.workflow;
+  if (!workflow?.configOpened) {
+    vscode.window.showInformationMessage("Open and edit the generated config first.");
+    return;
+  }
+  await setActiveConfigPath(workflow.configPath);
+  reportProvider.updateWorkflow({ active: true, validated: false, ran: false });
+  vscode.window.showInformationMessage(`DSX-Transfer config set to ${relativeWorkspacePath(workflow.configPath) || workflow.configPath}.`);
+}
+
+async function workflowValidateConfig() {
+  const workflow = reportProvider.workflow;
+  if (!workflow?.active) {
+    vscode.window.showInformationMessage("Set the generated config active first.");
+    return;
+  }
+  const parsed = await validateConfig({ silent: false });
+  reportProvider.updateWorkflow({ validated: Boolean(parsed.valid), ran: false });
+}
+
+async function workflowRunTransfer() {
+  const workflow = reportProvider.workflow;
+  if (!workflow?.validated) {
+    vscode.window.showInformationMessage("Validate the generated config first.");
+    return;
+  }
+  const ran = await runTransferWithConfig(vscode.Uri.file(workflow.configPath), "DSX-Transfer");
+  reportProvider.updateWorkflow({ ran });
 }
 
 async function setActiveConfigPath(filePath) {
@@ -956,7 +1111,7 @@ async function runTransferWithConfig(target, label = "DSX-Transfer") {
   const validation = await validateConfigPath(target, { silent: true });
   if (!validation.valid) {
     vscode.window.showErrorMessage(`${label} config is invalid. Fix diagnostics before running.`);
-    return;
+    return false;
   }
   const result = await runCli(["migrate", "--config", target.fsPath]);
   const report = parseReport(result.stdout);
@@ -969,12 +1124,14 @@ async function runTransferWithConfig(target, label = "DSX-Transfer") {
     } else {
       vscode.window.showErrorMessage(`${label} finished with failures: ${summary}.`);
     }
-    return;
+    return result.ok;
   }
   if (result.ok) {
     vscode.window.showInformationMessage(`${label} command completed.`);
+    return true;
   } else {
     vscode.window.showErrorMessage(`${label} command failed. See DSX-Transfer output.`);
+    return false;
   }
 }
 
@@ -1065,6 +1222,10 @@ function activate(context) {
   context.subscriptions.push(vscode.window.registerTreeDataProvider("dsxTransferReport", reportProvider));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.focusWorkbench", focusWorkbench));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createTransferWorkspace", createTransferWorkspace));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.workflowOpenConfig", workflowOpenConfig));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.workflowUseActiveConfig", workflowUseActiveConfig));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.workflowValidateConfig", workflowValidateConfig));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.workflowRunTransfer", workflowRunTransfer));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openConfig", openConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.useActiveFileAsConfig", useActiveFileAsConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));

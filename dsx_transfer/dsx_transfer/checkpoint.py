@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def _checkpoint_key(transfer_id: str, item: TransferItem) -> str:
 class JsonCheckpointStore(CheckpointStore):
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
+        self._lock = asyncio.Lock()
 
     async def get(self, *, transfer_id: str, item: TransferItem) -> CheckpointRecord | None:
         raw = self._load().get(_checkpoint_key(transfer_id, item))
@@ -35,21 +37,22 @@ class JsonCheckpointStore(CheckpointStore):
         return record
 
     async def put(self, *, transfer_id: str, outcome: TransferItemOutcome) -> None:
-        data = self._load()
-        item = outcome.item
-        data[_checkpoint_key(transfer_id, item)] = CheckpointRecord(
-            transfer_id=transfer_id,
-            object_identity=item.object_identity,
-            source_uri=item.source_uri,
-            destination_uri=item.destination_uri,
-            state=outcome.state,
-            size_bytes=item.size_bytes,
-            metadata_fingerprint=_fingerprint(item),
-            outcome=outcome,
-            updated_at=utcnow(),
-        ).model_dump(mode="json")
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+        async with self._lock:
+            data = self._load()
+            item = outcome.item
+            data[_checkpoint_key(transfer_id, item)] = CheckpointRecord(
+                transfer_id=transfer_id,
+                object_identity=item.object_identity,
+                source_uri=item.source_uri,
+                destination_uri=item.destination_uri,
+                state=outcome.state,
+                size_bytes=item.size_bytes,
+                metadata_fingerprint=_fingerprint(item),
+                outcome=outcome,
+                updated_at=utcnow(),
+            ).model_dump(mode="json")
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
     def _load(self) -> dict:
         if not self.path.exists():

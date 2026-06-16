@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 
 from dsx_transfer.contracts import AuditSink, CheckpointStore, ScanGate, SinkAdapter, SourceAdapter
 from dsx_transfer.models import AuditEvent, TransferAction, TransferItem, TransferItemOutcome, TransferItemState, TransferPlan, TransferReport, utcnow
+
+ProgressCallback = Callable[[int, int, TransferItemOutcome], Awaitable[None]]
 
 
 class TransferEngine:
@@ -15,12 +19,16 @@ class TransferEngine:
         scan_gate: ScanGate,
         audit_sink: AuditSink | None = None,
         checkpoint_store: CheckpointStore | None = None,
+        concurrency: int = 1,
+        progress_callback: ProgressCallback | None = None,
     ) -> None:
         self.source = source
         self.sink = sink
         self.scan_gate = scan_gate
         self.audit_sink = audit_sink
         self.checkpoint_store = checkpoint_store
+        self.concurrency = max(1, int(concurrency))
+        self.progress_callback = progress_callback
 
     async def build_plan(self, *, destination_uri: str, transfer_id: str, policy_id: str | None = None) -> TransferPlan:
         return await self.source.plan(
@@ -31,10 +39,34 @@ class TransferEngine:
 
     async def execute_plan(self, plan: TransferPlan) -> TransferReport:
         started_at = utcnow()
-        outcomes: list[TransferItemOutcome] = []
-        for item in plan.items:
-            outcome = await self._execute_item(plan.transfer_id, item)
-            outcomes.append(outcome)
+        total_items = len(plan.items)
+        completed_items = 0
+        progress_lock = asyncio.Lock()
+
+        async def record_progress(outcome: TransferItemOutcome) -> None:
+            nonlocal completed_items
+            if self.progress_callback is None:
+                return
+            async with progress_lock:
+                completed_items += 1
+                await self.progress_callback(completed_items, total_items, outcome)
+
+        if self.concurrency == 1 or len(plan.items) <= 1:
+            outcomes: list[TransferItemOutcome] = []
+            for item in plan.items:
+                outcome = await self._execute_item(plan.transfer_id, item)
+                outcomes.append(outcome)
+                await record_progress(outcome)
+        else:
+            semaphore = asyncio.Semaphore(self.concurrency)
+
+            async def execute_with_limit(item: TransferItem) -> TransferItemOutcome:
+                async with semaphore:
+                    outcome = await self._execute_item(plan.transfer_id, item)
+                    await record_progress(outcome)
+                    return outcome
+
+            outcomes = await asyncio.gather(*(execute_with_limit(item) for item in plan.items))
         return TransferReport(
             transfer_id=plan.transfer_id,
             source_uri=plan.source_uri,

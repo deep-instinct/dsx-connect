@@ -1,0 +1,78 @@
+{
+  "name": "dsx-transfer-desktop",
+  "version": "0.1.0",
+  "description": "Desktop guarded file-share transfer app powered by dsx-transfer.",
+  "main": "main.js",
+  "author": "Deep Instinct",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:mac:dir": "electron-builder --mac dir --publish never",
+    "build:win": "electron-builder --win nsis --publish never",
+    "build:linux": "electron-builder --linux AppImage --publish never"
+  },
+  "devDependencies": {
+    "electron": "^41.0.4",
+    "electron-builder": "26.8.1"
+  },
+  "build": {
+    "appId": "com.deepinstinct.dsxtransfer.desktop",
+    "productName": "DSX-Transfer Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "style.css",
+      "build/icons/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../dsx_transfer",
+        "to": "dsx_transfer",
+        "filter": [
+          "dsx_transfer/**",
+          "pyproject.toml",
+          "README.md"
+        ]
+      },
+      {
+        "from": "../dsxa_sdk_py",
+        "to": "dsxa_sdk_py",
+        "filter": [
+          "dsxa_sdk_py/**",
+          "pyproject.toml",
+          "README.md"
+        ]
+      }
+    ],
+    "mac": {
+      "icon": "build/icons/dsx-transfer-desktop.icns",
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "build/icons/dsx-transfer-desktop.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "icon": "build/icons/icon.png",
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
+  }
+}

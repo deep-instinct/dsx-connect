@@ -29,7 +29,7 @@ dsx-transfer config schema
 ```
 
 `Focus Workbench` opens the DSX-Transfer activity bar view.
-`Create New Transfer` lets you choose a directory, creates an annotated filesystem-to-GCS `dsx-transfer.yaml`, writes a Python integration skeleton, sets the config active, and opens it for editing.
+`Create New Transfer` lets you choose a directory, creates an annotated filesystem-to-GCS `dsx-transfer.yaml`, writes a Python integration skeleton, sets the config active, opens it for editing, and shows a four-step workflow checklist in the activity view.
 `Open Config` opens the configured `dsx-transfer.yaml` or offers to create it.
 `Use Active File as Config` updates the workspace `dsxTransfer.configPath` setting to the open YAML file.
 `Create Config` opens the existing config, overwrites it, or cancels when the file already exists.
@@ -40,6 +40,19 @@ dsx-transfer config schema
 `Run Transfer` validates first, runs the transfer, and updates the `Last Report` view with summary, blocked objects, and failed objects.
 `Check Environment` reports the workspace, invocation mode, visible GCS credential variable, CLI availability, and config-file presence.
 `Open Report Item JSON` opens the selected blocked or failed report item as formatted JSON from the `Last Report` view.
+
+## Activity View
+
+The `DSX-Transfer` activity bar view contains `Last Report`.
+
+After `Create New Transfer`, the view shows a guided checklist:
+
+1. Edit the generated config
+2. Use the active file as config
+3. Validate the config
+4. Run the transfer
+
+After a run, the same view shows the latest transfer summary plus blocked and failed outcomes.
 
 ## Source-Tree Settings
 

@@ -85,6 +85,7 @@ function setMetrics(summary = {}) {
 }
 
 function resetProgress() {
+  setMetrics();
   $("progressPanel").hidden = false;
   $("progressLabel").textContent = "Preparing transfer";
   $("progressPercent").textContent = "0%";
@@ -99,6 +100,12 @@ function updateProgress(event) {
   $("transferProgress").value = percent;
   $("progressPercent").textContent = `${Math.round(percent)}%`;
   $("progressLabel").textContent = total > 0 ? `${completed} of ${total} files` : "Preparing transfer";
+  setMetrics({
+    planned: total,
+    allowed: Number(event?.allowed_items || 0),
+    blocked: Number(event?.blocked_items || 0) + Number(event?.excluded_items || 0) + Number(event?.skipped_items || 0),
+    failed: Number(event?.failed_items || 0)
+  });
 }
 
 function completeProgress() {

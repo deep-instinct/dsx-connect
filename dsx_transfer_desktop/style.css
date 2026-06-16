@@ -65,6 +65,7 @@ body {
   color: var(--text);
   background: var(--bg);
   font-family: var(--sans);
+  font-size: 13px;
   overflow-x: hidden;
 }
 
@@ -95,7 +96,8 @@ body {
 
 .brand h1 {
   margin: 4px 0 0;
-  font-size: 20px;
+  font-size: 18px;
+  font-weight: 700;
   letter-spacing: 0;
 }
 
@@ -127,12 +129,12 @@ body {
   color: var(--accent-dark);
   font-weight: 700;
   margin-bottom: 8px;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .subtitle {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .section-head {
@@ -147,7 +149,7 @@ label {
   display: grid;
   gap: 4px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   margin-bottom: 8px;
 }
 
@@ -164,7 +166,8 @@ select {
   border-radius: 6px;
   background: var(--field-bg);
   color: var(--text);
-  padding: 7px 8px;
+  padding: 6px 8px;
+  font-size: 12px;
 }
 
 input[type="checkbox"] {
@@ -190,7 +193,9 @@ button {
   background: var(--surface-2);
   color: var(--text);
   cursor: pointer;
-  padding: 7px 10px;
+  padding: 6px 9px;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 button:hover {
@@ -206,7 +211,7 @@ button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
-  font-weight: 700;
+  font-weight: 750;
 }
 
 button.primary:hover {
@@ -249,7 +254,7 @@ button.primary:hover {
   justify-content: space-between;
   gap: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   margin-bottom: 4px;
 }
 
@@ -275,7 +280,7 @@ progress {
 }
 
 .metric strong {
-  font-size: 22px;
+  font-size: 20px;
   letter-spacing: 0;
 }
 
@@ -295,7 +300,7 @@ progress {
   border-radius: 999px;
   background: #e7eeed;
   color: var(--accent-dark);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   padding: 5px 8px;
   white-space: nowrap;
@@ -322,7 +327,7 @@ progress {
   gap: 6px;
   align-items: center;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .table-wrap {
@@ -338,7 +343,7 @@ table {
   min-width: 820px;
   width: max-content;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 th,

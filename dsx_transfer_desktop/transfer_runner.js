@@ -129,9 +129,9 @@ async function copyAllowedFile(item, destinationRoot) {
   return stat.size;
 }
 
-async function appendJsonLine(target, payload) {
+async function writeJsonFile(target, payload) {
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.appendFile(target, `${JSON.stringify(payload)}\n`, "utf8");
+  await fs.writeFile(target, JSON.stringify(payload, null, 2), "utf8");
 }
 
 function auditEventFromOutcome(transferId, outcome) {
@@ -183,10 +183,59 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
   const items = await listFiles(sourceRoot, destinationRoot);
   const outcomes = [];
   const checkpointRecords = {};
-  let checkpointWrite = Promise.resolve();
-  let completed = 0;
+  const counts = {
+    completed: 0,
+    allowed: 0,
+    blocked: 0,
+    failed: 0,
+    skipped: 0,
+    excluded: 0
+  };
+  let auditLines = [];
+  let auditWrite = Promise.resolve();
   const concurrency = Math.max(1, Number.parseInt(String(settings.transferConcurrency || 4), 10) || 4);
   let cursor = 0;
+  let lastProgressAt = 0;
+  let lastProgressCompleted = -1;
+
+  async function flushAudit() {
+    if (!auditLines.length) {
+      return auditWrite;
+    }
+    const batch = auditLines.join("");
+    auditLines = [];
+    auditWrite = auditWrite.then(async () => {
+      await fs.mkdir(path.dirname(paths.auditPath), { recursive: true });
+      await fs.appendFile(paths.auditPath, batch, "utf8");
+    });
+    return auditWrite;
+  }
+
+  function emitProgress(item, state, force = false) {
+    if (!onProgress) return;
+    const currentTime = Date.now();
+    const shouldEmit =
+      force ||
+      counts.completed === 0 ||
+      counts.completed === items.length ||
+      counts.completed - lastProgressCompleted >= 10 ||
+      currentTime - lastProgressAt >= 250;
+    if (!shouldEmit) return;
+    lastProgressAt = currentTime;
+    lastProgressCompleted = counts.completed;
+    onProgress({
+      event: "transfer_progress",
+      completed_items: counts.completed,
+      total_items: items.length,
+      allowed_items: counts.allowed,
+      blocked_items: counts.blocked,
+      failed_items: counts.failed,
+      skipped_items: counts.skipped,
+      excluded_items: counts.excluded,
+      object_identity: item?.object_identity || null,
+      state
+    });
+  }
 
   async function executeItem(item) {
     const itemStartedAt = nowIso();
@@ -231,7 +280,10 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
       cursor += 1;
       const outcome = await executeItem(item);
       outcomes.push(outcome);
-      await appendJsonLine(paths.auditPath, auditEventFromOutcome(transferId, outcome));
+      auditLines.push(`${JSON.stringify(auditEventFromOutcome(transferId, outcome))}\n`);
+      if (auditLines.length >= 100) {
+        await flushAudit();
+      }
       const checkpointRecord = {
         transfer_id: transferId,
         object_identity: item.object_identity,
@@ -244,25 +296,21 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
         updated_at: nowIso()
       };
       checkpointRecords[item.object_identity] = checkpointRecord;
-      checkpointWrite = checkpointWrite.then(async () => {
-        await fs.mkdir(path.dirname(paths.checkpointPath), { recursive: true });
-        await fs.writeFile(paths.checkpointPath, JSON.stringify(checkpointRecords, null, 2), "utf8");
-      });
-      await checkpointWrite;
-      completed += 1;
-      if (onProgress) {
-        onProgress({
-          event: "transfer_progress",
-          completed_items: completed,
-          total_items: items.length,
-          object_identity: item.object_identity,
-          state: outcome.state
-        });
-      }
+      counts.completed += 1;
+      if (outcome.state === "allowed") counts.allowed += 1;
+      else if (outcome.state === "blocked") counts.blocked += 1;
+      else if (outcome.state === "failed") counts.failed += 1;
+      else if (outcome.state === "skipped") counts.skipped += 1;
+      else if (outcome.state === "excluded") counts.excluded += 1;
+      emitProgress(item, outcome.state);
     }
   }
 
+  emitProgress(null, "planned", true);
   await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker()));
+  await flushAudit();
+  await writeJsonFile(paths.checkpointPath, checkpointRecords);
+  emitProgress(null, "completed", true);
   outcomes.sort((a, b) => a.item.object_identity.localeCompare(b.item.object_identity));
   return {
     transfer_id: transferId,

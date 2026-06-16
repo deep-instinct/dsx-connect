@@ -78,8 +78,17 @@ body {
 .sidebar {
   border-right: 1px solid var(--border);
   background: var(--sidebar-bg);
-  padding: 12px;
+  padding: 38px 12px 12px;
   min-width: 0;
+  -webkit-app-region: drag;
+}
+
+.sidebar .panel,
+.sidebar input,
+.sidebar select,
+.sidebar button,
+.brand {
+  -webkit-app-region: no-drag;
 }
 
 .content {
@@ -216,6 +225,17 @@ button.primary {
 
 button.primary:hover {
   background: color-mix(in srgb, var(--allow) 88%, var(--surface));
+}
+
+button.danger {
+  background: color-mix(in srgb, var(--block) 10%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--block) 35%, var(--border));
+  color: var(--block);
+  font-weight: 600;
+}
+
+button.danger:hover {
+  background: color-mix(in srgb, var(--block) 16%, var(--surface-2));
 }
 
 .field-grid,

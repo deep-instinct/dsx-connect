@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("dsxTransferDesktop", {
   loadSettings: () => ipcRenderer.invoke("dsx-transfer-desktop:load-settings"),
   saveSettings: (settings) => ipcRenderer.invoke("dsx-transfer-desktop:save-settings", settings),
   runTransfer: (request) => ipcRenderer.invoke("dsx-transfer-desktop:run-transfer", request),
+  cancelTransfer: () => ipcRenderer.invoke("dsx-transfer-desktop:cancel-transfer"),
+  setTitlebarTheme: (theme) => ipcRenderer.invoke("dsx-transfer-desktop:set-titlebar-theme", theme),
   openPath: (targetPath) => ipcRenderer.invoke("dsx-transfer-desktop:open-path", targetPath),
   onTransferProgress: (listener) => {
     const wrapped = (_event, payload) => listener(payload);

@@ -28,7 +28,9 @@ function effectiveTheme() {
 }
 
 function applyTheme() {
-  document.documentElement.setAttribute("data-theme", effectiveTheme());
+  const theme = effectiveTheme();
+  document.documentElement.setAttribute("data-theme", theme);
+  window.dsxTransferDesktop.setTitlebarTheme(theme);
 }
 
 function setThemeMode(themeMode) {
@@ -190,7 +192,10 @@ async function pickFolder(purpose, target) {
 
 async function runTransfer() {
   const button = $("runTransfer");
+  const cancelButton = $("cancelTransfer");
   button.disabled = true;
+  cancelButton.disabled = false;
+  cancelButton.textContent = "Cancel";
   setStatus("Running transfer", "busy");
   resetProgress();
   try {
@@ -198,13 +203,33 @@ async function runTransfer() {
     const result = await window.dsxTransferDesktop.runTransfer(settingsFromForm());
     setMetrics(result.summary);
     renderResults(result.report);
-    completeProgress();
-    setStatus(result.ok ? "Completed" : "Completed with errors", result.ok ? "ok" : "error");
+    if (result.cancelled) {
+      setStatus("Cancelled", "neutral");
+    } else {
+      completeProgress();
+      setStatus(result.ok ? "Completed" : "Completed with errors", result.ok ? "ok" : "error");
+    }
   } catch (error) {
     setStatus("Failed", "error");
     renderError(error?.message || String(error));
   } finally {
     button.disabled = false;
+    cancelButton.disabled = true;
+    cancelButton.textContent = "Cancel";
+  }
+}
+
+async function cancelTransfer() {
+  const cancelButton = $("cancelTransfer");
+  cancelButton.disabled = true;
+  cancelButton.textContent = "Cancelling";
+  setStatus("Cancelling", "busy");
+  try {
+    await window.dsxTransferDesktop.cancelTransfer();
+  } catch (error) {
+    setStatus("Cancel failed", "error");
+    cancelButton.disabled = false;
+    cancelButton.textContent = "Cancel";
   }
 }
 
@@ -218,6 +243,7 @@ async function init() {
   $("pickSource").addEventListener("click", () => pickFolder("source", fields.sourcePath));
   $("pickDestination").addEventListener("click", () => pickFolder("destination", fields.destinationPath));
   $("runTransfer").addEventListener("click", runTransfer);
+  $("cancelTransfer").addEventListener("click", cancelTransfer);
 }
 
 init().catch((error) => {

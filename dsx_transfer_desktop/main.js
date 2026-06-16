@@ -8,8 +8,14 @@ const { runGuardedTransfer } = require("./transfer_runner");
 const APP_NAME = "DSX-Transfer Desktop";
 const SETTINGS_FILE = "settings.json";
 const APP_ICON_PATH = path.join(__dirname, "build", "icons", "icon.png");
+const TITLEBAR_COLORS = {
+  light: "#e8eeed",
+  operations: "#141f1d",
+  security: "#0b121d"
+};
 let lastRunArtifacts = null;
 let mainWindow = null;
+let activeTransferController = null;
 
 function createMainWindow() {
   const indexUrl = pathToFileURL(path.join(__dirname, "index.html")).toString();
@@ -20,6 +26,9 @@ function createMainWindow() {
     minHeight: 600,
     title: APP_NAME,
     icon: APP_ICON_PATH,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    trafficLightPosition: { x: 14, y: 14 },
+    backgroundColor: TITLEBAR_COLORS.light,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -46,6 +55,12 @@ function createMainWindow() {
   });
 
   return mainWindow.loadURL(indexUrl);
+}
+
+function setTitlebarTheme(theme) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const color = TITLEBAR_COLORS[theme] || TITLEBAR_COLORS.light;
+  mainWindow.setBackgroundColor(color);
 }
 
 function escapeHtml(value) {
@@ -242,7 +257,14 @@ function emitTransferProgress(sender, payload) {
   sender.send("dsx-transfer-desktop:transfer-progress", payload);
 }
 
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
 async function runTransfer(request, sender) {
+  if (activeTransferController) {
+    throw new Error("A transfer is already running.");
+  }
   const persisted = await readSettings();
   const effectiveRequest = { ...persisted, ...(request || {}), transferConcurrency: persisted.transferConcurrency || 4 };
   const sourcePath = await assertDirectory(effectiveRequest.sourcePath, "Source folder");
@@ -289,16 +311,23 @@ async function runTransfer(request, sender) {
   let stderr = "";
   let code = 0;
   let report = null;
+  const transferController = new AbortController();
+  activeTransferController = transferController;
   try {
     report = await runGuardedTransfer({
       settings: { ...effectiveRequest, sourcePath, destinationPath },
       paths,
+      signal: transferController.signal,
       onProgress: (event) => emitTransferProgress(sender, event)
     });
     stdout = JSON.stringify(report, null, 2);
   } catch (error) {
-    code = 1;
-    stderr = `${error?.stack || error?.message || String(error)}\n`;
+    code = isAbortError(error) ? 130 : 1;
+    report = error?.report || null;
+    stdout = report ? JSON.stringify(report, null, 2) : "";
+    stderr = isAbortError(error) ? "Transfer cancelled by user.\n" : `${error?.stack || error?.message || String(error)}\n`;
+  } finally {
+    activeTransferController = null;
   }
   const completed = Date.now();
   await fs.appendFile(
@@ -319,6 +348,7 @@ async function runTransfer(request, sender) {
   const result = {
     ok: code === 0,
     code,
+    cancelled: code === 130,
     commandKind: "node",
     executable: process.execPath,
     configPath: paths.configPath,
@@ -342,6 +372,14 @@ async function runTransfer(request, sender) {
   return result;
 }
 
+async function cancelTransfer() {
+  if (!activeTransferController) {
+    return { ok: false, cancelled: false, message: "No transfer is running." };
+  }
+  activeTransferController.abort();
+  return { ok: true, cancelled: true };
+}
+
 async function setTransferConcurrency(concurrency) {
   await writeSettings({ transferConcurrency: Math.max(1, Number.parseInt(String(concurrency), 10) || 4) });
 }
@@ -350,6 +388,7 @@ async function setThemeMode(themeMode) {
   const allowed = new Set(["auto", "light", "operations", "security"]);
   const nextThemeMode = allowed.has(themeMode) ? themeMode : "auto";
   await writeSettings({ themeMode: nextThemeMode });
+  setTitlebarTheme(nextThemeMode === "auto" ? "light" : nextThemeMode);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("dsx-transfer-desktop:theme-changed", { themeMode: nextThemeMode });
   }
@@ -523,6 +562,8 @@ ipcMain.handle("dsx-transfer-desktop:pick-folder", async (_event, purpose) => {
 ipcMain.handle("dsx-transfer-desktop:load-settings", async () => readSettings());
 ipcMain.handle("dsx-transfer-desktop:save-settings", async (_event, settings) => writeSettings(settings));
 ipcMain.handle("dsx-transfer-desktop:run-transfer", async (_event, request) => runTransfer(request, _event.sender));
+ipcMain.handle("dsx-transfer-desktop:cancel-transfer", async () => cancelTransfer());
+ipcMain.handle("dsx-transfer-desktop:set-titlebar-theme", async (_event, theme) => setTitlebarTheme(theme));
 ipcMain.handle("dsx-transfer-desktop:open-path", async (_event, targetPath) => {
   if (!targetPath) return { ok: false, message: "No path provided." };
   const message = await shell.openPath(String(targetPath));

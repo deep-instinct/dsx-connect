@@ -4,13 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DSX-Transfer Desktop</title>
-  <link rel="stylesheet" href="./style.css?v=0.1.5" />
+  <link rel="stylesheet" href="./style.css?v=0.1.6" />
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
-        <div class="eyebrow">Guarded transfer</div>
         <h1>DSX-Transfer Desktop</h1>
       </div>
 
@@ -99,7 +98,8 @@
         </div>
 
         <div class="action-row">
-          <button id="runTransfer" type="button" class="primary">Scan and Copy Files |&gt;</button>
+          <button id="runTransfer" type="button" class="primary">Scan and Copy Files &#9654;</button>
+          <button id="cancelTransfer" type="button" class="danger" disabled>Cancel</button>
         </div>
         <div id="progressPanel" class="progress-panel" hidden>
           <div class="progress-head">
@@ -156,6 +156,6 @@
     </main>
   </div>
 
-  <script src="./renderer.js?v=0.1.5"></script>
+  <script src="./renderer.js?v=0.1.6"></script>
 </body>
 </html>

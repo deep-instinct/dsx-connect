@@ -110,7 +110,24 @@ function stateForAction(action) {
   return "blocked";
 }
 
-async function scanFile({ filePath, settings }) {
+function isAbortError(error) {
+  return error?.name === "AbortError";
+}
+
+function createAbortError(message = "Transfer cancelled") {
+  const error = new Error(message);
+  error.name = "AbortError";
+  return error;
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
+async function scanFile({ filePath, settings, signal }) {
+  throwIfAborted(signal);
   const baseUrl = String(settings.dsxaBaseUrl || "").replace(/\/+$/, "");
   const url = `${baseUrl}/scan/binary/v2`;
   const headers = {
@@ -127,7 +144,8 @@ async function scanFile({ filePath, settings }) {
     method: "POST",
     headers,
     body: fsSync.createReadStream(filePath),
-    duplex: "half"
+    duplex: "half",
+    signal
   });
   const text = await response.text();
   if (!response.ok) {
@@ -140,7 +158,8 @@ async function scanFile({ filePath, settings }) {
   }
 }
 
-async function copyAllowedFile(item, destinationRoot) {
+async function copyAllowedFile(item, destinationRoot, signal) {
+  throwIfAborted(signal);
   const relative = item.metadata.relative_path || item.object_identity;
   const destination = path.resolve(destinationRoot, relative);
   const root = path.resolve(destinationRoot);
@@ -148,7 +167,9 @@ async function copyAllowedFile(item, destinationRoot) {
     throw new Error(`Destination escaped root: ${destination}`);
   }
   await fs.mkdir(path.dirname(destination), { recursive: true });
+  throwIfAborted(signal);
   await fs.copyFile(item.metadata.source_path, destination);
+  throwIfAborted(signal);
   const stat = await fs.stat(destination);
   return stat.size;
 }
@@ -189,7 +210,7 @@ function reportSummary(outcomes) {
   };
 }
 
-async function runGuardedTransfer({ settings, paths, onProgress }) {
+async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
   const sourceRoot = path.resolve(settings.sourcePath);
   const destinationRoot = path.resolve(settings.destinationPath);
   const transferId = paths.transferId;
@@ -266,9 +287,10 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
   }
 
   async function executeItem(item) {
+    throwIfAborted(signal);
     const itemStartedAt = nowIso();
     try {
-      const response = await scanFile({ filePath: item.metadata.source_path, settings });
+      const response = await scanFile({ filePath: item.metadata.source_path, settings, signal });
       const observation = scanObservationFromDsxa(response);
       const decision = applyFileTypeBlocks(
         evaluatePolicy({ item, observation, policyId, verdictActions }),
@@ -277,7 +299,7 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
       let bytesWritten = 0;
       let state = stateForAction(decision.action);
       if (decision.action === "allow") {
-        bytesWritten = await copyAllowedFile(item, destinationRoot);
+        bytesWritten = await copyAllowedFile(item, destinationRoot, signal);
         state = "allowed";
       }
       return {
@@ -290,6 +312,9 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
         error: null
       };
     } catch (error) {
+      if (signal?.aborted || isAbortError(error)) {
+        throw createAbortError();
+      }
       return {
         item,
         state: "failed",
@@ -306,7 +331,7 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
   }
 
   async function worker() {
-    while (cursor < items.length) {
+    while (cursor < items.length && !signal?.aborted) {
       const item = items[cursor];
       cursor += 1;
       const outcome = await executeItem(item);
@@ -338,12 +363,13 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
   }
 
   emitProgress(null, "planned", true);
-  await Promise.all(Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker()));
+  const workers = Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker());
+  const workerResults = await Promise.allSettled(workers);
   await flushAudit();
   await writeJsonFile(paths.checkpointPath, checkpointRecords);
-  emitProgress(null, "completed", true);
+  emitProgress(null, signal?.aborted ? "cancelled" : "completed", true);
   outcomes.sort((a, b) => a.item.object_identity.localeCompare(b.item.object_identity));
-  return {
+  const report = {
     transfer_id: transferId,
     source_uri: pathToFileURL(sourceRoot).toString(),
     destination_uri: pathToFileURL(destinationRoot).toString(),
@@ -353,6 +379,16 @@ async function runGuardedTransfer({ settings, paths, onProgress }) {
     completed_at: nowIso(),
     ...reportSummary(outcomes)
   };
+  const failedWorker = workerResults.find((result) => result.status === "rejected" && !isAbortError(result.reason));
+  if (failedWorker) {
+    throw failedWorker.reason;
+  }
+  if (signal?.aborted || workerResults.some((result) => result.status === "rejected" && isAbortError(result.reason))) {
+    const error = createAbortError();
+    error.report = report;
+    throw error;
+  }
+  return report;
 }
 
 module.exports = {

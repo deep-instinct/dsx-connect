@@ -109,6 +109,10 @@ function relativeWorkspacePath(filePath) {
   return relative.split(path.sep).join("/");
 }
 
+function yamlString(value) {
+  return JSON.stringify(String(value));
+}
+
 function settings() {
   const cfg = config();
   return {
@@ -321,7 +325,10 @@ bash ${relativeRunScript}
 }
 
 async function writePythonIntegrationSkeleton(targetDir, options = {}) {
-  const activeConfig = relativeWorkspacePath(configUri().fsPath) || settings().configPath;
+  return writePythonIntegrationSkeletonForConfig(targetDir, relativeWorkspacePath(configUri().fsPath) || settings().configPath, options);
+}
+
+async function writePythonIntegrationSkeletonForConfig(targetDir, activeConfig, options = {}) {
   const files = [
     {
       path: path.join(targetDir, "run_transfer.py"),
@@ -351,6 +358,154 @@ async function writePythonIntegrationSkeleton(targetDir, options = {}) {
     }
   }
   return { targetDir, written, skipped };
+}
+
+async function writeTransferWorkspace(targetDir, wizard, options = {}) {
+  const configPath = path.join(targetDir, "dsx-transfer.yaml");
+  const sourceDir = path.isAbsolute(wizard.sourcePath) ? wizard.sourcePath : path.join(targetDir, wizard.sourcePath);
+  const auditDir = path.join(targetDir, ".dsx-transfer", "audit");
+  const checkpointDir = path.join(targetDir, ".dsx-transfer", "checkpoints");
+  const integrationDir = path.join(targetDir, "integration", "python");
+
+  await ensureDirectory(sourceDir);
+  await ensureDirectory(auditDir);
+  await ensureDirectory(checkpointDir);
+
+  const files = [
+    {
+      path: configPath,
+      content: transferWorkspaceConfig(wizard),
+    },
+    {
+      path: path.join(sourceDir, "hello.txt"),
+      content: "Hello from the DSX-Transfer filesystem-to-GCS workspace.\n",
+    },
+    {
+      path: path.join(sourceDir, "blocked-demo.txt"),
+      content: "This file is marked suspicious by object identity and should not upload.\n",
+    },
+    {
+      path: path.join(targetDir, ".env.example"),
+      content: transferWorkspaceEnvExample(configPath, wizard),
+    },
+    {
+      path: path.join(targetDir, "README.md"),
+      content: transferWorkspaceReadme(configPath, integrationDir, wizard),
+    },
+  ];
+
+  const written = [];
+  const skipped = [];
+  for (const file of files) {
+    if (await writeTextFile(file.path, file.content, options)) {
+      written.push(file.path);
+    } else {
+      skipped.push(file.path);
+    }
+  }
+
+  const relativeConfig = relativeWorkspacePath(configPath) || configPath;
+  const skeleton = await writePythonIntegrationSkeletonForConfig(integrationDir, relativeConfig, options);
+  written.push(...skeleton.written);
+  skipped.push(...skeleton.skipped);
+  return { configPath, integrationDir, written, skipped };
+}
+
+function transferWorkspaceConfig(wizard) {
+  return `version: 1
+
+transfer:
+  id: ${yamlString(wizard.transferId)}
+  policy_id: scan-before-upload
+
+source:
+  kind: filesystem
+  path: ${yamlString(wizard.sourcePath)}
+
+destination:
+  kind: gcs
+  uri: ${yamlString(wizard.destinationUri)}
+
+scanner:
+  mode: dsxa
+  dsxa:
+    base_url: ${yamlString(wizard.scannerUrl)}
+
+policy:
+  verdict_actions:
+    benign: allow
+    malicious: block
+    suspicious: block
+    unknown: block
+  file_type_actions:
+    windows_executables: block
+
+runtime:
+  audit_jsonl: .dsx-transfer/audit/${wizard.transferId}.jsonl
+  checkpoint: .dsx-transfer/checkpoints/${wizard.transferId}.json
+`;
+}
+
+function transferWorkspaceEnvExample(configPath, wizard) {
+  const configValue = relativeWorkspacePath(configPath) || configPath;
+  return `DSX_TRANSFER_WORKSPACE=${workspaceRoot()}
+DSX_TRANSFER_CONFIG=${configValue}
+DSX_TRANSFER_USE_MODULE=1
+DSX_TRANSFER_PYTHON=${settings().pythonPath || ".venv/bin/python"}
+DSX_TRANSFER_PYTHONPATH=${settings().modulePythonPath || ".:dsx_transfer:dsxa_sdk_py"}
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
+DSX_TRANSFER_SCANNER_URL=${wizard.scannerUrl}
+`;
+}
+
+function transferWorkspaceReadme(configPath, integrationDir, wizard) {
+  const configValue = relativeWorkspacePath(configPath) || configPath;
+  const integrationValue = relativeWorkspacePath(integrationDir) || integrationDir;
+  return `# DSX-Transfer Filesystem-to-GCS Workspace
+
+This directory is a generated DSX-Transfer integration workspace.
+
+Generated files:
+
+- \`dsx-transfer.yaml\`: editable transfer config
+- \`source/\`: sample source files
+- \`integration/python/\`: Python runner and smoke-test skeleton
+- \`.env.example\`: local environment variables
+
+Before running:
+
+1. Confirm the GCS destination: \`${wizard.destinationUri}\`.
+2. Confirm the DSXA scanner URL: \`${wizard.scannerUrl}\`.
+3. Set \`GOOGLE_APPLICATION_CREDENTIALS\` to a service account JSON file.
+4. Confirm the source path: \`${wizard.sourcePath}\`.
+
+Run with the extension:
+
+1. Open \`dsx-transfer.yaml\`.
+2. Run \`DSX-Transfer: Use Active File as Config\`.
+3. Run \`DSX-Transfer: Validate Config\`.
+4. Run \`DSX-Transfer: Run Transfer\`.
+
+Run from the terminal:
+
+\`\`\`bash
+dsx-transfer migrate --config ${configValue}
+\`\`\`
+
+Run through the generated Python skeleton:
+
+\`\`\`bash
+cd ${integrationValue}
+DSX_TRANSFER_WORKSPACE=${workspaceRoot()} DSX_TRANSFER_CONFIG=${configValue} python run_transfer.py
+\`\`\`
+
+Expected demo behavior:
+
+- Files are scanned by DSXA before upload.
+- Allowed files upload to GCS.
+- Blocked files are stopped before upload.
+- The report shows planned, allowed, blocked, and failed counts.
+`;
 }
 
 function pythonIntegrationRunner() {
@@ -563,6 +718,114 @@ async function openConfig() {
   await vscode.window.showTextDocument(doc, { preview: false });
 }
 
+async function createTransferWorkspace() {
+  output.show(true);
+  const selected = await vscode.window.showOpenDialog({
+    canSelectFiles: false,
+    canSelectFolders: true,
+    canSelectMany: false,
+    defaultUri: vscode.Uri.file(workspaceRoot()),
+    openLabel: "Use This Directory",
+    title: "Choose a directory for the DSX-Transfer workspace",
+  });
+  if (!selected?.length) {
+    return;
+  }
+
+  const targetDir = selected[0].fsPath;
+  const wizard = await promptTransferWorkspaceOptions(targetDir);
+  if (!wizard) {
+    return;
+  }
+
+  const targetConfig = path.join(targetDir, "dsx-transfer.yaml");
+  const overwrite = await pathExists(targetConfig)
+    ? await vscode.window.showWarningMessage(
+      "This directory already contains dsx-transfer.yaml.",
+      "Open Existing",
+      "Overwrite",
+      "Cancel"
+    )
+    : "Overwrite";
+  if (overwrite === "Open Existing") {
+    await setActiveConfigPath(targetConfig);
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(targetConfig));
+    await vscode.window.showTextDocument(doc, { preview: false });
+    return;
+  }
+  if (overwrite !== "Overwrite") {
+    return;
+  }
+
+  const result = await writeTransferWorkspace(targetDir, wizard, { overwrite: true });
+  await setActiveConfigPath(result.configPath);
+  output.appendLine("DSX-Transfer workspace:");
+  output.appendLine(`- directory: ${targetDir}`);
+  output.appendLine(`- config: ${result.configPath}`);
+  output.appendLine(`- python skeleton: ${result.integrationDir}`);
+  output.appendLine(`- wrote ${result.written.length} file(s)`);
+
+  const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(result.configPath));
+  await vscode.window.showTextDocument(doc, { preview: false });
+  vscode.window.showInformationMessage("Created DSX-Transfer workspace. Edit the GCS URI and credentials before running.");
+}
+
+async function promptTransferWorkspaceOptions(targetDir) {
+  const defaultId = path.basename(targetDir).replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || "filesystem-to-gcs";
+  const transferId = await vscode.window.showInputBox({
+    title: "Create DSX-Transfer Workspace",
+    prompt: "Transfer id",
+    value: defaultId,
+    validateInput: (value) => /^[A-Za-z0-9_-]+$/.test(value.trim()) ? undefined : "Use letters, numbers, hyphen, or underscore.",
+  });
+  if (transferId === undefined) {
+    return null;
+  }
+
+  const sourcePath = await vscode.window.showInputBox({
+    title: "Create DSX-Transfer Workspace",
+    prompt: "Filesystem source path, relative to the transfer directory or absolute",
+    value: "source",
+    validateInput: (value) => value.trim() ? undefined : "Source path is required.",
+  });
+  if (sourcePath === undefined) {
+    return null;
+  }
+
+  const destinationUri = await vscode.window.showInputBox({
+    title: "Create DSX-Transfer Workspace",
+    prompt: "GCS destination URI",
+    value: "gs://REPLACE_WITH_BUCKET/archive",
+    validateInput: (value) => value.trim().startsWith("gs://") ? undefined : "Destination must start with gs://.",
+  });
+  if (destinationUri === undefined) {
+    return null;
+  }
+
+  const scannerUrl = await vscode.window.showInputBox({
+    title: "Create DSX-Transfer Workspace",
+    prompt: "DSXA scanner base URL",
+    value: "https://scanner.example.com",
+    validateInput: (value) => value.trim() ? undefined : "Scanner URL is required.",
+  });
+  if (scannerUrl === undefined) {
+    return null;
+  }
+
+  return {
+    transferId: transferId.trim(),
+    sourcePath: sourcePath.trim(),
+    destinationUri: destinationUri.trim(),
+    scannerUrl: scannerUrl.trim(),
+  };
+}
+
+async function setActiveConfigPath(filePath) {
+  const relative = relativeWorkspacePath(filePath);
+  await config().update("configPath", relative || filePath, vscode.ConfigurationTarget.Workspace);
+  output.appendLine(`DSX-Transfer active config: ${relative || filePath}`);
+}
+
 async function useActiveFileAsConfig(uri) {
   const target = uri?.fsPath
     ? uri
@@ -578,8 +841,7 @@ async function useActiveFileAsConfig(uri) {
     return;
   }
 
-  await config().update("configPath", relative, vscode.ConfigurationTarget.Workspace);
-  output.appendLine(`DSX-Transfer active config: ${relative}`);
+  await setActiveConfigPath(target.fsPath);
   vscode.window.showInformationMessage(`DSX-Transfer config set to ${relative}.`);
   await validateConfig({ silent: true });
 }
@@ -815,6 +1077,10 @@ async function openReportItemJson(item) {
   vscode.window.showInformationMessage(`Opened DSX-Transfer report item: ${identity}.`);
 }
 
+async function focusWorkbench() {
+  await vscode.commands.executeCommand("workbench.view.extension.dsxTransfer");
+}
+
 function activate(context) {
   output = vscode.window.createOutputChannel("DSX-Transfer");
   diagnostics = vscode.languages.createDiagnosticCollection("dsx-transfer");
@@ -822,6 +1088,8 @@ function activate(context) {
   context.subscriptions.push(output);
   context.subscriptions.push(diagnostics);
   context.subscriptions.push(vscode.window.registerTreeDataProvider("dsxTransferReport", reportProvider));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.focusWorkbench", focusWorkbench));
+  context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createTransferWorkspace", createTransferWorkspace));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.openConfig", openConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.useActiveFileAsConfig", useActiveFileAsConfig));
   context.subscriptions.push(vscode.commands.registerCommand("dsxTransfer.createConfig", createConfig));

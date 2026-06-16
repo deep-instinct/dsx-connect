@@ -5,6 +5,8 @@ This extension helps developers create, validate, and run `dsx-transfer.yaml` fr
 ## Commands
 
 - `DSX-Transfer: Open Config`
+- `DSX-Transfer: Focus Workbench`
+- `DSX-Transfer: Create New Transfer`
 - `DSX-Transfer: Use Active File as Config`
 - `DSX-Transfer: Create Config`
 - `DSX-Transfer: Open Local Harness`
@@ -26,6 +28,8 @@ dsx-transfer migrate --config dsx-transfer.yaml
 dsx-transfer config schema
 ```
 
+`Focus Workbench` opens the DSX-Transfer activity bar view.
+`Create New Transfer` steps through transfer id, source path, GCS destination, and DSXA scanner URL, then creates a filesystem-to-GCS transfer workspace, writes a Python integration skeleton, sets the config active, and opens it for editing.
 `Open Config` opens the configured `dsx-transfer.yaml` or offers to create it.
 `Use Active File as Config` updates the workspace `dsxTransfer.configPath` setting to the open YAML file.
 `Create Config` opens the existing config, overwrites it, or cancels when the file already exists.

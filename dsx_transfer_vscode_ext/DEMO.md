@@ -50,6 +50,8 @@ In the Extension Development Host, open:
 
 ## Demo Flow
 
+### Local Harness
+
 1. Open the DSX-Transfer activity bar icon.
 2. Confirm the welcome actions are visible in `Last Report`.
 3. Run `DSX-Transfer: Check Environment`.
@@ -108,3 +110,79 @@ The local harness should report:
 planned 2, allowed 1, blocked 1, failed 0
 ```
 
+## Filesystem-to-GCS Skeleton Flow
+
+This is the main developer integration demo.
+
+1. Run `DSX-Transfer: Create New Transfer`.
+2. Choose a directory for the transfer workspace.
+3. Enter:
+
+- transfer id
+- filesystem source path
+- GCS destination URI
+- DSXA scanner URL
+
+4. Show the generated files:
+
+```text
+dsx-transfer.yaml
+source/hello.txt
+source/blocked-demo.txt
+integration/python/run_transfer.py
+integration/python/smoke_test.py
+integration/python/.env.example
+integration/python/README.md
+```
+
+5. Edit `dsx-transfer.yaml` if needed:
+
+```yaml
+destination:
+  kind: gcs
+  uri: gs://real-bucket/archive
+```
+
+6. Confirm the generated scanner:
+
+```yaml
+scanner:
+  mode: dsxa
+  dsxa:
+    base_url: https://scanner.example.com
+```
+
+7. Set credentials in VS Code workspace settings:
+
+```json
+{
+  "dsxTransfer.extraEnv": {
+    "GOOGLE_APPLICATION_CREDENTIALS": "/path/to/service-account.json"
+  }
+}
+```
+
+8. Run `DSX-Transfer: Validate Config`.
+9. Run `DSX-Transfer: Run Transfer`.
+10. In `Last Report`, show:
+
+- planned count
+- allowed count
+- blocked count
+- failed count
+- DSXA scan decisions
+
+11. Confirm GCS contains the allowed files and does not contain blocked files.
+
+Run the generated Python skeleton:
+
+```bash
+cd integration/python
+DSX_TRANSFER_WORKSPACE=/path/to/workspace DSX_TRANSFER_CONFIG=/path/to/transfer/dsx-transfer.yaml python run_transfer.py
+```
+
+Expected result shape:
+
+```text
+summary: planned=<n> allowed=<n> blocked=<n> failed=<n>
+```

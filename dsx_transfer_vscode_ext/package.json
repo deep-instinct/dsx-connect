@@ -11,6 +11,8 @@
     "Other"
   ],
   "activationEvents": [
+    "onCommand:dsxTransfer.focusWorkbench",
+    "onCommand:dsxTransfer.createTransferWorkspace",
     "onCommand:dsxTransfer.openConfig",
     "onCommand:dsxTransfer.useActiveFileAsConfig",
     "onCommand:dsxTransfer.createConfig",
@@ -78,6 +80,14 @@
       }
     ],
     "commands": [
+      {
+        "command": "dsxTransfer.focusWorkbench",
+        "title": "DSX-Transfer: Focus Workbench"
+      },
+      {
+        "command": "dsxTransfer.createTransferWorkspace",
+        "title": "DSX-Transfer: Create New Transfer"
+      },
       {
         "command": "dsxTransfer.openConfig",
         "title": "DSX-Transfer: Open Config"
@@ -147,7 +157,7 @@
     "viewsWelcome": [
       {
         "view": "dsxTransferReport",
-        "contents": "Create a config or run the local harness to see transfer results here.\n[Open Config](command:dsxTransfer.openConfig)\n[Add Local Harness](command:dsxTransfer.addLocalHarness)\n[Run Local Harness](command:dsxTransfer.runLocalHarness)"
+        "contents": "Create a transfer, create a config, or run the local harness to see transfer results here.\n[Create New Transfer](command:dsxTransfer.createTransferWorkspace)\n[Open Config](command:dsxTransfer.openConfig)\n[Add Local Harness](command:dsxTransfer.addLocalHarness)\n[Run Local Harness](command:dsxTransfer.runLocalHarness)"
       }
     ],
     "menus": {
@@ -158,24 +168,29 @@
           "group": "navigation@1"
         },
         {
-          "command": "dsxTransfer.validateConfig",
+          "command": "dsxTransfer.createTransferWorkspace",
           "when": "view == dsxTransferReport",
           "group": "navigation@2"
         },
         {
-          "command": "dsxTransfer.openConfig",
+          "command": "dsxTransfer.validateConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@3"
         },
         {
-          "command": "dsxTransfer.useActiveFileAsConfig",
+          "command": "dsxTransfer.openConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@4"
         },
         {
-          "command": "dsxTransfer.addPythonIntegrationSkeleton",
+          "command": "dsxTransfer.useActiveFileAsConfig",
           "when": "view == dsxTransferReport",
           "group": "navigation@5"
+        },
+        {
+          "command": "dsxTransfer.addPythonIntegrationSkeleton",
+          "when": "view == dsxTransferReport",
+          "group": "navigation@6"
         }
       ],
       "editor/title": [

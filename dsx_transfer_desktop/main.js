@@ -268,7 +268,8 @@ async function runTransfer(request, sender) {
     transferId: `desktop-${crypto.randomUUID()}`,
     configPath: path.join(runDir, "dsx-transfer.yaml"),
     auditPath: path.join(runDir, "audit.jsonl"),
-    checkpointPath: path.join(runDir, "checkpoint.json")
+    checkpointPath: path.join(runDir, "checkpoint.json"),
+    runLogPath: path.join(runDir, "run.log")
   };
   const config = buildTransferConfig({ ...effectiveRequest, sourcePath, destinationPath }, paths);
   await fs.writeFile(paths.configPath, config, "utf8");
@@ -283,7 +284,27 @@ async function runTransfer(request, sender) {
   ].filter(Boolean);
 
   const started = Date.now();
-  const child = spawn(python, ["-m", "dsx_transfer.cli", "migrate", "--config", paths.configPath, "--progress-jsonl"], {
+  const args = ["-m", "dsx_transfer.cli", "migrate", "--config", paths.configPath, "--progress-jsonl"];
+  await fs.writeFile(
+    paths.runLogPath,
+    [
+      `started_at=${new Date(started).toISOString()}`,
+      `run_dir=${runDir}`,
+      `python=${python}`,
+      `cwd=${root}`,
+      `command=${python} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`,
+      `pythonpath=${pythonPathParts.join(path.delimiter)}`,
+      `config=${paths.configPath}`,
+      `audit=${paths.auditPath}`,
+      `checkpoint=${paths.checkpointPath}`,
+      "",
+      "stderr:",
+      ""
+    ].join("\n"),
+    "utf8"
+  );
+
+  const child = spawn(python, args, {
     cwd: root,
     env: {
       ...process.env,
@@ -318,12 +339,31 @@ async function runTransfer(request, sender) {
     }
   });
 
-  const code = await new Promise((resolve, reject) => {
-    child.on("error", reject);
+  const code = await new Promise((resolve) => {
+    child.on("error", (error) => {
+      stderr += `${error.stack || error.message || String(error)}\n`;
+      resolve(-1);
+    });
     child.on("close", resolve);
   });
 
   const report = parseJsonReport(stdout);
+  const completed = Date.now();
+  await fs.appendFile(
+    paths.runLogPath,
+    [
+      stderr,
+      "",
+      "stdout:",
+      stdout,
+      "",
+      `exit_code=${code}`,
+      `elapsed_seconds=${((completed - started) / 1000).toFixed(3)}`,
+      `completed_at=${new Date(completed).toISOString()}`,
+      ""
+    ].join("\n"),
+    "utf8"
+  );
   const result = {
     ok: code === 0,
     code,
@@ -331,6 +371,7 @@ async function runTransfer(request, sender) {
     configPath: paths.configPath,
     auditPath: paths.auditPath,
     checkpointPath: paths.checkpointPath,
+    runLogPath: paths.runLogPath,
     elapsedSeconds: (Date.now() - started) / 1000,
     stdout,
     stderr,
@@ -341,6 +382,7 @@ async function runTransfer(request, sender) {
     configPath: result.configPath,
     auditPath: result.auditPath,
     checkpointPath: result.checkpointPath,
+    runLogPath: result.runLogPath,
     runDir: path.dirname(result.configPath)
   };
   await rebuildApplicationMenu();
@@ -360,11 +402,89 @@ async function setThemeMode(themeMode) {
   }
 }
 
+async function pathExists(target) {
+  try {
+    await fs.access(target);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function latestRunArtifacts() {
+  if (lastRunArtifacts) {
+    return lastRunArtifacts;
+  }
+
+  const runsDir = userDataPath("runs");
+  let entries;
+  try {
+    entries = await fs.readdir(runsDir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+
+  const candidates = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const runDir = path.join(runsDir, entry.name);
+    try {
+      const stat = await fs.stat(runDir);
+      candidates.push({ runDir, mtimeMs: stat.mtimeMs });
+    } catch {
+      // Ignore partially removed run folders.
+    }
+  }
+
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  for (const candidate of candidates) {
+    const artifacts = {
+      configPath: path.join(candidate.runDir, "dsx-transfer.yaml"),
+      auditPath: path.join(candidate.runDir, "audit.jsonl"),
+      checkpointPath: path.join(candidate.runDir, "checkpoint.json"),
+      runLogPath: path.join(candidate.runDir, "run.log"),
+      runDir: candidate.runDir
+    };
+    if ((await pathExists(artifacts.auditPath)) || (await pathExists(artifacts.runLogPath)) || (await pathExists(artifacts.configPath))) {
+      lastRunArtifacts = artifacts;
+      return artifacts;
+    }
+  }
+
+  return null;
+}
+
+async function reportOpenFailure(target, message) {
+  const detail = message ? `${target}\n\n${message}` : target;
+  await dialog.showMessageBox(mainWindow || undefined, {
+    type: "error",
+    title: "Unable to Open Artifact",
+    message: "DSX-Transfer Desktop could not open the selected artifact.",
+    detail
+  });
+}
+
 async function openArtifact(kind) {
-  if (!lastRunArtifacts) return;
-  const target = lastRunArtifacts[kind];
-  if (target) {
-    await shell.openPath(target);
+  const artifacts = await latestRunArtifacts();
+  const target = artifacts?.[kind];
+  if (!target) {
+    await reportOpenFailure("No run artifact found.", "Run a transfer first, then try again.");
+    return;
+  }
+  if (!(await pathExists(target))) {
+    if (kind === "auditPath" && artifacts?.runLogPath && (await pathExists(artifacts.runLogPath))) {
+      const message = await shell.openPath(artifacts.runLogPath);
+      if (message) {
+        await reportOpenFailure(artifacts.runLogPath, message);
+      }
+      return;
+    }
+    await reportOpenFailure(target, "The artifact does not exist on disk.");
+    return;
+  }
+  const message = await shell.openPath(target);
+  if (message) {
+    await reportOpenFailure(target, message);
   }
 }
 
@@ -373,7 +493,7 @@ async function rebuildApplicationMenu() {
   const settings = await readSettings();
   const selectedConcurrency = Math.max(1, Number.parseInt(String(settings.transferConcurrency || 4), 10) || 4);
   const selectedTheme = ["auto", "light", "operations", "security"].includes(settings.themeMode) ? settings.themeMode : "auto";
-  const hasArtifacts = Boolean(lastRunArtifacts);
+  const hasArtifacts = Boolean(await latestRunArtifacts());
   const template = [
     ...(process.platform === "darwin"
       ? [
@@ -387,6 +507,7 @@ async function rebuildApplicationMenu() {
       label: "File",
       submenu: [
         { label: "Open Last Audit", enabled: hasArtifacts, click: () => openArtifact("auditPath") },
+        { label: "Open Last Run Log", enabled: hasArtifacts, click: () => openArtifact("runLogPath") },
         { label: "Open Last Config", enabled: hasArtifacts, click: () => openArtifact("configPath") },
         { label: "Reveal Last Run Folder", enabled: hasArtifacts, click: () => openArtifact("runDir") },
         { type: "separator" },

@@ -1,6 +1,6 @@
 [project]
 name = "dsx-transfer"
-version = "0.1.1"
+version = "0.1.2"
 description = "Guarded file transfer contracts and tooling for DSX"
 readme = "README.md"
 requires-python = ">=3.10"

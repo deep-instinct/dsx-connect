@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require("electron")
 const fs = require("node:fs/promises");
 const fsSync = require("node:fs");
 const path = require("node:path");
+const { pathToFileURL } = require("node:url");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 
@@ -12,6 +13,7 @@ let lastRunArtifacts = null;
 let mainWindow = null;
 
 function createMainWindow() {
+  const indexUrl = pathToFileURL(path.join(__dirname, "index.html")).toString();
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 820,
@@ -31,7 +33,29 @@ function createMainWindow() {
     mainWindow = null;
   });
 
-  return mainWindow.loadFile(path.join(__dirname, "index.html"));
+  mainWindow.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedUrl, isMainFrame) => {
+    if (!isMainFrame) return;
+    const detail = escapeHtml(
+      [
+        `Failed to load DSX-Transfer Desktop UI.`,
+        `URL: ${validatedUrl || indexUrl}`,
+        `Error ${errorCode}: ${errorDescription}`,
+        `App path: ${__dirname}`
+      ].join("\n")
+    );
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<pre>${detail}</pre>`)}`);
+  });
+
+  return mainWindow.loadURL(indexUrl);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 function userDataPath(...parts) {

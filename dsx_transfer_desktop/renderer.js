@@ -1,6 +1,8 @@
 const $ = (id) => document.getElementById(id);
 const RESULT_DISPLAY_LIMIT = 100;
 let currentThemeMode = "auto";
+let scannerStatusTimer = null;
+let scannerStatusRequestId = 0;
 
 const fields = {
   dsxaBaseUrl: $("dsxaBaseUrl"),
@@ -42,6 +44,42 @@ function setStatus(message, tone = "neutral") {
   const status = $("status");
   status.textContent = message;
   status.dataset.tone = tone;
+}
+
+function setScannerStatus(stateName, text) {
+  const status = $("scannerStatus");
+  const statusText = $("scannerStatusText");
+  if (!status || !statusText) return;
+  status.classList.remove("active", "unreachable", "checking");
+  status.classList.add(stateName);
+  statusText.textContent = text;
+}
+
+async function refreshScannerStatus() {
+  const requestId = ++scannerStatusRequestId;
+  setScannerStatus("checking", "Checking scanner");
+  try {
+    const result = await window.dsxTransferDesktop.checkScanner(settingsFromForm());
+    if (requestId !== scannerStatusRequestId) return;
+    if (result?.state === "active") {
+      setScannerStatus("active", "Scanner active");
+      return;
+    }
+    setScannerStatus("unreachable", result?.message || "Scanner unreachable");
+  } catch {
+    if (requestId !== scannerStatusRequestId) return;
+    setScannerStatus("unreachable", "Scanner unreachable");
+  }
+}
+
+function scheduleScannerStatusRefresh(delayMs = 350) {
+  if (scannerStatusTimer) {
+    clearTimeout(scannerStatusTimer);
+  }
+  scannerStatusTimer = setTimeout(() => {
+    scannerStatusTimer = null;
+    refreshScannerStatus();
+  }, delayMs);
 }
 
 function settingsFromForm() {
@@ -233,8 +271,16 @@ async function cancelTransfer() {
   }
 }
 
+function toggleAuthTokenVisibility() {
+  const button = $("toggleDsxaAuthToken");
+  const shouldShow = fields.dsxaAuthToken.type === "password";
+  fields.dsxaAuthToken.type = shouldShow ? "text" : "password";
+  button.textContent = shouldShow ? "Hide" : "Show";
+}
+
 async function init() {
   applySettings(await window.dsxTransferDesktop.loadSettings());
+  await refreshScannerStatus();
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => {
     if (currentThemeMode === "auto") applyTheme();
   });
@@ -244,6 +290,11 @@ async function init() {
   $("pickDestination").addEventListener("click", () => pickFolder("destination", fields.destinationPath));
   $("runTransfer").addEventListener("click", runTransfer);
   $("cancelTransfer").addEventListener("click", cancelTransfer);
+  $("toggleDsxaAuthToken").addEventListener("click", toggleAuthTokenVisibility);
+  fields.dsxaBaseUrl.addEventListener("blur", () => scheduleScannerStatusRefresh(0));
+  fields.dsxaAuthToken.addEventListener("blur", () => scheduleScannerStatusRefresh(0));
+  fields.dsxaProtectedEntity.addEventListener("blur", () => scheduleScannerStatusRefresh(0));
+  fields.dsxaVerifyTls.addEventListener("change", () => scheduleScannerStatusRefresh(100));
 }
 
 init().catch((error) => {

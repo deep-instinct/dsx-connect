@@ -20,6 +20,7 @@
     "build:linux": "electron-builder --linux AppImage deb --publish never"
   },
   "dependencies": {
+    "@deep-instinct/dsx-desktop-shared": "file:../desktop_shared",
     "@deep-instinct/dsxa-sdk-js": "file:../dsxa_sdk_js"
   },
   "devDependencies": {

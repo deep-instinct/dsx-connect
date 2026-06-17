@@ -2,6 +2,7 @@ const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { probeDsxaScanner } = require("@deep-instinct/dsx-desktop-shared");
 
 const APP_NAME = "DSXA Desktop";
 const PROFILES_FILE = "profiles.json";
@@ -113,6 +114,15 @@ function buildCurlCommand({ baseUrl, authToken, protectedEntity, customMetadata,
   return parts.join(" ");
 }
 
+async function checkScannerReachability(profile) {
+  return probeDsxaScanner({
+    baseUrl: profile?.baseUrl,
+    authToken: profile?.authToken,
+    protectedEntity: profile?.protectedEntity,
+    timeoutMs: profile?.timeoutMs ? Math.min(Number(profile.timeoutMs), 5000) : 2500
+  });
+}
+
 async function createMainWindow() {
   const win = new BrowserWindow({
     width: 1100,
@@ -120,6 +130,8 @@ async function createMainWindow() {
     minWidth: 920,
     minHeight: 700,
     title: APP_NAME,
+    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    trafficLightPosition: process.platform === "darwin" ? { x: 16, y: 15 } : undefined,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -155,6 +167,10 @@ ipcMain.handle("dsxa-desktop:load-profiles", async () => {
 
 ipcMain.handle("dsxa-desktop:save-profiles", async (_event, state) => {
   return writeProfiles(state);
+});
+
+ipcMain.handle("dsxa-desktop:check-scanner", async (_event, profile) => {
+  return checkScannerReachability(profile);
 });
 
 ipcMain.handle("dsxa-desktop:scan-file", async (_event, req) => {

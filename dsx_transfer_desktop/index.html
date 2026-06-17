@@ -4,13 +4,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DSX-Transfer Desktop</title>
-  <link rel="stylesheet" href="./style.css?v=0.1.7" />
+  <link rel="stylesheet" href="./style.css?v=0.1.8" />
 </head>
 <body>
   <div class="app-shell">
     <header class="titlebar">
-      <div class="brand">
-        <h1>DSX-Transfer Desktop</h1>
+      <div id="scannerStatus" class="scanner-status checking" aria-live="polite">
+        <span class="scanner-status-dot" aria-hidden="true"></span>
+        <span id="scannerStatusText">Checking scanner</span>
       </div>
     </header>
 
@@ -23,8 +24,11 @@
             <input id="dsxaBaseUrl" type="text" placeholder="http://127.0.0.1:5000" />
           </label>
           <label>
-            Auth token
-            <input id="dsxaAuthToken" type="password" />
+            Auth token (optional)
+            <div class="secret-field">
+              <input id="dsxaAuthToken" type="password" />
+              <button id="toggleDsxaAuthToken" type="button">Show</button>
+            </div>
           </label>
           <div class="field-grid">
             <label>
@@ -160,6 +164,6 @@
     </div>
   </div>
 
-  <script src="./renderer.js?v=0.1.7"></script>
+  <script src="./renderer.js?v=0.1.8"></script>
 </body>
 </html>

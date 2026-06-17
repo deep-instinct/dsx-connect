@@ -3,6 +3,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const crypto = require("node:crypto");
+const { probeDsxaScanner } = require("@deep-instinct/dsx-desktop-shared");
 const { runGuardedTransfer } = require("./transfer_runner");
 
 const APP_NAME = "DSX-Transfer Desktop";
@@ -126,6 +127,15 @@ async function writeSettings(settings) {
   await fs.writeFile(target, JSON.stringify(merged, null, 2), "utf8");
   await rebuildApplicationMenu();
   return merged;
+}
+
+async function checkScanner(settings) {
+  const effectiveSettings = { ...defaultSettings(), ...(settings || {}) };
+  return probeDsxaScanner({
+    baseUrl: effectiveSettings.dsxaBaseUrl,
+    authToken: effectiveSettings.dsxaAuthToken,
+    protectedEntity: effectiveSettings.dsxaProtectedEntity
+  });
 }
 
 function transferRunDir() {
@@ -561,6 +571,7 @@ ipcMain.handle("dsx-transfer-desktop:pick-folder", async (_event, purpose) => {
 
 ipcMain.handle("dsx-transfer-desktop:load-settings", async () => readSettings());
 ipcMain.handle("dsx-transfer-desktop:save-settings", async (_event, settings) => writeSettings(settings));
+ipcMain.handle("dsx-transfer-desktop:check-scanner", async (_event, settings) => checkScanner(settings));
 ipcMain.handle("dsx-transfer-desktop:run-transfer", async (_event, request) => runTransfer(request, _event.sender));
 ipcMain.handle("dsx-transfer-desktop:cancel-transfer", async () => cancelTransfer());
 ipcMain.handle("dsx-transfer-desktop:set-titlebar-theme", async (_event, theme) => setTitlebarTheme(theme));

@@ -13,6 +13,9 @@
   --allow: #1c7f48;
   --block: #ad3d32;
   --fail: #8f6117;
+  --status-active: #167d79;
+  --status-checking: #6f7780;
+  --status-unreachable: #b4432f;
   --shadow: 0 10px 30px rgba(24, 42, 38, 0.08);
   --mono: "SFMono-Regular", "Menlo", "Consolas", monospace;
   --sans: "Avenir Next", "Segoe UI", sans-serif;
@@ -32,6 +35,9 @@
   --allow: #58c987;
   --block: #ef7569;
   --fail: #d7a64a;
+  --status-active: #42c0b9;
+  --status-checking: #9badb3;
+  --status-unreachable: #f07d65;
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
   --mono: "SFMono-Regular", "Menlo", "Consolas", monospace;
   --sans: "Avenir Next", "Segoe UI", sans-serif;
@@ -51,6 +57,9 @@
   --allow: #4ee08d;
   --block: #ff5f73;
   --fail: #ffd166;
+  --status-active: #35c7ff;
+  --status-checking: #91a4be;
+  --status-unreachable: #ff5f73;
   --shadow: 0 10px 28px rgba(0, 0, 0, 0.34);
   --mono: "SFMono-Regular", "Menlo", "Consolas", monospace;
   --sans: "Avenir Next", "Segoe UI", sans-serif;
@@ -78,10 +87,61 @@ body {
 .titlebar {
   display: flex;
   align-items: center;
+  justify-content: center;
   min-width: 0;
-  padding: 0 12px 0 78px;
+  padding: 0 12px;
   background: var(--sidebar-bg);
   -webkit-app-region: drag;
+}
+
+.scanner-status {
+  min-width: 190px;
+  max-width: min(360px, 52vw);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--status-checking);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(20, 40, 47, 0.08);
+  -webkit-app-region: no-drag;
+}
+
+.scanner-status-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 16%, transparent);
+}
+
+.scanner-status.active {
+  color: var(--status-active);
+}
+
+.scanner-status.unreachable {
+  color: var(--status-unreachable);
+}
+
+.scanner-status.checking .scanner-status-dot {
+  animation: scanner-status-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes scanner-status-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 .app-body {
@@ -273,6 +333,18 @@ button.danger:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
+}
+
+.secret-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.secret-field button {
+  min-width: 52px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .action-row {

@@ -224,8 +224,23 @@ function escapeHtml(value) {
 async function pickFolder(purpose, target) {
   const picked = await window.dsxTransferDesktop.pickFolder(purpose);
   if (picked) {
-    target.value = picked;
+    setPickedPath(target, picked);
   }
+}
+
+function setPickedPath(target, picked) {
+  target.value = picked;
+  target.setAttribute("value", picked);
+  target.title = picked;
+  target.dispatchEvent(new Event("input", { bubbles: true }));
+  target.dispatchEvent(new Event("change", { bubbles: true }));
+
+  const picker = target.closest(".path-picker");
+  picker?.classList.add("path-picker-refresh");
+  void target.offsetWidth;
+  requestAnimationFrame(() => {
+    picker?.classList.remove("path-picker-refresh");
+  });
 }
 
 async function runTransfer() {

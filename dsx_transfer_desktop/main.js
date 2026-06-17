@@ -561,7 +561,8 @@ async function rebuildApplicationMenu() {
 }
 
 ipcMain.handle("dsx-transfer-desktop:pick-folder", async (_event, purpose) => {
-  const picked = await dialog.showOpenDialog({
+  const owner = BrowserWindow.fromWebContents(_event.sender) || mainWindow || undefined;
+  const picked = await dialog.showOpenDialog(owner, {
     title: purpose === "destination" ? "Select Destination File Share" : "Select Source File Share",
     properties: ["openDirectory", "createDirectory"]
   });

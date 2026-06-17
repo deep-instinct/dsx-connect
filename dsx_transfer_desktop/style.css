@@ -335,6 +335,10 @@ button.danger:hover {
   gap: 6px;
 }
 
+.path-picker-refresh input {
+  transform: translateZ(0);
+}
+
 .secret-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

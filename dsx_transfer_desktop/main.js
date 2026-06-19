@@ -55,6 +55,20 @@ function createMainWindow() {
     mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<pre>${detail}</pre>`)}`);
   });
 
+  mainWindow.webContents.on("context-menu", (_event, params) => {
+    if (!params.isEditable) return;
+    Menu.buildFromTemplate([
+      { role: "undo" },
+      { role: "redo" },
+      { type: "separator" },
+      { role: "cut" },
+      { role: "copy" },
+      { role: "paste" },
+      { type: "separator" },
+      { role: "selectAll" }
+    ]).popup({ window: mainWindow });
+  });
+
   return mainWindow.loadURL(indexUrl);
 }
 
@@ -294,6 +308,7 @@ async function runTransfer(request, sender) {
     configPath: path.join(runDir, "dsx-transfer.yaml"),
     auditPath: path.join(runDir, "audit.jsonl"),
     checkpointPath: path.join(runDir, "checkpoint.json"),
+    perfPath: path.join(runDir, "perf.jsonl"),
     runLogPath: path.join(runDir, "run.log")
   };
   const config = buildTransferConfig({ ...effectiveRequest, sourcePath, destinationPath }, paths);
@@ -310,6 +325,7 @@ async function runTransfer(request, sender) {
       `config=${paths.configPath}`,
       `audit=${paths.auditPath}`,
       `checkpoint=${paths.checkpointPath}`,
+      `perf=${paths.perfPath}`,
       "",
       "stderr:",
       ""
@@ -364,6 +380,7 @@ async function runTransfer(request, sender) {
     configPath: paths.configPath,
     auditPath: paths.auditPath,
     checkpointPath: paths.checkpointPath,
+    perfPath: paths.perfPath,
     runLogPath: paths.runLogPath,
     elapsedSeconds: (Date.now() - started) / 1000,
     stdout,
@@ -375,6 +392,7 @@ async function runTransfer(request, sender) {
     configPath: result.configPath,
     auditPath: result.auditPath,
     checkpointPath: result.checkpointPath,
+    perfPath: result.perfPath,
     runLogPath: result.runLogPath,
     runDir: path.dirname(result.configPath)
   };
@@ -444,6 +462,7 @@ async function latestRunArtifacts() {
       configPath: path.join(candidate.runDir, "dsx-transfer.yaml"),
       auditPath: path.join(candidate.runDir, "audit.jsonl"),
       checkpointPath: path.join(candidate.runDir, "checkpoint.json"),
+      perfPath: path.join(candidate.runDir, "perf.jsonl"),
       runLogPath: path.join(candidate.runDir, "run.log"),
       runDir: candidate.runDir
     };
@@ -510,10 +529,26 @@ async function rebuildApplicationMenu() {
       submenu: [
         { label: "Open Last Audit", enabled: hasArtifacts, click: () => openArtifact("auditPath") },
         { label: "Open Last Run Log", enabled: hasArtifacts, click: () => openArtifact("runLogPath") },
+        { label: "Open Last Performance Log", enabled: hasArtifacts, click: () => openArtifact("perfPath") },
         { label: "Open Last Config", enabled: hasArtifacts, click: () => openArtifact("configPath") },
         { label: "Reveal Last Run Folder", enabled: hasArtifacts, click: () => openArtifact("runDir") },
         { type: "separator" },
         process.platform === "darwin" ? { role: "close" } : { role: "quit" }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "pasteAndMatchStyle" },
+        { role: "delete" },
+        { type: "separator" },
+        { role: "selectAll" }
       ]
     },
     {

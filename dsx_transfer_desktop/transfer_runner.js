@@ -2,6 +2,7 @@ const fs = require("node:fs/promises");
 const fsSync = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
+const { performance } = require("node:perf_hooks");
 
 function nowIso() {
   return new Date().toISOString();
@@ -242,10 +243,73 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
   };
   let auditLines = [];
   let auditWrite = Promise.resolve();
+  let perfWrite = Promise.resolve();
   const concurrency = Math.max(1, Number.parseInt(String(settings.transferConcurrency || 4), 10) || 4);
   let cursor = 0;
   let lastProgressAt = 0;
   let lastProgressCompleted = -1;
+  const perfStartedAt = performance.now();
+  let lastPerfAt = perfStartedAt;
+  let lastPerfCompleted = 0;
+  let lastPerfLoggedCompleted = -1;
+  let totalScanMs = 0;
+  let scanCount = 0;
+  let totalCopyMs = 0;
+  let copyCount = 0;
+  let totalAuditFlushMs = 0;
+  let auditFlushCount = 0;
+
+  function memorySnapshot() {
+    const memory = process.memoryUsage();
+    return {
+      rss_mb: Number((memory.rss / 1024 / 1024).toFixed(1)),
+      heap_used_mb: Number((memory.heapUsed / 1024 / 1024).toFixed(1)),
+      heap_total_mb: Number((memory.heapTotal / 1024 / 1024).toFixed(1)),
+      external_mb: Number((memory.external / 1024 / 1024).toFixed(1))
+    };
+  }
+
+  async function emitPerf(reason, force = false) {
+    if (!paths.perfPath) return;
+    const currentTime = performance.now();
+    const completedDelta = counts.completed - lastPerfCompleted;
+    const elapsedDelta = (currentTime - lastPerfAt) / 1000;
+    const shouldEmit =
+      force ||
+      counts.completed === 0 ||
+      counts.completed === items.length ||
+      counts.completed - lastPerfLoggedCompleted >= 500 ||
+      currentTime - lastPerfAt >= 5000;
+    if (!shouldEmit) return;
+
+    const elapsedTotal = (currentTime - perfStartedAt) / 1000;
+    const event = {
+      event: "transfer_perf",
+      reason,
+      completed_items: counts.completed,
+      total_items: items.length,
+      elapsed_seconds: Number(elapsedTotal.toFixed(3)),
+      total_items_per_second: elapsedTotal > 0 ? Number((counts.completed / elapsedTotal).toFixed(3)) : 0,
+      window_items_per_second: elapsedDelta > 0 ? Number((completedDelta / elapsedDelta).toFixed(3)) : 0,
+      avg_scan_ms: scanCount > 0 ? Number((totalScanMs / scanCount).toFixed(3)) : null,
+      avg_copy_ms: copyCount > 0 ? Number((totalCopyMs / copyCount).toFixed(3)) : null,
+      audit_flush_count: auditFlushCount,
+      avg_audit_flush_ms: auditFlushCount > 0 ? Number((totalAuditFlushMs / auditFlushCount).toFixed(3)) : null,
+      outcomes_retained: outcomes.length,
+      audit_lines_pending: auditLines.length,
+      ...memorySnapshot(),
+      event_time: nowIso()
+    };
+
+    lastPerfAt = currentTime;
+    lastPerfCompleted = counts.completed;
+    lastPerfLoggedCompleted = counts.completed;
+    perfWrite = perfWrite.then(async () => {
+      await fs.mkdir(path.dirname(paths.perfPath), { recursive: true });
+      await fs.appendFile(paths.perfPath, `${JSON.stringify(event)}\n`, "utf8");
+    });
+    return perfWrite;
+  }
 
   async function flushAudit() {
     if (!auditLines.length) {
@@ -254,8 +318,11 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
     const batch = auditLines.join("");
     auditLines = [];
     auditWrite = auditWrite.then(async () => {
+      const started = performance.now();
       await fs.mkdir(path.dirname(paths.auditPath), { recursive: true });
       await fs.appendFile(paths.auditPath, batch, "utf8");
+      totalAuditFlushMs += performance.now() - started;
+      auditFlushCount += 1;
     });
     return auditWrite;
   }
@@ -290,7 +357,10 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
     throwIfAborted(signal);
     const itemStartedAt = nowIso();
     try {
+      const scanStarted = performance.now();
       const response = await scanFile({ filePath: item.metadata.source_path, settings, signal });
+      totalScanMs += performance.now() - scanStarted;
+      scanCount += 1;
       const observation = scanObservationFromDsxa(response);
       const decision = applyFileTypeBlocks(
         evaluatePolicy({ item, observation, policyId, verdictActions }),
@@ -299,7 +369,10 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
       let bytesWritten = 0;
       let state = stateForAction(decision.action);
       if (decision.action === "allow") {
+        const copyStarted = performance.now();
         bytesWritten = await copyAllowedFile(item, destinationRoot, signal);
+        totalCopyMs += performance.now() - copyStarted;
+        copyCount += 1;
         state = "allowed";
       }
       return {
@@ -359,14 +432,19 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
       else if (outcome.state === "skipped") counts.skipped += 1;
       else if (outcome.state === "excluded") counts.excluded += 1;
       emitProgress(item, outcome.state);
+      await emitPerf("progress");
     }
   }
 
+  await emitPerf("planned", true);
   emitProgress(null, "planned", true);
   const workers = Array.from({ length: Math.min(concurrency, Math.max(1, items.length)) }, () => worker());
   const workerResults = await Promise.allSettled(workers);
   await flushAudit();
+  await emitPerf("audit_flushed", true);
   await writeJsonFile(paths.checkpointPath, checkpointRecords);
+  await emitPerf("checkpoint_written", true);
+  await perfWrite;
   emitProgress(null, signal?.aborted ? "cancelled" : "completed", true);
   outcomes.sort((a, b) => a.item.object_identity.localeCompare(b.item.object_identity));
   const report = {

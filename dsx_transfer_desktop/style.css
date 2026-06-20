@@ -315,7 +315,6 @@ button.danger:hover {
 }
 
 .field-grid,
-.path-row,
 .metrics {
   display: grid;
   gap: 8px;
@@ -325,8 +324,55 @@ button.danger:hover {
   grid-template-columns: 1fr 1fr;
 }
 
-.path-row {
+.transfer-route {
+  display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.route-pane {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  min-height: 132px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-2) 52%, var(--surface));
+}
+
+.route-pane-title {
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.route-kind {
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 10px;
+}
+
+.destination-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 210px);
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+.destination-kind-select {
+  margin-bottom: 0;
+}
+
+.destination-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.destination-fields[hidden] {
+  display: none;
 }
 
 .path-picker {
@@ -416,6 +462,20 @@ progress {
   font-weight: 700;
   padding: 5px 8px;
   white-space: nowrap;
+}
+
+.status-stack {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.status-sink {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status[data-tone="ok"] {
@@ -524,7 +584,8 @@ tr:last-child td {
     border-bottom: 1px solid var(--border);
   }
 
-  .path-row,
+  .transfer-route,
+  .destination-head,
   .metrics {
     grid-template-columns: 1fr;
   }

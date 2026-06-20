@@ -3,6 +3,8 @@ const RESULT_DISPLAY_LIMIT = 100;
 let currentThemeMode = "auto";
 let scannerStatusTimer = null;
 let scannerStatusRequestId = 0;
+let sinkStatusTimer = null;
+let sinkStatusRequestId = 0;
 
 const fields = {
   dsxaBaseUrl: $("dsxaBaseUrl"),
@@ -10,7 +12,11 @@ const fields = {
   dsxaProtectedEntity: $("dsxaProtectedEntity"),
   dsxaVerifyTls: $("dsxaVerifyTls"),
   sourcePath: $("sourcePath"),
+  destinationKind: $("destinationKind"),
   destinationPath: $("destinationPath"),
+  gcsBucket: $("gcsBucket"),
+  gcsPrefix: $("gcsPrefix"),
+  gcsServiceAccountPath: $("gcsServiceAccountPath"),
   actionBenign: $("actionBenign"),
   actionMalicious: $("actionMalicious"),
   actionUnknown: $("actionUnknown"),
@@ -43,6 +49,14 @@ function setThemeMode(themeMode) {
 function setStatus(message, tone = "neutral") {
   const status = $("status");
   status.textContent = message;
+  status.dataset.tone = tone;
+}
+
+function setSinkStatus(message, tone = "busy") {
+  const status = $("sinkStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.title = message;
   status.dataset.tone = tone;
 }
 
@@ -82,6 +96,33 @@ function scheduleScannerStatusRefresh(delayMs = 350) {
   }, delayMs);
 }
 
+async function refreshSinkStatus() {
+  const requestId = ++sinkStatusRequestId;
+  setSinkStatus("Checking sink", "busy");
+  try {
+    const result = await window.dsxTransferDesktop.checkSink(settingsFromForm());
+    if (requestId !== sinkStatusRequestId) return;
+    if (result?.state === "active") {
+      setSinkStatus(result?.destinationUri ? `Sink ready: ${result.destinationUri}` : "Sink ready", "ok");
+      return;
+    }
+    setSinkStatus(result?.message || "Sink unavailable", "error");
+  } catch (error) {
+    if (requestId !== sinkStatusRequestId) return;
+    setSinkStatus(error?.message || "Sink unavailable", "error");
+  }
+}
+
+function scheduleSinkStatusRefresh(delayMs = 350) {
+  if (sinkStatusTimer) {
+    clearTimeout(sinkStatusTimer);
+  }
+  sinkStatusTimer = setTimeout(() => {
+    sinkStatusTimer = null;
+    refreshSinkStatus();
+  }, delayMs);
+}
+
 function settingsFromForm() {
   return {
     scannerMode: "dsxa",
@@ -92,7 +133,11 @@ function settingsFromForm() {
     dsxaProtectedEntity: Number.parseInt(fields.dsxaProtectedEntity.value, 10) || 1,
     dsxaVerifyTls: fields.dsxaVerifyTls.checked,
     sourcePath: fields.sourcePath.value.trim(),
+    destinationKind: fields.destinationKind.value,
     destinationPath: fields.destinationPath.value.trim(),
+    gcsBucket: fields.gcsBucket.value.trim(),
+    gcsPrefix: fields.gcsPrefix.value.trim(),
+    gcsServiceAccountPath: fields.gcsServiceAccountPath.value.trim(),
     verdictActions: {
       benign: fields.actionBenign.value,
       malicious: fields.actionMalicious.value,
@@ -114,12 +159,30 @@ function applySettings(settings) {
   fields.dsxaProtectedEntity.value = settings.dsxaProtectedEntity || 1;
   fields.dsxaVerifyTls.checked = Boolean(settings.dsxaVerifyTls);
   fields.sourcePath.value = settings.sourcePath || "";
+  fields.destinationKind.value = settings.destinationKind === "gcs" ? "gcs" : "filesystem";
   fields.destinationPath.value = settings.destinationPath || "";
+  fields.gcsBucket.value = settings.gcsBucket || "";
+  fields.gcsPrefix.value = settings.gcsPrefix || "";
+  fields.gcsServiceAccountPath.value = settings.gcsServiceAccountPath || "";
   fields.actionBenign.value = verdictActions.benign || "allow";
   fields.actionMalicious.value = verdictActions.malicious || "block";
   fields.actionUnknown.value = verdictActions.unknown || "block";
   fields.actionError.value = verdictActions.error || "block";
   fields.blockWindowsExecutables.checked = settings.fileTypeBlocks?.windowsExecutables !== false;
+  updateDestinationFields();
+}
+
+function setDestinationKind(kind) {
+  fields.destinationKind.value = kind === "gcs" ? "gcs" : "filesystem";
+  updateDestinationFields();
+}
+
+function updateDestinationFields() {
+  const isGcs = fields.destinationKind.value === "gcs";
+  $("filesystemDestinationFields").hidden = isGcs;
+  $("gcsDestinationFields").hidden = !isGcs;
+  $("pickDestination").disabled = isGcs;
+  scheduleSinkStatusRefresh(0);
 }
 
 function setMetrics(summary = {}) {
@@ -228,6 +291,14 @@ async function pickFolder(purpose, target) {
   }
 }
 
+async function pickFile(purpose, target) {
+  const picked = await window.dsxTransferDesktop.pickFile(purpose);
+  if (picked) {
+    setPickedPath(target, picked);
+    scheduleSinkStatusRefresh(0);
+  }
+}
+
 function setPickedPath(target, picked) {
   target.value = picked;
   target.setAttribute("value", picked);
@@ -296,6 +367,7 @@ function toggleAuthTokenVisibility() {
 async function init() {
   applySettings(await window.dsxTransferDesktop.loadSettings());
   await refreshScannerStatus();
+  await refreshSinkStatus();
   window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => {
     if (currentThemeMode === "auto") applyTheme();
   });
@@ -303,9 +375,17 @@ async function init() {
   window.dsxTransferDesktop.onTransferProgress(updateProgress);
   $("pickSource").addEventListener("click", () => pickFolder("source", fields.sourcePath));
   $("pickDestination").addEventListener("click", () => pickFolder("destination", fields.destinationPath));
+  $("pickGcsServiceAccount").addEventListener("click", () =>
+    pickFile("gcs-service-account", fields.gcsServiceAccountPath)
+  );
   $("runTransfer").addEventListener("click", runTransfer);
   $("cancelTransfer").addEventListener("click", cancelTransfer);
   $("toggleDsxaAuthToken").addEventListener("click", toggleAuthTokenVisibility);
+  fields.destinationKind.addEventListener("change", () => setDestinationKind(fields.destinationKind.value));
+  fields.destinationPath.addEventListener("blur", () => scheduleSinkStatusRefresh(0));
+  fields.gcsBucket.addEventListener("blur", () => scheduleSinkStatusRefresh(0));
+  fields.gcsPrefix.addEventListener("blur", () => scheduleSinkStatusRefresh(0));
+  fields.gcsServiceAccountPath.addEventListener("blur", () => scheduleSinkStatusRefresh(0));
   fields.dsxaBaseUrl.addEventListener("blur", () => scheduleScannerStatusRefresh(0));
   fields.dsxaAuthToken.addEventListener("blur", () => scheduleScannerStatusRefresh(0));
   fields.dsxaProtectedEntity.addEventListener("blur", () => scheduleScannerStatusRefresh(0));

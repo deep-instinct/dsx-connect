@@ -1,6 +1,6 @@
 {
   "name": "dsx-transfer-desktop",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Desktop guarded file-share transfer app powered by dsx-transfer.",
   "main": "main.js",
   "author": "Deep Instinct",
@@ -57,6 +57,7 @@
     }
   },
   "dependencies": {
-    "@deep-instinct/dsx-desktop-shared": "file:../desktop_shared"
+    "@deep-instinct/dsx-desktop-shared": "file:../desktop_shared",
+    "@google-cloud/storage": "^7.21.0"
   }
 }

@@ -3,14 +3,126 @@ const fsSync = require("node:fs");
 const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const { performance } = require("node:perf_hooks");
+const { Storage } = require("@google-cloud/storage");
 
 function nowIso() {
   return new Date().toISOString();
 }
 
-async function listFiles(root, destinationRoot) {
+function normalizeDestinationKind(value) {
+  return value === "gcs" ? "gcs" : "filesystem";
+}
+
+function normalizeGcsPrefix(value) {
+  return String(value || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function gcsObjectName(prefix, relative) {
+  return [prefix, relative].filter(Boolean).join("/");
+}
+
+function createFilesystemSinkWriter(settings) {
+  const root = path.resolve(settings.destinationPath);
+  return {
+    kind: "filesystem",
+    destinationUri: pathToFileURL(root).toString(),
+    destinationUriFor(relative) {
+      return pathToFileURL(path.join(root, relative)).toString();
+    },
+    async write(item, signal) {
+      throwIfAborted(signal);
+      const relative = item.metadata.relative_path || item.object_identity;
+      const destination = path.resolve(root, relative);
+      if (!destination.startsWith(root + path.sep) && destination !== root) {
+        throw new Error(`Destination escaped root: ${destination}`);
+      }
+      await fs.mkdir(path.dirname(destination), { recursive: true });
+      throwIfAborted(signal);
+      await fs.copyFile(item.metadata.source_path, destination);
+      throwIfAborted(signal);
+      const stat = await fs.stat(destination);
+      return stat.size;
+    },
+    async validate() {
+      await fs.mkdir(root, { recursive: true });
+      const stat = await fs.stat(root);
+      if (!stat.isDirectory()) {
+        throw new Error(`Destination is not a folder: ${root}`);
+      }
+      const probePath = path.join(root, `.dsx-transfer-write-test-${process.pid}-${Date.now()}`);
+      await fs.writeFile(probePath, "");
+      await fs.unlink(probePath);
+      return {
+        ok: true,
+        message: "Sink ready",
+        destinationUri: pathToFileURL(root).toString()
+      };
+    }
+  };
+}
+
+function createGcsSinkWriter(settings) {
+  const bucket = String(settings.gcsBucket || "").trim();
+  if (!bucket) {
+    throw new Error("GCS bucket is required.");
+  }
+  const prefix = normalizeGcsPrefix(settings.gcsPrefix);
+  const serviceAccountPath = String(settings.gcsServiceAccountPath || "").trim();
+  const storage = serviceAccountPath ? new Storage({ keyFilename: serviceAccountPath }) : new Storage();
+  const bucketHandle = storage.bucket(bucket);
+  return {
+    kind: "gcs",
+    destinationUri: `gs://${bucket}${prefix ? `/${prefix}` : ""}`,
+    destinationUriFor(relative) {
+      return `gs://${bucket}/${gcsObjectName(prefix, relative)}`;
+    },
+    async write(item, signal) {
+      throwIfAborted(signal);
+      const relative = item.metadata.relative_path || item.object_identity;
+      const objectName = gcsObjectName(prefix, relative);
+      if (!objectName || objectName.includes("\0")) {
+        throw new Error(`Invalid GCS object name: ${objectName}`);
+      }
+      await bucketHandle.upload(item.metadata.source_path, {
+        destination: objectName,
+        resumable: false,
+        metadata: item.content_type
+          ? {
+              contentType: item.content_type
+            }
+          : undefined
+      });
+      throwIfAborted(signal);
+      return item.size_bytes || 0;
+    },
+    async validate() {
+      if (serviceAccountPath) {
+        const stat = await fs.stat(serviceAccountPath);
+        if (!stat.isFile()) {
+          throw new Error(`GCS service account path is not a file: ${serviceAccountPath}`);
+        }
+      }
+      const [exists] = await bucketHandle.exists();
+      if (!exists) {
+        throw new Error(`GCS bucket not found or inaccessible: ${bucket}`);
+      }
+      return {
+        ok: true,
+        message: "Sink ready",
+        destinationUri: `gs://${bucket}${prefix ? `/${prefix}` : ""}`
+      };
+    }
+  };
+}
+
+function createSinkWriter(settings) {
+  return normalizeDestinationKind(settings.destinationKind) === "gcs"
+    ? createGcsSinkWriter(settings)
+    : createFilesystemSinkWriter(settings);
+}
+
+async function listFiles(root, sinkWriter) {
   const resolvedRoot = path.resolve(root);
-  const resolvedDestinationRoot = path.resolve(destinationRoot);
   const files = [];
 
   async function walk(dir) {
@@ -25,7 +137,7 @@ async function listFiles(root, destinationRoot) {
         const relative = path.relative(resolvedRoot, absolute).split(path.sep).join("/");
         files.push({
           source_uri: pathToFileURL(absolute).toString(),
-          destination_uri: pathToFileURL(path.join(resolvedDestinationRoot, relative)).toString(),
+          destination_uri: sinkWriter.destinationUriFor(relative),
           object_identity: relative,
           size_bytes: stat.size,
           content_type: null,
@@ -159,22 +271,6 @@ async function scanFile({ filePath, settings, signal }) {
   }
 }
 
-async function copyAllowedFile(item, destinationRoot, signal) {
-  throwIfAborted(signal);
-  const relative = item.metadata.relative_path || item.object_identity;
-  const destination = path.resolve(destinationRoot, relative);
-  const root = path.resolve(destinationRoot);
-  if (!destination.startsWith(root + path.sep) && destination !== root) {
-    throw new Error(`Destination escaped root: ${destination}`);
-  }
-  await fs.mkdir(path.dirname(destination), { recursive: true });
-  throwIfAborted(signal);
-  await fs.copyFile(item.metadata.source_path, destination);
-  throwIfAborted(signal);
-  const stat = await fs.stat(destination);
-  return stat.size;
-}
-
 async function writeJsonFile(target, payload) {
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, JSON.stringify(payload, null, 2), "utf8");
@@ -213,7 +309,7 @@ function reportSummary(outcomes) {
 
 async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
   const sourceRoot = path.resolve(settings.sourcePath);
-  const destinationRoot = path.resolve(settings.destinationPath);
+  const sinkWriter = createSinkWriter(settings);
   const transferId = paths.transferId;
   const policyId = "desktop-default";
   const verdictActions = {
@@ -230,7 +326,7 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
   };
 
   const startedAt = nowIso();
-  const items = await listFiles(sourceRoot, destinationRoot);
+  const items = await listFiles(sourceRoot, sinkWriter);
   const outcomes = [];
   const checkpointRecords = {};
   const counts = {
@@ -370,7 +466,7 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
       let state = stateForAction(decision.action);
       if (decision.action === "allow") {
         const copyStarted = performance.now();
-        bytesWritten = await copyAllowedFile(item, destinationRoot, signal);
+        bytesWritten = await sinkWriter.write(item, signal);
         totalCopyMs += performance.now() - copyStarted;
         copyCount += 1;
         state = "allowed";
@@ -450,7 +546,7 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
   const report = {
     transfer_id: transferId,
     source_uri: pathToFileURL(sourceRoot).toString(),
-    destination_uri: pathToFileURL(destinationRoot).toString(),
+    destination_uri: sinkWriter.destinationUri,
     policy_id: policyId,
     outcomes,
     started_at: startedAt,
@@ -470,5 +566,6 @@ async function runGuardedTransfer({ settings, paths, onProgress, signal }) {
 }
 
 module.exports = {
+  createSinkWriter,
   runGuardedTransfer
 };

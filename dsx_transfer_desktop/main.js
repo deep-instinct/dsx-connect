@@ -4,7 +4,7 @@ const path = require("node:path");
 const { pathToFileURL } = require("node:url");
 const crypto = require("node:crypto");
 const { probeDsxaScanner } = require("@deep-instinct/dsx-desktop-shared");
-const { runGuardedTransfer } = require("./transfer_runner");
+const { createSinkWriter, runGuardedTransfer } = require("./transfer_runner");
 
 const APP_NAME = "DSX-Transfer Desktop";
 const SETTINGS_FILE = "settings.json";
@@ -116,8 +116,12 @@ function defaultSettings() {
     },
     transferConcurrency: 4,
     themeMode: "auto",
+    destinationKind: "filesystem",
     sourcePath: "",
-    destinationPath: ""
+    destinationPath: "",
+    gcsBucket: "",
+    gcsPrefix: "",
+    gcsServiceAccountPath: ""
   };
 }
 
@@ -152,6 +156,30 @@ async function checkScanner(settings) {
   });
 }
 
+async function checkSink(settings) {
+  try {
+    const effectiveSettings = { ...defaultSettings(), ...(settings || {}) };
+    effectiveSettings.destinationKind = normalizeDestinationKind(effectiveSettings.destinationKind);
+    if (effectiveSettings.destinationKind === "filesystem" && !String(effectiveSettings.destinationPath || "").trim()) {
+      return { state: "unreachable", message: "Destination folder missing" };
+    }
+    if (effectiveSettings.destinationKind === "gcs" && !String(effectiveSettings.gcsBucket || "").trim()) {
+      return { state: "unreachable", message: "GCS bucket missing" };
+    }
+    const result = await createSinkWriter(effectiveSettings).validate();
+    return {
+      state: "active",
+      message: result?.message || "Sink ready",
+      destinationUri: result?.destinationUri || destinationUri(effectiveSettings)
+    };
+  } catch (error) {
+    return {
+      state: "unreachable",
+      message: error?.message || "Sink unavailable"
+    };
+  }
+}
+
 function transferRunDir() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   return userDataPath("runs", `${stamp}-${crypto.randomUUID().slice(0, 8)}`);
@@ -180,8 +208,8 @@ function buildTransferConfig(request, paths) {
     `  path: ${yamlString(settings.sourcePath)}`,
     "",
     "destination:",
-    "  kind: filesystem",
-    `  uri: ${yamlString(settings.destinationPath)}`,
+    `  kind: ${yamlString(settings.destinationKind || "filesystem")}`,
+    `  uri: ${yamlString(destinationUri(settings))}`,
     "",
     "scanner:",
     `  mode: ${yamlString("dsxa")}`,
@@ -212,8 +240,30 @@ function buildTransferConfig(request, paths) {
   lines.push(`  audit_jsonl: ${yamlString(paths.auditPath)}`);
   lines.push(`  checkpoint: ${yamlString(paths.checkpointPath)}`);
   lines.push(`  concurrency: ${Math.max(1, Number.parseInt(String(settings.transferConcurrency || 4), 10) || 4)}`);
+  if (settings.destinationKind === "gcs" && settings.gcsServiceAccountPath) {
+    lines.push("  gcs:");
+    lines.push(`    service_account_json: ${yamlString(settings.gcsServiceAccountPath)}`);
+  }
   lines.push("");
   return lines.join("\n");
+}
+
+function normalizeDestinationKind(value) {
+  return value === "gcs" ? "gcs" : "filesystem";
+}
+
+function normalizeGcsPrefix(value) {
+  return String(value || "").trim().replace(/^\/+/, "").replace(/\/+$/, "");
+}
+
+function destinationUri(settings) {
+  const kind = normalizeDestinationKind(settings.destinationKind);
+  if (kind === "gcs") {
+    const bucket = String(settings.gcsBucket || "").trim();
+    const prefix = normalizeGcsPrefix(settings.gcsPrefix);
+    return prefix ? `gs://${bucket}/${prefix}` : `gs://${bucket}`;
+  }
+  return settings.destinationPath;
 }
 
 async function assertDirectory(targetPath, label) {
@@ -291,10 +341,16 @@ async function runTransfer(request, sender) {
   }
   const persisted = await readSettings();
   const effectiveRequest = { ...persisted, ...(request || {}), transferConcurrency: persisted.transferConcurrency || 4 };
+  effectiveRequest.destinationKind = normalizeDestinationKind(effectiveRequest.destinationKind);
   const sourcePath = await assertDirectory(effectiveRequest.sourcePath, "Source folder");
-  const destinationPath = await assertDirectory(effectiveRequest.destinationPath, "Destination folder");
-  if (sourcePath === destinationPath) {
-    throw new Error("Source and destination must be different folders.");
+  let destinationPath = String(effectiveRequest.destinationPath || "").trim();
+  if (effectiveRequest.destinationKind === "filesystem") {
+    destinationPath = await assertDirectory(effectiveRequest.destinationPath, "Destination folder");
+    if (sourcePath === destinationPath) {
+      throw new Error("Source and destination must be different folders.");
+    }
+  } else if (!String(effectiveRequest.gcsBucket || "").trim()) {
+    throw new Error("GCS bucket is required when destination type is Google Cloud Storage.");
   }
   if (!String(effectiveRequest.dsxaBaseUrl || "").trim()) {
     throw new Error("DSXA scanner URL is required when scanner mode is DSXA.");
@@ -605,9 +661,27 @@ ipcMain.handle("dsx-transfer-desktop:pick-folder", async (_event, purpose) => {
   return picked.filePaths[0];
 });
 
+ipcMain.handle("dsx-transfer-desktop:pick-file", async (_event, purpose) => {
+  const owner = BrowserWindow.fromWebContents(_event.sender) || mainWindow || undefined;
+  const picked = await dialog.showOpenDialog(owner, {
+    title: purpose === "gcs-service-account" ? "Select GCS Service Account JSON" : "Select File",
+    properties: ["openFile"],
+    filters:
+      purpose === "gcs-service-account"
+        ? [
+            { name: "JSON Files", extensions: ["json"] },
+            { name: "All Files", extensions: ["*"] }
+          ]
+        : undefined
+  });
+  if (picked.canceled || !picked.filePaths?.length) return null;
+  return picked.filePaths[0];
+});
+
 ipcMain.handle("dsx-transfer-desktop:load-settings", async () => readSettings());
 ipcMain.handle("dsx-transfer-desktop:save-settings", async (_event, settings) => writeSettings(settings));
 ipcMain.handle("dsx-transfer-desktop:check-scanner", async (_event, settings) => checkScanner(settings));
+ipcMain.handle("dsx-transfer-desktop:check-sink", async (_event, settings) => checkSink(settings));
 ipcMain.handle("dsx-transfer-desktop:run-transfer", async (_event, request) => runTransfer(request, _event.sender));
 ipcMain.handle("dsx-transfer-desktop:cancel-transfer", async () => cancelTransfer());
 ipcMain.handle("dsx-transfer-desktop:set-titlebar-theme", async (_event, theme) => setTitlebarTheme(theme));

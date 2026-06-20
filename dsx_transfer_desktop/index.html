@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DSX-Transfer Desktop</title>
-  <link rel="stylesheet" href="./style.css?v=0.1.8" />
+  <link rel="stylesheet" href="./style.css?v=0.1.11" />
 </head>
 <body>
   <div class="app-shell">
@@ -81,25 +81,63 @@
         <section class="panel transfer-panel">
         <div class="section-head">
           <div>
-            <div class="panel-title">File Share Transfer</div>
-            <div class="subtitle">Copy files only after the scanner and policy produce an allow decision.</div>
+            <div class="panel-title">Transfer Route</div>
+            <div class="subtitle">Move files to the active destination only after the scanner and policy produce an allow decision.</div>
           </div>
-          <div id="status" class="status">Ready</div>
+          <div class="status-stack">
+            <div id="sinkStatus" class="status status-sink" data-tone="busy">Checking sink</div>
+            <div id="status" class="status">Ready</div>
+          </div>
         </div>
 
-        <div class="path-row">
-          <div class="path-field">
+        <div class="transfer-route">
+          <div class="route-pane source-pane">
+            <div class="route-pane-title">Source</div>
+            <div class="route-kind">Filesystem</div>
             <label>Source file share</label>
             <div class="path-picker">
               <input id="sourcePath" type="text" placeholder="/Volumes/source-share or C:\\Shares\\Source" />
               <button id="pickSource" type="button">Browse</button>
             </div>
           </div>
-          <div class="path-field">
-            <label>Destination file share</label>
-            <div class="path-picker">
-              <input id="destinationPath" type="text" placeholder="/Volumes/destination-share or C:\\Shares\\Destination" />
-              <button id="pickDestination" type="button">Browse</button>
+
+          <div class="route-pane destination-pane">
+            <div class="destination-head">
+              <div>
+                <div class="route-pane-title">Destination</div>
+                <div class="route-kind">Active sink</div>
+              </div>
+              <label class="destination-kind-select">
+                Type
+                <select id="destinationKind">
+                  <option value="filesystem">File Share</option>
+                  <option value="gcs">GCS</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="filesystemDestinationFields" class="destination-fields">
+              <label>Destination file share</label>
+              <div class="path-picker">
+                <input id="destinationPath" type="text" placeholder="/Volumes/destination-share or C:\\Shares\\Destination" />
+                <button id="pickDestination" type="button">Browse</button>
+              </div>
+            </div>
+
+            <div id="gcsDestinationFields" class="destination-fields" hidden>
+              <label>
+                GCS bucket
+                <input id="gcsBucket" type="text" placeholder="my-transfer-destination" />
+              </label>
+              <label>
+                Object prefix
+                <input id="gcsPrefix" type="text" placeholder="optional/prefix" />
+              </label>
+              <label>Service account JSON (optional)</label>
+              <div class="path-picker">
+                <input id="gcsServiceAccountPath" type="text" placeholder="Uses Application Default Credentials when blank" />
+                <button id="pickGcsServiceAccount" type="button">Browse</button>
+              </div>
             </div>
           </div>
         </div>
@@ -164,6 +202,6 @@
     </div>
   </div>
 
-  <script src="./renderer.js?v=0.1.8"></script>
+  <script src="./renderer.js?v=0.1.11"></script>
 </body>
 </html>

@@ -2,9 +2,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("dsxTransferDesktop", {
   pickFolder: (purpose) => ipcRenderer.invoke("dsx-transfer-desktop:pick-folder", purpose),
+  pickFile: (purpose) => ipcRenderer.invoke("dsx-transfer-desktop:pick-file", purpose),
   loadSettings: () => ipcRenderer.invoke("dsx-transfer-desktop:load-settings"),
   saveSettings: (settings) => ipcRenderer.invoke("dsx-transfer-desktop:save-settings", settings),
   checkScanner: (settings) => ipcRenderer.invoke("dsx-transfer-desktop:check-scanner", settings),
+  checkSink: (settings) => ipcRenderer.invoke("dsx-transfer-desktop:check-sink", settings),
   runTransfer: (request) => ipcRenderer.invoke("dsx-transfer-desktop:run-transfer", request),
   cancelTransfer: () => ipcRenderer.invoke("dsx-transfer-desktop:cancel-transfer"),
   setTitlebarTheme: (theme) => ipcRenderer.invoke("dsx-transfer-desktop:set-titlebar-theme", theme),

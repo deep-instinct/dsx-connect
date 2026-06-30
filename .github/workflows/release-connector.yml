@@ -1,0 +1,110 @@
+name: Release Connector
+
+on:
+  workflow_dispatch:
+    inputs:
+      connector:
+        description: "Connector slug"
+        required: true
+        type: choice
+        options:
+          - aws_s3
+          - azure_blob_storage
+          - filesystem
+          - google_cloud_storage
+          - m365_mail
+          - onedrive
+          - salesforce
+          - sharepoint
+      version:
+        description: "Release version. Leave blank to use connectors/<connector>/version.py"
+        required: false
+        default: ""
+      image_registry:
+        description: "Image registry/namespace used as docker tag prefix"
+        required: false
+        default: "dsxconnect"
+      registry_host:
+        description: "OCI registry host for Docker/Helm login"
+        required: false
+        default: "registry-1.docker.io"
+      helm_repo:
+        description: "Helm OCI repo"
+        required: false
+        default: "oci://registry-1.docker.io/dsxconnect"
+      platforms:
+        description: "Buildx platforms"
+        required: false
+        default: "linux/amd64,linux/arm64"
+      push_latest:
+        description: "Also push :latest image tag"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: connector-release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Log in to OCI registry for Docker
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ inputs.registry_host }}
+          username: ${{ secrets.OCR_USERNAME }}
+          password: ${{ secrets.OCR_TOKEN }}
+
+      - name: Log in to OCI registry for Helm
+        run: |
+          echo "${{ secrets.OCR_TOKEN }}" | helm registry login "${{ inputs.registry_host }}" \
+            --username "${{ secrets.OCR_USERNAME }}" \
+            --password-stdin
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip pytest
+          if [ -f "connectors/${{ inputs.connector }}/requirements.txt" ]; then
+            python -m pip install -r "connectors/${{ inputs.connector }}/requirements.txt"
+          fi
+
+      - name: Release connector
+        env:
+          CONNECTOR: ${{ inputs.connector }}
+          VERSION: ${{ inputs.version }}
+          IMAGE_REGISTRY: ${{ inputs.image_registry }}
+          HELM_REPO: ${{ inputs.helm_repo }}
+          PLATFORMS: ${{ inputs.platforms }}
+          PUSH_LATEST: ${{ inputs.push_latest }}
+        run: |
+          args=(
+            "$CONNECTOR"
+            --registry "$IMAGE_REGISTRY"
+            --helm-repo "$HELM_REPO"
+            --platform "$PLATFORMS"
+          )
+          if [ -n "$VERSION" ]; then
+            args+=(--version "$VERSION")
+          fi
+          if [ "$PUSH_LATEST" = "true" ]; then
+            args+=(--latest)
+          else
+            args+=(--no-latest)
+          fi
+          scripts/connectors/release.sh "${args[@]}"

@@ -82,6 +82,18 @@ class GoogleCloudStorageConnectorConfig(BaseConnectorConfig):
             "GCS_CREDENTIALS_FILE",
         ),
     )
+    asset_inventory_scope: str = Field(
+        default="",
+        description=(
+            "Optional Cloud Asset Inventory parent scope for bucket discovery. "
+            "Use projects/PROJECT_ID, folders/FOLDER_ID, or organizations/ORG_ID."
+        ),
+        validation_alias=AliasChoices(
+            "DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE",
+            "GCS_ASSET_INVENTORY_SCOPE",
+            "CLOUD_ASSET_INVENTORY_SCOPE",
+        ),
+    )
 
     # Derived at startup from `asset`. For GCS, `asset` may be either
     #   - "bucket" or

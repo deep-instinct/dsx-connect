@@ -102,6 +102,34 @@ Discovery can come from different connector-owned sources:
 
 `configured_asset` is the least-privilege default for connectors that do not have tenant-wide list permissions. `inventory_enumeration` is useful when the operator wants to add new protected scopes from a broad asset list, but it may require platform permissions such as `storage.buckets.list`.
 
+### Cloud Inventory Providers
+
+For cloud repositories, broad bucket/container discovery should use the provider inventory service when one exists:
+
+- AWS S3 bucket discovery should use AWS Config where available.
+- Google Cloud Storage bucket discovery should use Cloud Asset Inventory with asset type `storage.googleapis.com/Bucket`.
+
+Provider inventory services are preferable for operator discovery because they can work at organization, folder, account, or project scope and return resource metadata without walking object contents. Bucket-local object or prefix enumeration remains a repository API concern after a protected scope has been selected.
+
+For GCS, the connector should support:
+
+- `configured_asset`: report the configured bucket or bucket/prefix.
+- `inventory_enumeration` with `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE`: list buckets through Cloud Asset Inventory.
+- `inventory_enumeration` without Cloud Asset Inventory scope: fall back to direct Cloud Storage bucket listing for credentials that only have project-local `storage.buckets.list`.
+
+Expected GCS Cloud Asset Inventory scope values:
+
+```text
+projects/PROJECT_ID
+folders/FOLDER_ID
+organizations/ORG_ID
+```
+
+Required permissions:
+
+- Cloud Asset Inventory: `cloudasset.assets.listResource` plus service usage permission, commonly via `roles/cloudasset.viewer` and `roles/serviceusage.serviceUsageConsumer`.
+- Direct Storage API fallback: `storage.buckets.list`.
+
 Possible response:
 
 ```json

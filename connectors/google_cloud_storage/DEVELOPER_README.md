@@ -32,10 +32,28 @@ Leave `config.py` alone — it contains sane defaults. During development, overr
     - `DSXCONNECTOR_VERIFY_TLS=false`
     - `DSXCONNECTOR_ASSET=bucket-name`
     - `DSXCONNECTOR_FILTER=`
+    - `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE=organizations/123456789`
   - Or set `DSXCONNECTOR_ENV_FILE=/path/to/custom.env` to use a different file.
 
 - Environment variables (shell/Compose/CI)
   - Any setting can be overridden as `DSXCONNECTOR_<SETTING_NAME>`.
+
+### Bucket Discovery
+
+The connector asset discovery endpoint supports two bucket inventory modes:
+
+- `configured_asset`: reports the configured `DSXCONNECTOR_ASSET` bucket or bucket/prefix.
+- `inventory_enumeration`: lists visible buckets for operator scope selection.
+
+For broad GCP inventory, set `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` to a Cloud Asset Inventory parent:
+
+```text
+projects/PROJECT_ID
+folders/FOLDER_ID
+organizations/ORG_ID
+```
+
+When that scope is set, `inventory_enumeration` uses Cloud Asset Inventory asset type `storage.googleapis.com/Bucket`. The service account needs Cloud Asset Inventory resource-list permissions, commonly `roles/cloudasset.viewer` plus `roles/serviceusage.serviceUsageConsumer` on the selected scope. If no Cloud Asset Inventory scope is set, the connector falls back to direct Cloud Storage bucket listing, which requires `storage.buckets.list`.
 
 ## Build a Deployment Release
 

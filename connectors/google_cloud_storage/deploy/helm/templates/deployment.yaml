@@ -92,7 +92,7 @@ spec:
             {{- end }}
             {{- if .Values.gcp.credentialsSecretName }}
             - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: {{ printf "%s/%s" .Values.gcp.mountPath .Values.gcp.filename | quote }}
+              value: {{ printf "%s/%s" (default "/app/creds" .Values.gcp.mountPath) (default "service-account.json" .Values.gcp.filename) | quote }}
             {{- end }}
           {{- if .Values.envSecretRefs }}
           envFrom:
@@ -127,7 +127,7 @@ spec:
             {{- end }}
             {{- if .Values.gcp.credentialsSecretName }}
             - name: gcp-creds
-              mountPath: {{ .Values.gcp.mountPath | quote }}
+              mountPath: {{ (default "/app/creds" .Values.gcp.mountPath) | quote }}
               readOnly: true
             {{- end }}
             {{- if .Values.dataVolume.enabled }}

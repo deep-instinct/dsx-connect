@@ -42,7 +42,10 @@ env:
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
   DSXCONNECTOR_ASSET: ""          # bucket name
   DSXCONNECTOR_FILTER: ""
+  # Optional Cloud Asset Inventory parent for bucket discovery: projects/ID, folders/ID, or organizations/ID
+  # DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: ""
   DSXCONNECTOR_DATA_DIR: "/app/data"
+  DSXCONNECTOR_MONITOR: "false"
   GCS_PUBSUB_PROJECT_ID: ""
   GCS_PUBSUB_SUBSCRIPTION: ""
 
@@ -56,10 +59,13 @@ auth_dsxconnect:
   enrollmentKey: ENROLLMENT_TOKEN  # Secret providing DSXCONNECT_ENROLLMENT_TOKEN when dsx-connect auth is enabled
 
 gcp:
-  # Optional: mount a GCP service account JSON Secret and set GOOGLE_APPLICATION_CREDENTIALS
-  credentialsSecretName: "gcp-sa"  # see connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-secret.yaml
-  mountPath: "/app/creds"
-  filename: "service-account.json"
+  # Existing Secret containing a GCP service account JSON key.
+  # The Secret is mounted and GOOGLE_APPLICATION_CREDENTIALS is set automatically.
+  # See examples/gcp-sa-secret.yaml for the expected Secret shape.
+  credentialsSecretName: ""
+  # Optional overrides if the Secret key or mount location differs from the defaults.
+  # mountPath: "/app/creds"
+  # filename: "service-account.json"
 
 dataVolume:
   enabled: true

@@ -43,6 +43,126 @@ _monitor_thread: threading.Thread | None = None
 _monitor_stop = threading.Event()
 
 
+def _normalize_asset_inventory_scope(scope: str | None) -> str:
+    raw = str(scope or "").strip().strip("/")
+    if not raw:
+        return ""
+    aliases = {
+        "project": "projects",
+        "folder": "folders",
+        "organization": "organizations",
+        "org": "organizations",
+    }
+    if ":" in raw and "/" not in raw:
+        kind, value = raw.split(":", 1)
+        kind = aliases.get(kind.strip().lower(), kind.strip().lower())
+        value = value.strip()
+        return f"{kind}/{value}" if kind and value else ""
+    parts = raw.split("/", 1)
+    if len(parts) != 2:
+        return raw
+    kind, value = parts
+    return f"{aliases.get(kind.strip().lower(), kind.strip().lower())}/{value.strip()}"
+
+
+def _bucket_name_from_cloud_asset(asset) -> str:
+    resource = getattr(asset, "resource", None)
+    data = getattr(resource, "data", None) or {}
+    try:
+        bucket_name = data.get("name")
+    except AttributeError:
+        bucket_name = None
+    if bucket_name:
+        return str(bucket_name)
+    name = str(getattr(asset, "name", "") or "")
+    if "/buckets/" in name:
+        return name.rsplit("/buckets/", 1)[-1]
+    return name.rsplit("/", 1)[-1]
+
+
+def _cloud_asset_metadata(asset) -> dict:
+    resource = getattr(asset, "resource", None)
+    data = getattr(resource, "data", None) or {}
+
+    def _get(key: str):
+        try:
+            return data.get(key)
+        except AttributeError:
+            return None
+
+    metadata = {
+        "provider": "gcs",
+        "discovery_source": "cloud_asset_inventory",
+        "asset_type": str(getattr(asset, "asset_type", "") or getattr(asset, "assetType", "") or "storage.googleapis.com/Bucket"),
+        "asset_name": str(getattr(asset, "name", "") or ""),
+    }
+    for key in ("location", "storageClass", "projectNumber", "timeCreated", "updated"):
+        value = _get(key)
+        if value is not None:
+            metadata[key] = str(value)
+    return metadata
+
+
+def _list_cloud_asset_inventory_buckets(
+    *,
+    scope: str,
+    limit: int,
+    cursor: str | None = None,
+) -> tuple[list[AssetDiscoveryItem], str | None]:
+    parent = _normalize_asset_inventory_scope(scope)
+    if not parent:
+        raise RuntimeError("cloud_asset_inventory_scope_not_configured")
+    try:
+        from google.cloud import asset_v1
+    except Exception as exc:
+        raise RuntimeError("google-cloud-asset is required for Cloud Asset Inventory discovery") from exc
+
+    client = asset_v1.AssetServiceClient()
+    request = {
+        "parent": parent,
+        "asset_types": ["storage.googleapis.com/Bucket"],
+        "content_type": asset_v1.ContentType.RESOURCE,
+        "page_size": max(1, min(int(limit or 100), 1000)),
+    }
+    if cursor:
+        request["page_token"] = cursor
+
+    response = client.list_assets(request=request)
+    page = None
+    page_source = getattr(response, "pages", None)
+    if page_source is not None:
+        try:
+            page = next(iter(page_source))
+        except StopIteration:
+            page = []
+    else:
+        page = response
+
+    assets: list[AssetDiscoveryItem] = []
+    for asset in page:
+        bucket = _bucket_name_from_cloud_asset(asset)
+        if not bucket:
+            continue
+        metadata = _cloud_asset_metadata(asset)
+        metadata["bucket"] = bucket
+        metadata["asset_inventory_scope"] = parent
+        assets.append(
+            AssetDiscoveryItem(
+                id=bucket,
+                display_name=bucket,
+                selector=bucket,
+                metadata=metadata,
+            )
+        )
+    raw_response = getattr(response, "_response", None)
+    next_cursor = (
+        getattr(page, "next_page_token", None)
+        or getattr(response, "next_page_token", None)
+        or getattr(raw_response, "next_page_token", None)
+    )
+    return assets, (str(next_cursor) if next_cursor else None)
+
+
 def _resolve_requested_item_action(scan_request: ScanRequestModel) -> tuple[ItemActionEnum, str | None, dict[str, str]]:
     resolved = resolve_item_action_request(
         scan_request,
@@ -405,6 +525,38 @@ async def asset_discovery_handler(
                 )
             ],
         )
+    asset_inventory_scope = _normalize_asset_inventory_scope(getattr(config, "asset_inventory_scope", ""))
+    use_cloud_asset_inventory = requested_source in {"cloud_asset_inventory", "asset_inventory"} or (
+        requested_source == "inventory_enumeration" and bool(asset_inventory_scope)
+    )
+    if use_cloud_asset_inventory:
+        try:
+            assets, next_cursor = _list_cloud_asset_inventory_buckets(
+                scope=asset_inventory_scope,
+                limit=limit,
+                cursor=cursor,
+            )
+        except Exception as exc:
+            message = str(exc)
+            dsx_logging.warning(f"GCS Cloud Asset Inventory discovery failed: {exc}")
+            permission_denied = "403" in message or "permission" in message.lower() or "cloudasset" in message.lower()
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="cloud_asset_inventory",
+                status="permission_denied" if permission_denied else "error",
+                assets=[],
+                unsupported=False,
+                message=f"asset_discovery_failed:{exc}",
+                required_permission="cloudasset.assets.listResource",
+            )
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="cloud_asset_inventory",
+            status="success",
+            assets=assets,
+            next_cursor=next_cursor,
+        )
+
     try:
         buckets = gcs_client.buckets()
     except Exception as exc:

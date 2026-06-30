@@ -1,8 +1,66 @@
 import pytest
+import sys
+import types
 
 pytest.importorskip("google.cloud.storage")
 
 from shared.models.connector_models import ItemActionEnum, ScanRequestModel
+
+
+def test_cloud_asset_inventory_helper_reads_first_page(monkeypatch):
+    import google.cloud
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    class FakePage(list):
+        next_page_token = "token-2"
+
+    class FakePager:
+        @property
+        def pages(self):
+            return iter(
+                [
+                    FakePage(
+                        [
+                            types.SimpleNamespace(
+                                name="//storage.googleapis.com/projects/_/buckets/bucket-a",
+                                asset_type="storage.googleapis.com/Bucket",
+                                resource=types.SimpleNamespace(
+                                    data={
+                                        "name": "bucket-a",
+                                        "location": "US",
+                                        "storageClass": "STANDARD",
+                                    }
+                                ),
+                            )
+                        ]
+                    )
+                ]
+            )
+
+        def __iter__(self):
+            raise AssertionError("helper should consume one page, not auto-iterate the full pager")
+
+    class FakeAssetServiceClient:
+        def list_assets(self, request):
+            assert request["parent"] == "organizations/123"
+            assert request["asset_types"] == ["storage.googleapis.com/Bucket"]
+            assert request["content_type"] == "RESOURCE"
+            assert request["page_size"] == 10
+            return FakePager()
+
+    fake_asset_v1 = types.SimpleNamespace(
+        AssetServiceClient=FakeAssetServiceClient,
+        ContentType=types.SimpleNamespace(RESOURCE="RESOURCE"),
+    )
+    monkeypatch.setitem(sys.modules, "google.cloud.asset_v1", fake_asset_v1)
+    monkeypatch.setattr(google.cloud, "asset_v1", fake_asset_v1, raising=False)
+
+    assets, next_cursor = gc._list_cloud_asset_inventory_buckets(scope="org:123", limit=10)
+
+    assert [asset.selector for asset in assets] == ["bucket-a"]
+    assert assets[0].metadata["discovery_source"] == "cloud_asset_inventory"
+    assert assets[0].metadata["location"] == "US"
+    assert next_cursor == "token-2"
 
 
 @pytest.mark.asyncio
@@ -67,6 +125,7 @@ async def test_asset_discovery_reports_configured_bucket_by_default(monkeypatch)
     gc.config.asset = "bucket-gcs/sub1"
     gc.config.asset_bucket = "bucket-gcs"
     gc.config.asset_prefix_root = "sub1"
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "")
     monkeypatch.setattr(gc.gcs_client, "buckets", lambda: ["bucket-a", "bucket-b", "bucket-c"])
 
     resp = await gc.asset_discovery_handler(asset_type="bucket", limit=2)
@@ -86,6 +145,7 @@ async def test_asset_discovery_reports_configured_bucket_by_default(monkeypatch)
 async def test_asset_discovery_lists_gcs_buckets_for_inventory_enumeration(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "")
     monkeypatch.setattr(gc.gcs_client, "buckets", lambda: ["bucket-a", "bucket-b", "bucket-c"])
 
     resp = await gc.asset_discovery_handler(asset_type="bucket", source="inventory_enumeration", limit=2)
@@ -96,6 +156,68 @@ async def test_asset_discovery_lists_gcs_buckets_for_inventory_enumeration(monke
     assert [asset.selector for asset in resp.assets] == ["bucket-a", "bucket-b"]
     assert resp.next_cursor == "2"
     assert resp.assets[0].metadata["provider"] == "gcs"
+
+
+@pytest.mark.asyncio
+async def test_asset_discovery_uses_cloud_asset_inventory_when_scope_configured(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    def fake_cloud_asset_buckets(*, scope: str, limit: int, cursor: str | None = None):
+        assert scope == "organizations/123"
+        assert limit == 2
+        assert cursor == "next-token"
+        return (
+            [
+                gc.AssetDiscoveryItem(
+                    id="bucket-a",
+                    display_name="bucket-a",
+                    selector="bucket-a",
+                    metadata={
+                        "provider": "gcs",
+                        "bucket": "bucket-a",
+                        "discovery_source": "cloud_asset_inventory",
+                    },
+                )
+            ],
+            "after-token",
+        )
+
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "organizations/123")
+    monkeypatch.setattr(gc, "_list_cloud_asset_inventory_buckets", fake_cloud_asset_buckets)
+
+    resp = await gc.asset_discovery_handler(
+        asset_type="bucket",
+        source="inventory_enumeration",
+        limit=2,
+        cursor="next-token",
+    )
+
+    assert resp.asset_type == "bucket"
+    assert resp.source == "cloud_asset_inventory"
+    assert resp.status == "success"
+    assert [asset.selector for asset in resp.assets] == ["bucket-a"]
+    assert resp.assets[0].metadata["discovery_source"] == "cloud_asset_inventory"
+    assert resp.next_cursor == "after-token"
+
+
+@pytest.mark.asyncio
+async def test_asset_discovery_reports_cloud_asset_inventory_failure(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    def fail_cloud_asset_buckets(*, scope: str, limit: int, cursor: str | None = None):
+        raise RuntimeError("403 cloudasset.assets.listResource permission denied")
+
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "folders/456")
+    monkeypatch.setattr(gc, "_list_cloud_asset_inventory_buckets", fail_cloud_asset_buckets)
+
+    resp = await gc.asset_discovery_handler(asset_type="bucket", source="cloud_asset_inventory", limit=2)
+
+    assert resp.unsupported is False
+    assert resp.source == "cloud_asset_inventory"
+    assert resp.status == "permission_denied"
+    assert resp.assets == []
+    assert resp.message == "asset_discovery_failed:403 cloudasset.assets.listResource permission denied"
+    assert resp.required_permission == "cloudasset.assets.listResource"
 
 
 @pytest.mark.asyncio
@@ -114,6 +236,8 @@ async def test_asset_discovery_reports_unsupported_asset_type(monkeypatch):
 @pytest.mark.asyncio
 async def test_asset_discovery_reports_bucket_listing_failure(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "")
 
     def fail_buckets():
         raise RuntimeError("403 storage.buckets.list permission denied")

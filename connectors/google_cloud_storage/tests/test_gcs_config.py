@@ -44,3 +44,18 @@ def test_reload_config_resolves_relative_credentials_against_env_file(monkeypatc
 
     assert config.google_application_credentials == str((tmp_path / "gcp-sa.json").resolve())
     assert os.environ["GOOGLE_APPLICATION_CREDENTIALS"] == str((tmp_path / "gcp-sa.json").resolve())
+
+
+def test_reload_config_reads_cloud_asset_inventory_scope(monkeypatch, tmp_path: Path) -> None:
+    _install_google_api_core_stub()
+    from connectors.google_cloud_storage.config import ConfigManager
+
+    env_file = tmp_path / ".env.local"
+    env_file.write_text("DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE=organizations/123456789\n", encoding="utf-8")
+
+    monkeypatch.setenv("DSXCONNECTOR_ENV_FILE", str(env_file))
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+
+    config = ConfigManager.reload_config()
+
+    assert config.asset_inventory_scope == "organizations/123456789"

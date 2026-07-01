@@ -1,0 +1,88 @@
+name: Deploy Connector to k3s
+
+on:
+  workflow_dispatch:
+    inputs:
+      connector:
+        description: "Connector slug"
+        required: true
+        type: choice
+        options:
+          - aws_s3
+          - azure_blob_storage
+          - filesystem
+          - google_cloud_storage
+          - m365_mail
+          - onedrive
+          - salesforce
+          - sharepoint
+      tag:
+        description: "Image tag to deploy, e.g. ci-<sha> or 0.5.55"
+        required: true
+      release_name:
+        description: "Helm release name"
+        required: false
+        default: ""
+      namespace:
+        description: "Kubernetes namespace"
+        required: false
+        default: "dsx-connect"
+      image_registry:
+        description: "Image registry/namespace used as docker tag prefix"
+        required: false
+        default: "dsxconnect"
+      values_file:
+        description: "Optional values file path in the repo"
+        required: false
+        default: ""
+      runner_label:
+        description: "Self-hosted runner label with kubectl/cluster access"
+        required: false
+        default: "self-hosted"
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runner_label }}
+    environment: connector-k3s
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Deploy connector
+        env:
+          CONNECTOR: ${{ inputs.connector }}
+          TAG: ${{ inputs.tag }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+          NAMESPACE: ${{ inputs.namespace }}
+          IMAGE_REGISTRY: ${{ inputs.image_registry }}
+          VALUES_FILE: ${{ inputs.values_file }}
+        run: |
+          args=(
+            "$CONNECTOR"
+            --tag "$TAG"
+            --registry "$IMAGE_REGISTRY"
+            --namespace "$NAMESPACE"
+          )
+          if [ -n "$RELEASE_NAME" ]; then
+            args+=(--release "$RELEASE_NAME")
+          fi
+          if [ -n "$VALUES_FILE" ]; then
+            args+=(--values "$VALUES_FILE")
+          fi
+          scripts/connectors/deploy-k3s.sh "${args[@]}"
+
+      - name: Show connector pods
+        if: always()
+        run: |
+          release="${{ inputs.release_name }}"
+          if [ -z "$release" ]; then
+            release="${{ inputs.connector }}"
+            release="${release//_/-}"
+          fi
+          kubectl get pods -n "${{ inputs.namespace }}" -l "app.kubernetes.io/instance=$release"

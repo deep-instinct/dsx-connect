@@ -1,0 +1,36 @@
+image:
+  repository: dsxconnect/google-cloud-storage-connector
+  pullPolicy: IfNotPresent
+  tag: ""
+
+env:
+  LOG_LEVEL: "debug"
+  DSXCONNECTOR_APP_ENV: "dev"
+  DSXCONNECTOR_ASSET: "YOUR_BUCKET_OR_BUCKET_PREFIX"
+  DSXCONNECTOR_FILTER: ""
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+
+  # Use the in-cluster DSX Connect service name when core is deployed.
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api"
+
+  # Leave disabled for connector-only smoke tests.
+  # Enable only after Pub/Sub topic/subscription and permissions are ready.
+  DSXCONNECTOR_MONITOR: "false"
+  GCS_PUBSUB_PROJECT_ID: ""
+  GCS_PUBSUB_SUBSCRIPTION: ""
+
+gcp:
+  # Apply this Secret in the same namespace before deploying:
+  # kubectl create secret generic gcp-sa \
+  #   -n dsx-connect \
+  #   --from-file=service-account.json=/path/to/service-account.json
+  credentialsSecretName: "gcp-sa"
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"
+
+workers: 1
+replicaCount: 1

@@ -88,7 +88,46 @@ spec:
 
 Your GitOps controller should be the only thing applying changes; operators update git and the controller reconciles.
 
+## GitHub Actions deployment to k3s
+
+The repository includes a manual workflow for connector deployment:
+
+```text
+Deploy Connector to k3s
+```
+
+This workflow is intended for a lab or integration cluster that is reachable from a GitHub self-hosted runner. GitHub does not need inbound network access to the cluster. The runner opens an outbound connection to GitHub, receives the job, and runs `helm`/`kubectl` locally.
+
+Expected runner labels:
+
+```text
+self-hosted
+k3s
+dsx-connect-lab
+```
+
+The runner host must have:
+
+- outbound HTTPS access to GitHub
+- `kubectl` configured for the target k3s cluster
+- Helm installed
+- access to any values files referenced by the workflow
+- required Kubernetes Secrets already applied in the target namespace
+
+The deploy workflow has a `wait` input. Keep `wait=true` when DSX Connect is running and connector readiness should be enforced. Use `wait=false` for connector-only smoke tests before DSX Connect is deployed; in that mode the connector pod can start and pass `/healthz`, while `/readyz` remains `503` until registration succeeds.
+
+Example connector-only smoke deploy:
+
+```text
+connector: google_cloud_storage
+tag: 0.5.55
+release_name: gcs
+namespace: dsx-connect
+image_registry: dsxconnect
+values_file: connectors/google_cloud_storage/deploy/helm/examples/values-lab.example.yaml
+wait: false
+```
+
 ## A note on secrets and `--set`
 - Avoid putting real secrets in `helm --set ...` or `kubectl create secret --from-literal ...` in shared environments; these often leak into shell history and CI logs.
 - Prefer Secrets referenced by the chart (for example, `envSecretRefs`) and a secrets manager integration (External Secrets Operator), or encrypted secrets with SOPS/Sealed Secrets.
-

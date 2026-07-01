@@ -132,7 +132,10 @@ fi
 
 echo "Deploying $registry/$image_name:$tag as release $release in namespace $namespace"
 helm "${helm_args[@]}"
-kubectl rollout status deployment \
-  --namespace "$namespace" \
-  --selector "app.kubernetes.io/instance=$release" \
-  --timeout "$timeout"
+
+if [[ "$wait" == "true" ]]; then
+  kubectl rollout status deployment \
+    --namespace "$namespace" \
+    --selector "app.kubernetes.io/instance=$release" \
+    --timeout "$timeout"
+fi

@@ -35,6 +35,11 @@ on:
         description: "Optional values file path in the repo"
         required: false
         default: ""
+      wait:
+        description: "Wait for Kubernetes readiness. Disable for connector-only smoke tests before DSX Connect is running."
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -58,6 +63,7 @@ jobs:
           NAMESPACE: ${{ inputs.namespace }}
           IMAGE_REGISTRY: ${{ inputs.image_registry }}
           VALUES_FILE: ${{ inputs.values_file }}
+          WAIT_FOR_READY: ${{ inputs.wait }}
         run: |
           args=(
             "$CONNECTOR"
@@ -70,6 +76,9 @@ jobs:
           fi
           if [ -n "$VALUES_FILE" ]; then
             args+=(--values "$VALUES_FILE")
+          fi
+          if [ "$WAIT_FOR_READY" != "true" ]; then
+            args+=(--no-wait)
           fi
           scripts/connectors/deploy-k3s.sh "${args[@]}"
 

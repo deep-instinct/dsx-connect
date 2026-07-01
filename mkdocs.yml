@@ -157,6 +157,7 @@ nav:
               - Configure Authentication: deployment/kubernetes/authentication.md
               - Configure TLS / Ingress: deployment/kubernetes/tls.md
           - Scaling & Performance: deployment/kubernetes/scaling.md
+          - Advanced Connector Deployment: deployment/kubernetes/advanced-connector-deployment.md
           - Connectors:
               - Filesystem: deployment/kubernetes/filesystem.md
               - Google Cloud Storage: deployment/kubernetes/google-cloud-storage.md

@@ -139,6 +139,14 @@ kubectl apply -f connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-sec
     helm install gcs . -f values.yaml
     ```
 
+    A safe lab starting point is available at:
+
+    ```text
+    connectors/google_cloud_storage/deploy/helm/examples/values-lab.example.yaml
+    ```
+
+    This example references a Kubernetes Secret named `gcp-sa`, but does not contain credentials.
+
 ---
 
 ## Required Settings

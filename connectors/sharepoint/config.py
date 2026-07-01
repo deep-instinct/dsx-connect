@@ -115,6 +115,7 @@ class SharepointConnectorConfig(BaseConnectorConfig):
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "forbid"
+        populate_by_name = True
 
 # Singleton with reload capability
 class ConfigManager:

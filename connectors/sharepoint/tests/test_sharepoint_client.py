@@ -10,6 +10,10 @@ from connectors.sharepoint.config import SharepointConnectorConfig
 from connectors.sharepoint.sharepoint_client import SharePointClient, GRAPH_BASE
 
 
+def _response(status_code, url, **kwargs):
+    return httpx.Response(status_code, request=httpx.Request("GET", url), **kwargs)
+
+
 @pytest.mark.asyncio
 async def test_token_acquisition_and_list(monkeypatch):
     cfg = SharepointConnectorConfig(
@@ -35,12 +39,12 @@ async def test_token_acquisition_and_list(monkeypatch):
     # Mock httpx responses for site, drive, and list children
     async def fake_get(self, url, headers=None, follow_redirects=False):
         if url.startswith(f"{GRAPH_BASE}/sites/") and "?$select=" in url:
-            return httpx.Response(200, json={"id": "site-id"})
+            return _response(200, url, json={"id": "site-id"})
         if url == f"{GRAPH_BASE}/sites/site-id/drive":
-            return httpx.Response(200, json={"id": "drive-id"})
+            return _response(200, url, json={"id": "drive-id"})
         if url.startswith(f"{GRAPH_BASE}/drives/drive-id/root/children"):
-            return httpx.Response(200, json={"value": [{"id": "1", "name": "a.txt"}]})
-        return httpx.Response(404)
+            return _response(200, url, json={"value": [{"id": "1", "name": "a.txt"}]})
+        return _response(404, url)
 
     with patch.object(httpx.AsyncClient, "get", new=fake_get):
         items = await client.list_files("")
@@ -69,12 +73,12 @@ async def test_download_by_id(monkeypatch):
 
     async def fake_get(self, url, headers=None, follow_redirects=False):
         if url.startswith(f"{GRAPH_BASE}/sites/") and "?$select=" in url:
-            return httpx.Response(200, json={"id": "site-id"})
+            return _response(200, url, json={"id": "site-id"})
         if url == f"{GRAPH_BASE}/sites/site-id/drive":
-            return httpx.Response(200, json={"id": "drive-id"})
+            return _response(200, url, json={"id": "drive-id"})
         if url == f"{GRAPH_BASE}/drives/drive-id/items/abc/content":
-            return httpx.Response(200, content=b"hello")
-        return httpx.Response(404)
+            return _response(200, url, content=b"hello")
+        return _response(404, url)
 
     with patch.object(httpx.AsyncClient, "get", new=fake_get):
         resp = await client.download_file("abc")
@@ -107,27 +111,27 @@ async def test_move_creates_folders_and_patches(monkeypatch):
     async def fake_get(self, url, headers=None, follow_redirects=False):
         calls["get"].append(url)
         if url.startswith(f"{GRAPH_BASE}/sites/") and "?$select=" in url:
-            return httpx.Response(200, json={"id": "site-id"})
+            return _response(200, url, json={"id": "site-id"})
         if url == f"{GRAPH_BASE}/sites/site-id/drive":
-            return httpx.Response(200, json={"id": "drive-id"})
+            return _response(200, url, json={"id": "drive-id"})
         # First two folder probes 404, then success on third
         if url.endswith("/root:/quarantine"):
-            return httpx.Response(404)
+            return _response(404, url)
         if url.endswith("/root:/quarantine/sub"):
-            return httpx.Response(404)
+            return _response(404, url)
         if url.endswith("/root:/quarantine/sub"):
-            return httpx.Response(200, json={"id": "folder-id"})
+            return _response(200, url, json={"id": "folder-id"})
         # Item content retrieve not used here
-        return httpx.Response(404)
+        return _response(404, url)
 
     async def fake_post(self, url, headers=None, json=None, content=None):
         calls["post"].append((url, json))
         # create folder returns a driveItem
-        return httpx.Response(200, json={"id": "folder-created"})
+        return httpx.Response(200, request=httpx.Request("POST", url), json={"id": "folder-created"})
 
     async def fake_patch(self, url, headers=None, json=None):
         calls["patch"].append((url, json))
-        return httpx.Response(200, json={"id": "moved-id"})
+        return httpx.Response(200, request=httpx.Request("PATCH", url), json={"id": "moved-id"})
 
     with patch.object(httpx.AsyncClient, "get", new=fake_get), \
          patch.object(httpx.AsyncClient, "post", new=fake_post), \

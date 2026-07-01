@@ -14,8 +14,10 @@ def test_item_action_move_tag_uses_requested_destination(monkeypatch):
 
     orig_action = spc.config.item_action
     orig_target = spc.config.item_action_move_metainfo
+    orig_asset = spc.config.asset
     spc.config.item_action = ItemActionEnum.NOTHING
     spc.config.item_action_move_metainfo = "fallback-target"
+    spc.config.asset = "root"
 
     calls = []
 
@@ -37,10 +39,11 @@ def test_item_action_move_tag_uses_requested_destination(monkeypatch):
         assert resp.status.value == "success"
         assert resp.item_action == ItemActionEnum.MOVE_TAG
         assert "Tagging skipped" in resp.message
-        assert calls == [("abc", "tenant-quarantine", "file.txt_c23bbf85bc", "rename")]
+        assert calls == [("abc", "root/tenant-quarantine", "file.txt_c23bbf85bc", "rename")]
     finally:
         spc.config.item_action = orig_action
         spc.config.item_action_move_metainfo = orig_target
+        spc.config.asset = orig_asset
 
 
 def test_item_action_tag_requested_returns_not_supported():

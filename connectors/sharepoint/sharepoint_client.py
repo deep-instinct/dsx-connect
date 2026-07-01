@@ -10,6 +10,7 @@ from shared.graph.base import MSGraphClientBase
 from shared.graph.drive import build_drive_item_path, delta_changes
 from connectors.sharepoint.config import SharepointConnectorConfig
 
+GRAPH_BASE = MSGraphClientBase.GRAPH_BASE
 SPO_API = "https://{host}/sites/{site}/_api"
 
 

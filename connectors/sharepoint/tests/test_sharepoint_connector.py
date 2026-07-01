@@ -60,13 +60,15 @@ async def test_item_action_delete_success(monkeypatch):
 async def test_item_action_move_tag_uses_requested_destination(monkeypatch):
     orig_action = spc.config.item_action
     orig_target = spc.config.item_action_move_metainfo
+    orig_asset = spc.config.asset
     spc.config.item_action = ItemActionEnum.NOTHING
     spc.config.item_action_move_metainfo = "fallback-target"
+    spc.config.asset = "root"
 
     calls = []
 
-    async def fake_move(item_id: str, dest_folder: str):
-        calls.append((item_id, dest_folder))
+    async def fake_move(item_id: str, dest_folder: str, new_name=None, conflict_behavior="rename"):
+        calls.append((item_id, dest_folder, new_name, conflict_behavior))
         return {"id": item_id}
 
     monkeypatch.setattr(spc.sp_client, "move_file", fake_move)
@@ -84,10 +86,11 @@ async def test_item_action_move_tag_uses_requested_destination(monkeypatch):
         assert resp.status.value == "success"
         assert resp.item_action == ItemActionEnum.MOVE_TAG
         assert "Tagging skipped" in resp.message
-        assert calls == [("abc", "tenant-quarantine")]
+        assert calls == [("abc", "root/tenant-quarantine", None, "rename")]
     finally:
         spc.config.item_action = orig_action
         spc.config.item_action_move_metainfo = orig_target
+        spc.config.asset = orig_asset
 
 
 @pytest.mark.asyncio

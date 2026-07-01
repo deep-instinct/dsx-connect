@@ -35,17 +35,13 @@ on:
         description: "Optional values file path in the repo"
         required: false
         default: ""
-      runner_label:
-        description: "Self-hosted runner label with kubectl/cluster access"
-        required: false
-        default: "self-hosted"
 
 permissions:
   contents: read
 
 jobs:
   deploy:
-    runs-on: ${{ inputs.runner_label }}
+    runs-on: [self-hosted, k3s, dsx-connect-lab]
     environment: connector-k3s
     steps:
       - name: Checkout

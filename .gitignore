@@ -43,6 +43,7 @@ shared/deploy/certs/*.key
 /dsx-transfer*.yaml
 /destination/
 /tmp.log
+/dsx_transfer_desktop/release-downloads/
 
 # Local workspace settings
 /.vscode/

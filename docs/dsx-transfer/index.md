@@ -8,6 +8,8 @@ The package-local docs live under `dsx_transfer/docs/`. Treat those as the imple
 
 For high-level product positioning diagrams, see [`dsx_transfer/docs/product-modes-and-diagrams.md`](../../dsx_transfer/docs/product-modes-and-diagrams.md).
 
+For a presentation-style positioning deck, see [`Why DSX-Transfer`](why-dsx-transfer-slide-deck.md).
+
 The core workflow is:
 
 ```text

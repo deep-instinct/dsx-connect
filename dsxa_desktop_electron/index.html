@@ -8,6 +8,13 @@
 </head>
 <body>
   <div class="app-shell">
+    <div class="title-row">
+      <div id="scannerStatus" class="scanner-status checking" aria-live="polite">
+        <span class="scanner-status-dot" aria-hidden="true"></span>
+        <span id="scannerStatusText">Checking scanner</span>
+      </div>
+    </div>
+
     <aside class="sidebar">
       <div class="brand">
         <div class="eyebrow">Electron Preview</div>
@@ -70,7 +77,6 @@
             <div id="scanContextDescription" class="panel-subtitle">Switch scan context without leaving the current workspace.</div>
           </div>
           <div class="panel-head-right">
-            <div id="status" class="status">Ready</div>
             <div class="scan-tabs" role="tablist" aria-label="Scan mode">
               <button id="tabScanFile" type="button" class="scan-tab active" data-tab="scanFilePane" role="tab" aria-selected="true">File</button>
               <button id="tabScanFolder" type="button" class="scan-tab" data-tab="scanFolderPane" role="tab" aria-selected="false">Folder</button>

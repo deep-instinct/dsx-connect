@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("dsxaDesktop", {
   pickFolder: () => ipcRenderer.invoke("dsxa-desktop:pick-folder"),
   loadProfiles: () => ipcRenderer.invoke("dsxa-desktop:load-profiles"),
   saveProfiles: (state) => ipcRenderer.invoke("dsxa-desktop:save-profiles", state),
+  checkScanner: (profile) => ipcRenderer.invoke("dsxa-desktop:check-scanner", profile),
   scanFile: (req) => ipcRenderer.invoke("dsxa-desktop:scan-file", req),
   scanFolder: (req) => ipcRenderer.invoke("dsxa-desktop:scan-folder", req),
   scanHash: (req) => ipcRenderer.invoke("dsxa-desktop:scan-hash", req),

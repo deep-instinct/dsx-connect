@@ -16,6 +16,8 @@ const state = {
 
 const THEME_STORAGE_KEY = "dsxa-desktop-electron.theme-mode";
 let systemThemeMediaQuery = null;
+let scannerStatusTimer = null;
+let scannerStatusRequestId = 0;
 
 const TAB_COPY = {
   scanFilePane: {
@@ -79,7 +81,43 @@ function saveThemeMode() {
 }
 
 function setStatus(text) {
-  el("status").textContent = text;
+  console.debug("[status]", text);
+}
+
+function setScannerStatus(stateName, text) {
+  const status = el("scannerStatus");
+  const statusText = el("scannerStatusText");
+  if (!status || !statusText) return;
+  status.classList.remove("active", "unreachable", "checking");
+  status.classList.add(stateName);
+  statusText.textContent = text;
+}
+
+async function refreshScannerStatus() {
+  const requestId = ++scannerStatusRequestId;
+  setScannerStatus("checking", "Checking scanner");
+  try {
+    const result = await window.dsxaDesktop.checkScanner(currentProfile());
+    if (requestId !== scannerStatusRequestId) return;
+    if (result?.state === "active") {
+      setScannerStatus("active", "Scanner active");
+      return;
+    }
+    setScannerStatus("unreachable", result?.message || "Scanner unreachable");
+  } catch {
+    if (requestId !== scannerStatusRequestId) return;
+    setScannerStatus("unreachable", "Scanner unreachable");
+  }
+}
+
+function scheduleScannerStatusRefresh(delayMs = 350) {
+  if (scannerStatusTimer) {
+    clearTimeout(scannerStatusTimer);
+  }
+  scannerStatusTimer = setTimeout(() => {
+    scannerStatusTimer = null;
+    refreshScannerStatus();
+  }, delayMs);
 }
 
 function setFolderProgress(scanned, total, labelPrefix = "Progress") {
@@ -194,6 +232,7 @@ function handleFolderProgress(payload) {
     setFolderProgress(payload.scanned || 0, payload.total || payload.scanned || 0, "Complete");
     setFolderProgressVisible(true);
     setStatus("Folder scan complete");
+    scheduleScannerStatusRefresh(0);
     state.activeFolderJobId = null;
     state.folderScanStartedAt = 0;
     setFolderControlsRunning(false, true);
@@ -206,6 +245,7 @@ function handleFolderProgress(payload) {
     setFolderProgressVisible(true);
     resetFolderStats();
     setStatus("Folder scan failed");
+    scheduleScannerStatusRefresh(0);
     state.activeFolderJobId = null;
     state.folderScanStartedAt = 0;
     setFolderControlsRunning(false, false);
@@ -341,6 +381,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   await loadProfiles();
+  await refreshScannerStatus();
   const removeFolderProgressListener = window.dsxaDesktop.onFolderProgress(handleFolderProgress);
   window.addEventListener("beforeunload", () => {
     removeFolderProgressListener();
@@ -359,11 +400,19 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   el("profileSelect").addEventListener("change", (event) => {
     applyProfile(event.target.value);
+    scheduleScannerStatusRefresh(0);
   });
 
   el("saveProfile").addEventListener("click", async () => {
     await saveProfiles();
+    await refreshScannerStatus();
     setStatus("Profile saved");
+  });
+
+  ["baseUrl", "authToken", "protectedEntity", "timeoutMs"].forEach((id) => {
+    el(id).addEventListener("input", () => {
+      scheduleScannerStatusRefresh();
+    });
   });
 
   el("themeMode").addEventListener("change", (event) => {
@@ -416,9 +465,11 @@ window.addEventListener("DOMContentLoaded", async () => {
         "",
         JSON.stringify(result.result || {}, null, 2)
       ]);
+      await refreshScannerStatus();
       setStatus("Scan complete");
     } catch (error) {
       setOutput("Scan File Error", [parseErrorMessage(error)]);
+      await refreshScannerStatus();
       setStatus("Scan failed");
     }
   });
@@ -456,6 +507,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       if (!state.activeFolderJobId && result.summary) {
         renderFolderSummaryOutput(result.summary);
         setFolderControlsRunning(false, true);
+        await refreshScannerStatus();
         setStatus("Folder scan complete");
         state.folderScanStartedAt = 0;
       }
@@ -464,6 +516,7 @@ window.addEventListener("DOMContentLoaded", async () => {
       state.folderScanStartedAt = 0;
       setFolderControlsRunning(false, false);
       setOutput("Scan Folder Error", [parseErrorMessage(error)]);
+      await refreshScannerStatus();
       setStatus("Folder scan failed");
     }
   });
@@ -491,9 +544,11 @@ window.addEventListener("DOMContentLoaded", async () => {
         "",
         JSON.stringify(result.result || {}, null, 2)
       ]);
+      await refreshScannerStatus();
       setStatus("Hash scan complete");
     } catch (error) {
       setOutput("Scan Hash Error", [parseErrorMessage(error)]);
+      await refreshScannerStatus();
       setStatus("Hash scan failed");
     }
   });

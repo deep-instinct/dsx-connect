@@ -28,6 +28,7 @@ def test_operator_console_page_renders() -> None:
     assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
     assert "Instances</th>" in response.text
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
+    assert 'id="connector-drawer"' in response.text
     assert "Default Policy" in response.text
     assert "Detect only, tag if possible" in response.text
     assert "Quarantine, move and tag" in response.text

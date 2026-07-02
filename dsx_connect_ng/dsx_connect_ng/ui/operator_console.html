@@ -330,7 +330,7 @@
 
     .shell {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
+      grid-template-columns: minmax(0, 1fr);
       gap: 16px;
       padding: 16px 20px 28px;
       max-width: 1680px;
@@ -338,7 +338,7 @@
       margin: 0 auto;
     }
 
-    .main, .side {
+    .main {
       min-width: 0;
       display: grid;
       gap: 14px;
@@ -572,6 +572,53 @@
       color: var(--danger);
     }
 
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0 0 0 auto;
+      z-index: 31;
+      width: min(440px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      transform: translateX(100%);
+      transition: transform 0.18s ease;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .drawer-body {
+      overflow: auto;
+      padding: 14px 16px;
+    }
+
     .hidden {
       display: none !important;
     }
@@ -585,9 +632,6 @@
         grid-template-columns: 54px minmax(0, 1fr);
       }
 
-      .side {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
     }
 
     @media (max-width: 820px) {
@@ -636,7 +680,7 @@
         justify-content: start;
       }
 
-      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3, .metric-row, .side {
+      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3, .metric-row {
         grid-template-columns: 1fr;
       }
 
@@ -664,6 +708,7 @@
           <option value="operations">Operations</option>
           <option value="security">Security Console</option>
         </select>
+        <button class="primary" id="open-add-connector" type="button">Add Repository Connector</button>
         <button id="refresh-all" type="button">Refresh</button>
       </div>
     </header>
@@ -939,141 +984,60 @@
           </div>
         </section>
         </main>
-
-        <aside class="side">
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <h2>Add Repository Connector</h2>
-              <p>Preconfigure a repository boundary before a runtime instance registers.</p>
-            </div>
-          </div>
-          <div class="panel-body">
-            <form class="cards" id="integration-form">
-              <div class="grid-2">
-                <label>Display Name
-                  <input name="display_name" placeholder="GCS Tenant A" required>
-                </label>
-                <label>Platform
-                  <input name="platform" placeholder="gcs" required>
-                </label>
-              </div>
-              <label>Platform Key
-                <input name="platform_key" placeholder="project-or-tenant-id" required>
-              </label>
-              <div class="grid-2">
-                <label>Reader
-                  <select name="reader_strategy">
-                    <option value="proxy">proxy</option>
-                    <option value="native">native</option>
-                  </select>
-                </label>
-                <label>Connector Name
-                  <input name="connector_name" placeholder="google-cloud-storage-connector">
-                </label>
-              </div>
-              <label>Proxy Base URL
-                <input name="proxy_base_url" placeholder="http://127.0.0.1:8630">
-              </label>
-              <div class="checks">
-                <label><input type="checkbox" name="enabled" checked> Enabled</label>
-                <label><input type="checkbox" name="capability_discover" checked> Discover</label>
-                <label><input type="checkbox" name="capability_monitor" checked> Monitor</label>
-                <label><input type="checkbox" name="capability_read"> Read</label>
-                <label><input type="checkbox" name="capability_remediate" checked> Remediate</label>
-              </div>
-              <label>Advanced Config JSON
-                <textarea name="advanced_config_json" placeholder='{"policy": {"policy_id": "default"}}'></textarea>
-              </label>
-              <button class="primary" type="submit">Add Connector</button>
-              <div class="status-line" id="integration-form-status"></div>
-            </form>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <h2>Protect Asset</h2>
-              <p>Create a protected scope and attach policy.</p>
-            </div>
-          </div>
-          <div class="panel-body">
-            <form class="cards" id="scope-form">
-              <label>Connector
-                <select name="integration_id" id="scope-integration-id" required></select>
-              </label>
-              <label>Display Name
-                <input name="display_name" placeholder="Bucket A" required>
-              </label>
-              <label>Selector
-                <input name="resource_selector" placeholder="bucket-a/prefix" required>
-              </label>
-              <div class="grid-2">
-                <label>Scope Type
-                  <select name="scope_type">
-                    <option value="path">path</option>
-                    <option value="identity">identity</option>
-                  </select>
-                </label>
-                <label>Mode
-                  <select name="mode">
-                    <option value="full_scan">full_scan</option>
-                    <option value="monitor">monitor</option>
-                  </select>
-                </label>
-              </div>
-              <div class="grid-2">
-                <label>Policy
-                  <select name="policy_id">
-                    <option value="default-policy">Default Policy</option>
-                  </select>
-                </label>
-                <label>Policy Action
-                  <input id="scope-policy-action-summary" value="Detect only, tag if possible" readonly>
-                </label>
-              </div>
-              <label>Advanced Policy JSON
-                <textarea name="advanced_policy_json" placeholder='{"auto_dianna_on_verdicts": ["malicious"]}'></textarea>
-              </label>
-              <div class="checks">
-                <label><input type="checkbox" name="enabled" checked> Enabled</label>
-              </div>
-              <button class="primary" type="submit">Protect</button>
-              <div class="status-line" id="scope-form-status"></div>
-            </form>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-header">
-            <div>
-              <h2>Run Scan</h2>
-              <p>Submit selected scope through the UI scan endpoint.</p>
-            </div>
-          </div>
-          <div class="panel-body">
-            <form class="cards" id="scan-scope-form">
-              <label>Scope
-                <select name="scope_id" id="scan-scope-id" required></select>
-              </label>
-              <label>Path Override
-                <input name="path" placeholder="defaults to scope selector">
-              </label>
-              <label>Reader
-                <select name="reader_strategy">
-                  <option value="proxy">proxy</option>
-                  <option value="native">native</option>
-                </select>
-              </label>
-              <button class="primary" type="submit">Start Scan</button>
-              <div class="status-line" id="scan-scope-form-status"></div>
-            </form>
-          </div>
-        </section>
-        </aside>
       </div>
     </div>
+
+    <div class="drawer-backdrop" id="connector-drawer-backdrop"></div>
+    <aside class="drawer" id="connector-drawer" aria-label="Add Repository Connector" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>Add Repository Connector</h2>
+          <p>Preconfigure a repository boundary before a runtime instance registers.</p>
+        </div>
+        <button id="close-add-connector" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form class="cards" id="integration-form">
+          <div class="grid-2">
+            <label>Display Name
+              <input name="display_name" placeholder="GCS Tenant A" required>
+            </label>
+            <label>Platform
+              <input name="platform" placeholder="gcs" required>
+            </label>
+          </div>
+          <label>Platform Key
+            <input name="platform_key" placeholder="project-or-tenant-id" required>
+          </label>
+          <div class="grid-2">
+            <label>Reader
+              <select name="reader_strategy">
+                <option value="proxy">proxy</option>
+                <option value="native">native</option>
+              </select>
+            </label>
+            <label>Connector Name
+              <input name="connector_name" placeholder="google-cloud-storage-connector">
+            </label>
+          </div>
+          <label>Proxy Base URL
+            <input name="proxy_base_url" placeholder="http://127.0.0.1:8630">
+          </label>
+          <div class="checks">
+            <label><input type="checkbox" name="enabled" checked> Enabled</label>
+            <label><input type="checkbox" name="capability_discover" checked> Discover</label>
+            <label><input type="checkbox" name="capability_monitor" checked> Monitor</label>
+            <label><input type="checkbox" name="capability_read"> Read</label>
+            <label><input type="checkbox" name="capability_remediate" checked> Remediate</label>
+          </div>
+          <label>Advanced Config JSON
+            <textarea name="advanced_config_json" placeholder='{"policy": {"policy_id": "default"}}'></textarea>
+          </label>
+          <button class="primary" type="submit">Add Connector</button>
+          <div class="status-line" id="integration-form-status"></div>
+        </form>
+      </div>
+    </aside>
   </div>
 
   <script>
@@ -1455,10 +1419,6 @@
       const summary = policy.malicious_verdict.action === "quarantine"
         ? "Quarantine, move and tag"
         : "Detect only, tag if possible";
-      const scopeSummary = document.getElementById("scope-policy-action-summary");
-      if (scopeSummary) {
-        scopeSummary.value = summary;
-      }
       document.getElementById("default-policy-status").textContent = `${policy.policy_id}: ${summary}`;
     }
 
@@ -1518,12 +1478,6 @@
       }
       document.getElementById("scan-results-filter-integration").innerHTML = integrationOptions;
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
-      document.getElementById("scope-integration-id").innerHTML = state.integrations
-        .map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
-        .join("");
-      document.getElementById("scan-scope-id").innerHTML = state.scopes
-        .map((scope) => `<option value="${escapeHtml(scope.scope_id)}">${escapeHtml(scope.display_name)} (${escapeHtml(scope.scope_id)})</option>`)
-        .join("");
     }
 
     async function loadOverview() {
@@ -1605,9 +1559,39 @@
       }
     }
 
-    function buildPolicyFromScopeForm(form) {
-      const policy = currentDefaultPolicy();
-      return mergeObjects(policy, parseOptionalJson(form.advanced_policy_json.value));
+    function setConnectorDrawerOpen(open) {
+      document.getElementById("connector-drawer").classList.toggle("open", open);
+      document.getElementById("connector-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("connector-drawer-backdrop").classList.toggle("open", open);
+    }
+
+    async function protectAsset(asset) {
+      await fetchJson(endpoints.createScope, {
+        method: "POST",
+        body: JSON.stringify({
+          integration_id: asset.integrationId,
+          display_name: asset.name || asset.selector,
+          scope_type: asset.scopeType || "path",
+          resource_selector: asset.selector,
+          mode: "full_scan",
+          enabled: true,
+          post_scan_policy: currentDefaultPolicy(),
+        }),
+      });
+      await refreshAll();
+      if (state.activeAssetsTab === "protected") {
+        await loadProtectedAssets();
+      }
+    }
+
+    async function scanScope(scopeId) {
+      const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
+        method: "POST",
+        body: JSON.stringify({ reader_strategy: "proxy" }),
+      });
+      await loadScanResults();
+      selectTab("scan-results");
+      renderScanResultDetail(batch.job.job_id);
     }
 
     document.querySelectorAll(".rail-item").forEach((button) => {
@@ -1624,6 +1608,14 @@
 
     document.getElementById("refresh-all").addEventListener("click", () => {
       refreshAll().catch((error) => alert(`Refresh failed: ${error.message}`));
+    });
+    document.getElementById("open-add-connector").addEventListener("click", () => setConnectorDrawerOpen(true));
+    document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setConnectorDrawerOpen(false);
+      }
     });
     document.getElementById("theme-mode").addEventListener("change", (event) => {
       setThemeMode(event.currentTarget.value);
@@ -1663,21 +1655,28 @@
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
       const prefill = event.target.closest("[data-action='prefill-scope']");
       if (prefill) {
-        const form = document.getElementById("scope-form");
-        form.integration_id.value = prefill.dataset.integration;
-        form.display_name.value = prefill.dataset.name || prefill.dataset.selector;
-        form.resource_selector.value = prefill.dataset.selector;
-        form.policy_id.value = "default-policy";
-        syncDefaultPolicySummary();
-        selectTab("assets");
-        setStatus("scope-form-status", `Ready to protect ${prefill.dataset.selector}.`);
-        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        prefill.disabled = true;
+        try {
+          await protectAsset({
+            integrationId: prefill.dataset.integration,
+            selector: prefill.dataset.selector,
+            name: prefill.dataset.name,
+          });
+        } catch (error) {
+          alert(`Protect failed: ${error.message}`);
+          prefill.disabled = false;
+        }
         return;
       }
       const scan = event.target.closest("[data-action='scan-asset-scope']");
       if (scan && scan.dataset.scope) {
-        document.getElementById("scan-scope-id").value = scan.dataset.scope;
-        document.getElementById("scan-scope-form").requestSubmit();
+        scan.disabled = true;
+        try {
+          await scanScope(scan.dataset.scope);
+        } catch (error) {
+          alert(`Scan failed: ${error.message}`);
+          scan.disabled = false;
+        }
         return;
       }
       const toggleScope = event.target.closest("[data-action='toggle-scope-protection']");
@@ -1741,67 +1740,10 @@
         form.capability_remediate.checked = true;
         form.reader_strategy.value = "proxy";
         setStatus("integration-form-status", "Connector created.");
+        setConnectorDrawerOpen(false);
         await refreshAll();
       } catch (error) {
         setStatus("integration-form-status", `Create failed: ${error.message}`, true);
-      }
-    });
-
-    document.getElementById("scope-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      setStatus("scope-form-status", "Creating protected scope...");
-      try {
-        await fetchJson(endpoints.createScope, {
-          method: "POST",
-          body: JSON.stringify({
-            integration_id: form.integration_id.value,
-            display_name: form.display_name.value,
-            scope_type: form.scope_type.value,
-            resource_selector: form.resource_selector.value,
-            mode: form.mode.value,
-            enabled: form.enabled.checked,
-            post_scan_policy: buildPolicyFromScopeForm(form),
-          }),
-        });
-        form.reset();
-        form.enabled.checked = true;
-        form.scope_type.value = "path";
-        form.mode.value = "full_scan";
-        form.policy_id.value = "default-policy";
-        syncDefaultPolicySummary();
-        setStatus("scope-form-status", "Protected scope created.");
-        await refreshAll();
-        if (state.activeAssetsTab === "protected") {
-          await loadProtectedAssets();
-        }
-      } catch (error) {
-        setStatus("scope-form-status", `Create failed: ${error.message}`, true);
-      }
-    });
-
-    document.getElementById("scan-scope-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      setStatus("scan-scope-form-status", "Starting scan...");
-      try {
-        const scopeId = form.scope_id.value;
-        const payload = {
-          reader_strategy: form.reader_strategy.value,
-        };
-        if (form.path.value.trim()) {
-          payload.path = form.path.value.trim();
-        }
-        const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
-          method: "POST",
-          body: JSON.stringify(payload),
-        });
-        setStatus("scan-scope-form-status", `Scan started: ${batch.job.job_id}`);
-        form.path.value = "";
-        await loadScanResults();
-        selectTab("scan-results");
-      } catch (error) {
-        setStatus("scan-scope-form-status", `Scan failed: ${error.message}`, true);
       }
     });
 

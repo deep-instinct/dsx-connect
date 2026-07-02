@@ -22,6 +22,7 @@ import typer
 
 DEFAULT_STATE_DIR = Path.home() / ".dsx-connect-local" / "dsx-connect-ng"
 LOCAL_POSTGRES_RELAY_POLL_INTERVAL_SECONDS = 0.25
+DSXA_REQUIRED_ENV_KEYS = ("APPLIANCE_URL", "TOKEN", "SCANNER_ID")
 
 app = typer.Typer(help="DSX-Connect NG local runtime manager")
 SERVICE_NAMES = {
@@ -94,6 +95,7 @@ DSX_CONNECT_NG_LOCAL__SCANNER_CLIENT_SCOPE=shared
 # Optional when using --with-dsxa-docker.
 # DSX_CONNECT_NG_LOCAL__DSXA_IMAGE=dsxconnect/dpa-rocky9:4.2.0.2176
 # DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN=
+# DSXA Docker defaults to https://127.0.0.1:15000 with scanner TLS verification disabled.
 # APPLIANCE_URL=<your-appliance.deepinstinctweb.com>
 # TOKEN=<scanner-registration-token>
 # SCANNER_ID=<scanner-id>
@@ -390,11 +392,24 @@ def _ensure_dsxa_container(
     state = _rabbitmq_container_state(container_name)
     if state == "running":
         return False, f"dsxa container already running: {container_name}"
-    if state in {"created", "exited"}:
+    if state == "exited":
+        logs = _docker_logs(container_name, tail=80)
+        raise RuntimeError(
+            f"dsxa_container_exited:{container_name}:logs={logs}:"
+            "remove the container or use --dsxa-container-name after fixing DSXA env"
+        )
+    if state == "created":
         result = _docker_run(["start", container_name])
         if result.returncode != 0:
             raise RuntimeError(f"docker_start_failed:{result.stderr.strip() or result.stdout.strip()}")
         return True, f"dsxa container started: {container_name}"
+    missing = [key for key in DSXA_REQUIRED_ENV_KEYS if not str(env_values.get(key) or "").strip()]
+    if missing:
+        raise RuntimeError(
+            "dsxa_env_required:"
+            f"missing={','.join(missing)}:"
+            "set them in --dsxa-env-file or the local .env before using --with-dsxa-docker"
+        )
     args = [
         "run",
         "--name",
@@ -415,6 +430,32 @@ def _ensure_dsxa_container(
 
 def _stop_dsxa_container(container_name: str) -> None:
     _docker_run(["stop", container_name])
+
+
+def _wait_for_dsxa_ready(container_name: str, host: str, port: int, *, timeout_seconds: float = 45.0) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        state = _rabbitmq_container_state(container_name)
+        if state is None or state == "exited":
+            logs = _docker_logs(container_name, tail=120)
+            raise RuntimeError(f"dsxa_not_ready:{container_name}:state={state or 'missing'}:{last_error}:logs={logs}")
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(1.0)
+        try:
+            sock.connect((host, port))
+            sock.close()
+            return
+        except OSError as exc:
+            last_error = exc
+            time.sleep(0.5)
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
+    logs = _docker_logs(container_name, tail=120)
+    raise RuntimeError(f"dsxa_not_ready:{container_name}:state={_rabbitmq_container_state(container_name) or 'missing'}:{last_error}:logs={logs}")
 
 
 def _wait_for_tcp(host: str, port: int, *, timeout_seconds: float = 30.0) -> None:
@@ -564,8 +605,10 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
         overrides["DSX_CONNECT_NG_RABBITMQ__URL"] = "amqp://dsx:dsx@127.0.0.1:5672/%2F"
         overrides["DSX_CONNECT_NG_RABBITMQ__PUBLISHER_CONFIRMS"] = "false"
     if ctx.obj.get("with_dsxa_docker"):
+        dsxa_scheme = str(ctx.obj.get("dsxa_scheme", "https"))
         overrides["DSX_CONNECT_NG_SCANNER__MODE"] = "dsxa"
-        overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] = f"http://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
+        overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] = f"{dsxa_scheme}://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
+        overrides["DSX_CONNECT_NG_SCANNER__VERIFY_TLS"] = str(ctx.obj.get("dsxa_verify_tls", False)).lower()
         auth_token = ctx.obj.get("dsxa_auth_token")
         if auth_token:
             overrides["DSX_CONNECT_NG_SCANNER__AUTH_TOKEN"] = str(auth_token)
@@ -624,31 +667,43 @@ def _prepare_runtime(
     rabbit_started_by_launcher = False
     postgres_started_by_launcher = False
     dsxa_started_by_launcher = False
-    if ctx.obj.get("with_postgres_docker"):
-        postgres_started_by_launcher, message = _ensure_postgres_container(postgres_container_name)
-        print(message)
-        _wait_for_tcp("127.0.0.1", 5432)
-        _wait_for_postgres_ready(postgres_container_name)
-        print("postgres ready on 127.0.0.1:5432")
-    if ctx.obj.get("with_rabbit_docker"):
-        rabbit_started_by_launcher, message = _ensure_rabbitmq_container(rabbit_container_name)
-        print(message)
-        _wait_for_tcp("127.0.0.1", 5672)
-        _wait_for_rabbitmq_ready(rabbit_container_name)
-        _wait_for_rabbitmq_auth(rabbit_container_name)
-        _wait_for_rabbitmq_amqp("amqp://dsx:dsx@127.0.0.1:5672/%2F")
-        print("rabbitmq ready on 127.0.0.1:5672")
-    if ctx.obj.get("with_dsxa_docker"):
-        dsxa_started_by_launcher, message = _ensure_dsxa_container(
-            dsxa_container_name,
-            image=str(ctx.obj.get("dsxa_image") or ""),
-            host_port=int(ctx.obj.get("dsxa_host_port", 15000)),
-            container_port=int(ctx.obj.get("dsxa_container_port", 5000)),
-            env_values=_dsxa_docker_env(ctx, paths["env"]),
-        )
-        print(message)
-        _wait_for_tcp("127.0.0.1", int(ctx.obj.get("dsxa_host_port", 15000)))
-        print(f"dsxa ready on http://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}")
+    try:
+        if ctx.obj.get("with_postgres_docker"):
+            postgres_started_by_launcher, message = _ensure_postgres_container(postgres_container_name)
+            print(message)
+            _wait_for_tcp("127.0.0.1", 5432)
+            _wait_for_postgres_ready(postgres_container_name)
+            print("postgres ready on 127.0.0.1:5432")
+        if ctx.obj.get("with_rabbit_docker"):
+            rabbit_started_by_launcher, message = _ensure_rabbitmq_container(rabbit_container_name)
+            print(message)
+            _wait_for_tcp("127.0.0.1", 5672)
+            _wait_for_rabbitmq_ready(rabbit_container_name)
+            _wait_for_rabbitmq_auth(rabbit_container_name)
+            _wait_for_rabbitmq_amqp("amqp://dsx:dsx@127.0.0.1:5672/%2F")
+            print("rabbitmq ready on 127.0.0.1:5672")
+        if ctx.obj.get("with_dsxa_docker"):
+            dsxa_started_by_launcher, message = _ensure_dsxa_container(
+                dsxa_container_name,
+                image=str(ctx.obj.get("dsxa_image") or ""),
+                host_port=int(ctx.obj.get("dsxa_host_port", 15000)),
+                container_port=int(ctx.obj.get("dsxa_container_port", 5000)),
+                env_values=_dsxa_docker_env(ctx, paths["env"]),
+            )
+            print(message)
+            _wait_for_dsxa_ready(dsxa_container_name, "127.0.0.1", int(ctx.obj.get("dsxa_host_port", 15000)))
+            print(
+                f"dsxa ready on {ctx.obj.get('dsxa_scheme', 'https')}://"
+                f"127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
+            )
+    except Exception:
+        if dsxa_started_by_launcher:
+            _stop_dsxa_container(dsxa_container_name)
+        if rabbit_started_by_launcher:
+            _stop_rabbitmq_container(rabbit_container_name)
+        if postgres_started_by_launcher:
+            _stop_postgres_container(postgres_container_name)
+        raise
     return (
         paths,
         specs,
@@ -788,6 +843,8 @@ def main(
     dsxa_image: str = typer.Option("", "--dsxa-image", envvar="DSX_CONNECT_NG_LOCAL__DSXA_IMAGE", help="DSXA Docker image to run"),
     dsxa_host_port: int = typer.Option(15000, "--dsxa-host-port", min=1, help="host port for DSXA scanner"),
     dsxa_container_port: int = typer.Option(5000, "--dsxa-container-port", min=1, help="container port exposed by the DSXA scanner image"),
+    dsxa_scheme: str = typer.Option("https", "--dsxa-scheme", help="scheme for the local DSXA scanner URL: http or https"),
+    dsxa_verify_tls: bool = typer.Option(False, "--dsxa-verify-tls/--no-dsxa-verify-tls", help="verify TLS certificates when NG connects to local DSXA Docker"),
     dsxa_env_file: str = typer.Option("", "--dsxa-env-file", help="optional env file containing APPLIANCE_URL, TOKEN, SCANNER_ID, FLAVOR, NO_SSL, AUTH_TOKEN"),
     dsxa_auth_token: str = typer.Option("", "--dsxa-auth-token", envvar="DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN", help="optional DSXA REST auth token; also passed to NG scanner config"),
     scan_worker_prefetch_count: int = typer.Option(1000, "--scan-worker-prefetch-count", min=1, help="number of in-flight scan messages the local scan worker may process concurrently"),
@@ -813,6 +870,8 @@ def main(
         raise typer.BadParameter("scanner_client_scope must be one of: shared, per-task")
     if scan_batch_ack_mode not in {"completed", "scanned", "accepted"}:
         raise typer.BadParameter("scan_batch_ack_mode must be one of: completed, scanned, accepted")
+    if dsxa_scheme not in {"http", "https"}:
+        raise typer.BadParameter("dsxa_scheme must be one of: http, https")
     ctx.obj = {
         "state_dir": state_dir,
         "with_rabbit_docker": with_rabbit_docker,
@@ -824,6 +883,8 @@ def main(
         "dsxa_image": dsxa_image,
         "dsxa_host_port": dsxa_host_port,
         "dsxa_container_port": dsxa_container_port,
+        "dsxa_scheme": dsxa_scheme,
+        "dsxa_verify_tls": dsxa_verify_tls,
         "dsxa_env_file": dsxa_env_file,
         "dsxa_auth_token": dsxa_auth_token,
         "scan_worker_prefetch_count": scan_worker_prefetch_count,

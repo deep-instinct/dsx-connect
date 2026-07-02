@@ -93,6 +93,8 @@ def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
             "with_rabbit_docker": False,
             "with_dsxa_docker": True,
             "dsxa_host_port": 15000,
+            "dsxa_scheme": "https",
+            "dsxa_verify_tls": False,
             "dsxa_auth_token": "rest-token",
             "scan_worker_prefetch_count": 10,
             "scan_worker_count": 1,
@@ -106,7 +108,8 @@ def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
     overrides = _runtime_env_overrides(Ctx())
 
     assert overrides["DSX_CONNECT_NG_SCANNER__MODE"] == "dsxa"
-    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == "http://127.0.0.1:15000"
+    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == "https://127.0.0.1:15000"
+    assert overrides["DSX_CONNECT_NG_SCANNER__VERIFY_TLS"] == "false"
     assert overrides["DSX_CONNECT_NG_SCANNER__AUTH_TOKEN"] == "rest-token"
 
 
@@ -356,6 +359,43 @@ def test_ensure_dsxa_container_requires_image() -> None:
         _ensure_dsxa_container("dsxa", image="", host_port=15000, container_port=5000, env_values={})
 
     assert "dsxa_image_required" in str(excinfo.value)
+
+
+def test_ensure_dsxa_container_requires_runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Result:
+        returncode = 1
+        stdout = ""
+        stderr = "missing"
+
+    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_run", lambda args: Result())
+
+    with pytest.raises(RuntimeError) as excinfo:
+        _ensure_dsxa_container("dsxa", image="repo/dsxa:test", host_port=15000, container_port=5000, env_values={})
+
+    assert "dsxa_env_required" in str(excinfo.value)
+    assert "APPLIANCE_URL,TOKEN,SCANNER_ID" in str(excinfo.value)
+
+
+def test_ensure_dsxa_container_reports_exited_container_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Result:
+        returncode = 0
+        stdout = "exited"
+        stderr = ""
+
+    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_run", lambda args: Result())
+    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_logs", lambda container_name, tail=100: "bad config")
+
+    with pytest.raises(RuntimeError) as excinfo:
+        _ensure_dsxa_container(
+            "dsxa",
+            image="repo/dsxa:test",
+            host_port=15000,
+            container_port=5000,
+            env_values={"APPLIANCE_URL": "tenant", "TOKEN": "token", "SCANNER_ID": "scanner"},
+        )
+
+    assert "dsxa_container_exited" in str(excinfo.value)
+    assert "bad config" in str(excinfo.value)
 
 
 def test_wait_for_rabbitmq_ready_reports_container_state_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:

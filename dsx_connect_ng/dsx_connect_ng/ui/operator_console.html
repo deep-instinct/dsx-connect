@@ -87,6 +87,7 @@
       background: var(--bg);
       color: var(--ink);
       font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
     }
 
     button, input, select, textarea {
@@ -101,7 +102,7 @@
       background: var(--surface);
       color: var(--ink);
       cursor: pointer;
-      font-weight: 650;
+      font-weight: 500;
     }
 
     button.primary {
@@ -144,7 +145,7 @@
       gap: 5px;
       color: var(--muted);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 500;
     }
 
     h1, h2, h3, p {
@@ -152,23 +153,26 @@
     }
 
     h1 {
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1.2;
+      font-weight: 600;
     }
 
     h2 {
-      font-size: 16px;
+      font-size: 14px;
       line-height: 1.25;
+      font-weight: 600;
     }
 
     h3 {
-      font-size: 14px;
+      font-size: 13px;
       line-height: 1.3;
+      font-weight: 600;
     }
 
     p {
       color: var(--muted);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.45;
     }
 
@@ -244,6 +248,86 @@
       min-width: 150px;
     }
 
+    .workspace {
+      display: grid;
+      grid-template-columns: 188px minmax(0, 1fr);
+      min-height: 0;
+      transition: grid-template-columns 0.16s ease;
+    }
+
+    .app.nav-collapsed .workspace {
+      grid-template-columns: 54px minmax(0, 1fr);
+    }
+
+    .rail {
+      border-right: 1px solid var(--line);
+      background: var(--toolbar-bg);
+      padding: 12px 8px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .rail-toggle {
+      width: 38px;
+      min-height: 32px;
+      padding: 5px;
+      justify-self: end;
+    }
+
+    .app.nav-collapsed .rail-toggle {
+      justify-self: center;
+    }
+
+    .rail-nav {
+      display: grid;
+      gap: 4px;
+    }
+
+    .rail-item {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      min-height: 34px;
+      width: 100%;
+      padding: 6px 8px;
+      border-color: transparent;
+      background: transparent;
+      text-align: left;
+      color: var(--ink);
+    }
+
+    .rail-item[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-soft-ink);
+    }
+
+    .rail-icon {
+      width: 24px;
+      text-align: center;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    .rail-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app.nav-collapsed .rail-label {
+      display: none;
+    }
+
+    .app.nav-collapsed .rail-item {
+      grid-template-columns: 24px;
+      justify-content: center;
+      padding-inline: 6px;
+    }
+
     .shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 360px;
@@ -261,18 +345,18 @@
       align-content: start;
     }
 
-    .tabs, .subtabs {
+    .subtabs {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
       align-items: center;
     }
 
-    .tab, .subtab {
+    .subtab {
       background: var(--surface);
     }
 
-    .tab[aria-selected="true"], .subtab[aria-selected="true"] {
+    .subtab[aria-selected="true"] {
       border-color: var(--accent);
       background: var(--accent-soft);
       color: var(--accent-soft-ink);
@@ -423,7 +507,7 @@
       background: var(--surface);
       color: var(--ink);
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 500;
       white-space: nowrap;
     }
 
@@ -497,6 +581,10 @@
         grid-template-columns: 1fr;
       }
 
+      .workspace {
+        grid-template-columns: 54px minmax(0, 1fr);
+      }
+
       .side {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -518,6 +606,34 @@
 
       .shell {
         padding: 12px;
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+      }
+
+      .rail-toggle {
+        justify-self: start;
+      }
+
+      .rail-nav {
+        display: flex;
+        overflow-x: auto;
+      }
+
+      .rail-label,
+      .app.nav-collapsed .rail-label {
+        display: inline;
+      }
+
+      .app.nav-collapsed .rail-item {
+        grid-template-columns: 24px minmax(0, 1fr);
+        justify-content: start;
       }
 
       .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3, .metric-row, .side {
@@ -552,13 +668,27 @@
       </div>
     </header>
 
-    <div class="shell">
-      <main class="main">
-        <nav class="tabs" aria-label="Primary views">
-          <button class="tab" type="button" data-tab="assets" aria-selected="true">Assets</button>
-          <button class="tab" type="button" data-tab="scan-results" aria-selected="false">Scan Results</button>
-          <button class="tab" type="button" data-tab="policy" aria-selected="false">Policy</button>
+    <div class="workspace">
+      <aside class="rail" aria-label="Primary navigation">
+        <button class="rail-toggle" id="nav-toggle" type="button" title="Collapse navigation" aria-label="Collapse navigation">&lt;&lt;</button>
+        <nav class="rail-nav">
+          <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets">
+            <span class="rail-icon" aria-hidden="true">A</span>
+            <span class="rail-label">Assets</span>
+          </button>
+          <button class="rail-item" type="button" data-tab="scan-results" aria-selected="false" title="Scan Results">
+            <span class="rail-icon" aria-hidden="true">S</span>
+            <span class="rail-label">Scan Results</span>
+          </button>
+          <button class="rail-item" type="button" data-tab="policy" aria-selected="false" title="Policy">
+            <span class="rail-icon" aria-hidden="true">P</span>
+            <span class="rail-label">Policy</span>
+          </button>
         </nav>
+      </aside>
+
+      <div class="shell">
+        <main class="main">
 
         <section class="view" id="view-assets">
           <div class="panel">
@@ -733,6 +863,53 @@
           <div class="panel">
             <div class="panel-header">
               <div>
+                <h2>Default Policy</h2>
+                <p>Applied when protecting assets unless another policy is selected.</p>
+              </div>
+              <span class="pill good">default</span>
+            </div>
+            <div class="panel-body">
+              <form class="cards" id="default-policy-form">
+                <div class="grid-2">
+                  <label>Remediation
+                    <select name="remediation_action">
+                      <option value="detect_only">Detect only, tag if possible</option>
+                      <option value="quarantine">Quarantine, move and tag</option>
+                    </select>
+                  </label>
+                  <label>Quarantine Subfolder
+                    <input name="quarantine_subfolder" value="quarantine">
+                  </label>
+                </div>
+                <div class="checks">
+                  <label><input type="checkbox" name="apply_malicious" checked> Malicious</label>
+                  <label><input type="checkbox" name="apply_not_scanned"> Not-scanned</label>
+                  <label><input type="checkbox" name="apply_non_compliant"> Non-compliant</label>
+                </div>
+                <div class="grid-2">
+                  <label>Non-compliant Subfolder
+                    <input name="non_compliant_subfolder" value="non-compliant">
+                  </label>
+                  <label>Policy ID
+                    <input name="policy_id" value="default-policy">
+                  </label>
+                </div>
+                <div>
+                  <h3>Treat File Type as Non-Compliant</h3>
+                  <div class="checks">
+                    <label><input type="checkbox" name="blocked_file_type" value="windows_executable"> Windows executables</label>
+                    <label><input type="checkbox" name="blocked_file_type" value="office_macro"> Office macros</label>
+                    <label><input type="checkbox" name="blocked_file_type" value="archive"> Archives</label>
+                    <label><input type="checkbox" name="blocked_file_type" value="script"> Scripts</label>
+                  </div>
+                </div>
+                <div class="status-line" id="default-policy-status">Default policy is used by new protected assets.</div>
+              </form>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
                 <h2>Policy</h2>
                 <p>Definitions and assignments applied to protected assets.</p>
               </div>
@@ -761,9 +938,9 @@
             </div>
           </div>
         </section>
-      </main>
+        </main>
 
-      <aside class="side">
+        <aside class="side">
         <section class="panel">
           <div class="panel-header">
             <div>
@@ -847,16 +1024,13 @@
                 </label>
               </div>
               <div class="grid-2">
-                <label>Policy ID
-                  <input name="policy_id" placeholder="policy-quarantine">
-                </label>
-                <label>Malicious Action
-                  <select name="malicious_action">
-                    <option value="detect_only">detect_only</option>
-                    <option value="quarantine">quarantine</option>
-                    <option value="delete">delete</option>
-                    <option value="tag_only">tag_only</option>
+                <label>Policy
+                  <select name="policy_id">
+                    <option value="default-policy">Default Policy</option>
                   </select>
+                </label>
+                <label>Policy Action
+                  <input id="scope-policy-action-summary" value="Detect only, tag if possible" readonly>
                 </label>
               </div>
               <label>Advanced Policy JSON
@@ -897,7 +1071,8 @@
             </form>
           </div>
         </section>
-      </aside>
+        </aside>
+      </div>
     </div>
   </div>
 
@@ -927,6 +1102,7 @@
 
     const themeModes = ["auto", "light", "operations", "security"];
     const themeStorageKey = "dsx-connect-ng-theme-mode";
+    const navStorageKey = "dsx-connect-ng-nav-collapsed";
     let currentThemeMode = "auto";
 
     function systemPrefersDark() {
@@ -1026,7 +1202,7 @@
 
     function selectTab(tabName) {
       state.activeTab = tabName;
-      document.querySelectorAll(".tab").forEach((button) => {
+      document.querySelectorAll(".rail-item").forEach((button) => {
         button.setAttribute("aria-selected", String(button.dataset.tab === tabName));
       });
       document.querySelectorAll(".view").forEach((view) => {
@@ -1045,6 +1221,19 @@
       if (tabName === "protected" && !state.protectedAssetsLoaded) {
         loadProtectedAssets().catch(showProtectedAssetsError);
       }
+    }
+
+    function setNavCollapsed(collapsed) {
+      document.querySelector(".app").classList.toggle("nav-collapsed", collapsed);
+      localStorage.setItem(navStorageKey, collapsed ? "true" : "false");
+      const toggle = document.getElementById("nav-toggle");
+      toggle.title = collapsed ? "Expand navigation" : "Collapse navigation";
+      toggle.textContent = collapsed ? ">>" : "<<";
+      toggle.setAttribute("aria-label", toggle.title);
+    }
+
+    function initNav() {
+      setNavCollapsed(localStorage.getItem(navStorageKey) === "true");
     }
 
     function renderTopStats() {
@@ -1198,6 +1387,9 @@
       }
       for (const policy of state.policies) {
         const rules = policy.outcome_rules || {};
+        const triggers = rules.outcome_triggers || {};
+        const nonCompliance = rules.non_compliance || {};
+        const blockedTypes = nonCompliance.blocked_file_types || [];
         const assignments = (policy.assignments || [])
           .map((assignment) => `${assignment.scope_display_name} (${assignment.source})`)
           .join(", ");
@@ -1207,6 +1399,9 @@
             <td><span class="${pillClass(policy.status)}">${escapeHtml(policy.status)}</span></td>
             <td>
               <span class="pill">${escapeHtml(rules.malicious_action || "detect_only")}</span>
+              ${triggers.not_scanned ? '<span class="pill warn">not-scanned</span>' : ""}
+              ${triggers.non_compliant ? '<span class="pill warn">non-compliant</span>' : ""}
+              ${blockedTypes.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join(" ")}
               ${(rules.auto_dianna_on_verdicts || []).map((item) => `<span class="pill">dianna ${escapeHtml(item)}</span>`).join(" ")}
             </td>
             <td>${policy.assigned_assets || 0}</td>
@@ -1215,6 +1410,56 @@
           </tr>
         `);
       }
+    }
+
+    function currentDefaultPolicy() {
+      const form = document.getElementById("default-policy-form");
+      const action = form.remediation_action.value;
+      const quarantineSubfolder = form.quarantine_subfolder.value.trim() || "quarantine";
+      const nonCompliantSubfolder = form.non_compliant_subfolder.value.trim() || "non-compliant";
+      const policyId = form.policy_id.value.trim() || "default-policy";
+      const blockedFileTypes = Array.from(form.querySelectorAll("input[name='blocked_file_type']:checked")).map((input) => input.value);
+      const policy = {
+        policy_id: policyId,
+        malicious_verdict: {
+          action,
+          tag_on_detect: action === "detect_only",
+          tag_on_quarantine: action === "quarantine",
+        },
+        outcome_triggers: {
+          malicious: form.apply_malicious.checked,
+          not_scanned: form.apply_not_scanned.checked,
+          non_compliant: form.apply_non_compliant.checked,
+        },
+        non_compliance: {
+          blocked_file_types: blockedFileTypes,
+          quarantine_target: {
+            path: nonCompliantSubfolder,
+            collision_strategy: "suffix_random",
+            preserve_relative_path: false,
+          },
+        },
+      };
+      if (action === "quarantine") {
+        policy.malicious_verdict.quarantine_target = {
+          path: quarantineSubfolder,
+          collision_strategy: "suffix_random",
+          preserve_relative_path: false,
+        };
+      }
+      return policy;
+    }
+
+    function syncDefaultPolicySummary() {
+      const policy = currentDefaultPolicy();
+      const summary = policy.malicious_verdict.action === "quarantine"
+        ? "Quarantine, move and tag"
+        : "Detect only, tag if possible";
+      const scopeSummary = document.getElementById("scope-policy-action-summary");
+      if (scopeSummary) {
+        scopeSummary.value = summary;
+      }
+      document.getElementById("default-policy-status").textContent = `${policy.policy_id}: ${summary}`;
     }
 
     function renderScanResultDetail(jobId) {
@@ -1361,19 +1606,16 @@
     }
 
     function buildPolicyFromScopeForm(form) {
-      const policy = {
-        malicious_verdict: {
-          action: form.malicious_action.value,
-        },
-      };
-      if (form.policy_id.value.trim()) {
-        policy.policy_id = form.policy_id.value.trim();
-      }
+      const policy = currentDefaultPolicy();
       return mergeObjects(policy, parseOptionalJson(form.advanced_policy_json.value));
     }
 
-    document.querySelectorAll(".tab").forEach((button) => {
+    document.querySelectorAll(".rail-item").forEach((button) => {
       button.addEventListener("click", () => selectTab(button.dataset.tab));
+    });
+
+    document.getElementById("nav-toggle").addEventListener("click", () => {
+      setNavCollapsed(!document.querySelector(".app").classList.contains("nav-collapsed"));
     });
 
     document.querySelectorAll(".subtab").forEach((button) => {
@@ -1425,8 +1667,8 @@
         form.integration_id.value = prefill.dataset.integration;
         form.display_name.value = prefill.dataset.name || prefill.dataset.selector;
         form.resource_selector.value = prefill.dataset.selector;
-        form.policy_id.value = "";
-        form.malicious_action.value = "detect_only";
+        form.policy_id.value = "default-policy";
+        syncDefaultPolicySummary();
         selectTab("assets");
         setStatus("scope-form-status", `Ready to protect ${prefill.dataset.selector}.`);
         form.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1526,7 +1768,8 @@
         form.enabled.checked = true;
         form.scope_type.value = "path";
         form.mode.value = "full_scan";
-        form.malicious_action.value = "detect_only";
+        form.policy_id.value = "default-policy";
+        syncDefaultPolicySummary();
         setStatus("scope-form-status", "Protected scope created.");
         await refreshAll();
         if (state.activeAssetsTab === "protected") {
@@ -1563,6 +1806,9 @@
     });
 
     initTheme();
+    initNav();
+    document.getElementById("default-policy-form").addEventListener("input", syncDefaultPolicySummary);
+    syncDefaultPolicySummary();
     refreshAll().catch((error) => {
       document.getElementById("connectors-body").innerHTML = `<tr><td colspan="9"><div class="empty">Failed to load console data: ${escapeHtml(error.message)}</div></td></tr>`;
     });

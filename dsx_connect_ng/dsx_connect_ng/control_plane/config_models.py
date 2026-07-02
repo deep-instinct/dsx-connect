@@ -75,6 +75,7 @@ class QuarantineTargetConfig(BaseModel):
 class MaliciousVerdictPolicyConfig(BaseModel):
     action: PolicyRemediationAction = "detect_only"
     quarantine_target: QuarantineTargetConfig | None = None
+    tag_on_detect: bool = True
     tag_on_quarantine: bool = True
 
 
@@ -85,6 +86,8 @@ class PolicyRuntimeConfig(BaseModel):
     malicious_verdict: MaliciousVerdictPolicyConfig | None = None
     non_compliant_treatment: PolicyFallbackTreatment | None = None
     not_scanned_treatment: PolicyFallbackTreatment | None = None
+    outcome_triggers: dict[str, Any] | None = None
+    non_compliance: dict[str, Any] | None = None
     remediation_plan_by_verdict: dict[PolicyVerdict, dict[str, Any]] | None = None
     result_delivery_policy: StageResultDeliveryPolicy | None = None
     delivery: PolicyDeliveryTargetsConfig | None = None
@@ -139,6 +142,8 @@ def resolve_policy_runtime_config(
         malicious_verdict=_resolve("malicious_verdict"),
         non_compliant_treatment=_resolve("non_compliant_treatment"),
         not_scanned_treatment=_resolve("not_scanned_treatment"),
+        outcome_triggers=_resolve("outcome_triggers"),
+        non_compliance=_resolve("non_compliance"),
         remediation_plan_by_verdict=_resolve("remediation_plan_by_verdict"),
         result_delivery_policy=_resolve("result_delivery_policy"),
         delivery=_resolve("delivery"),

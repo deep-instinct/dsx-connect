@@ -27,6 +27,10 @@ def test_operator_console_page_renders() -> None:
     assert "Add Repository Connector" in response.text
     assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
     assert "Instances</th>" in response.text
+    assert 'class="rail-item" type="button" data-tab="assets"' in response.text
+    assert "Default Policy" in response.text
+    assert "Detect only, tag if possible" in response.text
+    assert "Quarantine, move and tag" in response.text
     assert '<option value="operations">Operations</option>' in response.text
     assert '<option value="security">Security Console</option>' in response.text
 
@@ -618,6 +622,8 @@ def test_ui_policies_lists_scope_and_integration_assignments() -> None:
                 "policy_id": "policy-quarantine",
                 "malicious_verdict": {"action": "quarantine", "tag_on_quarantine": True},
                 "auto_dianna_on_verdicts": ["malicious"],
+                "outcome_triggers": {"malicious": True, "not_scanned": True, "non_compliant": True},
+                "non_compliance": {"blocked_file_types": ["windows_executable"]},
             },
         )
     )
@@ -643,6 +649,8 @@ def test_ui_policies_lists_scope_and_integration_assignments() -> None:
     assert policies["policy-quarantine"]["assignments"][0]["source"] == "scope"
     assert policies["policy-quarantine"]["outcome_rules"]["malicious_action"] == "quarantine"
     assert policies["policy-quarantine"]["outcome_rules"]["auto_dianna_on_verdicts"] == ["malicious"]
+    assert policies["policy-quarantine"]["outcome_rules"]["outcome_triggers"]["not_scanned"] is True
+    assert policies["policy-quarantine"]["outcome_rules"]["non_compliance"]["blocked_file_types"] == ["windows_executable"]
     assert policies["policy-default-gcs"]["assigned_assets"] == 1
     assert policies["policy-default-gcs"]["assignments"][0]["scope_id"] == "scope-b"
     assert policies["policy-default-gcs"]["assignments"][0]["source"] == "integration"

@@ -966,6 +966,8 @@ def _policy_outcome_rules(definition: dict[str, Any]) -> dict[str, Any]:
     malicious = definition.get("malicious_verdict") or {}
     return {
         "malicious_action": malicious.get("action"),
+        "outcome_triggers": definition.get("outcome_triggers") or {},
+        "non_compliance": definition.get("non_compliance") or {},
         "auto_dianna_on_verdicts": definition.get("auto_dianna_on_verdicts") or [],
         "non_compliant_treatment": definition.get("non_compliant_treatment"),
         "not_scanned_treatment": definition.get("not_scanned_treatment"),

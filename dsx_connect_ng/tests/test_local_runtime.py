@@ -5,6 +5,7 @@ import pytest
 from dsx_connect_ng.local.dsx_connect_ng_local import (
     _default_env_template,
     _docker_logs,
+    _ensure_dsxa_container,
     _ensure_postgres_container,
     _ensure_rabbitmq_container,
     _read_env_file,
@@ -29,6 +30,8 @@ def test_default_env_template_mentions_rabbitmq_mode() -> None:
     assert "DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ACK_MODE=scanned" in content
     assert "DSX_CONNECT_NG_LOCAL__SCAN_BATCH_TRUST_ITEMS=true" in content
     assert "DSX_CONNECT_NG_LOCAL__SCAN_ONLY_RUNTIME_LEASES=false" in content
+    assert "DSX_CONNECT_NG_LOCAL__DSXA_IMAGE=" in content
+    assert "APPLIANCE_URL=<your-appliance.deepinstinctweb.com>" in content
     assert "DSX_CONNECT_NG_LOCAL__POLICY_PREFETCH_COUNT=1" in content
     assert "DSX_CONNECT_NG_LOCAL__RESULT_SINK_PREFETCH_COUNT=1" in content
     assert "DSX_CONNECT_NG_RESULT_SINK__BACKEND=stdout" in content
@@ -81,6 +84,30 @@ def test_runtime_env_overrides_use_short_postgres_relay_poll_by_default() -> Non
     overrides = _runtime_env_overrides(Ctx())
 
     assert overrides["DSX_CONNECT_NG_RELAY__POLL_INTERVAL_SECONDS"] == "0.25"
+
+
+def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
+    class Ctx:
+        obj = {
+            "with_postgres_docker": False,
+            "with_rabbit_docker": False,
+            "with_dsxa_docker": True,
+            "dsxa_host_port": 15000,
+            "dsxa_auth_token": "rest-token",
+            "scan_worker_prefetch_count": 10,
+            "scan_worker_count": 1,
+            "policy_worker_prefetch_count": 1,
+            "result_sink_worker_prefetch_count": 1,
+            "relay_max_active_scan_items": None,
+            "relay_batch_size": None,
+            "relay_poll_interval_seconds": None,
+        }
+
+    overrides = _runtime_env_overrides(Ctx())
+
+    assert overrides["DSX_CONNECT_NG_SCANNER__MODE"] == "dsxa"
+    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == "http://127.0.0.1:15000"
+    assert overrides["DSX_CONNECT_NG_SCANNER__AUTH_TOKEN"] == "rest-token"
 
 
 def test_service_specs_include_api_relay_scan_policy_remediation_delivery_and_dianna(tmp_path: Path) -> None:
@@ -278,6 +305,57 @@ def test_ensure_postgres_container_does_not_use_rm(monkeypatch: pytest.MonkeyPat
 
     run_call = next(call for call in calls if call and call[0] == "run")
     assert "--rm" not in run_call
+
+
+def test_ensure_dsxa_container_uses_configured_image_port_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+
+    def fake_docker_run(args: list[str]):
+        calls.append(args)
+
+        class Result:
+            returncode = 0
+            stdout = "container-id"
+            stderr = ""
+
+        if args[:2] == ["inspect", "-f"]:
+            Result.returncode = 1
+            Result.stdout = ""
+            Result.stderr = "missing"
+        return Result()
+
+    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_run", fake_docker_run)
+
+    _ensure_dsxa_container(
+        "dsxa",
+        image="repo/dsxa:test",
+        host_port=15000,
+        container_port=5000,
+        env_values={
+            "APPLIANCE_URL": "tenant.example",
+            "TOKEN": "scanner-token",
+            "SCANNER_ID": "scanner-id",
+            "FLAVOR": "rest,config",
+            "NO_SSL": "true",
+            "AUTH_TOKEN": "rest-token",
+        },
+    )
+
+    run_call = next(call for call in calls if call and call[0] == "run")
+    assert "--rm" not in run_call
+    assert "repo/dsxa:test" == run_call[-1]
+    assert ["-p", "15000:5000"] == run_call[run_call.index("-p") : run_call.index("-p") + 2]
+    assert "APPLIANCE_URL=tenant.example" in run_call
+    assert "TOKEN=scanner-token" in run_call
+    assert "SCANNER_ID=scanner-id" in run_call
+    assert "AUTH_TOKEN=rest-token" in run_call
+
+
+def test_ensure_dsxa_container_requires_image() -> None:
+    with pytest.raises(RuntimeError) as excinfo:
+        _ensure_dsxa_container("dsxa", image="", host_port=15000, container_port=5000, env_values={})
+
+    assert "dsxa_image_required" in str(excinfo.value)
 
 
 def test_wait_for_rabbitmq_ready_reports_container_state_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:

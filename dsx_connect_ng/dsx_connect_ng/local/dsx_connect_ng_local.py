@@ -91,6 +91,14 @@ DSX_CONNECT_NG_LOCAL__SCAN_ONLY_COMPLETION_BATCH_SIZE=1
 DSX_CONNECT_NG_LOCAL__SCAN_ONLY_COMPLETION_FLUSH_INTERVAL_SECONDS=1.0
 DSX_CONNECT_NG_LOCAL__SCAN_ONLY_RUNTIME_LEASES=false
 DSX_CONNECT_NG_LOCAL__SCANNER_CLIENT_SCOPE=shared
+# Optional when using --with-dsxa-docker.
+# DSX_CONNECT_NG_LOCAL__DSXA_IMAGE=dsxconnect/dpa-rocky9:4.2.0.2176
+# DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN=
+# APPLIANCE_URL=<your-appliance.deepinstinctweb.com>
+# TOKEN=<scanner-registration-token>
+# SCANNER_ID=<scanner-id>
+# FLAVOR=rest,config
+# NO_SSL=true
 DSX_CONNECT_NG_LOCAL__SCAN_WORKER_SERVICE_IO_THREADED=false
 DSX_CONNECT_NG_LOCAL__SCAN_BATCH_WINDOW_SIZE=100
 DSX_CONNECT_NG_LOCAL__SCAN_BATCH_WINDOW_WAIT_SECONDS=0.5
@@ -368,6 +376,47 @@ def _stop_postgres_container(container_name: str) -> None:
     _docker_run(["stop", container_name])
 
 
+def _ensure_dsxa_container(
+    container_name: str,
+    *,
+    image: str,
+    host_port: int,
+    container_port: int,
+    env_values: dict[str, str],
+) -> tuple[bool, str]:
+    image = image.strip()
+    if not image:
+        raise RuntimeError("dsxa_image_required:set --dsxa-image or DSX_CONNECT_NG_LOCAL__DSXA_IMAGE")
+    state = _rabbitmq_container_state(container_name)
+    if state == "running":
+        return False, f"dsxa container already running: {container_name}"
+    if state in {"created", "exited"}:
+        result = _docker_run(["start", container_name])
+        if result.returncode != 0:
+            raise RuntimeError(f"docker_start_failed:{result.stderr.strip() or result.stdout.strip()}")
+        return True, f"dsxa container started: {container_name}"
+    args = [
+        "run",
+        "--name",
+        container_name,
+        "-p",
+        f"{host_port}:{container_port}",
+    ]
+    for key in ("APPLIANCE_URL", "TOKEN", "SCANNER_ID", "FLAVOR", "NO_SSL", "AUTH_TOKEN"):
+        value = env_values.get(key)
+        if value:
+            args.extend(["-e", f"{key}={value}"])
+    args.extend(["-d", image])
+    result = _docker_run(args)
+    if result.returncode != 0:
+        raise RuntimeError(f"docker_run_failed:{result.stderr.strip() or result.stdout.strip()}")
+    return True, f"dsxa container created: {container_name}"
+
+
+def _stop_dsxa_container(container_name: str) -> None:
+    _docker_run(["stop", container_name])
+
+
 def _wait_for_tcp(host: str, port: int, *, timeout_seconds: float = 30.0) -> None:
     deadline = time.time() + timeout_seconds
     last_error: Exception | None = None
@@ -514,6 +563,12 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
         overrides["DSX_CONNECT_NG__JOB_BUS_BACKEND"] = "rabbitmq"
         overrides["DSX_CONNECT_NG_RABBITMQ__URL"] = "amqp://dsx:dsx@127.0.0.1:5672/%2F"
         overrides["DSX_CONNECT_NG_RABBITMQ__PUBLISHER_CONFIRMS"] = "false"
+    if ctx.obj.get("with_dsxa_docker"):
+        overrides["DSX_CONNECT_NG_SCANNER__MODE"] = "dsxa"
+        overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] = f"http://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
+        auth_token = ctx.obj.get("dsxa_auth_token")
+        if auth_token:
+            overrides["DSX_CONNECT_NG_SCANNER__AUTH_TOKEN"] = str(auth_token)
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_PREFETCH_COUNT"] = str(ctx.obj.get("scan_worker_prefetch_count", 1000))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_WORKER_COUNT"] = str(ctx.obj.get("scan_worker_count", 1))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_ONLY_COMPLETION_BATCH_SIZE"] = str(ctx.obj.get("scan_only_completion_batch_size", 1))
@@ -542,11 +597,22 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
     return overrides
 
 
+def _dsxa_docker_env(ctx: typer.Context, env_path: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(_read_env_file(env_path))
+    dsxa_env_file = str(ctx.obj.get("dsxa_env_file") or "").strip()
+    if dsxa_env_file:
+        env.update(_read_env_file(Path(dsxa_env_file).expanduser()))
+    if ctx.obj.get("dsxa_auth_token"):
+        env["AUTH_TOKEN"] = str(ctx.obj["dsxa_auth_token"])
+    return env
+
+
 def _prepare_runtime(
     ctx: typer.Context,
     *,
     require_env: bool = True,
-) -> tuple[dict[str, Path], list[ServiceSpec], bool, bool, str, str]:
+) -> tuple[dict[str, Path], list[ServiceSpec], bool, bool, bool, str, str, str]:
     state_dir = _ctx_state_dir(ctx)
     paths = _ensure_dirs(state_dir)
     if require_env and not paths["env"].exists():
@@ -554,8 +620,10 @@ def _prepare_runtime(
     specs = _service_specs(state_dir, extra_env=_runtime_env_overrides(ctx))
     rabbit_container_name = str(ctx.obj["rabbit_container_name"])
     postgres_container_name = str(ctx.obj["postgres_container_name"])
+    dsxa_container_name = str(ctx.obj["dsxa_container_name"])
     rabbit_started_by_launcher = False
     postgres_started_by_launcher = False
+    dsxa_started_by_launcher = False
     if ctx.obj.get("with_postgres_docker"):
         postgres_started_by_launcher, message = _ensure_postgres_container(postgres_container_name)
         print(message)
@@ -570,13 +638,26 @@ def _prepare_runtime(
         _wait_for_rabbitmq_auth(rabbit_container_name)
         _wait_for_rabbitmq_amqp("amqp://dsx:dsx@127.0.0.1:5672/%2F")
         print("rabbitmq ready on 127.0.0.1:5672")
+    if ctx.obj.get("with_dsxa_docker"):
+        dsxa_started_by_launcher, message = _ensure_dsxa_container(
+            dsxa_container_name,
+            image=str(ctx.obj.get("dsxa_image") or ""),
+            host_port=int(ctx.obj.get("dsxa_host_port", 15000)),
+            container_port=int(ctx.obj.get("dsxa_container_port", 5000)),
+            env_values=_dsxa_docker_env(ctx, paths["env"]),
+        )
+        print(message)
+        _wait_for_tcp("127.0.0.1", int(ctx.obj.get("dsxa_host_port", 15000)))
+        print(f"dsxa ready on http://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}")
     return (
         paths,
         specs,
         rabbit_started_by_launcher,
         postgres_started_by_launcher,
+        dsxa_started_by_launcher,
         rabbit_container_name,
         postgres_container_name,
+        dsxa_container_name,
     )
 
 
@@ -585,8 +666,10 @@ def _run_services(
     *,
     rabbit_started_by_launcher: bool,
     postgres_started_by_launcher: bool,
+    dsxa_started_by_launcher: bool,
     rabbit_container_name: str,
     postgres_container_name: str,
+    dsxa_container_name: str,
     fail_fast: bool,
     stream_logs: bool,
 ) -> int:
@@ -687,6 +770,8 @@ def _run_services(
             _stop_rabbitmq_container(rabbit_container_name)
         if postgres_started_by_launcher:
             _stop_postgres_container(postgres_container_name)
+        if dsxa_started_by_launcher:
+            _stop_dsxa_container(dsxa_container_name)
     return exit_code
 
 
@@ -698,6 +783,13 @@ def main(
     rabbit_container_name: str = typer.Option("dsx-ng-rabbit", "--rabbit-container-name", help="RabbitMQ Docker container name"),
     with_postgres_docker: bool = typer.Option(False, "--with-postgres-docker", help="start local Postgres in Docker if needed"),
     postgres_container_name: str = typer.Option("dsx-ng-postgres", "--postgres-container-name", help="Postgres Docker container name"),
+    with_dsxa_docker: bool = typer.Option(False, "--with-dsxa-docker", help="start local DSXA scanner in Docker if needed and configure NG scanner mode"),
+    dsxa_container_name: str = typer.Option("dsx-ng-dsxa", "--dsxa-container-name", help="DSXA Docker container name"),
+    dsxa_image: str = typer.Option("", "--dsxa-image", envvar="DSX_CONNECT_NG_LOCAL__DSXA_IMAGE", help="DSXA Docker image to run"),
+    dsxa_host_port: int = typer.Option(15000, "--dsxa-host-port", min=1, help="host port for DSXA scanner"),
+    dsxa_container_port: int = typer.Option(5000, "--dsxa-container-port", min=1, help="container port exposed by the DSXA scanner image"),
+    dsxa_env_file: str = typer.Option("", "--dsxa-env-file", help="optional env file containing APPLIANCE_URL, TOKEN, SCANNER_ID, FLAVOR, NO_SSL, AUTH_TOKEN"),
+    dsxa_auth_token: str = typer.Option("", "--dsxa-auth-token", envvar="DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN", help="optional DSXA REST auth token; also passed to NG scanner config"),
     scan_worker_prefetch_count: int = typer.Option(1000, "--scan-worker-prefetch-count", min=1, help="number of in-flight scan messages the local scan worker may process concurrently"),
     scan_worker_count: int = typer.Option(1, "--scan-worker-count", min=1, help="number of local scan worker processes to start"),
     scan_only_completion_batch_size: int = typer.Option(1, "--scan-only-completion-batch-size", min=1, help="number of scan-only item completions each worker buffers before bulk persistence"),
@@ -727,6 +819,13 @@ def main(
         "rabbit_container_name": rabbit_container_name,
         "with_postgres_docker": with_postgres_docker,
         "postgres_container_name": postgres_container_name,
+        "with_dsxa_docker": with_dsxa_docker,
+        "dsxa_container_name": dsxa_container_name,
+        "dsxa_image": dsxa_image,
+        "dsxa_host_port": dsxa_host_port,
+        "dsxa_container_port": dsxa_container_port,
+        "dsxa_env_file": dsxa_env_file,
+        "dsxa_auth_token": dsxa_auth_token,
         "scan_worker_prefetch_count": scan_worker_prefetch_count,
         "scan_worker_count": scan_worker_count,
         "scan_only_completion_batch_size": scan_only_completion_batch_size,
@@ -777,6 +876,9 @@ def cmd_status(ctx: typer.Context) -> None:
     if ctx.obj.get("with_postgres_docker"):
         name = str(ctx.obj["postgres_container_name"])
         print(f"postgres docker: {name} state={_rabbitmq_container_state(name) or 'missing'}")
+    if ctx.obj.get("with_dsxa_docker"):
+        name = str(ctx.obj["dsxa_container_name"])
+        print(f"dsxa docker: {name} state={_rabbitmq_container_state(name) or 'missing'}")
     if overrides:
         print(f"runtime env overrides: {overrides}")
     for spec in _service_specs(state_dir, extra_env=overrides):
@@ -785,13 +887,24 @@ def cmd_status(ctx: typer.Context) -> None:
 
 @app.command("foreground")
 def cmd_foreground(ctx: typer.Context) -> None:
-    _paths, specs, rabbit_started_by_launcher, postgres_started_by_launcher, rabbit_container_name, postgres_container_name = _prepare_runtime(ctx)
+    (
+        _paths,
+        specs,
+        rabbit_started_by_launcher,
+        postgres_started_by_launcher,
+        dsxa_started_by_launcher,
+        rabbit_container_name,
+        postgres_container_name,
+        dsxa_container_name,
+    ) = _prepare_runtime(ctx)
     exit_code = _run_services(
         specs,
         rabbit_started_by_launcher=rabbit_started_by_launcher,
         postgres_started_by_launcher=postgres_started_by_launcher,
+        dsxa_started_by_launcher=dsxa_started_by_launcher,
         rabbit_container_name=rabbit_container_name,
         postgres_container_name=postgres_container_name,
+        dsxa_container_name=dsxa_container_name,
         fail_fast=True,
         stream_logs=bool(ctx.obj.get("stream_logs", True)),
     )
@@ -809,14 +922,25 @@ def cmd_debug(
         help="service(s) to run: api, relay, scan-worker, policy-worker, remediation-worker, result-sink-worker, dianna-worker (legacy alias: delivery-worker)",
     ),
 ) -> None:
-    _paths, specs, rabbit_started_by_launcher, postgres_started_by_launcher, rabbit_container_name, postgres_container_name = _prepare_runtime(ctx)
+    (
+        _paths,
+        specs,
+        rabbit_started_by_launcher,
+        postgres_started_by_launcher,
+        dsxa_started_by_launcher,
+        rabbit_container_name,
+        postgres_container_name,
+        dsxa_container_name,
+    ) = _prepare_runtime(ctx)
     selected = _select_service_specs(specs, service)
     exit_code = _run_services(
         selected,
         rabbit_started_by_launcher=rabbit_started_by_launcher,
         postgres_started_by_launcher=postgres_started_by_launcher,
+        dsxa_started_by_launcher=dsxa_started_by_launcher,
         rabbit_container_name=rabbit_container_name,
         postgres_container_name=postgres_container_name,
+        dsxa_container_name=dsxa_container_name,
         fail_fast=False,
         stream_logs=bool(ctx.obj.get("stream_logs", True)),
     )

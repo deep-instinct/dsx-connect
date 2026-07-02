@@ -251,8 +251,11 @@ def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatc
     result = asyncio.run(connector.heartbeat_ng_control_plane())
 
     assert result.status.value == "success"
+    assert "/api/v1/control-plane/connectors/" in calls[0][1]
+    assert "/dsx-connect/api/v1/" not in calls[0][1]
     assert calls[0][1].endswith("/api/v1/control-plane/connectors/gcs-pod-1/heartbeat")
     assert calls[1][1].endswith("/api/v1/control-plane/connectors/register")
+    assert "/dsx-connect/api/v1/" not in calls[1][1]
 
 
 def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

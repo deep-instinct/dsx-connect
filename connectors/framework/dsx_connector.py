@@ -46,6 +46,7 @@ _SCAN_ENQ_COUNTER: contextvars.ContextVar[int] = contextvars.ContextVar("scan_en
 # <end> API key config and validation
 
 connector_api = None
+NG_API_PREFIX_V1 = "api/v1"
 
 
 @dataclass(frozen=True)
@@ -758,7 +759,7 @@ class DSXConnector:
                 message="NG registration disabled",
                 description="register_with_ng_control_plane=false",
             )
-        url = service_url(self.dsx_connect_ng_url, API_PREFIX_V1, "control-plane", "connectors", "register")
+        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "control-plane", "connectors", "register")
         headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
         try:
             async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
@@ -790,7 +791,7 @@ class DSXConnector:
         instance_id = self.connector_instance_id
         url = service_url(
             self.dsx_connect_ng_url,
-            API_PREFIX_V1,
+            NG_API_PREFIX_V1,
             "control-plane",
             "connectors",
             instance_id,

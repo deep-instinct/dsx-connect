@@ -8,6 +8,9 @@ import psycopg
 from psycopg.rows import dict_row
 
 from dsx_connect_ng.control_plane.models import (
+    ConnectorInstanceHeartbeat,
+    ConnectorInstanceRecord,
+    ConnectorInstanceRegister,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -155,6 +158,143 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
             row = cur.fetchone()
             conn.commit()
             return IntegrationRecord.model_validate(row) if row else None
+
+    def list_connector_instances(self, integration_id: str | None = None) -> list[ConnectorInstanceRecord]:
+        query = """
+            SELECT connector_instance_id, integration_id, platform, platform_key,
+                   connector_name, connector_version, base_url,
+                   capabilities_json AS capabilities, health, labels_json AS labels,
+                   lease_seconds, first_seen_at, last_seen_at, expires_at,
+                   created_at, updated_at
+            FROM cp_connector_instances
+        """
+        params: tuple = ()
+        if integration_id:
+            query += " WHERE integration_id = %s"
+            params = (integration_id,)
+        query += " ORDER BY first_seen_at"
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(query, params)
+            return [ConnectorInstanceRecord.model_validate(row) for row in cur.fetchall()]
+
+    def get_connector_instance(self, connector_instance_id: str) -> ConnectorInstanceRecord | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT connector_instance_id, integration_id, platform, platform_key,
+                       connector_name, connector_version, base_url,
+                       capabilities_json AS capabilities, health, labels_json AS labels,
+                       lease_seconds, first_seen_at, last_seen_at, expires_at,
+                       created_at, updated_at
+                FROM cp_connector_instances
+                WHERE connector_instance_id = %s
+                """,
+                (connector_instance_id,),
+            )
+            row = cur.fetchone()
+            return ConnectorInstanceRecord.model_validate(row) if row else None
+
+    def upsert_connector_instance(
+        self,
+        payload: ConnectorInstanceRegister,
+        *,
+        integration_id: str,
+    ) -> ConnectorInstanceRecord:
+        connector_instance_id = payload.connector_instance_id or f"conn_{uuid.uuid4().hex}"
+        data = payload.model_dump(exclude={"connector_instance_id", "display_name", "integration_id"})
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cp_connector_instances (
+                    connector_instance_id, integration_id, platform, platform_key,
+                    connector_name, connector_version, base_url,
+                    capabilities_json, health, labels_json, lease_seconds,
+                    first_seen_at, last_seen_at, expires_at
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb, %s,
+                    NOW(), NOW(), NOW() + (%s * INTERVAL '1 second')
+                )
+                ON CONFLICT (connector_instance_id) DO UPDATE
+                SET integration_id = EXCLUDED.integration_id,
+                    platform = EXCLUDED.platform,
+                    platform_key = EXCLUDED.platform_key,
+                    connector_name = EXCLUDED.connector_name,
+                    connector_version = EXCLUDED.connector_version,
+                    base_url = EXCLUDED.base_url,
+                    capabilities_json = EXCLUDED.capabilities_json,
+                    health = EXCLUDED.health,
+                    labels_json = EXCLUDED.labels_json,
+                    lease_seconds = EXCLUDED.lease_seconds,
+                    last_seen_at = NOW(),
+                    expires_at = NOW() + (EXCLUDED.lease_seconds * INTERVAL '1 second'),
+                    updated_at = NOW()
+                RETURNING connector_instance_id, integration_id, platform, platform_key,
+                          connector_name, connector_version, base_url,
+                          capabilities_json AS capabilities, health, labels_json AS labels,
+                          lease_seconds, first_seen_at, last_seen_at, expires_at,
+                          created_at, updated_at
+                """,
+                (
+                    connector_instance_id,
+                    integration_id,
+                    data["platform"],
+                    data["platform_key"],
+                    data["connector_name"],
+                    data["connector_version"],
+                    data["base_url"],
+                    psycopg.types.json.Json(data["capabilities"]),
+                    data["health"],
+                    psycopg.types.json.Json(data["labels"]),
+                    data["lease_seconds"],
+                    data["lease_seconds"],
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return ConnectorInstanceRecord.model_validate(row)
+
+    def update_connector_instance_heartbeat(
+        self,
+        connector_instance_id: str,
+        payload: ConnectorInstanceHeartbeat,
+    ) -> ConnectorInstanceRecord | None:
+        current = self.get_connector_instance(connector_instance_id)
+        if current is None:
+            return None
+        lease_seconds = payload.lease_seconds or current.lease_seconds
+        health = payload.health or current.health
+        capabilities = payload.capabilities if payload.capabilities is not None else current.capabilities
+        labels = payload.labels if payload.labels is not None else current.labels
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE cp_connector_instances
+                SET health = %s,
+                    capabilities_json = %s::jsonb,
+                    labels_json = %s::jsonb,
+                    lease_seconds = %s,
+                    last_seen_at = NOW(),
+                    expires_at = NOW() + (%s * INTERVAL '1 second'),
+                    updated_at = NOW()
+                WHERE connector_instance_id = %s
+                RETURNING connector_instance_id, integration_id, platform, platform_key,
+                          connector_name, connector_version, base_url,
+                          capabilities_json AS capabilities, health, labels_json AS labels,
+                          lease_seconds, first_seen_at, last_seen_at, expires_at,
+                          created_at, updated_at
+                """,
+                (
+                    health,
+                    psycopg.types.json.Json(capabilities),
+                    psycopg.types.json.Json(labels),
+                    lease_seconds,
+                    lease_seconds,
+                    connector_instance_id,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return ConnectorInstanceRecord.model_validate(row) if row else None
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:
         query = """

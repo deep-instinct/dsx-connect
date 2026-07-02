@@ -32,6 +32,38 @@ class BaseConnectorConfig(BaseSettings):
         default=True,
         description="Whether this connector should self-register with a 1g dsx-connect core.",
     )
+    register_with_ng_control_plane: bool = Field(
+        default=False,
+        description="Whether this connector should self-register with the dsx-connect-ng control plane.",
+    )
+    dsx_connect_ng_url: Optional[HttpUrl] = Field(
+        default=None,
+        description="Optional dsx-connect-ng base URL. Defaults to dsx_connect_url when NG registration is enabled.",
+    )
+    ng_integration_id: str = Field(
+        default="",
+        description="Optional existing dsx-connect-ng integration_id to link during connector registration.",
+    )
+    instance_id: str = Field(
+        default="",
+        description="Optional runtime instance identifier for dsx-connect-ng registration.",
+    )
+    ng_platform: str = Field(
+        default="",
+        description="Optional dsx-connect-ng platform identifier override.",
+    )
+    ng_platform_key: str = Field(
+        default="",
+        description="Optional dsx-connect-ng stable platform key override.",
+    )
+    ng_connector_labels: dict = Field(
+        default_factory=dict,
+        description="Optional labels included with dsx-connect-ng connector instance registration.",
+    )
+    ng_lease_seconds: int = Field(
+        default=120,
+        description="Connector instance lease duration advertised to dsx-connect-ng.",
+    )
     item_action: ItemActionEnum = ItemActionEnum.NOTHING
     item_action_move_metainfo: str = "dsxconnect-quarantine"
     asset: str = ""

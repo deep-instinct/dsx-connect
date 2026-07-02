@@ -1,5 +1,7 @@
 import asyncio
 
+import pytest
+
 from connectors.framework.base_config import BaseConnectorConfig
 from connectors.framework.dsx_connector import (
     DSXConnector,
@@ -16,6 +18,13 @@ class _JsonRequest:
 
     async def json(self):
         return self._payload
+
+
+@pytest.fixture(autouse=True)
+def connector_data_dir(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setenv("DSXCONNECTOR_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("HOSTNAME", raising=False)
+    monkeypatch.delenv("POD_UID", raising=False)
 
 
 def test_put_config_applies_requested_action_to_legacy_item_action_fields() -> None:
@@ -154,3 +163,128 @@ def test_unregister_connector_returns_success_when_registration_disabled() -> No
 
     assert result.status.value == "success"
     assert result.message == "Unregistration disabled"
+
+
+def test_ng_registration_payload_uses_runtime_identity_and_capabilities() -> None:
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            instance_id="gcs-pod-1",
+            ng_platform_key="project-a",
+            ng_connector_labels={"namespace": "dsx-connect"},
+        )
+    )
+
+    async def read_file(_request):
+        return None
+
+    async def discover_assets():
+        return None
+
+    connector.read_file(read_file)
+    connector.asset_discovery(discover_assets)
+
+    payload = connector._ng_registration_payload()
+
+    assert payload["connector_instance_id"] == "gcs-pod-1"
+    assert payload["platform"] == "gcs"
+    assert payload["platform_key"] == "project-a"
+    assert payload["connector_name"] == "google-cloud-storage-connector"
+    assert payload["base_url"] == "http://gcs/google-cloud-storage-connector"
+    assert payload["capabilities"]["discover"] is True
+    assert payload["capabilities"]["read"] is True
+    assert payload["capabilities"]["write"] is False
+    assert payload["labels"] == {"namespace": "dsx-connect"}
+
+
+def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str, dict]] = []
+
+    class _FakeResponse:
+        def __init__(self, status_code: int, payload: dict | None = None):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = str(self._payload)
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise AssertionError(f"unexpected status {self.status_code}")
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append(("POST", url, json or {}))
+            if url.endswith("/heartbeat"):
+                return _FakeResponse(404)
+            return _FakeResponse(200, {"connector_instance_id": "gcs-pod-1"})
+
+    from connectors.framework import dsx_connector as connector_module
+
+    monkeypatch.setattr(connector_module.httpx, "AsyncClient", _FakeAsyncClient)
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            instance_id="gcs-pod-1",
+            ng_platform_key="project-a",
+        )
+    )
+
+    result = asyncio.run(connector.heartbeat_ng_control_plane())
+
+    assert result.status.value == "success"
+    assert calls[0][1].endswith("/api/v1/control-plane/connectors/gcs-pod-1/heartbeat")
+    assert calls[1][1].endswith("/api/v1/control-plane/connectors/register")
+
+
+def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DSXCONNECTOR_DATA_DIR", str(tmp_path))
+
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            instance_id="gcs-pod-1",
+            ng_platform_key="project-a",
+        )
+    )
+
+    assert connector.connector_instance_id == "gcs-pod-1"
+    assert not (tmp_path / "connector_uuid.txt").exists()
+
+
+def test_legacy_registration_still_creates_stable_uuid_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DSXCONNECTOR_DATA_DIR", str(tmp_path))
+
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect:8586",
+            register_with_core=True,
+            register_with_ng_control_plane=False,
+        )
+    )
+
+    assert str(connector.connector_running_model.uuid) == (tmp_path / "connector_uuid.txt").read_text().strip()

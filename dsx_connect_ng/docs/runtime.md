@@ -28,6 +28,14 @@ DSX_CONNECT_NG__JOB_BUS_BACKEND=memory \
 python -m uvicorn dsx_connect_ng.app:app --host 127.0.0.1 --port 8093
 ```
 
+Seed repeatable operator-console demo data in a separate terminal:
+
+```bash
+curl -X POST http://127.0.0.1:8093/api/v1/ui/demo/seed
+```
+
+This creates sample integrations, protected scopes, policies, and scan results for local preview. The endpoint is available only when `DSX_CONNECT_NG__ENVIRONMENT` is `dev`, `local`, or `test`.
+
 ## Local Runtime Manager
 
 ```bash

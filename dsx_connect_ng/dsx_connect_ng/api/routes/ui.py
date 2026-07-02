@@ -7,7 +7,7 @@ from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -16,15 +16,24 @@ from dsx_connect_ng.api.job_service_dependencies import get_job_service
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config, resolve_policy_runtime_config
 from dsx_connect_ng.control_plane.models import (
+    ConnectorInstanceRecord,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
     ProtectedScopeCreate,
     ProtectedScopeRecord,
     ProtectedScopeUpdate,
+    utcnow,
 )
 from dsx_connect_ng.control_plane.service import ControlPlaneService
-from dsx_connect_ng.jobs.models import BatchJobRecord, BatchJobSubmitRequest, JobItemRecord, JobItemSummary, JobRecord
+from dsx_connect_ng.jobs.models import (
+    BatchJobRecord,
+    BatchJobSubmitRequest,
+    JobItemRecord,
+    JobItemSummary,
+    JobRecord,
+    StageUpdateRequest,
+)
 from dsx_connect_ng.jobs.service import JobService
 
 router = APIRouter(prefix="/ui", tags=["ui"])
@@ -43,6 +52,8 @@ class UIIntegrationSummary(BaseModel):
     integration: IntegrationRecord
     scope_count: int = 0
     scopes: list[ProtectedScopeRecord] = Field(default_factory=list)
+    connector_instance_count: int = 0
+    connector_instances: list[ConnectorInstanceRecord] = Field(default_factory=list)
     reader_strategy: str | None = None
     proxy_base_url: str | None = None
     connector_name: str | None = None
@@ -220,6 +231,13 @@ class UIScopePolicyUpdateRequest(BaseModel):
 
 class UIToggleEnabledRequest(BaseModel):
     enabled: bool
+
+
+class UIDemoSeedResponse(BaseModel):
+    integrations: list[IntegrationRecord] = Field(default_factory=list)
+    scopes: list[ProtectedScopeRecord] = Field(default_factory=list)
+    jobs: list[UIJobSummary] = Field(default_factory=list)
+    message: str = "demo_seed_applied"
 
 
 def _failure_reason_from_item(item: JobItemRecord) -> str | None:
@@ -512,18 +530,23 @@ def _summarize_integration(
     integration: IntegrationRecord,
     *,
     scopes: list[ProtectedScopeRecord],
+    connector_instances: list[ConnectorInstanceRecord],
 ) -> UIIntegrationSummary:
     runtime = parse_integration_runtime_config(integration.config)
     reader_strategy = runtime.reader.default_strategy if runtime.reader is not None else runtime.reader_strategy
     proxy = runtime.reader.proxy if runtime.reader is not None else None
-    health = _probe_connector_health(
-        proxy.base_url if proxy is not None else None,
-        proxy.connector_name if proxy is not None else None,
-    )
+    health = _connector_instance_health(connector_instances)
+    if health is None:
+        health = _probe_connector_health(
+            proxy.base_url if proxy is not None else None,
+            proxy.connector_name if proxy is not None else None,
+        )
     return UIIntegrationSummary(
         integration=integration,
         scope_count=len(scopes),
         scopes=scopes,
+        connector_instance_count=len(connector_instances),
+        connector_instances=connector_instances,
         reader_strategy=reader_strategy,
         proxy_base_url=proxy.base_url if proxy is not None else None,
         connector_name=proxy.connector_name if proxy is not None else None,
@@ -531,19 +554,247 @@ def _summarize_integration(
     )
 
 
+def _connector_instance_health(connector_instances: list[ConnectorInstanceRecord]) -> ConnectorHealthStatus | None:
+    if not connector_instances:
+        return None
+    now = utcnow()
+    live_instances = [instance for instance in connector_instances if instance.expires_at > now]
+    if not live_instances:
+        latest = max(connector_instances, key=lambda instance: instance.last_seen_at)
+        return ConnectorHealthStatus(
+            status="stale",
+            endpoint=latest.base_url,
+            checked_at=latest.last_seen_at.isoformat(),
+            details={
+                "connector_instance_id": latest.connector_instance_id,
+                "last_health": latest.health,
+                "expires_at": latest.expires_at.isoformat(),
+            },
+        )
+    priority = {"healthy": 0, "degraded": 1, "unknown": 2, "unhealthy": 3}
+    best = sorted(live_instances, key=lambda instance: priority.get(instance.health, 99))[0]
+    return ConnectorHealthStatus(
+        status=best.health,
+        endpoint=best.base_url,
+        checked_at=best.last_seen_at.isoformat(),
+        details={
+            "connector_instance_id": best.connector_instance_id,
+            "live_instances": len(live_instances),
+            "registered_instances": len(connector_instances),
+        },
+    )
+
+
 def _list_ui_integration_summaries(service: ControlPlaneService) -> list[UIIntegrationSummary]:
     integrations = service.list_integrations()
     scopes = service.list_scopes()
+    connector_instances = service.list_connector_instances()
     scopes_by_integration: dict[str, list[ProtectedScopeRecord]] = {}
     for scope in scopes:
         scopes_by_integration.setdefault(scope.integration_id, []).append(scope)
+    connector_instances_by_integration: dict[str, list[ConnectorInstanceRecord]] = {}
+    for connector_instance in connector_instances:
+        connector_instances_by_integration.setdefault(connector_instance.integration_id, []).append(connector_instance)
     return [
         _summarize_integration(
             integration,
             scopes=scopes_by_integration.get(integration.integration_id, []),
+            connector_instances=connector_instances_by_integration.get(integration.integration_id, []),
         )
         for integration in integrations
     ]
+
+
+def _get_or_create_integration(service: ControlPlaneService, payload: IntegrationCreate) -> IntegrationRecord:
+    for existing in service.list_integrations():
+        if payload.integration_id and existing.integration_id == payload.integration_id:
+            return existing
+        if existing.platform == payload.platform and existing.platform_key == payload.platform_key:
+            return existing
+    return service.create_integration(payload)
+
+
+def _get_or_create_scope(service: ControlPlaneService, payload: ProtectedScopeCreate) -> ProtectedScopeRecord:
+    for existing in service.list_scopes(integration_id=payload.integration_id):
+        if payload.scope_id and existing.scope_id == payload.scope_id:
+            return existing
+        if existing.scope_type == payload.scope_type and existing.resource_selector == payload.resource_selector:
+            return existing
+    return service.create_scope(payload)
+
+
+def _is_demo_seed_allowed() -> bool:
+    return settings.environment.strip().lower() in {"dev", "local", "test"}
+
+
+async def _seed_demo_data(control_plane: ControlPlaneService, job_service: JobService) -> UIDemoSeedResponse:
+    if not _is_demo_seed_allowed():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "demo_seed_disabled",
+                "message": "Demo seed data is only available in dev, local, or test environments.",
+            },
+        )
+
+    gcs = _get_or_create_integration(
+        control_plane,
+        IntegrationCreate(
+            integration_id="demo-gcs",
+            platform="gcs",
+            platform_key="demo-gcp-project",
+            display_name="Demo GCS Connector",
+            capability_discover=True,
+            capability_monitor=True,
+            capability_enumerate=True,
+            capability_read=True,
+            capability_remediate=True,
+            config={
+                "reader": {
+                    "default_strategy": "proxy",
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8630",
+                        "connector_name": "google-cloud-storage-connector",
+                        "auth_mode": "none",
+                    },
+                },
+                "policy": {
+                    "policy_id": "demo-detect-only",
+                    "malicious_verdict": {"action": "detect_only"},
+                },
+                "remediation": {
+                    "supports_move": True,
+                    "supports_tag": True,
+                    "supports_movetag": True,
+                },
+            },
+        ),
+    )
+    fs = _get_or_create_integration(
+        control_plane,
+        IntegrationCreate(
+            integration_id="demo-filesystem",
+            platform="filesystem",
+            platform_key="demo-local",
+            display_name="Demo Filesystem Connector",
+            capability_discover=True,
+            capability_monitor=True,
+            capability_enumerate=True,
+            capability_read=True,
+            capability_remediate=True,
+            config={
+                "reader": {
+                    "default_strategy": "proxy",
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8620",
+                        "connector_name": "filesystem-connector",
+                        "auth_mode": "none",
+                    },
+                },
+                "remediation": {
+                    "supports_move": True,
+                    "supports_delete": True,
+                },
+            },
+        ),
+    )
+
+    gcs_scope = _get_or_create_scope(
+        control_plane,
+        ProtectedScopeCreate(
+            scope_id="demo-scope-gcs-finance",
+            integration_id=gcs.integration_id,
+            scope_type="path",
+            resource_selector="demo-finance-bucket/incoming",
+            display_name="Finance Incoming",
+            mode="full_scan",
+            post_scan_policy={
+                "policy_id": "demo-quarantine-malware",
+                "malicious_verdict": {"action": "quarantine", "tag_on_quarantine": True},
+                "auto_dianna_on_verdicts": ["malicious"],
+            },
+        ),
+    )
+    fs_scope = _get_or_create_scope(
+        control_plane,
+        ProtectedScopeCreate(
+            scope_id="demo-scope-fs-legal",
+            integration_id=fs.integration_id,
+            scope_type="path",
+            resource_selector="/demo/legal-review",
+            display_name="Legal Review Share",
+            mode="full_scan",
+            post_scan_policy={
+                "policy_id": "demo-detect-only",
+                "malicious_verdict": {"action": "detect_only"},
+            },
+        ),
+    )
+
+    gcs_batch = await job_service.submit_batch_job(
+        BatchJobSubmitRequest(
+            job_id="demo-job-gcs-scan",
+            integration_id=gcs.integration_id,
+            scope_id=gcs_scope.scope_id,
+            idempotency_key="demo-seed-gcs-scan",
+            payload={"source": "demo_seed", "scopeSelector": gcs_scope.resource_selector, "enumerationMode": "sample"},
+            items=[
+                {"object_identity": "demo-finance-bucket/incoming/vendor-invoice.pdf", "payload": {"readerStrategy": "proxy"}},
+                {"object_identity": "demo-finance-bucket/incoming/payroll-export.csv", "payload": {"readerStrategy": "proxy"}},
+                {"object_identity": "demo-finance-bucket/incoming/eicar-sample.txt", "payload": {"readerStrategy": "proxy"}},
+            ],
+        )
+    )
+    gcs_items = job_service.list_job_items(job_id=gcs_batch.job.job_id, limit=10)
+    if gcs_items and gcs_items[0].scan_stage.state != "completed":
+        job_service.complete_scan_only(
+            gcs_items[0].job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "demo-clean"}),
+        )
+    if len(gcs_items) > 1 and gcs_items[1].scan_stage.state != "completed":
+        job_service.complete_scan_only(
+            gcs_items[1].job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Suspicious", "scanGuid": "demo-suspicious"}),
+        )
+    if len(gcs_items) > 2 and gcs_items[2].scan_stage.state != "completed":
+        job_service.complete_scan_only(
+            gcs_items[2].job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Malicious", "scanGuid": "demo-malicious"}),
+        )
+    if len(gcs_items) > 2 and gcs_items[2].remediation_stage.state != "completed":
+        job_service.update_remediation_stage(
+            gcs_items[2].job_item_id,
+            StageUpdateRequest(
+                state="completed",
+                result={"action": "quarantine", "outcome": "success", "targetPath": "demo-quarantine"},
+            ),
+        )
+
+    fs_batch = await job_service.submit_batch_job(
+        BatchJobSubmitRequest(
+            job_id="demo-job-fs-cancelled",
+            integration_id=fs.integration_id,
+            scope_id=fs_scope.scope_id,
+            idempotency_key="demo-seed-fs-cancelled",
+            payload={"source": "demo_seed", "scopeSelector": fs_scope.resource_selector, "enumerationMode": "sample"},
+            items=[
+                {"object_identity": "/demo/legal-review/contract-draft.docx", "payload": {"readerStrategy": "proxy"}},
+                {"object_identity": "/demo/legal-review/archive.zip", "payload": {"readerStrategy": "proxy"}},
+            ],
+        )
+    )
+    if fs_batch.job.state != "cancelled":
+        job_service.cancel_job(fs_batch.job.job_id)
+
+    seeded_jobs = [
+        _summarize_job(job_service, job_service.get_job_or_404(gcs_batch.job.job_id)),
+        _summarize_job(job_service, job_service.get_job_or_404(fs_batch.job.job_id)),
+    ]
+    return UIDemoSeedResponse(
+        integrations=[gcs, fs],
+        scopes=[gcs_scope, fs_scope],
+        jobs=seeded_jobs,
+    )
 
 
 def _selector_key(value: str | None) -> str:
@@ -781,6 +1032,14 @@ async def ui_status() -> dict:
     }
 
 
+@router.post("/demo/seed", response_model=UIDemoSeedResponse)
+async def seed_ui_demo_data(
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> UIDemoSeedResponse:
+    return await _seed_demo_data(control_plane, job_service)
+
+
 @router.get("/integrations", response_model=list[UIIntegrationSummary])
 async def list_ui_integrations(
     service: ControlPlaneService = Depends(get_control_plane_service),
@@ -826,18 +1085,8 @@ async def get_ui_overview(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
     job_service: JobService = Depends(get_job_service),
 ) -> UIOverview:
-    integrations = control_plane.list_integrations()
+    summaries = _list_ui_integration_summaries(control_plane)
     scopes = control_plane.list_scopes()
-    scopes_by_integration: dict[str, list[ProtectedScopeRecord]] = {}
-    for scope in scopes:
-        scopes_by_integration.setdefault(scope.integration_id, []).append(scope)
-    summaries = [
-        _summarize_integration(
-            integration,
-            scopes=scopes_by_integration.get(integration.integration_id, []),
-        )
-        for integration in integrations
-    ]
     jobs = job_service.list_jobs(limit=50)
     job_summaries = [_summarize_job(job_service, job) for job in jobs]
     return UIOverview(integrations=summaries, scopes=scopes, jobs=jobs, job_summaries=job_summaries)

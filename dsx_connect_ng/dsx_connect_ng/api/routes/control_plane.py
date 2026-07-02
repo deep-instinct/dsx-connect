@@ -3,6 +3,9 @@ from fastapi import APIRouter, Depends, Query, Request
 from dsx_connect_ng.api.dependencies import get_control_plane_service
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.models import (
+    ConnectorInstanceHeartbeat,
+    ConnectorInstanceRecord,
+    ConnectorInstanceRegister,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -69,6 +72,39 @@ async def update_integration(
     service: ControlPlaneService = Depends(get_control_plane_service),
 ) -> IntegrationRecord:
     return service.update_integration(integration_id, payload)
+
+
+@router.get("/connectors", response_model=list[ConnectorInstanceRecord])
+async def list_connector_instances(
+    integration_id: str | None = Query(default=None),
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> list[ConnectorInstanceRecord]:
+    return service.list_connector_instances(integration_id=integration_id)
+
+
+@router.post("/connectors/register", response_model=ConnectorInstanceRecord)
+async def register_connector_instance(
+    payload: ConnectorInstanceRegister,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> ConnectorInstanceRecord:
+    return service.register_connector_instance(payload)
+
+
+@router.get("/connectors/{connector_instance_id}", response_model=ConnectorInstanceRecord)
+async def get_connector_instance(
+    connector_instance_id: str,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> ConnectorInstanceRecord:
+    return service.get_connector_instance_or_404(connector_instance_id)
+
+
+@router.post("/connectors/{connector_instance_id}/heartbeat", response_model=ConnectorInstanceRecord)
+async def heartbeat_connector_instance(
+    connector_instance_id: str,
+    payload: ConnectorInstanceHeartbeat,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> ConnectorInstanceRecord:
+    return service.heartbeat_connector_instance(connector_instance_id, payload)
 
 
 @router.get("/scopes", response_model=list[ProtectedScopeRecord])

@@ -40,6 +40,9 @@ Phase 2:
 Current scaffold now includes:
 
 - control-plane CRUD for `integrations`
+- connector-instance registration and heartbeat lease tracking
+- opt-in connector framework registration via `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`
+- deployment-native NG instance identity via `DSXCONNECTOR_INSTANCE_ID`
 - control-plane CRUD for `protected_scopes`
 - in-memory control-plane repository/service
 - first SQL migration at `migrations/0001_control_plane.sql`
@@ -189,6 +192,17 @@ The scan, policy, remediation, delivery, and DIANNA workers currently run as que
 - `dsx-connect-ng-local debug --service ...` starts only the selected services and does not fail-fast when one child exits, which is more practical for debugger attach workflows
 - `dsx-connect-ng-local --with-rabbit-docker foreground` will also start a local `rabbitmq:3-management` container if Docker is available and the named container is not already running
 - `dsx-connect-ng-local --with-postgres-docker --with-rabbit-docker foreground` is the intended multi-process stub pipeline mode, because separate API/worker processes need shared PostgreSQL state
+- for UI-only local preview, run the API with memory backends and seed demo data:
+
+```bash
+DSX_CONNECT_NG__CONTROL_PLANE_BACKEND=memory \
+DSX_CONNECT_NG__JOB_BUS_BACKEND=memory \
+python -m uvicorn dsx_connect_ng.app:app --host 127.0.0.1 --port 8093
+
+curl -X POST http://127.0.0.1:8093/api/v1/ui/demo/seed
+```
+
+- `/api/v1/ui/demo/seed` is UI-only and local-preview oriented; it is rejected outside `dev`, `local`, or `test` environments
 
 Scan worker modes:
 

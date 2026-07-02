@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from dsx_connect_ng.app import create_app
 from dsx_connect_ng.config import settings
-from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScopeCreate
+from dsx_connect_ng.control_plane.models import ConnectorInstanceRegister, IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, StageUpdateRequest
 
 
@@ -86,6 +86,46 @@ def test_ui_integrations_summary_includes_scope_counts_and_health(monkeypatch) -
     assert payload[0]["health"]["status"] == "healthy"
     assert payload[0]["proxy_base_url"] == "http://127.0.0.1:8630"
     assert payload[0]["connector_name"] == "google-cloud-storage-connector"
+
+
+def test_ui_integrations_summary_prefers_registered_connector_health() -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    connector = service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            connector_name="google-cloud-storage-connector",
+            connector_version="0.5.55",
+            base_url="http://gcs:80",
+            capabilities={"discover": True, "read": True, "write": True},
+            health="healthy",
+            labels={"namespace": "dsx-connect"},
+        )
+    )
+    service.create_scope(
+        ProtectedScopeCreate(
+            scope_id="scope-a",
+            integration_id=connector.integration_id,
+            scope_type="path",
+            resource_selector="bucket-a/prefix",
+            display_name="Bucket A",
+            mode="full_scan",
+        )
+    )
+
+    client = TestClient(app)
+    response = client.get("/api/v1/ui/integrations")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["connector_instance_count"] == 1
+    assert payload[0]["connector_instances"][0]["connector_instance_id"] == "gcs-pod-1"
+    assert payload[0]["health"]["status"] == "healthy"
+    assert payload[0]["health"]["endpoint"] == "http://gcs:80"
+    assert payload[0]["health"]["details"]["connector_instance_id"] == "gcs-pod-1"
 
 
 def test_ui_assets_connectors_returns_tab_aligned_connector_summary(monkeypatch) -> None:
@@ -750,3 +790,46 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
     assert result["findings"]["malicious"] == 1
     assert result["remediation"]["completed"] == 1
     assert result["cancel"]["immediate_file_level_cancel"] is False
+
+
+def test_ui_demo_seed_creates_repeatable_local_preview_data() -> None:
+    app = create_app()
+    client = TestClient(app)
+
+    first = client.post("/api/v1/ui/demo/seed")
+    second = client.post("/api/v1/ui/demo/seed")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_payload = first.json()
+    second_payload = second.json()
+    assert [row["integration_id"] for row in first_payload["integrations"]] == ["demo-gcs", "demo-filesystem"]
+    assert [row["integration_id"] for row in second_payload["integrations"]] == ["demo-gcs", "demo-filesystem"]
+    assert [row["scope_id"] for row in first_payload["scopes"]] == ["demo-scope-gcs-finance", "demo-scope-fs-legal"]
+    assert [row["job"]["job_id"] for row in first_payload["jobs"]] == ["demo-job-gcs-scan", "demo-job-fs-cancelled"]
+
+    connectors = client.get("/api/v1/ui/assets/connectors").json()["connectors"]
+    assert [row["integration"]["integration_id"] for row in connectors] == ["demo-gcs", "demo-filesystem"]
+
+    policies = client.get("/api/v1/ui/policies").json()["policies"]
+    policy_ids = {policy["policy_id"] for policy in policies}
+    assert {"demo-detect-only", "demo-quarantine-malware"} <= policy_ids
+
+    results = client.get("/api/v1/ui/scan-results?item_limit=10").json()["results"]
+    assert [result["job"]["job_id"] for result in results] == ["demo-job-fs-cancelled", "demo-job-gcs-scan"]
+    gcs_result = next(result for result in results if result["job"]["job_id"] == "demo-job-gcs-scan")
+    assert gcs_result["findings"]["clean"] == 1
+    assert gcs_result["findings"]["suspicious"] == 1
+    assert gcs_result["findings"]["malicious"] == 1
+    assert gcs_result["remediation"]["completed"] == 1
+
+
+def test_ui_demo_seed_rejects_non_dev_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "environment", "prod")
+    app = create_app()
+    client = TestClient(app)
+
+    response = client.post("/api/v1/ui/demo/seed")
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["code"] == "demo_seed_disabled"

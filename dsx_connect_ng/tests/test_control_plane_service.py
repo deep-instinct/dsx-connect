@@ -1,6 +1,8 @@
 from fastapi import HTTPException
 
 from dsx_connect_ng.control_plane.models import (
+    ConnectorInstanceHeartbeat,
+    ConnectorInstanceRegister,
     IntegrationCreate,
     IntegrationUpdate,
     ProtectedScopeCreate,
@@ -39,6 +41,86 @@ def test_create_integration_rejects_duplicate_platform_key() -> None:
         assert exc.detail == "integration_platform_key_conflict"
     else:
         raise AssertionError("expected duplicate integration conflict")
+
+
+def test_register_connector_instance_creates_logical_integration() -> None:
+    service = build_service()
+
+    connector = service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            platform="gcs",
+            platform_key="project-a",
+            display_name="Project A",
+            connector_name="google-cloud-storage-connector",
+            connector_version="0.5.55",
+            base_url="http://gcs:80",
+            capabilities={"discover": True, "read": True, "write": True, "remediate": True},
+            health="healthy",
+            labels={"namespace": "dsx-connect"},
+        )
+    )
+
+    integrations = service.list_integrations()
+    assert len(integrations) == 1
+    assert connector.integration_id == integrations[0].integration_id
+    assert integrations[0].platform == "gcs"
+    assert integrations[0].platform_key == "project-a"
+    assert integrations[0].capability_discover is True
+    assert integrations[0].capability_read is True
+    assert integrations[0].capability_remediate is True
+
+
+def test_register_connector_instance_reuses_existing_integration_and_heartbeat_updates_status() -> None:
+    service = build_service()
+    integration = service.create_integration(
+        IntegrationCreate(platform="filesystem", platform_key="host-a", display_name="Host A")
+    )
+
+    registered = service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="fs-pod-1",
+            integration_id=integration.integration_id,
+            platform="filesystem",
+            platform_key="host-a",
+            connector_name="filesystem-connector",
+            base_url="http://filesystem:80",
+            capabilities={"discover": True, "read": True},
+        )
+    )
+    assert registered.integration_id == integration.integration_id
+
+    heartbeat = service.heartbeat_connector_instance(
+        "fs-pod-1",
+        ConnectorInstanceHeartbeat(health="healthy", capabilities={"discover": True, "read": True, "write": False}),
+    )
+    assert heartbeat.health == "healthy"
+    assert heartbeat.capabilities["write"] is False
+    assert len(service.list_connector_instances(integration_id=integration.integration_id)) == 1
+
+
+def test_register_connector_instance_rejects_explicit_integration_mismatch() -> None:
+    service = build_service()
+    integration = service.create_integration(
+        IntegrationCreate(platform="gcs", platform_key="project-a", display_name="Project A")
+    )
+
+    try:
+        service.register_connector_instance(
+            ConnectorInstanceRegister(
+                connector_instance_id="gcs-pod-1",
+                integration_id=integration.integration_id,
+                platform="gcs",
+                platform_key="project-b",
+                connector_name="google-cloud-storage-connector",
+                base_url="http://gcs:80",
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 409
+        assert exc.detail["code"] == "connector_integration_mismatch"
+    else:
+        raise AssertionError("expected connector integration mismatch")
 
 
 def test_create_scope_rejects_overlapping_path_scope() -> None:

@@ -5,6 +5,9 @@ from pydantic import ValidationError
 
 from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config, parse_policy_runtime_config
 from dsx_connect_ng.control_plane.models import (
+    ConnectorInstanceHeartbeat,
+    ConnectorInstanceRecord,
+    ConnectorInstanceRegister,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -87,6 +90,64 @@ class ControlPlaneService:
         row = self.repo.update_integration(integration_id, payload)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="integration_not_found")
+        return row
+
+    def _integration_for_connector_registration(self, payload: ConnectorInstanceRegister) -> IntegrationRecord:
+        if payload.integration_id:
+            integration = self.get_integration_or_404(payload.integration_id)
+            if integration.platform != payload.platform or integration.platform_key != payload.platform_key:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "code": "connector_integration_mismatch",
+                        "integration_id": integration.integration_id,
+                        "integration_platform": integration.platform,
+                        "integration_platform_key": integration.platform_key,
+                    },
+                )
+            return integration
+
+        for existing in self.repo.list_integrations():
+            if existing.platform == payload.platform and existing.platform_key == payload.platform_key:
+                return existing
+
+        return self.repo.create_integration(
+            IntegrationCreate(
+                platform=payload.platform,
+                platform_key=payload.platform_key,
+                display_name=payload.display_name or payload.connector_name,
+                capability_discover=bool(payload.capabilities.get("discover", False)),
+                capability_monitor=bool(payload.capabilities.get("events", payload.capabilities.get("monitor", False))),
+                capability_enumerate=bool(payload.capabilities.get("enumerate", payload.capabilities.get("discover", False))),
+                capability_read=bool(payload.capabilities.get("read", False)),
+                capability_remediate=bool(payload.capabilities.get("remediate", False)),
+                config={},
+            )
+        )
+
+    def register_connector_instance(self, payload: ConnectorInstanceRegister) -> ConnectorInstanceRecord:
+        integration = self._integration_for_connector_registration(payload)
+        return self.repo.upsert_connector_instance(payload, integration_id=integration.integration_id)
+
+    def list_connector_instances(self, integration_id: str | None = None) -> list[ConnectorInstanceRecord]:
+        if integration_id:
+            self.get_integration_or_404(integration_id)
+        return self.repo.list_connector_instances(integration_id=integration_id)
+
+    def get_connector_instance_or_404(self, connector_instance_id: str) -> ConnectorInstanceRecord:
+        row = self.repo.get_connector_instance(connector_instance_id)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="connector_instance_not_found")
+        return row
+
+    def heartbeat_connector_instance(
+        self,
+        connector_instance_id: str,
+        payload: ConnectorInstanceHeartbeat,
+    ) -> ConnectorInstanceRecord:
+        row = self.repo.update_connector_instance_heartbeat(connector_instance_id, payload)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="connector_instance_not_found")
         return row
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:

@@ -121,26 +121,33 @@ In both cases, DSX-Connect should avoid becoming a runtime orchestrator.
 
 ---
 
-## 2g Discovery Model
+## 2g Discovery and Registration Model
 
-In 2g, connectors should not be "discovered" primarily through 1g-style runtime self-registration.
+In 2g, connector registration should be capability-based rather than connector-monolith based.
 
-Instead:
+The control plane still owns the durable integration record, but a deployed connector should be able to register its runtime instance and capability manifest when it starts.
 
-1. an operator or automation creates an integration in the control plane
-2. the integration config defines connector/runtime details
-3. jobs reference the integration
-4. workers call the configured connector endpoint directly
+This creates two supported paths that converge on the same model:
 
-So in 2g, "registration" is really:
+1. an operator or automation pre-creates an integration in the control plane
+2. a connector runtime registers a live endpoint and capability manifest
+3. the control plane links or creates the integration record
+4. jobs reference the integration
+5. workers call an eligible connector instance for the requested capability
 
-- provisioning or updating the integration record
+So in 2g, "registration" means:
+
+- creating or updating the logical integration record when needed
+- upserting a runtime connector instance
+- publishing capability support, granted permissions, limits, health, and lease state
 
 not:
 
-- connector posting itself into core as the source of truth
+- connector ownership of policy
+- connector ownership of protected scopes
+- connector ownership of transfer rules
 
-This is why 1g runtime self-registration can be disabled for 2g-targeted local runs.
+This preserves the useful 1g behavior where connectors can appear after deployment, while keeping workflow intent in the control plane.
 
 ---
 
@@ -234,10 +241,11 @@ This is useful for flexibility, but it should not change the control-plane model
 Connector health in 2g should be treated as:
 
 - a control-plane health and observability concern
+- a runtime connector-instance lease signal
 
 not:
 
-- a discovery mechanism
+- the sole source of integration existence
 
 The control plane may assess health through:
 
@@ -246,10 +254,10 @@ The control plane may assess health through:
 - recent successful read/remediation activity
 - optional heartbeats
 
-But health should not be required to define integration existence.
+Health should not be required to define integration existence.
 
-Integration existence comes from configuration.
-Health describes runtime viability.
+Integration existence comes from durable control-plane state.
+Health describes runtime viability for a registered connector instance.
 
 ---
 
@@ -280,10 +288,11 @@ The recommended 2g deployment model is:
 - control plane owns integrations
 - policy stays out of connectors
 - connectors are repository adapters
+- deployed connectors can self-register runtime instances and capabilities
 - same deployment environment as core is preferred
 - separate deployment topology remains supported
 - Kubernetes or equivalent orchestration owns runtime lifecycle
-- runtime self-registration is optional legacy behavior, not the primary 2g discovery path
+- manual/static integrations remain supported for local development and pre-provisioning
 
 This keeps the architecture operationally realistic while supporting the long-requested UX of control-plane-driven connector binding and validation.
 

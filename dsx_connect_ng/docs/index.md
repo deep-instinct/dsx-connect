@@ -9,12 +9,14 @@ It owns the new control-plane-first architecture, job orchestration model, worke
 - [Architecture](architecture.md)
 - [Runtime](runtime.md)
 - [API Boundaries](api-boundaries.md)
+- [Shared Connector Control Plane](shared-control-plane.md)
 
 ## Core Principles
 
 - Keep NG isolated from legacy `dsx_connect`.
 - Make PostgreSQL and RabbitMQ first-class durable infrastructure.
 - Treat connectors as integration adapters, not policy engines.
+- Let connectors register runtime capabilities with the shared control plane.
 - Keep API families separated:
   - control-plane APIs
   - execution APIs

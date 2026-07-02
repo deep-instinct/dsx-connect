@@ -18,6 +18,18 @@ Purpose:
 - policy attachment
 - protection model management
 
+Connector runtime registration currently lives here:
+
+- `POST /api/v1/control-plane/connectors/register`
+- `GET /api/v1/control-plane/connectors`
+- `GET /api/v1/control-plane/connectors/{connector_instance_id}`
+- `POST /api/v1/control-plane/connectors/{connector_instance_id}/heartbeat`
+
+Registration creates or links a durable integration record, then upserts a runtime connector-instance lease. It does not let connectors define protected scopes or product policy.
+
+The shared connector framework can opt into this path with `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`.
+For NG-only registration, `DSXCONNECTOR_INSTANCE_ID` or deployment metadata should provide the connector instance identity; the legacy `connector_uuid.txt` file is only required for 1G compatibility.
+
 Characteristics:
 
 - stable machine contract

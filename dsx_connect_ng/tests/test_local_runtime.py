@@ -376,26 +376,36 @@ def test_ensure_dsxa_container_requires_runtime_env(monkeypatch: pytest.MonkeyPa
     assert "APPLIANCE_URL,TOKEN,SCANNER_ID" in str(excinfo.value)
 
 
-def test_ensure_dsxa_container_reports_exited_container_logs(monkeypatch: pytest.MonkeyPatch) -> None:
-    class Result:
-        returncode = 0
-        stdout = "exited"
-        stderr = ""
+def test_ensure_dsxa_container_recreates_exited_container_with_current_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
 
-    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_run", lambda args: Result())
-    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_logs", lambda container_name, tail=100: "bad config")
+    def fake_docker_run(args: list[str]):
+        calls.append(args)
 
-    with pytest.raises(RuntimeError) as excinfo:
-        _ensure_dsxa_container(
-            "dsxa",
-            image="repo/dsxa:test",
-            host_port=15000,
-            container_port=5000,
-            env_values={"APPLIANCE_URL": "tenant", "TOKEN": "token", "SCANNER_ID": "scanner"},
-        )
+        class Result:
+            returncode = 0
+            stdout = ""
+            stderr = ""
 
-    assert "dsxa_container_exited" in str(excinfo.value)
-    assert "bad config" in str(excinfo.value)
+        if args[:2] == ["inspect", "-f"]:
+            Result.stdout = "exited"
+        return Result()
+
+    monkeypatch.setattr("dsx_connect_ng.local.dsx_connect_ng_local._docker_run", fake_docker_run)
+
+    started, message = _ensure_dsxa_container(
+        "dsxa",
+        image="repo/dsxa:test",
+        host_port=15000,
+        container_port=5000,
+        env_values={"APPLIANCE_URL": "tenant", "TOKEN": "token", "SCANNER_ID": "scanner"},
+    )
+
+    assert started is True
+    assert message == "dsxa container recreated from exited: dsxa"
+    assert ["rm", "dsxa"] in calls
+    run_call = next(call for call in calls if call and call[0] == "run")
+    assert "APPLIANCE_URL=tenant" in run_call
 
 
 def test_wait_for_rabbitmq_ready_reports_container_state_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:

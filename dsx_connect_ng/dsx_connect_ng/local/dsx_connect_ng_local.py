@@ -392,17 +392,11 @@ def _ensure_dsxa_container(
     state = _rabbitmq_container_state(container_name)
     if state == "running":
         return False, f"dsxa container already running: {container_name}"
-    if state == "exited":
-        logs = _docker_logs(container_name, tail=80)
-        raise RuntimeError(
-            f"dsxa_container_exited:{container_name}:logs={logs}:"
-            "remove the container or use --dsxa-container-name after fixing DSXA env"
-        )
-    if state == "created":
-        result = _docker_run(["start", container_name])
+    recreate_reason = state if state in {"created", "exited"} else None
+    if recreate_reason:
+        result = _docker_run(["rm", container_name])
         if result.returncode != 0:
-            raise RuntimeError(f"docker_start_failed:{result.stderr.strip() or result.stdout.strip()}")
-        return True, f"dsxa container started: {container_name}"
+            raise RuntimeError(f"docker_rm_failed:{result.stderr.strip() or result.stdout.strip()}")
     missing = [key for key in DSXA_REQUIRED_ENV_KEYS if not str(env_values.get(key) or "").strip()]
     if missing:
         raise RuntimeError(
@@ -425,6 +419,8 @@ def _ensure_dsxa_container(
     result = _docker_run(args)
     if result.returncode != 0:
         raise RuntimeError(f"docker_run_failed:{result.stderr.strip() or result.stdout.strip()}")
+    if recreate_reason:
+        return True, f"dsxa container recreated from {recreate_reason}: {container_name}"
     return True, f"dsxa container created: {container_name}"
 
 

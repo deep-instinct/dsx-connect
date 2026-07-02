@@ -93,7 +93,7 @@ def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
             "with_rabbit_docker": False,
             "with_dsxa_docker": True,
             "dsxa_host_port": 15000,
-            "dsxa_scheme": "https",
+            "dsxa_scheme": "http",
             "dsxa_verify_tls": False,
             "dsxa_auth_token": "rest-token",
             "scan_worker_prefetch_count": 10,
@@ -108,7 +108,7 @@ def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
     overrides = _runtime_env_overrides(Ctx())
 
     assert overrides["DSX_CONNECT_NG_SCANNER__MODE"] == "dsxa"
-    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == "https://127.0.0.1:15000"
+    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == "http://127.0.0.1:15000"
     assert overrides["DSX_CONNECT_NG_SCANNER__VERIFY_TLS"] == "false"
     assert overrides["DSX_CONNECT_NG_SCANNER__AUTH_TOKEN"] == "rest-token"
 

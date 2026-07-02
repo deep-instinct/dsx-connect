@@ -1158,7 +1158,7 @@
       const normalized = String(value || "").toLowerCase();
       if (["healthy", "enabled", "completed", "protected", "clean", "active"].includes(normalized)) return "pill good";
       if (["failed", "cancelled", "unhealthy", "disabled", "malicious", "unreachable"].includes(normalized)) return "pill bad";
-      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only", "stub", "not_configured"].includes(normalized)) return "pill warn";
+      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only", "stub", "not_configured", "scheme_mismatch"].includes(normalized)) return "pill warn";
       return "pill";
     }
 

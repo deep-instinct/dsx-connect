@@ -549,6 +549,59 @@ def _build_dsxa_probe_url(base_url: str | None) -> str | None:
     return base_url.rstrip("/") + "/"
 
 
+def _probe_dsxa_endpoint(
+    *,
+    endpoint: str,
+    base_url: str,
+    mode: str,
+    headers: dict[str, str],
+    timeout: float,
+    verify_tls: bool,
+) -> UIDsxaStatusResponse:
+    request = urllib_request.Request(endpoint, method="GET", headers=headers)
+    context = None
+    if endpoint.startswith("https://") and not verify_tls:
+        context = ssl._create_unverified_context()
+    try:
+        if context is not None:
+            with urllib_request.urlopen(request, timeout=timeout, context=context) as response:
+                return UIDsxaStatusResponse(
+                    state="active",
+                    label="DSXA active",
+                    mode=mode,
+                    base_url=base_url,
+                    endpoint=endpoint,
+                    details={"effective_mode": _effective_scanner_mode(), "status_code": response.status},
+                )
+        with urllib_request.urlopen(request, timeout=timeout) as response:
+            return UIDsxaStatusResponse(
+                state="active",
+                label="DSXA active",
+                mode=mode,
+                base_url=base_url,
+                endpoint=endpoint,
+                details={"effective_mode": _effective_scanner_mode(), "status_code": response.status},
+            )
+    except urllib_error.HTTPError as exc:
+        return UIDsxaStatusResponse(
+            state="active",
+            label="DSXA reachable",
+            mode=mode,
+            base_url=base_url,
+            endpoint=endpoint,
+            details={"effective_mode": _effective_scanner_mode(), "reason": "http_response", "status_code": exc.code},
+        )
+    except (urllib_error.URLError, TimeoutError, OSError, ValueError) as exc:
+        return UIDsxaStatusResponse(
+            state="unreachable",
+            label="DSXA can't reach",
+            mode=mode,
+            base_url=base_url,
+            endpoint=endpoint,
+            details={"effective_mode": _effective_scanner_mode(), "reason": "transport_error", "message": str(exc)},
+        )
+
+
 def _probe_dsxa_status() -> UIDsxaStatusResponse:
     mode = _effective_scanner_mode()
     base_url = settings.scanner.base_url.strip()
@@ -572,49 +625,33 @@ def _probe_dsxa_status() -> UIDsxaStatusResponse:
     headers = {"Accept": "application/json"}
     if settings.scanner.auth_token:
         headers["Authorization"] = f"Bearer {settings.scanner.auth_token}"
-    request = urllib_request.Request(endpoint, method="GET", headers=headers)
     timeout = min(max(float(settings.scanner.timeout_seconds or 2.0), 0.1), 2.0)
-    context = None
-    if endpoint.startswith("https://") and not settings.scanner.verify_tls:
-        context = ssl._create_unverified_context()
-    try:
-        if context is not None:
-            with urllib_request.urlopen(request, timeout=timeout, context=context) as response:
-                return UIDsxaStatusResponse(
-                    state="active",
-                    label="DSXA active",
-                    mode=settings.scanner.mode,
-                    base_url=base_url,
-                    endpoint=endpoint,
-                    details={"effective_mode": mode, "status_code": response.status},
-                )
-        with urllib_request.urlopen(request, timeout=timeout) as response:
-            return UIDsxaStatusResponse(
-                state="active",
-                label="DSXA active",
-                mode=settings.scanner.mode,
-                base_url=base_url,
-                endpoint=endpoint,
-                details={"effective_mode": mode, "status_code": response.status},
-            )
-    except urllib_error.HTTPError as exc:
-        return UIDsxaStatusResponse(
-            state="active",
-            label="DSXA reachable",
-            mode=settings.scanner.mode,
+    result = _probe_dsxa_endpoint(
+        endpoint=endpoint,
+        base_url=base_url,
+        mode=settings.scanner.mode,
+        headers=headers,
+        timeout=timeout,
+        verify_tls=settings.scanner.verify_tls,
+    )
+    if result.state == "unreachable" and endpoint.startswith("https://"):
+        fallback_endpoint = "http://" + endpoint.removeprefix("https://")
+        fallback = _probe_dsxa_endpoint(
+            endpoint=fallback_endpoint,
             base_url=base_url,
-            endpoint=endpoint,
-            details={"effective_mode": mode, "reason": "http_response", "status_code": exc.code},
-        )
-    except (urllib_error.URLError, TimeoutError, OSError, ValueError) as exc:
-        return UIDsxaStatusResponse(
-            state="unreachable",
-            label="DSXA can't reach",
             mode=settings.scanner.mode,
-            base_url=base_url,
-            endpoint=endpoint,
-            details={"effective_mode": mode, "reason": "transport_error", "message": str(exc)},
+            headers=headers,
+            timeout=min(timeout, 1.0),
+            verify_tls=True,
         )
+        if fallback.state == "active":
+            fallback.state = "scheme_mismatch"
+            fallback.label = "DSXA use HTTP"
+            fallback.details["configured_endpoint"] = endpoint
+            fallback.details["https_error"] = result.details.get("message")
+            fallback.details["reason"] = "https_failed_http_reachable"
+            return fallback
+    return result
 
 
 def _summarize_integration(

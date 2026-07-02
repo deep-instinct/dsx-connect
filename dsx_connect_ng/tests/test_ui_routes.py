@@ -72,6 +72,47 @@ def test_ui_dsxa_status_reports_unreachable(monkeypatch) -> None:
     assert payload["endpoint"] == "http://scanner.local:15000/"
 
 
+def test_ui_dsxa_status_reports_scheme_mismatch_when_http_answers(monkeypatch) -> None:
+    from urllib import error as urllib_error
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    class Response:
+        status = 404
+
+        def __enter__(self):
+            raise urllib_error.HTTPError(
+                url="http://scanner.local:15000/",
+                code=404,
+                msg="not found",
+                hdrs=None,
+                fp=None,
+            )
+
+        def __exit__(self, exc_type, exc, traceback):
+            return False
+
+    def fake_urlopen(request, *args, **kwargs):
+        if request.full_url.startswith("https://"):
+            raise urllib_error.URLError("_ssl.c:983: The handshake operation timed out")
+        return Response()
+
+    monkeypatch.setattr(settings.scanner, "mode", "dsxa")
+    monkeypatch.setattr(settings.scanner, "base_url", "https://scanner.local:15000")
+    monkeypatch.setattr(settings.scanner, "verify_tls", False)
+    monkeypatch.setattr(ui_routes.urllib_request, "urlopen", fake_urlopen)
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/ui/dsxa/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "scheme_mismatch"
+    assert payload["label"] == "DSXA use HTTP"
+    assert payload["endpoint"] == "http://scanner.local:15000/"
+    assert payload["details"]["configured_endpoint"] == "https://scanner.local:15000/"
+
+
 def test_ui_integrations_summary_includes_scope_counts_and_health(monkeypatch) -> None:
     app = create_app()
     service = app.state.control_plane_service

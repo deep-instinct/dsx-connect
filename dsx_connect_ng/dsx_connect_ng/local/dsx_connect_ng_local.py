@@ -95,7 +95,7 @@ DSX_CONNECT_NG_LOCAL__SCANNER_CLIENT_SCOPE=shared
 # Optional when using --with-dsxa-docker.
 # DSX_CONNECT_NG_LOCAL__DSXA_IMAGE=dsxconnect/dpa-rocky9:4.2.0.2176
 # DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN=
-# DSXA Docker defaults to https://127.0.0.1:15000 with scanner TLS verification disabled.
+# DSXA Docker defaults to http://127.0.0.1:15000.
 # APPLIANCE_URL=<your-appliance.deepinstinctweb.com>
 # TOKEN=<scanner-registration-token>
 # SCANNER_ID=<scanner-id>
@@ -605,7 +605,7 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
         overrides["DSX_CONNECT_NG_RABBITMQ__URL"] = "amqp://dsx:dsx@127.0.0.1:5672/%2F"
         overrides["DSX_CONNECT_NG_RABBITMQ__PUBLISHER_CONFIRMS"] = "false"
     if ctx.obj.get("with_dsxa_docker"):
-        dsxa_scheme = str(ctx.obj.get("dsxa_scheme", "https"))
+        dsxa_scheme = str(ctx.obj.get("dsxa_scheme", "http"))
         overrides["DSX_CONNECT_NG_SCANNER__MODE"] = "dsxa"
         overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] = f"{dsxa_scheme}://127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
         overrides["DSX_CONNECT_NG_SCANNER__VERIFY_TLS"] = str(ctx.obj.get("dsxa_verify_tls", False)).lower()
@@ -693,7 +693,7 @@ def _prepare_runtime(
             print(message)
             _wait_for_dsxa_ready(dsxa_container_name, "127.0.0.1", int(ctx.obj.get("dsxa_host_port", 15000)))
             print(
-                f"dsxa ready on {ctx.obj.get('dsxa_scheme', 'https')}://"
+                f"dsxa ready on {ctx.obj.get('dsxa_scheme', 'http')}://"
                 f"127.0.0.1:{ctx.obj.get('dsxa_host_port', 15000)}"
             )
     except Exception:
@@ -843,7 +843,7 @@ def main(
     dsxa_image: str = typer.Option("", "--dsxa-image", envvar="DSX_CONNECT_NG_LOCAL__DSXA_IMAGE", help="DSXA Docker image to run"),
     dsxa_host_port: int = typer.Option(15000, "--dsxa-host-port", min=1, help="host port for DSXA scanner"),
     dsxa_container_port: int = typer.Option(5000, "--dsxa-container-port", min=1, help="container port exposed by the DSXA scanner image"),
-    dsxa_scheme: str = typer.Option("https", "--dsxa-scheme", help="scheme for the local DSXA scanner URL: http or https"),
+    dsxa_scheme: str = typer.Option("http", "--dsxa-scheme", help="scheme for the local DSXA scanner URL: http or https"),
     dsxa_verify_tls: bool = typer.Option(False, "--dsxa-verify-tls/--no-dsxa-verify-tls", help="verify TLS certificates when NG connects to local DSXA Docker"),
     dsxa_env_file: str = typer.Option("", "--dsxa-env-file", help="optional env file containing APPLIANCE_URL, TOKEN, SCANNER_ID, FLAVOR, NO_SSL, AUTH_TOKEN"),
     dsxa_auth_token: str = typer.Option("", "--dsxa-auth-token", envvar="DSX_CONNECT_NG_LOCAL__DSXA_AUTH_TOKEN", help="optional DSXA REST auth token; also passed to NG scanner config"),

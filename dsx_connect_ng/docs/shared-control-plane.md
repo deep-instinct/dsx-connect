@@ -100,6 +100,8 @@ Explicit configuration remains useful for:
 
 These modes should converge on the same records. Manual configuration should not create a separate connector model.
 
+The detailed registration and heartbeat lifecycle is documented in [connector-registration-leases.md](connector-registration-leases.md).
+
 ## Product Composition
 
 DSX-Connect NG composes connector capabilities for repository protection:

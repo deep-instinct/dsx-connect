@@ -10,6 +10,7 @@ It owns the new control-plane-first architecture, job orchestration model, worke
 - [Runtime](runtime.md)
 - [API Boundaries](api-boundaries.md)
 - [Shared Connector Control Plane](shared-control-plane.md)
+- [Connector Registration and Leases](connector-registration-leases.md)
 
 ## Core Principles
 

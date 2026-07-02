@@ -258,6 +258,10 @@
       grid-template-columns: minmax(150px, 1fr) auto;
     }
 
+    .toolbar.protected {
+      grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(120px, 1fr)) auto;
+    }
+
     .table-wrap {
       overflow: auto;
     }
@@ -467,7 +471,7 @@
         <h1>Operator Console</h1>
       </div>
       <div class="statusbar">
-        <span class="pill" id="stat-integrations">0 integrations</span>
+        <span class="pill" id="stat-integrations">0 connectors</span>
         <span class="pill" id="stat-scopes">0 scopes</span>
         <span class="pill" id="stat-jobs">0 jobs</span>
         <span class="pill good" id="stat-healthy">0 healthy</span>
@@ -510,6 +514,7 @@
                       <th>Connector</th>
                       <th>Type</th>
                       <th>Status</th>
+                      <th>Instances</th>
                       <th>Protected Scopes</th>
                       <th>Reader</th>
                       <th>Capabilities</th>
@@ -523,12 +528,18 @@
             </div>
 
             <div class="asset-pane hidden" id="asset-pane-protected">
-              <div class="toolbar">
-                <label>Connector Type
-                  <input id="protected-filter-connector-type" placeholder="gcs, filesystem">
-                </label>
-                <label>Integration
+              <div class="toolbar protected">
+                <label>Connector
                   <select id="protected-filter-integration"></select>
+                </label>
+                <label>Coverage
+                  <select id="protected-filter-coverage">
+                    <option value="">all</option>
+                    <option value="unprotected">unprotected</option>
+                    <option value="protected">protected</option>
+                    <option value="disabled">disabled</option>
+                    <option value="unknown">unknown</option>
+                  </select>
                 </label>
                 <label>Asset Type
                   <select id="protected-filter-type">
@@ -543,16 +554,15 @@
                     <option value="inventory_enumeration">inventory_enumeration</option>
                   </select>
                 </label>
-                <label>Coverage
-                  <select id="protected-filter-coverage">
-                    <option value="">all</option>
-                    <option value="protected">protected</option>
-                    <option value="unprotected">unprotected</option>
-                    <option value="disabled">disabled</option>
-                    <option value="unknown">unknown</option>
+                <label>Limit
+                  <select id="protected-filter-limit">
+                    <option value="100">100</option>
+                    <option value="250">250</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
                   </select>
                 </label>
-                <button class="primary" id="refresh-protected-assets" type="button">Apply</button>
+                <button class="primary" id="refresh-protected-assets" type="button">Load Assets</button>
               </div>
               <div class="metric-row">
                 <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
@@ -591,7 +601,7 @@
               <button id="refresh-scan-results" type="button">Refresh</button>
             </div>
             <div class="toolbar scan">
-              <label>Integration
+              <label>Connector
                 <select id="scan-results-filter-integration"></select>
               </label>
               <label>State
@@ -656,7 +666,7 @@
               <button id="refresh-policies" type="button">Refresh</button>
             </div>
             <div class="toolbar policy">
-              <label>Integration
+              <label>Connector
                 <select id="policy-filter-integration"></select>
               </label>
               <button class="primary" id="apply-policy-filter" type="button">Apply</button>
@@ -684,8 +694,8 @@
         <section class="panel">
           <div class="panel-header">
             <div>
-              <h2>Create Integration</h2>
-              <p>Register a connector-backed integration.</p>
+              <h2>Add Repository Connector</h2>
+              <p>Preconfigure a repository boundary before a runtime instance registers.</p>
             </div>
           </div>
           <div class="panel-body">
@@ -725,7 +735,7 @@
               <label>Advanced Config JSON
                 <textarea name="advanced_config_json" placeholder='{"policy": {"policy_id": "default"}}'></textarea>
               </label>
-              <button class="primary" type="submit">Create</button>
+              <button class="primary" type="submit">Add Connector</button>
               <div class="status-line" id="integration-form-status"></div>
             </form>
           </div>
@@ -740,7 +750,7 @@
           </div>
           <div class="panel-body">
             <form class="cards" id="scope-form">
-              <label>Integration
+              <label>Connector
                 <select name="integration_id" id="scope-integration-id" required></select>
               </label>
               <label>Display Name
@@ -927,7 +937,7 @@
 
     function renderTopStats() {
       const healthy = state.connectorRows.filter((row) => row.health?.status === "healthy").length;
-      document.getElementById("stat-integrations").textContent = `${state.integrations.length} integrations`;
+      document.getElementById("stat-integrations").textContent = `${state.integrations.length} connectors`;
       document.getElementById("stat-scopes").textContent = `${state.scopes.length} scopes`;
       document.getElementById("stat-jobs").textContent = `${state.scanResults.length} jobs`;
       document.getElementById("stat-healthy").textContent = `${healthy} healthy`;
@@ -941,13 +951,19 @@
       const body = document.getElementById("connectors-body");
       body.innerHTML = "";
       if (!state.connectorRows.length) {
-        renderEmptyRow(body, 8, "No connectors configured.");
+        renderEmptyRow(body, 9, "No repository connectors configured.");
         return;
       }
       for (const row of state.connectorRows) {
         const integration = row.integration;
         const capabilities = integration.remediation_capabilities || {};
-        const endpoint = row.proxy_base_url || "not configured";
+        const instances = row.connector_instances || [];
+        const liveInstance = instances[0] || null;
+        const runtimeCapabilities = liveInstance?.capabilities || {};
+        const endpoint = row.health?.endpoint || row.proxy_base_url || liveInstance?.base_url || "not configured";
+        const instanceSummary = instances.length
+          ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span>`
+          : "none";
         body.insertAdjacentHTML("beforeend", `
           <tr>
             <td>
@@ -956,9 +972,14 @@
             </td>
             <td>${escapeHtml(integration.platform)}</td>
             <td><span class="${pillClass(row.health?.status)}">${escapeHtml(row.health?.status || "unknown")}</span></td>
+            <td>${instanceSummary}</td>
             <td>${row.scope_count}</td>
             <td>${escapeHtml(row.reader_strategy || "unknown")}</td>
             <td>
+              <span class="pill">discover ${runtimeCapabilities.discover ? "yes" : "no"}</span>
+              <span class="pill">read ${runtimeCapabilities.read ? "yes" : "no"}</span>
+              <span class="pill">write ${runtimeCapabilities.write ? "yes" : "no"}</span>
+              <span class="pill">remediate ${runtimeCapabilities.remediate || capabilities.supports_move || capabilities.supports_tag ? "yes" : "no"}</span>
               <span class="pill">move ${capabilities.supports_move ? "yes" : "no"}</span>
               <span class="pill">tag ${capabilities.supports_tag ? "yes" : "no"}</span>
             </td>
@@ -995,6 +1016,17 @@
         const lastScanText = lastScan
           ? `${lastScan.state} ${lastScan.terminal_items || 0}/${lastScan.total_items || 0}`
           : "never";
+        let actions = "";
+        if (asset.coverage_state === "unprotected") {
+          actions = `<button type="button" data-action="prefill-scope" data-integration="${escapeHtml(asset.integration_id)}" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}">Protect</button>`;
+        } else if (asset.coverage_state === "protected") {
+          actions = `
+            <button type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>
+            <button type="button" data-action="toggle-scope-protection" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-enabled="false">Disable</button>
+          `;
+        } else if (asset.coverage_state === "disabled") {
+          actions = `<button type="button" data-action="toggle-scope-protection" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-enabled="true">Enable</button>`;
+        }
         body.insertAdjacentHTML("beforeend", `
           <tr>
             <td>
@@ -1007,11 +1039,7 @@
             <td>${escapeHtml(policyId)}</td>
             <td>${lastScan ? `<span class="${pillClass(lastScan.state)}">${escapeHtml(lastScanText)}</span><br><span class="mono">${escapeHtml(lastScan.job_id)}</span>` : "never"}</td>
             <td>${escapeHtml(findingText)}</td>
-            <td class="actions">
-              ${asset.coverage_state === "unprotected"
-                ? `<button type="button" data-action="prefill-scope" data-integration="${escapeHtml(asset.integration_id)}" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}">Protect</button>`
-                : `<button type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>`}
-            </td>
+            <td class="actions">${actions}</td>
           </tr>
         `);
       }
@@ -1120,7 +1148,17 @@
       const integrationOptions = ['<option value="">all</option>'].concat(
         state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
       ).join("");
-      document.getElementById("protected-filter-integration").innerHTML = integrationOptions;
+      const selectedProtectedConnector = document.getElementById("protected-filter-integration").value;
+      const registeredConnectorRows = state.connectorRows.filter((row) => (row.connector_instances || []).length > 0);
+      const protectedConnectorOptions = registeredConnectorRows.length
+        ? registeredConnectorRows
+            .map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`)
+            .join("")
+        : '<option value="">No registered connectors</option>';
+      document.getElementById("protected-filter-integration").innerHTML = protectedConnectorOptions;
+      if (selectedProtectedConnector && registeredConnectorRows.some((row) => row.integration.integration_id === selectedProtectedConnector)) {
+        document.getElementById("protected-filter-integration").value = selectedProtectedConnector;
+      }
       document.getElementById("scan-results-filter-integration").innerHTML = integrationOptions;
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
       document.getElementById("scope-integration-id").innerHTML = state.integrations
@@ -1150,16 +1188,23 @@
 
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
-      const connectorType = document.getElementById("protected-filter-connector-type").value.trim();
       const integrationId = document.getElementById("protected-filter-integration").value;
       const assetType = document.getElementById("protected-filter-type").value;
       const source = document.getElementById("protected-filter-source").value;
       const coverage = document.getElementById("protected-filter-coverage").value;
-      if (connectorType) params.set("connector_type", connectorType);
+      const limit = document.getElementById("protected-filter-limit").value;
+      if (!integrationId) {
+        state.protectedAssets = [];
+        state.protectedAssetsLoaded = true;
+        renderProtectedAssets({ unsupported_integrations: [] });
+        document.getElementById("protected-assets-body").innerHTML = '<tr><td colspan="8"><div class="empty">Select a registered connector.</div></td></tr>';
+        return;
+      }
       if (integrationId) params.set("integration_id", integrationId);
       if (assetType) params.set("type", assetType);
       if (source) params.set("source", source);
       if (coverage) params.set("coverage_state", coverage);
+      if (limit) params.set("limit", limit);
       const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
       state.protectedAssets = payload.assets || [];
       state.protectedAssetsLoaded = true;
@@ -1253,7 +1298,7 @@
         });
         await loadConnectors();
       } catch (error) {
-        alert(`Integration update failed: ${error.message}`);
+        alert(`Connector update failed: ${error.message}`);
         button.disabled = false;
       }
     });
@@ -1276,6 +1321,22 @@
       if (scan && scan.dataset.scope) {
         document.getElementById("scan-scope-id").value = scan.dataset.scope;
         document.getElementById("scan-scope-form").requestSubmit();
+        return;
+      }
+      const toggleScope = event.target.closest("[data-action='toggle-scope-protection']");
+      if (toggleScope && toggleScope.dataset.scope) {
+        toggleScope.disabled = true;
+        try {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(toggleScope.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: toggleScope.dataset.enabled === "true" }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } catch (error) {
+          alert(`Protection update failed: ${error.message}`);
+          toggleScope.disabled = false;
+        }
       }
     });
 
@@ -1288,7 +1349,7 @@
     document.getElementById("integration-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = event.currentTarget;
-      setStatus("integration-form-status", "Creating integration...");
+      setStatus("integration-form-status", "Creating connector...");
       try {
         let config = {
           reader: {
@@ -1322,7 +1383,7 @@
         form.capability_monitor.checked = true;
         form.capability_remediate.checked = true;
         form.reader_strategy.value = "proxy";
-        setStatus("integration-form-status", "Integration created.");
+        setStatus("integration-form-status", "Connector created.");
         await refreshAll();
       } catch (error) {
         setStatus("integration-form-status", `Create failed: ${error.message}`, true);

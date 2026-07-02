@@ -585,6 +585,22 @@ def _connector_instance_health(connector_instances: list[ConnectorInstanceRecord
     )
 
 
+def _connector_asset_endpoint(
+    integration: IntegrationRecord,
+    connector_instances: list[ConnectorInstanceRecord],
+) -> tuple[str | None, str | None]:
+    live_instances = [instance for instance in connector_instances if instance.expires_at > utcnow()]
+    if live_instances:
+        priority = {"healthy": 0, "degraded": 1, "unknown": 2, "unhealthy": 3}
+        instance = sorted(live_instances, key=lambda item: priority.get(item.health, 99))[0]
+        return instance.base_url, None
+    runtime = parse_integration_runtime_config(integration.config)
+    proxy = runtime.reader.proxy if runtime.reader is not None else None
+    if proxy is None:
+        return None, None
+    return proxy.base_url, proxy.connector_name
+
+
 def _list_ui_integration_summaries(service: ControlPlaneService) -> list[UIIntegrationSummary]:
     integrations = service.list_integrations()
     scopes = service.list_scopes()
@@ -1135,11 +1151,13 @@ async def discover_integration_assets(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> UIAssetDiscoveryResponse:
     integration = control_plane.get_integration_or_404(integration_id)
-    runtime = parse_integration_runtime_config(integration.config)
-    proxy = runtime.reader.proxy if runtime.reader is not None else None
+    base_url, connector_name = _connector_asset_endpoint(
+        integration,
+        control_plane.list_connector_instances(integration_id=integration_id),
+    )
     asset_payload = _fetch_connector_assets(
-        proxy.base_url if proxy is not None else None,
-        proxy.connector_name if proxy is not None else None,
+        base_url,
+        connector_name,
         asset_type=asset_type,
         source=source,
         limit=limit,
@@ -1185,12 +1203,14 @@ async def list_protected_assets(
     next_cursors: dict[str, str | None] = {}
 
     for integration in integrations:
-        runtime = parse_integration_runtime_config(integration.config)
-        proxy = runtime.reader.proxy if runtime.reader is not None else None
+        base_url, connector_name = _connector_asset_endpoint(
+            integration,
+            control_plane.list_connector_instances(integration_id=integration.integration_id),
+        )
         try:
             asset_payload = _fetch_connector_assets(
-                proxy.base_url if proxy is not None else None,
-                proxy.connector_name if proxy is not None else None,
+                base_url,
+                connector_name,
                 asset_type=asset_type,
                 source=source,
                 limit=limit,

@@ -24,6 +24,9 @@ def test_operator_console_page_renders() -> None:
 
     assert response.status_code == 200
     assert "DSX-Connect NG Operator Console" in response.text
+    assert "Add Repository Connector" in response.text
+    assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
+    assert "Instances</th>" in response.text
 
 
 def test_ui_integrations_summary_includes_scope_counts_and_health(monkeypatch) -> None:
@@ -420,6 +423,48 @@ def test_ui_assets_protected_aggregates_discovered_assets_with_policy(monkeypatc
     protected_only = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket&coverage_state=protected")
     assert protected_only.status_code == 200
     assert [asset["selector"] for asset in protected_only.json()["assets"]] == ["bucket-a"]
+
+
+def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    connector = service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            connector_name="google-cloud-storage-connector",
+            base_url="http://gcs/google-cloud-storage-connector",
+            capabilities={"discover": True, "read": True},
+            health="healthy",
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fake_fetch(base_url, connector_name, *, asset_type, source, limit, cursor):
+        assert base_url == "http://gcs/google-cloud-storage-connector"
+        assert connector_name is None
+        assert limit == 250
+        return {
+            "asset_type": asset_type,
+            "source": source,
+            "status": "success",
+            "assets": [{"id": "bucket-a", "display_name": "Bucket A", "selector": "bucket-a"}],
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch)
+
+    client = TestClient(app)
+    response = client.get(
+        f"/api/v1/ui/assets/protected?integration_id={connector.integration_id}&type=bucket&source=inventory_enumeration&limit=250"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assets"][0]["selector"] == "bucket-a"
+    assert payload["assets"][0]["coverage_state"] == "unprotected"
 
 
 def test_ui_scan_results_returns_operator_summary() -> None:

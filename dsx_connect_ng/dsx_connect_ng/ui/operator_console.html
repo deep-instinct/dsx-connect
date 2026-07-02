@@ -5,16 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DSX-Connect NG Operator Console</title>
   <style>
-    :root {
-      --bg: #f6f7f8;
+    :root,
+    :root[data-theme="light"] {
+      --bg: #f2f5f4;
       --surface: #ffffff;
-      --surface-2: #eef3f1;
-      --ink: #17242b;
-      --muted: #5d6d75;
-      --line: #d9e0e3;
+      --surface-2: #eef3f2;
+      --field-bg: #fbfdfd;
+      --toolbar-bg: #fbfcfc;
+      --ink: #17211f;
+      --muted: #64736f;
+      --heading-muted: #41545d;
+      --line: #d7dfdd;
       --line-strong: #b9c6cb;
-      --accent: #0f7a67;
+      --accent: #146f68;
+      --accent-contrast: #ffffff;
       --accent-soft: #dcefeb;
+      --accent-soft-ink: #075646;
       --warn: #9a6b10;
       --warn-soft: #f5ecd4;
       --danger: #a33a34;
@@ -22,6 +28,54 @@
       --good: #176b51;
       --good-soft: #dceee7;
       --shadow: 0 12px 28px rgba(25, 36, 42, 0.08);
+    }
+
+    :root[data-theme="operations"] {
+      --bg: #111918;
+      --surface: #172321;
+      --surface-2: #20302d;
+      --field-bg: #101817;
+      --toolbar-bg: #141f1d;
+      --ink: #e8efed;
+      --muted: #93a8a3;
+      --heading-muted: #bfd0cc;
+      --line: #2d403c;
+      --line-strong: #3d5752;
+      --accent: #32b7a9;
+      --accent-contrast: #07110f;
+      --accent-soft: #173d38;
+      --accent-soft-ink: #a9eee7;
+      --warn: #d7a64a;
+      --warn-soft: #3d321c;
+      --danger: #ef7569;
+      --danger-soft: #442521;
+      --good: #58c987;
+      --good-soft: #1f3d2c;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
+    }
+
+    :root[data-theme="security"] {
+      --bg: #080d14;
+      --surface: #0f1724;
+      --surface-2: #162338;
+      --field-bg: #080f18;
+      --toolbar-bg: #0b121d;
+      --ink: #e8f1ff;
+      --muted: #91a4be;
+      --heading-muted: #bdd0ea;
+      --line: #263851;
+      --line-strong: #365273;
+      --accent: #35c7ff;
+      --accent-contrast: #06111a;
+      --accent-soft: #102f45;
+      --accent-soft-ink: #b7edff;
+      --warn: #ffd166;
+      --warn-soft: #463b1e;
+      --danger: #ff5f73;
+      --danger-soft: #49202b;
+      --good: #4ee08d;
+      --good-soft: #173c2a;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
     }
 
     * {
@@ -53,7 +107,7 @@
     button.primary {
       border-color: var(--accent);
       background: var(--accent);
-      color: #fff;
+      color: var(--accent-contrast);
     }
 
     button.danger {
@@ -73,7 +127,7 @@
       border: 1px solid var(--line);
       border-radius: 6px;
       padding: 7px 9px;
-      background: #fff;
+      background: var(--field-bg);
       color: var(--ink);
     }
 
@@ -133,7 +187,7 @@
 
     th {
       background: var(--surface-2);
-      color: #41545d;
+      color: var(--heading-muted);
       font-size: 11px;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -185,6 +239,11 @@
       justify-content: flex-end;
     }
 
+    .theme-control {
+      width: auto;
+      min-width: 150px;
+    }
+
     .shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 360px;
@@ -216,7 +275,7 @@
     .tab[aria-selected="true"], .subtab[aria-selected="true"] {
       border-color: var(--accent);
       background: var(--accent-soft);
-      color: #075646;
+      color: var(--accent-soft-ink);
     }
 
     .panel {
@@ -247,7 +306,7 @@
       align-items: end;
       padding: 12px 16px;
       border-bottom: 1px solid var(--line);
-      background: #fbfcfc;
+      background: var(--toolbar-bg);
     }
 
     .toolbar.scan {
@@ -274,7 +333,7 @@
     .card {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fff;
+      background: var(--surface);
       padding: 12px;
       display: grid;
       gap: 10px;
@@ -336,7 +395,7 @@
     .metric {
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: #fbfcfc;
+      background: var(--toolbar-bg);
       padding: 10px;
     }
 
@@ -361,7 +420,7 @@
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 2px 8px;
-      background: #fff;
+      background: var(--surface);
       color: var(--ink);
       font-size: 12px;
       font-weight: 700;
@@ -399,13 +458,13 @@
       padding: 22px;
       color: var(--muted);
       text-align: center;
-      background: #fbfcfc;
+      background: var(--toolbar-bg);
     }
 
     .detail {
       border: 1px dashed var(--line-strong);
       border-radius: 8px;
-      background: #fbfcfc;
+      background: var(--toolbar-bg);
       padding: 10px;
       overflow: auto;
     }
@@ -449,6 +508,14 @@
         flex-direction: column;
       }
 
+      .statusbar {
+        justify-content: flex-start;
+      }
+
+      .theme-control {
+        width: 100%;
+      }
+
       .shell {
         padding: 12px;
       }
@@ -475,6 +542,12 @@
         <span class="pill" id="stat-scopes">0 scopes</span>
         <span class="pill" id="stat-jobs">0 jobs</span>
         <span class="pill good" id="stat-healthy">0 healthy</span>
+        <select class="theme-control" id="theme-mode" aria-label="Theme">
+          <option value="auto">Auto</option>
+          <option value="light">Light</option>
+          <option value="operations">Operations</option>
+          <option value="security">Security Console</option>
+        </select>
         <button id="refresh-all" type="button">Refresh</button>
       </div>
     </header>
@@ -851,6 +924,45 @@
       createIntegration: "/api/v1/ui/integrations",
       createScope: "/api/v1/ui/assets/protected",
     };
+
+    const themeModes = ["auto", "light", "operations", "security"];
+    const themeStorageKey = "dsx-connect-ng-theme-mode";
+    let currentThemeMode = "auto";
+
+    function systemPrefersDark() {
+      return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
+    }
+
+    function effectiveTheme() {
+      if (currentThemeMode === "operations" || currentThemeMode === "security" || currentThemeMode === "light") {
+        return currentThemeMode;
+      }
+      return systemPrefersDark() ? "operations" : "light";
+    }
+
+    function applyTheme() {
+      document.documentElement.setAttribute("data-theme", effectiveTheme());
+      const select = document.getElementById("theme-mode");
+      if (select) {
+        select.value = currentThemeMode;
+      }
+    }
+
+    function setThemeMode(themeMode) {
+      currentThemeMode = themeModes.includes(themeMode) ? themeMode : "auto";
+      localStorage.setItem(themeStorageKey, currentThemeMode);
+      applyTheme();
+    }
+
+    function initTheme() {
+      currentThemeMode = themeModes.includes(localStorage.getItem(themeStorageKey)) ? localStorage.getItem(themeStorageKey) : "auto";
+      applyTheme();
+      window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener("change", () => {
+        if (currentThemeMode === "auto") {
+          applyTheme();
+        }
+      });
+    }
 
     async function fetchJson(url, options = {}) {
       const response = await fetch(url, {
@@ -1271,6 +1383,9 @@
     document.getElementById("refresh-all").addEventListener("click", () => {
       refreshAll().catch((error) => alert(`Refresh failed: ${error.message}`));
     });
+    document.getElementById("theme-mode").addEventListener("change", (event) => {
+      setThemeMode(event.currentTarget.value);
+    });
     document.getElementById("refresh-protected-assets").addEventListener("click", () => {
       loadProtectedAssets().catch(showProtectedAssetsError);
     });
@@ -1447,8 +1562,9 @@
       }
     });
 
+    initTheme();
     refreshAll().catch((error) => {
-      document.getElementById("connectors-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load console data: ${escapeHtml(error.message)}</div></td></tr>`;
+      document.getElementById("connectors-body").innerHTML = `<tr><td colspan="9"><div class="empty">Failed to load console data: ${escapeHtml(error.message)}</div></td></tr>`;
     });
   </script>
 </body>

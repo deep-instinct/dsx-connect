@@ -27,6 +27,8 @@ def test_operator_console_page_renders() -> None:
     assert "Add Repository Connector" in response.text
     assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
     assert "Instances</th>" in response.text
+    assert '<option value="operations">Operations</option>' in response.text
+    assert '<option value="security">Security Console</option>' in response.text
 
 
 def test_ui_integrations_summary_includes_scope_counts_and_health(monkeypatch) -> None:

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query, Request
+from hmac import compare_digest
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 
 from dsx_connect_ng.api.dependencies import get_control_plane_service
 from dsx_connect_ng.config import settings
@@ -16,6 +18,29 @@ from dsx_connect_ng.control_plane.models import (
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 
 router = APIRouter(prefix="/control-plane", tags=["control-plane"])
+
+
+def _connector_enrollment_tokens() -> list[str]:
+    return [token.strip() for token in settings.connector_enrollment_tokens.split(",") if token.strip()]
+
+
+async def require_connector_registration_auth(
+    x_enrollment_token: str | None = Header(default=None, alias="X-Enrollment-Token"),
+) -> None:
+    tokens = _connector_enrollment_tokens()
+    auth_enabled = settings.connector_registration_auth_enabled or bool(tokens)
+    if not auth_enabled:
+        return
+    if not x_enrollment_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "connector_enrollment_token_required"},
+        )
+    if not any(compare_digest(x_enrollment_token, token) for token in tokens):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "connector_enrollment_token_invalid"},
+        )
 
 
 @router.get("/status")
@@ -85,6 +110,7 @@ async def list_connector_instances(
 @router.post("/connectors/register", response_model=ConnectorInstanceRecord)
 async def register_connector_instance(
     payload: ConnectorInstanceRegister,
+    _auth: None = Depends(require_connector_registration_auth),
     service: ControlPlaneService = Depends(get_control_plane_service),
 ) -> ConnectorInstanceRecord:
     return service.register_connector_instance(payload)
@@ -102,6 +128,7 @@ async def get_connector_instance(
 async def heartbeat_connector_instance(
     connector_instance_id: str,
     payload: ConnectorInstanceHeartbeat,
+    _auth: None = Depends(require_connector_registration_auth),
     service: ControlPlaneService = Depends(get_control_plane_service),
 ) -> ConnectorInstanceRecord:
     return service.heartbeat_connector_instance(connector_instance_id, payload)

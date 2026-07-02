@@ -30,6 +30,13 @@ Registration creates or links a durable integration record, then upserts a runti
 The shared connector framework can opt into this path with `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`.
 For NG-only registration, `DSXCONNECTOR_INSTANCE_ID` or deployment metadata should provide the connector instance identity; the legacy `connector_uuid.txt` file is only required for 1G compatibility.
 
+Registration auth:
+
+- Set `DSX_CONNECT_NG__CONNECTOR_REGISTRATION_AUTH_ENABLED=true` to require enrollment tokens.
+- Set `DSX_CONNECT_NG__CONNECTOR_ENROLLMENT_TOKENS=token-a,token-b` to configure accepted tokens.
+- Providing any enrollment token also enables auth, even if the explicit enabled flag is left false.
+- Connectors send the token as `X-Enrollment-Token`.
+
 Characteristics:
 
 - stable machine contract

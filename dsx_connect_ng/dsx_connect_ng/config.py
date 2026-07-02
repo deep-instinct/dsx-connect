@@ -124,6 +124,11 @@ class AppSettings(BaseSettings):
     api_prefix: str = "/api/v1"
     control_plane_backend: ControlPlaneBackend = "auto"
     job_bus_backend: JobBusBackend = "memory"
+    connector_registration_auth_enabled: bool = False
+    connector_enrollment_tokens: str = Field(
+        default="",
+        description="Comma-separated enrollment tokens accepted for connector registration and heartbeat.",
+    )
     features: FeatureFlags = Field(default_factory=FeatureFlags)
     postgres: PostgresSettings = Field(default_factory=PostgresSettings)
     rabbitmq: RabbitMQSettings = Field(default_factory=RabbitMQSettings)

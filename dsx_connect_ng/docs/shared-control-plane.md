@@ -167,9 +167,9 @@ For NG-only deployments, connector identity should be deployment-native rather t
 
 Remaining near-term work:
 
-1. Add enrollment-token authentication for connector registration.
-2. Define a formal capability manifest contract shared by DSX-Connect NG and DSX-Transfer.
-3. Teach worker capability selection to choose eligible connector instances instead of assuming a static proxy URL.
-4. Add Helm examples for NG-only and dual-registration deployments.
+1. Define a formal capability manifest contract shared by DSX-Connect NG and DSX-Transfer.
+2. Teach worker capability selection to choose eligible connector instances instead of assuming a static proxy URL.
+3. Add Helm examples for NG-only and dual-registration deployments.
+4. Add token rotation guidance for NG connector enrollment.
 
 The current `IntegrationRecord` and capability config should remain intact. Registration should populate and refresh runtime binding data around it.

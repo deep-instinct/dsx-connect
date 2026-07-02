@@ -4,8 +4,11 @@ import argparse
 import asyncio
 import json
 import threading
+import logging
 from time import perf_counter
 from typing import Any
+
+from shared.dsx_logging import dsx_logging
 
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.jobs.postgres_repo import OUTBOX_NOTIFY_CHANNEL
@@ -97,6 +100,49 @@ async def relay_once(service: JobService, *, limit: int, max_active_scan_items: 
     return await service.flush_outbox(limit=limit, max_active_scan_items=max_active_scan_items)
 
 
+def _flush_event_payload(result: OutboxFlushResult) -> dict[str, Any]:
+    return {
+        "event": "relay_flush",
+        "attempted": result.attempted,
+        "published": result.published,
+        "failed": result.failed,
+        "active_scan_items": result.active_scan_items,
+        "max_active_scan_items": result.max_active_scan_items,
+        "publish_capacity": result.publish_capacity,
+        "list_elapsed_ms": result.list_elapsed_ms,
+        "publish_elapsed_ms": result.publish_elapsed_ms,
+        "total_elapsed_ms": result.total_elapsed_ms,
+        "selected_job_ids": result.selected_job_ids,
+        "selected_topics": result.selected_topics,
+        "oldest_pending_age_ms": result.oldest_pending_age_ms,
+        "newest_pending_age_ms": result.newest_pending_age_ms,
+        "first_outbox_created_at": result.first_outbox_created_at.isoformat()
+        if result.first_outbox_created_at is not None
+        else None,
+        "last_outbox_created_at": result.last_outbox_created_at.isoformat()
+        if result.last_outbox_created_at is not None
+        else None,
+        "first_published_at": result.first_published_at.isoformat()
+        if result.first_published_at is not None
+        else None,
+        "last_published_at": result.last_published_at.isoformat()
+        if result.last_published_at is not None
+        else None,
+    }
+
+
+def _log_event(level: int, payload: dict[str, Any]) -> None:
+    if dsx_logging.isEnabledFor(level):
+        dsx_logging.log(level, json.dumps(payload, sort_keys=True))
+
+
+def _log_flush_result(result: OutboxFlushResult) -> None:
+    if result.attempted == 0 and result.failed == 0:
+        _log_event(logging.DEBUG, _flush_event_payload(result))
+        return
+    _log_event(logging.INFO, _flush_event_payload(result))
+
+
 async def relay_forever(
     service: JobService,
     *,
@@ -110,39 +156,7 @@ async def relay_forever(
             await wake_listener.start()
         while True:
             result = await relay_once(service, limit=limit, max_active_scan_items=max_active_scan_items)
-            print(
-                json.dumps(
-                    {
-                        "event": "relay_flush",
-                        "attempted": result.attempted,
-                        "published": result.published,
-                        "failed": result.failed,
-                        "active_scan_items": result.active_scan_items,
-                        "max_active_scan_items": result.max_active_scan_items,
-                        "publish_capacity": result.publish_capacity,
-                        "list_elapsed_ms": result.list_elapsed_ms,
-                        "publish_elapsed_ms": result.publish_elapsed_ms,
-                        "total_elapsed_ms": result.total_elapsed_ms,
-                        "selected_job_ids": result.selected_job_ids,
-                        "selected_topics": result.selected_topics,
-                        "oldest_pending_age_ms": result.oldest_pending_age_ms,
-                        "newest_pending_age_ms": result.newest_pending_age_ms,
-                        "first_outbox_created_at": result.first_outbox_created_at.isoformat()
-                        if result.first_outbox_created_at is not None
-                        else None,
-                        "last_outbox_created_at": result.last_outbox_created_at.isoformat()
-                        if result.last_outbox_created_at is not None
-                        else None,
-                        "first_published_at": result.first_published_at.isoformat()
-                        if result.first_published_at is not None
-                        else None,
-                        "last_published_at": result.last_published_at.isoformat()
-                        if result.last_published_at is not None
-                        else None,
-                    }
-                ),
-                flush=True,
-            )
+            _log_flush_result(result)
             if result.attempted > 0:
                 continue
             if wake_listener is None:
@@ -151,17 +165,16 @@ async def relay_forever(
                 wait_started = perf_counter()
                 notified = await wake_listener.wait(poll_interval_seconds)
                 wait_elapsed_ms = round((perf_counter() - wait_started) * 1000, 3)
-                print(
-                    json.dumps(
+                if notified or dsx_logging.isEnabledFor(logging.DEBUG):
+                    _log_event(
+                        logging.DEBUG,
                         {
                             "event": "relay_wakeup",
                             "notified": notified,
                             "timeout_seconds": poll_interval_seconds,
                             "elapsed_ms": wait_elapsed_ms,
-                        }
-                    ),
-                    flush=True,
-                )
+                        },
+                    )
     finally:
         if wake_listener is not None:
             wake_listener.close()
@@ -201,63 +214,27 @@ async def main() -> None:
     wake_listener = build_outbox_wake_listener(summary)
     if wake_listener is not None:
         await wake_listener.start()
-    print(
-        json.dumps(
-            {
-                "event": "relay_start",
-                **summary,
-                "outbox_wakeup": "postgres_notify" if wake_listener is not None else "poll_interval",
-                "outbox_notify_channel": OUTBOX_NOTIFY_CHANNEL if wake_listener is not None else None,
-                "outbox_wakeup_ready": wake_listener is not None,
-            }
-        ),
-        flush=True,
+    _log_event(
+        logging.INFO,
+        {
+            "event": "relay_start",
+            **summary,
+            "outbox_wakeup": "postgres_notify" if wake_listener is not None else "poll_interval",
+            "outbox_notify_channel": OUTBOX_NOTIFY_CHANNEL if wake_listener is not None else None,
+            "outbox_wakeup_ready": wake_listener is not None,
+        },
     )
     replayed = service.replay_nonterminal_scan_only_batches()
-    print(
-        json.dumps(
-            {
-                "event": "relay_scan_only_replay",
-                "replayed": replayed,
-            }
-        ),
-        flush=True,
+    _log_event(
+        logging.INFO,
+        {
+            "event": "relay_scan_only_replay",
+            "replayed": replayed,
+        },
     )
     if args.once:
         result = await relay_once(service, limit=args.batch_size, max_active_scan_items=args.max_active_scan_items)
-        print(
-            json.dumps(
-                {
-                    "event": "relay_flush",
-                    "attempted": result.attempted,
-                    "published": result.published,
-                    "failed": result.failed,
-                    "active_scan_items": result.active_scan_items,
-                    "max_active_scan_items": result.max_active_scan_items,
-                    "publish_capacity": result.publish_capacity,
-                    "list_elapsed_ms": result.list_elapsed_ms,
-                    "publish_elapsed_ms": result.publish_elapsed_ms,
-                    "total_elapsed_ms": result.total_elapsed_ms,
-                    "selected_job_ids": result.selected_job_ids,
-                    "selected_topics": result.selected_topics,
-                    "oldest_pending_age_ms": result.oldest_pending_age_ms,
-                    "newest_pending_age_ms": result.newest_pending_age_ms,
-                    "first_outbox_created_at": result.first_outbox_created_at.isoformat()
-                    if result.first_outbox_created_at is not None
-                    else None,
-                    "last_outbox_created_at": result.last_outbox_created_at.isoformat()
-                    if result.last_outbox_created_at is not None
-                    else None,
-                    "first_published_at": result.first_published_at.isoformat()
-                    if result.first_published_at is not None
-                    else None,
-                    "last_published_at": result.last_published_at.isoformat()
-                    if result.last_published_at is not None
-                    else None,
-                }
-            ),
-            flush=True,
-        )
+        _log_flush_result(result)
         return
     await relay_forever(
         service,

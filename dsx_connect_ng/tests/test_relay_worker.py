@@ -142,7 +142,12 @@ def test_postgres_outbox_wake_listener_uses_dedicated_listener_connection(monkey
     assert executed == ["LISTEN dsx_ng_outbox"]
 
 
-def test_relay_forever_logs_postgres_wakeup_result(capsys: pytest.CaptureFixture[str]) -> None:
+def test_relay_forever_logs_postgres_wakeup_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    logged: list[dict] = []
+
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.isEnabledFor", lambda level: True)
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.log", lambda level, message: logged.append(json.loads(message)))
+
     class FakeService:
         calls = 0
 
@@ -177,15 +182,19 @@ def test_relay_forever_logs_postgres_wakeup_result(capsys: pytest.CaptureFixture
             )
         )
 
-    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    wakeup = next(event for event in events if event["event"] == "relay_wakeup")
+    wakeup = next(event for event in logged if event["event"] == "relay_wakeup")
     assert wakeup["notified"] is True
     assert wakeup["timeout_seconds"] == 0.25
     assert wakeup["elapsed_ms"] >= 0
     assert listener.closed is True
 
 
-def test_relay_forever_drains_non_empty_flushes_without_wait(capsys: pytest.CaptureFixture[str]) -> None:
+def test_relay_forever_drains_non_empty_flushes_without_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    logged: list[dict] = []
+
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.isEnabledFor", lambda level: True)
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.log", lambda level, message: logged.append(json.loads(message)))
+
     class FakeService:
         calls = 0
 
@@ -223,6 +232,37 @@ def test_relay_forever_drains_non_empty_flushes_without_wait(capsys: pytest.Capt
             )
         )
 
-    events = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert [event["event"] for event in events] == ["relay_flush"]
+    assert [event["event"] for event in logged] == ["relay_flush"]
     assert listener.wait_calls == 0
+
+
+def test_relay_forever_suppresses_zero_work_info_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    info_logs: list[dict] = []
+
+    def fake_is_enabled(level: int) -> bool:
+        return level >= 20
+
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.isEnabledFor", fake_is_enabled)
+    monkeypatch.setattr("dsx_connect_ng.workers.relay_worker.dsx_logging.log", lambda level, message: info_logs.append(json.loads(message)))
+
+    class FakeService:
+        calls = 0
+
+        async def flush_outbox(self, *, limit: int, max_active_scan_items: int | None = None) -> OutboxFlushResult:
+            self.calls += 1
+            if self.calls > 1:
+                raise StopRelay()
+            return OutboxFlushResult()
+
+    with pytest.raises(StopRelay):
+        asyncio.run(
+            relay_forever(
+                FakeService(),
+                limit=100,
+                poll_interval_seconds=0,
+                max_active_scan_items=None,
+                wake_listener=None,
+            )
+        )
+
+    assert info_logs == []

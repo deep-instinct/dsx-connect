@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ssl
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
@@ -45,6 +46,15 @@ class ConnectorHealthStatus(BaseModel):
     status: str = "unknown"
     endpoint: str | None = None
     checked_at: str | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class UIDsxaStatusResponse(BaseModel):
+    state: str = "unknown"
+    label: str = "DSXA unknown"
+    mode: str = "stub"
+    base_url: str | None = None
+    endpoint: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -523,6 +533,87 @@ def _probe_connector_health(base_url: str | None, connector_name: str | None) ->
             status="healthy",
             endpoint=endpoint,
             details={"reason": "non_json_health_response"},
+        )
+
+
+def _effective_scanner_mode() -> str:
+    mode = settings.scanner.mode
+    if mode == "auto":
+        return "dsxa" if settings.scanner.base_url.strip() else "stub"
+    return mode
+
+
+def _build_dsxa_probe_url(base_url: str | None) -> str | None:
+    if not base_url:
+        return None
+    return base_url.rstrip("/") + "/"
+
+
+def _probe_dsxa_status() -> UIDsxaStatusResponse:
+    mode = _effective_scanner_mode()
+    base_url = settings.scanner.base_url.strip()
+    if mode == "stub":
+        return UIDsxaStatusResponse(
+            state="stub",
+            label="DSXA stub",
+            mode=settings.scanner.mode,
+            base_url=base_url or None,
+            details={"effective_mode": mode},
+        )
+    endpoint = _build_dsxa_probe_url(base_url)
+    if endpoint is None:
+        return UIDsxaStatusResponse(
+            state="not_configured",
+            label="DSXA not configured",
+            mode=settings.scanner.mode,
+            base_url=None,
+            details={"effective_mode": mode, "reason": "scanner_base_url_not_configured"},
+        )
+    headers = {"Accept": "application/json"}
+    if settings.scanner.auth_token:
+        headers["Authorization"] = f"Bearer {settings.scanner.auth_token}"
+    request = urllib_request.Request(endpoint, method="GET", headers=headers)
+    timeout = min(max(float(settings.scanner.timeout_seconds or 2.0), 0.1), 2.0)
+    context = None
+    if endpoint.startswith("https://") and not settings.scanner.verify_tls:
+        context = ssl._create_unverified_context()
+    try:
+        if context is not None:
+            with urllib_request.urlopen(request, timeout=timeout, context=context) as response:
+                return UIDsxaStatusResponse(
+                    state="active",
+                    label="DSXA active",
+                    mode=settings.scanner.mode,
+                    base_url=base_url,
+                    endpoint=endpoint,
+                    details={"effective_mode": mode, "status_code": response.status},
+                )
+        with urllib_request.urlopen(request, timeout=timeout) as response:
+            return UIDsxaStatusResponse(
+                state="active",
+                label="DSXA active",
+                mode=settings.scanner.mode,
+                base_url=base_url,
+                endpoint=endpoint,
+                details={"effective_mode": mode, "status_code": response.status},
+            )
+    except urllib_error.HTTPError as exc:
+        return UIDsxaStatusResponse(
+            state="active",
+            label="DSXA reachable",
+            mode=settings.scanner.mode,
+            base_url=base_url,
+            endpoint=endpoint,
+            details={"effective_mode": mode, "reason": "http_response", "status_code": exc.code},
+        )
+    except (urllib_error.URLError, TimeoutError, OSError, ValueError) as exc:
+        return UIDsxaStatusResponse(
+            state="unreachable",
+            label="DSXA can't reach",
+            mode=settings.scanner.mode,
+            base_url=base_url,
+            endpoint=endpoint,
+            details={"effective_mode": mode, "reason": "transport_error", "message": str(exc)},
         )
 
 
@@ -1048,6 +1139,11 @@ async def ui_status() -> dict:
         ],
         "notes": "UI routes are presentation-oriented and must remain separate from control-plane and execution contracts.",
     }
+
+
+@router.get("/dsxa/status", response_model=UIDsxaStatusResponse)
+async def dsxa_status() -> UIDsxaStatusResponse:
+    return _probe_dsxa_status()
 
 
 @router.post("/demo/seed", response_model=UIDemoSeedResponse)

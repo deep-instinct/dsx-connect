@@ -34,6 +34,42 @@ def test_operator_console_page_renders() -> None:
     assert "Quarantine, move and tag" in response.text
     assert '<option value="operations">Operations</option>' in response.text
     assert '<option value="security">Security Console</option>' in response.text
+    assert 'id="stat-dsxa"' in response.text
+    assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
+
+
+def test_ui_dsxa_status_reports_stub(monkeypatch) -> None:
+    monkeypatch.setattr(settings.scanner, "mode", "stub")
+    monkeypatch.setattr(settings.scanner, "base_url", "")
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/ui/dsxa/status")
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "stub"
+    assert response.json()["label"] == "DSXA stub"
+
+
+def test_ui_dsxa_status_reports_unreachable(monkeypatch) -> None:
+    from urllib import error as urllib_error
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fail_urlopen(*args, **kwargs):
+        raise urllib_error.URLError("connection refused")
+
+    monkeypatch.setattr(settings.scanner, "mode", "dsxa")
+    monkeypatch.setattr(settings.scanner, "base_url", "http://scanner.local:15000")
+    monkeypatch.setattr(ui_routes.urllib_request, "urlopen", fail_urlopen)
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/ui/dsxa/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["state"] == "unreachable"
+    assert payload["label"] == "DSXA can't reach"
+    assert payload["endpoint"] == "http://scanner.local:15000/"
 
 
 def test_ui_integrations_summary_includes_scope_counts_and_health(monkeypatch) -> None:

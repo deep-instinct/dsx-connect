@@ -698,6 +698,7 @@
         <h1>Operator Console</h1>
       </div>
       <div class="statusbar">
+        <span class="pill warn" id="stat-dsxa">DSXA checking</span>
         <span class="pill" id="stat-integrations">0 connectors</span>
         <span class="pill" id="stat-scopes">0 scopes</span>
         <span class="pill" id="stat-jobs">0 jobs</span>
@@ -1055,6 +1056,7 @@
     };
 
     const endpoints = {
+      dsxaStatus: "/api/v1/ui/dsxa/status",
       overview: "/api/v1/ui/overview",
       connectors: "/api/v1/ui/assets/connectors",
       protectedAssets: "/api/v1/ui/assets/protected",
@@ -1155,8 +1157,8 @@
     function pillClass(value) {
       const normalized = String(value || "").toLowerCase();
       if (["healthy", "enabled", "completed", "protected", "clean", "active"].includes(normalized)) return "pill good";
-      if (["failed", "cancelled", "unhealthy", "disabled", "malicious"].includes(normalized)) return "pill bad";
-      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only"].includes(normalized)) return "pill warn";
+      if (["failed", "cancelled", "unhealthy", "disabled", "malicious", "unreachable"].includes(normalized)) return "pill bad";
+      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only", "stub", "not_configured"].includes(normalized)) return "pill warn";
       return "pill";
     }
 
@@ -1210,6 +1212,26 @@
       document.getElementById("metric-healthy").textContent = String(healthy);
       document.getElementById("metric-enabled").textContent = String(state.connectorRows.filter((row) => row.integration.enabled).length);
       document.getElementById("metric-scopes").textContent = String(state.scopes.length);
+    }
+
+    function renderDsxaStatus(payload) {
+      const node = document.getElementById("stat-dsxa");
+      node.textContent = payload?.label || "DSXA unknown";
+      node.className = pillClass(payload?.state || "unknown");
+      node.title = payload?.base_url ? `${payload.base_url} (${payload.mode || "unknown"})` : `scanner mode: ${payload?.mode || "unknown"}`;
+    }
+
+    async function loadDsxaStatus() {
+      try {
+        renderDsxaStatus(await fetchJson(endpoints.dsxaStatus));
+      } catch (error) {
+        renderDsxaStatus({
+          state: "unreachable",
+          label: "DSXA status unavailable",
+          mode: "unknown",
+          details: { message: error.message },
+        });
+      }
     }
 
     function renderConnectors() {
@@ -1550,6 +1572,7 @@
     }
 
     async function refreshAll() {
+      await loadDsxaStatus();
       await loadOverview();
       await loadConnectors();
       await loadScanResults();

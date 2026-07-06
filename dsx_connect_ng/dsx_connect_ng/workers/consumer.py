@@ -30,6 +30,17 @@ def decode_envelope(body: bytes) -> MessageEnvelope:
     return MessageEnvelope.model_validate(payload)
 
 
+def _envelope_log_fields(envelope: MessageEnvelope | None) -> dict[str, Any]:
+    if envelope is None:
+        return {}
+    return {
+        "message_type": envelope.message_type,
+        "job_id": envelope.job_id,
+        "job_item_id": envelope.job_item_id,
+        "object_identity": envelope.object_identity,
+    }
+
+
 async def dispatch_body(handler: EnvelopeHandler, body: bytes) -> None:
     await handler(decode_envelope(body))
 
@@ -174,7 +185,36 @@ async def consume_queue(
                             job_item_id=envelope.job_item_id,
                             object_identity=envelope.object_identity,
                         )
-                except TerminalWorkerError:
+                except TerminalWorkerError as exc:
+                    error_payload = (
+                        exc.as_error_payload()
+                        if hasattr(exc, "as_error_payload")
+                        else {"code": exc.__class__.__name__, "message": str(exc), "retryable": False}
+                    )
+                    log_event(
+                        ops_logging,
+                        40,
+                        "worker_message_terminal_error",
+                        queue=queue_name,
+                        error=error_payload,
+                        **_envelope_log_fields(envelope),
+                    )
+                    if terminal_failure_handler is not None and envelope is not None:
+                        try:
+                            await terminal_failure_handler(envelope, exc, dict(message.headers or {}))
+                        except Exception as terminal_exc:
+                            log_event(
+                                ops_logging,
+                                40,
+                                "worker_terminal_failure_handler_failed",
+                                queue=queue_name,
+                                error={
+                                    "code": terminal_exc.__class__.__name__,
+                                    "message": str(terminal_exc),
+                                },
+                                original_error=error_payload,
+                                **_envelope_log_fields(envelope),
+                            )
                     if dlx_exchange is not None:
                         headers = dict(message.headers or {})
                         headers["x-dsx-terminal"] = True
@@ -187,9 +227,22 @@ async def consume_queue(
                         await dlx_exchange.publish(dlq_message, routing_key=routing_keys[0])
                     await message.ack()
                 except Exception as exc:
+                    envelope_fields = _envelope_log_fields(envelope)
                     if retry_exchange is not None and should_retry(headers=message.headers, max_attempts=retry_max_attempts):
                         headers = dict(message.headers or {})
                         headers["x-dsx-retry-attempt"] = next_retry_attempt(message.headers)
+                        log_event(
+                            ops_logging,
+                            40,
+                            "worker_message_retrying",
+                            queue=queue_name,
+                            retry_attempt=headers["x-dsx-retry-attempt"],
+                            error={
+                                "code": exc.__class__.__name__,
+                                "message": str(exc),
+                            },
+                            **envelope_fields,
+                        )
                         retry_message = aio_pika.Message(
                             body=message.body,
                             headers=headers,
@@ -199,10 +252,40 @@ async def consume_queue(
                         await retry_exchange.publish(retry_message, routing_key=routing_keys[0])
                         await message.ack()
                         return
+                    log_event(
+                        ops_logging,
+                        40,
+                        "worker_message_retries_exhausted",
+                        queue=queue_name,
+                        retry_attempt=next_retry_attempt(message.headers) - 1,
+                        error={
+                            "code": exc.__class__.__name__,
+                            "message": str(exc),
+                        },
+                        **envelope_fields,
+                    )
                     if terminal_failure_handler is not None and envelope is not None:
                         headers = dict(message.headers or {})
                         headers["x-dsx-retry-attempt"] = next_retry_attempt(message.headers) - 1
-                        await terminal_failure_handler(envelope, exc, headers)
+                        try:
+                            await terminal_failure_handler(envelope, exc, headers)
+                        except Exception as terminal_exc:
+                            log_event(
+                                ops_logging,
+                                40,
+                                "worker_terminal_failure_handler_failed",
+                                queue=queue_name,
+                                retry_attempt=headers["x-dsx-retry-attempt"],
+                                error={
+                                    "code": terminal_exc.__class__.__name__,
+                                    "message": str(terminal_exc),
+                                },
+                                original_error={
+                                    "code": exc.__class__.__name__,
+                                    "message": str(exc),
+                                },
+                                **envelope_fields,
+                            )
                     if dlx_exchange is not None:
                         headers = dict(message.headers or {})
                         headers["x-dsx-retry-attempt"] = next_retry_attempt(message.headers) - 1

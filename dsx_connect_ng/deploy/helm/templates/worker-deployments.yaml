@@ -1,0 +1,49 @@
+{{- range $workerName, $worker := .Values.workers }}
+{{- if $worker.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dsx-connect.fullname" $ }}-{{ $workerName | kebabcase }}
+  labels:
+    {{- include "dsx-connect.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $workerName | kebabcase }}
+spec:
+  replicas: {{ $worker.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+      app.kubernetes.io/component: {{ $workerName | kebabcase }}
+  template:
+    metadata:
+      labels:
+        {{- include "dsx-connect.labels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $workerName | kebabcase }}
+    spec:
+      {{- if $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range $.Values.imagePullSecrets }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ $workerName | kebabcase }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command:
+            {{- toYaml $worker.command | nindent 12 }}
+          {{- if $worker.args }}
+          args:
+            {{- toYaml $worker.args | nindent 12 }}
+          {{- end }}
+          env:
+            {{- include "dsx-connect.env" $ | nindent 12 }}
+          {{- if $.Values.envSecretRefs }}
+          envFrom:
+            {{- range $.Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+{{- end }}
+{{- end }}

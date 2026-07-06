@@ -8,10 +8,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, AsyncIterable, Awaitable, Callable
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config
+from dsx_connect_ng.control_plane.models import utcnow
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.contracts import ScanItemRequested
 from dsx_connect_ng.readers.base import ReadResult, Reader, TerminalScanError
@@ -68,6 +69,35 @@ def _first_int(*values: Any) -> int | None:
     return None
 
 
+def _normalize_registered_connector_base_url(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    if parsed.hostname not in {"0.0.0.0", "::"}:
+        return base_url
+    netloc = "127.0.0.1"
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+
+def _live_connector_proxy_endpoint(
+    request: ScanItemRequested,
+    *,
+    control_plane: ControlPlaneService,
+) -> str | None:
+    if not request.integration_id:
+        return None
+    instances = [
+        instance
+        for instance in control_plane.list_connector_instances(integration_id=request.integration_id)
+        if instance.expires_at > utcnow() and instance.capabilities.get("read") is not False
+    ]
+    if not instances:
+        return None
+    priority = {"healthy": 0, "degraded": 1, "unknown": 2, "unhealthy": 3}
+    instance = sorted(instances, key=lambda item: priority.get(item.health, 99))[0]
+    return f"{_normalize_registered_connector_base_url(instance.base_url).rstrip('/')}/read_file"
+
+
 def resolve_connector_proxy_runtime_config(
     request: ScanItemRequested,
     *,
@@ -83,6 +113,8 @@ def resolve_connector_proxy_runtime_config(
     proxy = runtime_config.reader.proxy if runtime_config.reader and runtime_config.reader.proxy else None
 
     endpoint_url = proxy.endpoint_url if proxy else None
+    if not endpoint_url:
+        endpoint_url = _live_connector_proxy_endpoint(request, control_plane=control_plane)
     if not endpoint_url:
         base_url = proxy.base_url if proxy else None
         connector_name = proxy.connector_name if proxy else None

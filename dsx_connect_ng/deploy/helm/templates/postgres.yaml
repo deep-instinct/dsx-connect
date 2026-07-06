@@ -1,0 +1,105 @@
+{{- if .Values.postgresql.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "dsx-connect.fullname" . }}-postgres
+  labels:
+    {{- include "dsx-connect.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: postgres
+  ports:
+    - name: postgres
+      port: {{ .Values.postgresql.service.port }}
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dsx-connect.fullname" . }}-postgres
+  labels:
+    {{- include "dsx-connect.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        {{- include "dsx-connect.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.postgresql.image.repository }}:{{ .Values.postgresql.image.tag }}"
+          imagePullPolicy: {{ .Values.postgresql.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.postgresql.service.port }}
+              protocol: TCP
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.auth.database | quote }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.auth.username | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.postgresql.auth.password | quote }}
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgresql.auth.username | quote }}
+                - -d
+                - {{ .Values.postgresql.auth.database | quote }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.postgresql.auth.username | quote }}
+                - -d
+                - {{ .Values.postgresql.auth.database | quote }}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres-data
+          {{- if .Values.postgresql.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "dsx-connect.fullname" . }}-postgres
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+{{- if .Values.postgresql.persistence.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dsx-connect.fullname" . }}-postgres
+  labels:
+    {{- include "dsx-connect.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.persistence.size }}
+{{- end }}
+{{- end }}

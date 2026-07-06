@@ -63,6 +63,41 @@ def test_cloud_asset_inventory_helper_reads_first_page(monkeypatch):
     assert next_cursor == "token-2"
 
 
+def test_filtered_cloud_asset_inventory_walks_until_page_is_filled(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    calls = []
+
+    def fake_cloud_asset_buckets(*, scope: str, limit: int, cursor: str | None = None):
+        calls.append((limit, cursor))
+        if cursor is None:
+            return [
+                gc.AssetDiscoveryItem(id="dev-a", display_name="dev-a", selector="dev-a"),
+                gc.AssetDiscoveryItem(id="qa-a", display_name="qa-a", selector="qa-a"),
+            ], "page-2"
+        if cursor == "page-2":
+            return [
+                gc.AssetDiscoveryItem(id="prod-a", display_name="prod-a", selector="prod-a"),
+                gc.AssetDiscoveryItem(id="prod-b", display_name="prod-b", selector="prod-b"),
+            ], "page-3"
+        return [
+            gc.AssetDiscoveryItem(id="prod-c", display_name="prod-c", selector="prod-c"),
+        ], None
+
+    monkeypatch.setattr(gc, "_list_cloud_asset_inventory_buckets", fake_cloud_asset_buckets)
+
+    assets, next_cursor = gc._list_filtered_cloud_asset_inventory_buckets(
+        scope="org:123",
+        limit=2,
+        asset_filter_mode="begins_with",
+        asset_filter_value="prod",
+    )
+
+    assert [asset.selector for asset in assets] == ["prod-a", "prod-b"]
+    assert next_cursor == "page-3"
+    assert calls == [(2, None), (2, "page-2")]
+
+
 @pytest.mark.asyncio
 async def test_full_scan_filters(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc

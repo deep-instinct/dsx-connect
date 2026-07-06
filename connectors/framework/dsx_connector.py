@@ -1523,6 +1523,8 @@ class DSXAConnectorRouter(APIRouter):
         source: str = Query(default="configured_asset"),
         limit: int = Query(default=100, ge=1, le=1000),
         cursor: str | None = Query(default=None),
+        asset_filter_mode: str | None = Query(default=None),
+        asset_filter_value: str | None = Query(default=None),
     ) -> AssetDiscoveryResponse:
         dsx_logging.debug(f"asset_discovery called (type={asset_type}, source={source}, limit={limit})")
         if self._connector.asset_discovery_handler is None:
@@ -1536,10 +1538,15 @@ class DSXAConnectorRouter(APIRouter):
             )
         handler = self._connector.asset_discovery_handler
         parameters = inspect.signature(handler).parameters
+        kwargs = {}
+        if "asset_filter_mode" in parameters:
+            kwargs["asset_filter_mode"] = asset_filter_mode
+        if "asset_filter_value" in parameters:
+            kwargs["asset_filter_value"] = asset_filter_value
         if "source" in parameters:
-            res = handler(asset_type, source, limit, cursor)
+            res = handler(asset_type, source, limit, cursor, **kwargs)
         else:
-            res = handler(asset_type, limit, cursor)
+            res = handler(asset_type, limit, cursor, **kwargs)
         if inspect.isawaitable(res):
             res = await res  # type: ignore[assignment]
         if isinstance(res, AssetDiscoveryResponse):

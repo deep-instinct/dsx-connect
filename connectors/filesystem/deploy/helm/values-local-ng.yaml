@@ -1,0 +1,28 @@
+env:
+  LOG_LEVEL: "debug"
+  DSXCONNECTOR_APP_ENV: "dev"
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
+  DSXCONNECTOR_NG_PLATFORM: "filesystem"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "local-colima"
+  DSXCONNECTOR_ASSET: "/app/scan_folder"
+  DSXCONNECTOR_FILTER: ""
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+  DSXCONNECTOR_MONITOR: "false"
+  DSXCONNECTOR_MONITOR_FORCE_POLLING: "false"
+  DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+  DSXCONNECTOR_SCAN_BY_PATH: "False"
+
+auth_dsxconnect:
+  enabled: false
+  enrollmentSecretName: "dsx-dsx-connect-api-auth-enrollment"
+  enrollmentKey: ENROLLMENT_TOKEN
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"

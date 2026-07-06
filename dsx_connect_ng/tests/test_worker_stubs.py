@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScopeCreate
+from dsx_connect_ng.control_plane.models import ConnectorInstanceRegister, IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneRepository
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.bus import InMemoryJobBus
@@ -1521,6 +1521,46 @@ def test_resolve_connector_proxy_runtime_config_uses_integration_config() -> Non
     assert config.auth_mode == "static_header"
     assert config.header_name == "X-Test-Auth"
     assert config.header_value == "token-1"
+
+
+def test_resolve_connector_proxy_runtime_config_uses_registered_connector_instance() -> None:
+    control_plane = ControlPlaneService(InMemoryControlPlaneRepository())
+    integration = control_plane.create_integration(
+        IntegrationCreate(
+            integration_id="gcs-prod",
+            platform="gcs",
+            platform_key="project-1",
+            display_name="GCS Prod",
+            config={},
+        )
+    )
+    control_plane.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            integration_id=integration.integration_id,
+            platform="gcs",
+            platform_key="project-1",
+            connector_name="google-cloud-storage-connector",
+            base_url="http://0.0.0.0:8595/google-cloud-storage-connector",
+            capabilities={"read": True},
+            health="healthy",
+        )
+    )
+    request = SimpleNamespace(
+        job_id="job-1",
+        job_item_id="item-1",
+        integration_id=integration.integration_id,
+        scope_id=None,
+        object_identity="bucket-a/object.pdf",
+        content_source=ContentSource(mode="original"),
+        read_hint={},
+        scan_options={"readerStrategy": "proxy"},
+    )
+
+    config = resolve_connector_proxy_runtime_config(request, control_plane=control_plane)
+
+    assert config.endpoint_url == "http://127.0.0.1:8595/google-cloud-storage-connector/read_file"
+    assert config.auth_mode == "none"
 
 
 def test_build_connector_proxy_reader_uses_http_transport_config() -> None:

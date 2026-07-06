@@ -169,6 +169,13 @@ nav:
               - Azure Blob Storage (reference): deployment/kubernetes/azure-blob.md
           - DIANNA Worker: deployment/kubernetes/dianna.md
 
+  - DSX-Connect 2:
+      - Overview: dsx-connect-2/index.md
+      - Deployment:
+          - Overview: dsx-connect-2/deployment/index.md
+          - Kubernetes Helm: dsx-connect-2/deployment/kubernetes.md
+          - Connectors: dsx-connect-2/deployment/connectors.md
+
   - Connectors:
       - connectors/index.md
 

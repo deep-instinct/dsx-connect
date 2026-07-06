@@ -1,0 +1,90 @@
+image:
+  repository: dsxconnect/dsx-connect
+  pullPolicy: IfNotPresent
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 8091
+
+api:
+  replicaCount: 1
+  host: "0.0.0.0"
+  workers: 1
+
+env:
+  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "memory"
+  DSX_CONNECT_NG__JOB_BUS_BACKEND: "memory"
+  DSX_CONNECT_NG_SCANNER__MODE: "stub"
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+
+envSecretRefs: []
+
+postgresql:
+  enabled: false
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    database: dsx_connect_2
+    username: dsx
+    password: dsx
+  service:
+    port: 5432
+  persistence:
+    enabled: false
+    size: 8Gi
+
+rabbitmq:
+  enabled: false
+  image:
+    repository: rabbitmq
+    tag: "3.13-management-alpine"
+    pullPolicy: IfNotPresent
+  auth:
+    username: dsx
+    password: dsx
+  service:
+    amqpPort: 5672
+    managementPort: 15672
+  persistence:
+    enabled: false
+    size: 8Gi
+
+workers:
+  relay:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.relay_worker"]
+    args: []
+  scan:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.scan_worker"]
+    args: ["--prefetch-count", "10"]
+  policy:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.policy_worker"]
+    args: []
+  remediation:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.remediation_worker"]
+    args: []
+  resultSink:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.result_sink_worker"]
+    args: []
+  dianna:
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_ng.workers.dianna_worker"]
+    args: []

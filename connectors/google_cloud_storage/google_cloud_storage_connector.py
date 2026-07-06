@@ -472,12 +472,66 @@ async def preview_provider(limit: int) -> list[str]:
     return items
 
 
+def _matches_asset_filter(value: str, *, mode: str | None, needle: str | None) -> bool:
+    if not mode or not needle:
+        return True
+    normalized_value = value.lower()
+    normalized_needle = needle.strip().lower()
+    if not normalized_needle:
+        return True
+    normalized_mode = mode.strip().lower().replace("-", "_")
+    if normalized_mode in {"begins_with", "starts_with", "prefix"}:
+        return normalized_value.startswith(normalized_needle)
+    if normalized_mode in {"ends_with", "suffix"}:
+        return normalized_value.endswith(normalized_needle)
+    if normalized_mode in {"contains", "substring"}:
+        return normalized_needle in normalized_value
+    return True
+
+
+def _list_filtered_cloud_asset_inventory_buckets(
+    *,
+    scope: str,
+    limit: int,
+    cursor: str | None = None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
+) -> tuple[list[AssetDiscoveryItem], str | None]:
+    effective_limit = max(1, min(int(limit or 100), 1000))
+    if not asset_filter_mode or not asset_filter_value or not asset_filter_value.strip():
+        return _list_cloud_asset_inventory_buckets(scope=scope, limit=effective_limit, cursor=cursor)
+
+    selected: list[AssetDiscoveryItem] = []
+    current_cursor = cursor
+    next_cursor: str | None = None
+
+    while len(selected) < effective_limit:
+        remaining = effective_limit - len(selected)
+        page_assets, next_cursor = _list_cloud_asset_inventory_buckets(
+            scope=scope,
+            limit=remaining,
+            cursor=current_cursor,
+        )
+        selected.extend(
+            asset
+            for asset in page_assets
+            if _matches_asset_filter(asset.selector, mode=asset_filter_mode, needle=asset_filter_value)
+        )
+        if not next_cursor:
+            return selected[:effective_limit], None
+        current_cursor = next_cursor
+
+    return selected[:effective_limit], next_cursor
+
+
 @connector.asset_discovery
 async def asset_discovery_handler(
     asset_type: str = "bucket",
     source: str = "configured_asset",
     limit: int = 100,
     cursor: str | None = None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
 ) -> AssetDiscoveryResponse:
     normalized_type = (asset_type or "bucket").strip().lower()
     if ":" in normalized_type:
@@ -512,6 +566,13 @@ async def asset_discovery_handler(
         if getattr(config, "asset_prefix_root", ""):
             metadata["prefix"] = config.asset_prefix_root
             metadata["kind"] = "configured_bucket_prefix"
+        if not _matches_asset_filter(configured_selector, mode=asset_filter_mode, needle=asset_filter_value):
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="configured_asset",
+                status="success",
+                assets=[],
+            )
         return AssetDiscoveryResponse(
             asset_type="bucket",
             source="configured_asset",
@@ -531,10 +592,12 @@ async def asset_discovery_handler(
     )
     if use_cloud_asset_inventory:
         try:
-            assets, next_cursor = _list_cloud_asset_inventory_buckets(
+            assets, next_cursor = _list_filtered_cloud_asset_inventory_buckets(
                 scope=asset_inventory_scope,
                 limit=limit,
                 cursor=cursor,
+                asset_filter_mode=asset_filter_mode,
+                asset_filter_value=asset_filter_value,
             )
         except Exception as exc:
             message = str(exc)
@@ -576,6 +639,11 @@ async def asset_discovery_handler(
             start = max(0, int(cursor))
         except ValueError:
             start = 0
+    buckets = [
+        bucket
+        for bucket in buckets
+        if _matches_asset_filter(bucket, mode=asset_filter_mode, needle=asset_filter_value)
+    ]
     effective_limit = max(1, min(int(limit or 100), 1000))
     selected = buckets[start:start + effective_limit]
     next_index = start + len(selected)

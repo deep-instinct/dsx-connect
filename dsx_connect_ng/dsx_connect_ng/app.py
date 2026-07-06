@@ -8,13 +8,14 @@ from dsx_connect_ng.api.routes.ui import router as ui_router
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.bootstrap import bootstrap_control_plane
 from dsx_connect_ng.jobs.bootstrap import bootstrap_job_bus, bootstrap_job_service
+from dsx_connect_ng.version import DSX_CONNECT_VERSION
 
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="DSX-Connect NG",
-        version="0.1.0",
-        summary="Standalone control-plane-first implementation for the next DSX-Connect architecture.",
+        title="DSX-Connect",
+        version=DSX_CONNECT_VERSION,
+        summary="Control-plane-first implementation for DSX-Connect v2.",
     )
     bootstrap = bootstrap_control_plane()
     job_bus_bootstrap = bootstrap_job_bus()

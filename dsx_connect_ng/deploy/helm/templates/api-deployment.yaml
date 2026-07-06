@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dsx-connect.fullname" . }}-api
+  labels:
+    {{- include "dsx-connect.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "dsx-connect.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.imagePullSecrets }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "uvicorn", "dsx_connect_ng.app:app"]
+          args:
+            - "--host"
+            - {{ .Values.api.host | quote }}
+            - "--port"
+            - {{ .Values.service.port | quote }}
+            - "--workers"
+            - {{ .Values.api.workers | quote }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          env:
+            {{- include "dsx-connect.env" . | nindent 12 }}
+          {{- if .Values.envSecretRefs }}
+          envFrom:
+            {{- range .Values.envSecretRefs }}
+            - secretRef:
+                name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3

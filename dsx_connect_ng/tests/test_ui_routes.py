@@ -23,19 +23,40 @@ def test_operator_console_page_renders() -> None:
     response = client.get("/api/v1/ui/")
 
     assert response.status_code == 200
-    assert "DSX-Connect NG Operator Console" in response.text
+    assert "DSX-Connect Operator Console" in response.text
+    assert "DSX-Connect v2.0.0 Operator Console" not in response.text
     assert "Add Repository Connector" in response.text
     assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
-    assert "Instances</th>" in response.text
+    assert 'id="connectors-table"' in response.text
+    assert "function renderDataTable" in response.text
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
     assert 'id="connector-drawer"' in response.text
-    assert "Default Policy" in response.text
-    assert "Detect only, tag if possible" in response.text
-    assert "Quarantine, move and tag" in response.text
+    assert "Protection Profile Editor" in response.text
+    assert "Default Protection Profile" in response.text
+    assert 'id="create-policy"' in response.text
+    assert 'id="policy-editor-drawer"' in response.text
+    assert 'id="policy-editor-save"' in response.text
+    assert 'id="policy-editor-cancel"' in response.text
+    assert "Malicious verdicts" in response.text
+    assert "Detect Only" in response.text
+    assert "Quarantine Folder Path" in response.text
     assert '<option value="operations">Operations</option>' in response.text
     assert '<option value="security">Security Console</option>' in response.text
     assert 'id="stat-dsxa"' in response.text
     assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
+
+
+def test_ui_meta_returns_display_version() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/api/v1/ui/meta")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "product": "DSX-Connect",
+        "version": "2.0.0",
+        "display_name": "DSX-Connect v2.0.0",
+    }
 
 
 def test_ui_dsxa_status_reports_stub(monkeypatch) -> None:
@@ -334,7 +355,7 @@ def test_ui_scope_scan_submits_batch_for_scope_selector(monkeypatch) -> None:
     assert progress["derived_from_item_count"] == 1
 
 
-def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:
+def test_ui_scope_scan_uses_connector_preview_items(monkeypatch) -> None:
     app = create_app()
     service = app.state.control_plane_service
     service.create_integration(
@@ -369,8 +390,70 @@ def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:
 
     monkeypatch.setattr(
         ui_routes,
-        "_fetch_connector_assets",
-        lambda base_url, connector_name, *, asset_type, source, limit, cursor: {
+        "_fetch_connector_preview",
+        lambda base_url, connector_name, *, limit: ["bucket-a/eicar.com", "bucket-a/clean.txt"],
+    )
+
+    client = TestClient(app)
+    response = client.post("/api/v1/ui/scopes/scope-a/scan", json={"reader_strategy": "proxy", "limit": 10})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job"]["payload"]["enumerationMode"] == "connector_preview"
+    assert payload["job"]["payload"]["itemCount"] == 2
+    assert payload["item_summary"]["total"] == 2
+
+    job_id = payload["job"]["job_id"]
+    items = client.get(f"/api/v1/execution/jobs/{job_id}/items").json()
+    assert [item["object_identity"] for item in items] == ["bucket-a/eicar.com", "bucket-a/clean.txt"]
+    assert [item["payload"]["path"] for item in items] == ["eicar.com", "clean.txt"]
+
+
+def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    service.create_integration(
+        IntegrationCreate(
+            integration_id="gcs-a",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            config={
+                "reader": {
+                    "default_strategy": "proxy",
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8630",
+                        "connector_name": "google-cloud-storage-connector",
+                    },
+                },
+            },
+        )
+    )
+    service.create_scope(
+        ProtectedScopeCreate(
+            scope_id="scope-a",
+            integration_id="gcs-a",
+            scope_type="path",
+            resource_selector="bucket-a",
+            display_name="Bucket A",
+            mode="full_scan",
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fake_fetch_assets(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
+        return {
             "asset_type": "bucket",
             "source": source,
             "status": "success",
@@ -379,8 +462,9 @@ def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:
                 {"id": "bucket-b", "display_name": "Bucket B", "selector": "bucket-b", "metadata": {"provider": "gcs"}},
             ],
             "next_cursor": None,
-        },
-    )
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch_assets)
 
     client = TestClient(app)
     response = client.get("/api/v1/ui/integrations/gcs-a/assets?type=bucket&source=inventory_enumeration")
@@ -465,7 +549,17 @@ def test_ui_assets_protected_aggregates_discovered_assets_with_policy(monkeypatc
 
     from dsx_connect_ng.api.routes import ui as ui_routes
 
-    def fake_fetch(base_url, connector_name, *, asset_type, source, limit, cursor):
+    def fake_fetch(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
         assert asset_type == "bucket"
         return {
             "asset_type": "bucket",
@@ -527,7 +621,17 @@ def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeyp
 
     from dsx_connect_ng.api.routes import ui as ui_routes
 
-    def fake_fetch(base_url, connector_name, *, asset_type, source, limit, cursor):
+    def fake_fetch(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
         assert base_url == "http://gcs/google-cloud-storage-connector"
         assert connector_name is None
         assert limit == 250
@@ -549,6 +653,65 @@ def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeyp
     payload = response.json()
     assert payload["assets"][0]["selector"] == "bucket-a"
     assert payload["assets"][0]["coverage_state"] == "unprotected"
+
+
+def test_ui_assets_protected_forwards_paging_and_asset_filter(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    connector = service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            connector_name="google-cloud-storage-connector",
+            base_url="http://gcs/google-cloud-storage-connector",
+            capabilities={"discover": True, "read": True},
+            health="healthy",
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fake_fetch(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
+        assert limit == 15
+        assert cursor == "page-2"
+        assert asset_filter_mode == "begins_with"
+        assert asset_filter_value == "prod"
+        return {
+            "asset_type": asset_type,
+            "source": source,
+            "status": "success",
+            "assets": [
+                {"id": "prod-a", "display_name": "prod-a", "selector": "prod-a"},
+                {"id": "dev-a", "display_name": "dev-a", "selector": "dev-a"},
+            ],
+            "next_cursor": "page-3",
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch)
+
+    client = TestClient(app)
+    response = client.get(
+        f"/api/v1/ui/assets/protected?integration_id={connector.integration_id}"
+        "&type=bucket&source=inventory_enumeration&limit=15&cursor=page-2"
+        "&asset_filter_mode=begins_with&asset_filter_value=prod"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [asset["selector"] for asset in payload["assets"]] == ["prod-a"]
+    assert payload["next_cursors"] == {connector.integration_id: "page-3"}
 
 
 def test_ui_scan_results_returns_operator_summary() -> None:
@@ -795,10 +958,18 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
             details={"ok": True},
         ),
     )
-    monkeypatch.setattr(
-        ui_routes,
-        "_fetch_connector_assets",
-        lambda base_url, connector_name, *, asset_type, source, limit, cursor: {
+    def fake_fetch_assets(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
+        return {
             "asset_type": asset_type,
             "source": source,
             "status": "success",
@@ -807,8 +978,9 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
                 {"id": "bucket-b", "display_name": "Bucket B", "selector": "bucket-b"},
             ],
             "next_cursor": None,
-        },
-    )
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch_assets)
 
     client = TestClient(app)
     integration = client.post(

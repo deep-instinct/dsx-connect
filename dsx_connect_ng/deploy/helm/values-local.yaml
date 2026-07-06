@@ -1,0 +1,4 @@
+image:
+  repository: local/dsx-connect/dsx-connect
+  pullPolicy: IfNotPresent
+  tag: dev

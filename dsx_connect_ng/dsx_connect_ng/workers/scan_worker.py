@@ -1111,13 +1111,16 @@ async def mark_scan_message_failed_after_retries(
 ) -> None:
     request = ScanItemRequested.from_envelope(envelope)
     retry_attempt = headers.get("x-dsx-retry-attempt")
-    error = {
-        "code": "scan_execution_failed",
-        "message": str(exc),
-        "retryable": True,
-        "reason": "retry_attempts_exhausted",
-        "retryAttempts": retry_attempt,
-    }
+    if isinstance(exc, TerminalScanError):
+        error = exc.as_error_payload()
+    else:
+        error = {
+            "code": "scan_execution_failed",
+            "message": str(exc),
+            "retryable": True,
+            "reason": "retry_attempts_exhausted",
+            "retryAttempts": retry_attempt,
+        }
     log_event(
         ops_logging,
         40,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DSX-Connect NG Operator Console</title>
+  <title>DSX-Connect Operator Console</title>
   <style>
     :root,
     :root[data-theme="light"] {
@@ -28,6 +28,50 @@
       --good: #176b51;
       --good-soft: #dceee7;
       --shadow: 0 12px 28px rgba(25, 36, 42, 0.08);
+
+      --font-family-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --font-family-mono: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      --font-size-2xs: 10px;
+      --font-size-xs: 11px;
+      --font-size-sm: 12px;
+      --font-size-md: 13px;
+      --font-size-lg: 14px;
+      --font-size-xl: 18px;
+      --font-weight-normal: 500;
+      --font-weight-strong: 600;
+      --font-weight-emphasis: 650;
+      --font-weight-heavy: 700;
+      --line-height-tight: 1.2;
+      --line-height-copy: 1.45;
+      --space-0: 0;
+      --space-1: 2px;
+      --space-2: 4px;
+      --space-3: 6px;
+      --space-4: 8px;
+      --space-5: 10px;
+      --space-6: 12px;
+      --space-7: 14px;
+      --space-8: 16px;
+      --space-9: 18px;
+      --space-10: 20px;
+      --space-12: 24px;
+      --space-14: 28px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-pill: 999px;
+      --control-height: 34px;
+      --control-height-sm: 24px;
+      --control-height-toggle: 32px;
+      --copy-icon-size: 14px;
+      --rail-icon-size: 15px;
+      --rail-width: 188px;
+      --rail-width-collapsed: 54px;
+      --table-min-width: 900px;
+      --table-min-width-protected: 1320px;
+      --table-max-height: clamp(280px, 52vh, 640px);
+      --table-cell-padding: 6px 7px;
+      --table-cell-padding-compact: var(--space-3);
+      --content-max-width: 1680px;
     }
 
     :root[data-theme="operations"] {
@@ -86,8 +130,8 @@
       margin: 0;
       background: var(--bg);
       color: var(--ink);
-      font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-      font-size: 13px;
+      font-family: var(--font-family-ui);
+      font-size: var(--font-size-md);
     }
 
     button, input, select, textarea {
@@ -95,14 +139,14 @@
     }
 
     button {
-      min-height: 34px;
+      min-height: var(--control-height);
       border: 1px solid var(--line-strong);
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       padding: 7px 11px;
       background: var(--surface);
       color: var(--ink);
       cursor: pointer;
-      font-weight: 500;
+      font-weight: var(--font-weight-normal);
     }
 
     button.primary {
@@ -122,11 +166,47 @@
       opacity: 0.55;
     }
 
+    button.copy-button {
+      width: var(--control-height-sm);
+      min-width: var(--control-height-sm);
+      min-height: var(--control-height-sm);
+      height: var(--control-height-sm);
+      padding: 0;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      line-height: 1;
+      opacity: 0.74;
+    }
+
+    button.copy-button:hover {
+      border-color: var(--line);
+      background: var(--toolbar-bg);
+      color: var(--ink);
+      opacity: 1;
+    }
+
+    button.copy-button.copied {
+      border-color: #b6d9cc;
+      background: var(--good-soft);
+      color: var(--good);
+      opacity: 1;
+    }
+
+    button.copy-button svg {
+      width: var(--copy-icon-size);
+      height: var(--copy-icon-size);
+      stroke-width: 1.8;
+    }
+
     input, select, textarea {
       width: 100%;
-      min-height: 34px;
+      min-height: var(--control-height);
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: var(--radius-sm);
       padding: 7px 9px;
       background: var(--field-bg);
       color: var(--ink);
@@ -135,17 +215,17 @@
     textarea {
       min-height: 82px;
       resize: vertical;
-      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.45;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
     }
 
     label {
       display: grid;
       gap: 5px;
       color: var(--muted);
-      font-size: 12px;
-      font-weight: 500;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
     }
 
     h1, h2, h3, p {
@@ -153,54 +233,163 @@
     }
 
     h1 {
-      font-size: 18px;
-      line-height: 1.2;
-      font-weight: 600;
+      font-size: var(--font-size-xl);
+      line-height: var(--line-height-tight);
+      font-weight: var(--font-weight-strong);
     }
 
     h2 {
-      font-size: 14px;
+      font-size: var(--font-size-lg);
       line-height: 1.25;
-      font-weight: 600;
+      font-weight: var(--font-weight-strong);
     }
 
     h3 {
-      font-size: 13px;
+      font-size: var(--font-size-md);
       line-height: 1.3;
-      font-weight: 600;
+      font-weight: var(--font-weight-strong);
     }
 
     p {
       color: var(--muted);
-      font-size: 12px;
-      line-height: 1.45;
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
     }
 
     table {
-      width: 100%;
+      width: max-content;
+      min-width: max(100%, var(--table-min-width));
       border-collapse: collapse;
-      font-size: 13px;
+      font-size: var(--font-size-md);
     }
 
     th, td {
       border-bottom: 1px solid var(--line);
-      padding: 10px 9px;
+      padding: var(--table-cell-padding);
       text-align: left;
       vertical-align: top;
+      white-space: nowrap;
+    }
+
+    td {
+      line-height: 1.28;
     }
 
     th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
       background: var(--surface-2);
       color: var(--heading-muted);
-      font-size: 11px;
+      font-size: var(--font-size-xs);
       letter-spacing: 0.04em;
       text-transform: uppercase;
       white-space: nowrap;
     }
 
+    .th-label {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .info-icon {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      background: var(--surface);
+      line-height: 1;
+      cursor: default;
+      vertical-align: middle;
+    }
+
+    .info-icon::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 50%;
+      top: calc(100% + var(--space-4));
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: 260px;
+      padding: var(--space-4) var(--space-5);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+      letter-spacing: 0;
+      line-height: var(--line-height-copy);
+      text-transform: none;
+      white-space: normal;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s ease;
+      z-index: 20;
+    }
+
+    .info-icon:hover::after,
+    .info-icon:focus-visible::after {
+      opacity: 1;
+    }
+
+    .info-icon svg {
+      width: 11px;
+      height: 11px;
+      stroke-width: 2.2;
+    }
+
+    tr.selected {
+      background: var(--accent-soft);
+    }
+
+    tr[data-action] {
+      cursor: pointer;
+    }
+
+    tr[data-action]:hover {
+      background: var(--toolbar-bg);
+    }
+
     td.actions {
       width: 1%;
       white-space: nowrap;
+      padding-left: var(--space-4);
+      padding-right: var(--space-4);
+    }
+
+    td.actions select,
+    td.actions button,
+    table td select {
+      min-height: 28px;
+      padding-top: var(--space-3);
+      padding-bottom: var(--space-3);
+    }
+
+    .coverage-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .coverage-action-select {
+      width: 84px;
+      min-width: 84px;
+      max-width: 84px;
+    }
+
+    .table-actions button,
+    .scan-action {
+      width: fit-content;
+      min-height: 28px;
+      padding-top: var(--space-3);
+      padding-bottom: var(--space-3);
     }
 
     .app {
@@ -213,8 +402,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      padding: 14px 20px;
+      gap: var(--space-8);
+      padding: var(--space-7) var(--space-10);
       border-bottom: 1px solid var(--line);
       background: var(--surface);
       position: sticky;
@@ -224,21 +413,21 @@
 
     .brand {
       display: grid;
-      gap: 2px;
+      gap: var(--space-1);
     }
 
     .brand small {
       color: var(--muted);
-      font-weight: 700;
+      font-weight: var(--font-weight-heavy);
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      font-size: 10px;
+      font-size: var(--font-size-2xs);
     }
 
     .statusbar {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--space-4);
       flex-wrap: wrap;
       justify-content: flex-end;
     }
@@ -250,28 +439,28 @@
 
     .workspace {
       display: grid;
-      grid-template-columns: 188px minmax(0, 1fr);
+      grid-template-columns: var(--rail-width) minmax(0, 1fr);
       min-height: 0;
       transition: grid-template-columns 0.16s ease;
     }
 
     .app.nav-collapsed .workspace {
-      grid-template-columns: 54px minmax(0, 1fr);
+      grid-template-columns: var(--rail-width-collapsed) minmax(0, 1fr);
     }
 
     .rail {
       border-right: 1px solid var(--line);
       background: var(--toolbar-bg);
-      padding: 12px 8px;
+      padding: var(--space-6) var(--space-4);
       display: grid;
       align-content: start;
-      gap: 8px;
+      gap: var(--space-4);
       min-width: 0;
     }
 
     .rail-toggle {
       width: 38px;
-      min-height: 32px;
+      min-height: var(--control-height-toggle);
       padding: 5px;
       justify-self: end;
     }
@@ -282,17 +471,17 @@
 
     .rail-nav {
       display: grid;
-      gap: 4px;
+      gap: var(--space-2);
     }
 
     .rail-item {
       display: grid;
-      grid-template-columns: 24px minmax(0, 1fr);
+      grid-template-columns: var(--control-height-sm) minmax(0, 1fr);
       align-items: center;
-      gap: 8px;
-      min-height: 34px;
+      gap: var(--space-4);
+      min-height: var(--control-height);
       width: 100%;
-      padding: 6px 8px;
+      padding: var(--space-3) var(--space-4);
       border-color: transparent;
       background: transparent;
       text-align: left;
@@ -306,10 +495,18 @@
     }
 
     .rail-icon {
-      width: 24px;
+      width: var(--control-height-sm);
+      height: var(--control-height-sm);
+      display: inline-grid;
+      place-items: center;
       text-align: center;
-      font-size: 15px;
       line-height: 1;
+    }
+
+    .rail-icon svg {
+      width: var(--rail-icon-size);
+      height: var(--rail-icon-size);
+      stroke-width: 1.9;
     }
 
     .rail-label {
@@ -323,17 +520,17 @@
     }
 
     .app.nav-collapsed .rail-item {
-      grid-template-columns: 24px;
+      grid-template-columns: var(--control-height-sm);
       justify-content: center;
-      padding-inline: 6px;
+      padding-inline: var(--space-3);
     }
 
     .shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: 16px;
-      padding: 16px 20px 28px;
-      max-width: 1680px;
+      gap: var(--space-8);
+      padding: var(--space-8) var(--space-10) var(--space-14);
+      max-width: var(--content-max-width);
       width: 100%;
       margin: 0 auto;
     }
@@ -341,15 +538,24 @@
     .main {
       min-width: 0;
       display: grid;
-      gap: 14px;
+      gap: var(--space-7);
       align-content: start;
+    }
+
+    .view,
+    .asset-pane {
+      min-width: 0;
     }
 
     .subtabs {
       display: flex;
-      gap: 6px;
+      gap: var(--space-3);
       flex-wrap: wrap;
       align-items: center;
+    }
+
+    .asset-tabs {
+      margin-top: 9px;
     }
 
     .subtab {
@@ -363,8 +569,9 @@
     }
 
     .panel {
+      min-width: 0;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--surface);
       box-shadow: var(--shadow);
       overflow: hidden;
@@ -374,27 +581,27 @@
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      gap: 12px;
-      padding: 14px 16px;
+      gap: var(--space-6);
+      padding: var(--space-7) var(--space-8);
       border-bottom: 1px solid var(--line);
     }
 
     .panel-body {
-      padding: 14px 16px;
+      padding: var(--space-7) var(--space-8);
     }
 
     .toolbar {
       display: grid;
       grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
-      gap: 10px;
+      gap: var(--space-5);
       align-items: end;
-      padding: 12px 16px;
+      padding: var(--space-6) var(--space-8);
       border-bottom: 1px solid var(--line);
       background: var(--toolbar-bg);
     }
 
     .toolbar.scan {
-      grid-template-columns: repeat(3, minmax(130px, 1fr)) auto;
+      grid-template-columns: repeat(2, minmax(130px, 1fr)) auto;
     }
 
     .toolbar.policy {
@@ -402,59 +609,70 @@
     }
 
     .toolbar.protected {
-      grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(120px, 1fr)) auto;
+      grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(110px, 0.8fr)) minmax(130px, 0.8fr) minmax(190px, 1.2fr) auto;
     }
 
     .table-wrap {
-      overflow: auto;
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      max-height: var(--table-max-height);
+      overflow-x: auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .table-wrap.protected-assets table {
+      min-width: max(100%, var(--table-min-width-protected));
     }
 
     .cards {
       display: grid;
-      gap: 10px;
+      gap: var(--space-5);
     }
 
     .card {
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--surface);
-      padding: 12px;
+      padding: var(--space-6);
       display: grid;
-      gap: 10px;
+      gap: var(--space-5);
     }
 
     .card-top {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 10px;
+      gap: var(--space-5);
     }
 
     .grid-2 {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
+      gap: var(--space-5);
     }
 
     .grid-3 {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
+      gap: var(--space-5);
     }
 
     .checks {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px 12px;
+      gap: var(--space-4) var(--space-6);
     }
 
     .checks label {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--space-3);
       color: var(--ink);
-      font-size: 12px;
-      font-weight: 650;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-emphasis);
     }
 
     .checks input {
@@ -462,39 +680,118 @@
       min-height: 0;
     }
 
+    .settings-list {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      min-height: var(--control-height);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+    }
+
+    .setting-row.nested {
+      padding-left: var(--space-8);
+    }
+
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 38px;
+      height: 22px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+      cursor: pointer;
+    }
+
+    .switch span {
+      width: 100%;
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: var(--line-strong);
+      transition: background 0.14s ease;
+    }
+
+    .switch span::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+      transition: transform 0.14s ease;
+    }
+
+    .switch input:checked + span {
+      background: var(--accent);
+    }
+
+    .switch input:checked + span::after {
+      transform: translateX(16px);
+    }
+
     .actions-row {
       display: flex;
       align-items: center;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: var(--space-4);
     }
 
     .metric-row {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 8px;
-      padding: 0 16px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-9);
+      padding: 0 var(--space-8) var(--space-6);
+      color: var(--muted);
     }
 
     .metric {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--toolbar-bg);
-      padding: 10px;
+      display: inline-flex;
+      align-items: baseline;
+      gap: var(--space-3);
+      min-height: var(--control-height-sm);
     }
 
     .metric strong {
-      display: block;
-      margin-top: 3px;
-      font-size: 22px;
+      color: var(--ink);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-strong);
     }
 
     .metric span {
       color: var(--muted);
-      font-size: 11px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: var(--space-4);
+      padding: 0 var(--space-8) var(--space-6);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .pager strong {
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
     }
 
     .pill {
@@ -502,12 +799,12 @@
       align-items: center;
       min-height: 22px;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 2px 8px;
+      border-radius: var(--radius-pill);
+      padding: var(--space-1) var(--space-4);
       background: var(--surface);
       color: var(--ink);
-      font-size: 12px;
-      font-weight: 500;
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
       white-space: nowrap;
     }
 
@@ -523,6 +820,15 @@
       color: var(--warn);
     }
 
+    .readonly-field {
+      min-height: var(--control-height);
+      display: flex;
+      align-items: center;
+      padding: 7px 0;
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
+    }
+
     .pill.bad {
       border-color: #dfb2ae;
       background: var(--danger-soft);
@@ -534,8 +840,21 @@
     }
 
     .mono {
-      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+    }
+
+    .copy-line {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      gap: var(--space-2);
+      vertical-align: middle;
+    }
+
+    .copy-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
     }
 
     .empty {
@@ -547,25 +866,52 @@
 
     .detail {
       border: 1px dashed var(--line-strong);
-      border-radius: 8px;
+      border-radius: var(--radius-md);
       background: var(--toolbar-bg);
-      padding: 10px;
+      padding: var(--space-5);
       overflow: auto;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--space-4);
+    }
+
+    .summary-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 9px;
+      background: var(--surface);
+    }
+
+    .summary-item span {
+      display: block;
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .summary-item strong {
+      display: block;
+      margin-top: 3px;
+      font-size: var(--font-size-md);
+      font-weight: var(--font-weight-strong);
     }
 
     pre {
       margin: 0;
       white-space: pre-wrap;
       word-break: break-word;
-      font-family: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-      line-height: 1.45;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
     }
 
     .status-line {
-      min-height: 18px;
+      min-height: var(--space-9);
       color: var(--muted);
-      font-size: 12px;
+      font-size: var(--font-size-sm);
     }
 
     .status-line.error {
@@ -601,6 +947,10 @@
       grid-template-rows: auto minmax(0, 1fr);
     }
 
+    .drawer.wide {
+      width: min(620px, 100vw);
+    }
+
     .drawer.open {
       transform: translateX(0);
     }
@@ -609,14 +959,82 @@
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: 12px;
-      padding: 14px 16px;
+      gap: var(--space-6);
+      padding: var(--space-7) var(--space-8);
       border-bottom: 1px solid var(--line);
     }
 
     .drawer-body {
       overflow: auto;
-      padding: 14px 16px;
+      padding: var(--space-7) var(--space-8);
+    }
+
+    .drawer-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-5);
+      padding: var(--space-6) var(--space-8);
+      border-top: 1px solid var(--line);
+      background: var(--toolbar-bg);
+    }
+
+    .drawer.with-footer {
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(0, 0, 0, 0.34);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      position: fixed;
+      z-index: 41;
+      top: 50%;
+      left: 50%;
+      width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding: var(--space-7);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      transform: translate(-50%, -48%) scale(0.98);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.16s ease;
+    }
+
+    .modal.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--space-5);
+      margin-bottom: var(--space-5);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
     }
 
     .hidden {
@@ -629,7 +1047,7 @@
       }
 
       .workspace {
-        grid-template-columns: 54px minmax(0, 1fr);
+        grid-template-columns: var(--rail-width-collapsed) minmax(0, 1fr);
       }
 
     }
@@ -649,7 +1067,7 @@
       }
 
       .shell {
-        padding: 12px;
+        padding: var(--space-6);
       }
 
       .workspace {
@@ -676,16 +1094,16 @@
       }
 
       .app.nav-collapsed .rail-item {
-        grid-template-columns: 24px minmax(0, 1fr);
+        grid-template-columns: var(--control-height-sm) minmax(0, 1fr);
         justify-content: start;
       }
 
-      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3, .metric-row {
+      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3 {
         grid-template-columns: 1fr;
       }
 
       th, td {
-        padding: 8px;
+        padding: var(--table-cell-padding-compact);
       }
     }
   </style>
@@ -694,7 +1112,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <small>DSX-Connect NG</small>
+        <small id="product-version">DSX-Connect</small>
         <h1>Operator Console</h1>
       </div>
       <div class="statusbar">
@@ -719,16 +1137,34 @@
         <button class="rail-toggle" id="nav-toggle" type="button" title="Collapse navigation" aria-label="Collapse navigation">&lt;&lt;</button>
         <nav class="rail-nav">
           <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets">
-            <span class="rail-icon" aria-hidden="true">A</span>
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z"></path>
+                <path d="M3 12.5 12 17l9-4.5"></path>
+                <path d="M3 17.5 12 22l9-4.5"></path>
+              </svg>
+            </span>
             <span class="rail-label">Assets</span>
           </button>
           <button class="rail-item" type="button" data-tab="scan-results" aria-selected="false" title="Scan Results">
-            <span class="rail-icon" aria-hidden="true">S</span>
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19V5"></path>
+                <path d="M4 19h16"></path>
+                <path d="m7 14 3-3 3 2 5-6"></path>
+                <path d="M18 7h2v2"></path>
+              </svg>
+            </span>
             <span class="rail-label">Scan Results</span>
           </button>
-          <button class="rail-item" type="button" data-tab="policy" aria-selected="false" title="Policy">
-            <span class="rail-icon" aria-hidden="true">P</span>
-            <span class="rail-label">Policy</span>
+          <button class="rail-item" type="button" data-tab="policy" aria-selected="false" title="Protection Profiles">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3 5 6v5c0 4.5 2.9 8.4 7 10 4.1-1.6 7-5.5 7-10V6l-7-3Z"></path>
+                <path d="m9 12 2 2 4-5"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Protection Profiles</span>
           </button>
         </nav>
       </aside>
@@ -741,12 +1177,11 @@
             <div class="panel-header">
               <div>
                 <h2>Assets</h2>
-                <p>Connector inventory reconciled with protected scopes.</p>
+                <nav class="subtabs asset-tabs" aria-label="Assets views">
+                  <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+                  <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+                </nav>
               </div>
-              <nav class="subtabs" aria-label="Assets views">
-                <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
-                <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
-              </nav>
             </div>
 
             <div class="asset-pane" id="asset-pane-connectors">
@@ -757,20 +1192,8 @@
                 <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
               </div>
               <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Connector</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Instances</th>
-                      <th>Protected Scopes</th>
-                      <th>Reader</th>
-                      <th>Capabilities</th>
-                      <th>Endpoint</th>
-                      <th></th>
-                    </tr>
-                  </thead>
+                <table id="connectors-table">
+                  <thead></thead>
                   <tbody id="connectors-body"></tbody>
                 </table>
               </div>
@@ -803,13 +1226,15 @@
                     <option value="inventory_enumeration">inventory_enumeration</option>
                   </select>
                 </label>
-                <label>Limit
-                  <select id="protected-filter-limit">
-                    <option value="100">100</option>
-                    <option value="250">250</option>
-                    <option value="500">500</option>
-                    <option value="1000">1000</option>
+                <label>Asset Match
+                  <select id="protected-filter-asset-mode">
+                    <option value="contains">contains</option>
+                    <option value="begins_with">begins with</option>
+                    <option value="ends_with">ends with</option>
                   </select>
+                </label>
+                <label>Asset
+                  <input id="protected-filter-asset-value" placeholder="bucket or prefix">
                 </label>
                 <button class="primary" id="refresh-protected-assets" type="button">Load Assets</button>
               </div>
@@ -819,20 +1244,14 @@
                 <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
                 <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Asset</th>
-                      <th>Connector</th>
-                      <th>Type</th>
-                      <th>Coverage</th>
-                      <th>Policy</th>
-                      <th>Last Scan</th>
-                      <th>Findings</th>
-                      <th></th>
-                    </tr>
-                  </thead>
+              <div class="pager" id="protected-assets-pager">
+                <button type="button" id="protected-page-prev">Previous</button>
+                <span id="protected-page-range"><strong>0-0</strong></span>
+                <button type="button" id="protected-page-next">Next</button>
+              </div>
+              <div class="table-wrap protected-assets">
+                <table id="protected-assets-table">
+                  <thead></thead>
                   <tbody id="protected-assets-body"></tbody>
                 </table>
               </div>
@@ -853,18 +1272,7 @@
               <label>Connector
                 <select id="scan-results-filter-integration"></select>
               </label>
-              <label>State
-                <select id="scan-results-filter-state">
-                  <option value="">all</option>
-                  <option value="accepted">accepted</option>
-                  <option value="publish_pending">publish_pending</option>
-                  <option value="running">running</option>
-                  <option value="completed">completed</option>
-                  <option value="failed">failed</option>
-                  <option value="cancelled">cancelled</option>
-                </select>
-              </label>
-              <label>Item Sample
+              <label>Item Detail Limit
                 <select id="scan-results-filter-item-limit">
                   <option value="25">25</option>
                   <option value="100" selected>100</option>
@@ -875,19 +1283,8 @@
               <button class="primary" id="apply-scan-results" type="button">Apply</button>
             </div>
             <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Job</th>
-                    <th>Target</th>
-                    <th>State</th>
-                    <th>Progress</th>
-                    <th>Findings</th>
-                    <th>Remediation</th>
-                    <th>Cancel</th>
-                    <th></th>
-                  </tr>
-                </thead>
+              <table id="scan-results-table">
+                <thead></thead>
                 <tbody id="scan-results-body"></tbody>
               </table>
             </div>
@@ -909,57 +1306,13 @@
           <div class="panel">
             <div class="panel-header">
               <div>
-                <h2>Default Policy</h2>
-                <p>Applied when protecting assets unless another policy is selected.</p>
+                <h2>Protection Profiles</h2>
+                <p>Reusable file-flow behavior applied when protecting connector assets.</p>
               </div>
-              <span class="pill good">default</span>
-            </div>
-            <div class="panel-body">
-              <form class="cards" id="default-policy-form">
-                <div class="grid-2">
-                  <label>Remediation
-                    <select name="remediation_action">
-                      <option value="detect_only">Detect only, tag if possible</option>
-                      <option value="quarantine">Quarantine, move and tag</option>
-                    </select>
-                  </label>
-                  <label>Quarantine Subfolder
-                    <input name="quarantine_subfolder" value="quarantine">
-                  </label>
-                </div>
-                <div class="checks">
-                  <label><input type="checkbox" name="apply_malicious" checked> Malicious</label>
-                  <label><input type="checkbox" name="apply_not_scanned"> Not-scanned</label>
-                  <label><input type="checkbox" name="apply_non_compliant"> Non-compliant</label>
-                </div>
-                <div class="grid-2">
-                  <label>Non-compliant Subfolder
-                    <input name="non_compliant_subfolder" value="non-compliant">
-                  </label>
-                  <label>Policy ID
-                    <input name="policy_id" value="default-policy">
-                  </label>
-                </div>
-                <div>
-                  <h3>Treat File Type as Non-Compliant</h3>
-                  <div class="checks">
-                    <label><input type="checkbox" name="blocked_file_type" value="windows_executable"> Windows executables</label>
-                    <label><input type="checkbox" name="blocked_file_type" value="office_macro"> Office macros</label>
-                    <label><input type="checkbox" name="blocked_file_type" value="archive"> Archives</label>
-                    <label><input type="checkbox" name="blocked_file_type" value="script"> Scripts</label>
-                  </div>
-                </div>
-                <div class="status-line" id="default-policy-status">Default policy is used by new protected assets.</div>
-              </form>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Policy</h2>
-                <p>Definitions and assignments applied to protected assets.</p>
+              <div class="cluster">
+                <button id="refresh-policies" type="button">Refresh</button>
+                <button class="primary" id="create-policy" type="button">Create Profile</button>
               </div>
-              <button id="refresh-policies" type="button">Refresh</button>
             </div>
             <div class="toolbar policy">
               <label>Connector
@@ -968,17 +1321,8 @@
               <button class="primary" id="apply-policy-filter" type="button">Apply</button>
             </div>
             <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Policy</th>
-                    <th>Status</th>
-                    <th>Outcome Rules</th>
-                    <th>Assigned Assets</th>
-                    <th>Assignments</th>
-                    <th>Updated</th>
-                  </tr>
-                </thead>
+              <table id="policies-table">
+                <thead></thead>
                 <tbody id="policies-body"></tbody>
               </table>
             </div>
@@ -1039,6 +1383,125 @@
         </form>
       </div>
     </aside>
+    <div class="drawer-backdrop" id="policy-editor-backdrop"></div>
+    <aside class="drawer" id="policy-editor-drawer" aria-label="Protection Profile Editor" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2 id="policy-editor-title">Protection Profile Editor</h2>
+          <p id="policy-editor-caption">Edit remediation and outcome handling.</p>
+        </div>
+        <button id="close-policy-editor" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form class="cards" id="default-policy-form">
+          <label id="policy-name-field">Profile Name
+            <input name="policy_name" value="Default Protection Profile" readonly>
+            <span class="readonly-field hidden" id="policy-name-readonly">Default Protection Profile</span>
+          </label>
+          <label class="hidden" id="policy-based-on-field">Based on Profile
+            <select name="based_on_policy"></select>
+          </label>
+          <input name="policy_id" type="hidden" value="policy-1">
+          <div>
+            <h3>Remediation</h3>
+            <label>Malicious verdicts
+              <select name="malicious_action">
+                <option value="detect_only">Detect Only</option>
+                <option value="quarantine">Quarantine</option>
+                <option value="delete">Delete</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <h3>Select actions for the following file verdicts</h3>
+            <div class="grid-2">
+              <label>Non-compliant
+                <select name="non_compliant_action">
+                  <option value="detect_only">Detect Only</option>
+                  <option value="quarantine">Quarantine</option>
+                  <option value="delete">Delete</option>
+                </select>
+              </label>
+              <label>Not scanned
+                <select name="not_scanned_action">
+                  <option value="detect_only">Detect Only</option>
+                  <option value="quarantine">Quarantine</option>
+                  <option value="delete">Delete</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div>
+            <h3>File Types</h3>
+            <p>Define non-compliant file types.</p>
+            <div class="settings-list">
+              <div class="setting-row">
+                <span>Executables (Windows, Mac, Linux)</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="executables"><span></span></label>
+              </div>
+              <div class="setting-row">
+                <span>PDF files</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="pdf"><span></span></label>
+              </div>
+              <div class="setting-row">
+                <span>Office files with macros</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_macro"><span></span></label>
+              </div>
+              <div>
+                <h3>Office files without macros</h3>
+                <div class="settings-list">
+                  <div class="setting-row nested">
+                    <span>Microsoft Word</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_word"><span></span></label>
+                  </div>
+                  <div class="setting-row nested">
+                    <span>Microsoft Excel</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_excel"><span></span></label>
+                  </div>
+                  <div class="setting-row nested">
+                    <span>Other Office files</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_other"><span></span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3>Quarantine Folder Setting</h3>
+            <label>Quarantine Folder Path
+              <input name="quarantine_folder_path" value="di-quarantine">
+            </label>
+          </div>
+          <div class="cluster">
+            <button id="policy-editor-cancel" type="button">Cancel</button>
+            <button class="primary" id="policy-editor-save" type="button">Save</button>
+          </div>
+          <div class="status-line" id="default-policy-status">Select a protection profile to edit.</div>
+        </form>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" id="protection-profile-picker-backdrop"></div>
+    <aside class="drawer wide with-footer" id="protection-profile-picker-drawer" aria-label="Choose Protection Profile" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>Choose Protection Profile</h2>
+          <p id="protection-profile-picker-caption">Select a protection profile to apply.</p>
+        </div>
+        <button id="close-protection-profile-picker" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <div class="table-wrap">
+          <table id="protection-profile-picker-table">
+            <thead></thead>
+            <tbody id="protection-profile-picker-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="drawer-footer">
+        <button id="protection-profile-picker-cancel" type="button">Cancel</button>
+        <button class="primary" id="protection-profile-picker-apply" type="button" disabled>Apply</button>
+      </div>
+    </aside>
   </div>
 
   <script>
@@ -1048,14 +1511,27 @@
       connectorRows: [],
       protectedAssets: [],
       protectedAssetsLoaded: false,
+      protectedPageIndex: 0,
+      protectedPageLimit: 15,
+      protectedPageCursors: [""],
+      protectedNextCursor: null,
       scanResults: [],
       policies: [],
+      policyCatalog: [],
+      defaultProfileByIntegration: {},
+      protectionProfileAsset: null,
+      selectedProtectionProfileId: "",
+      activePolicyId: "policy-1",
+      syncingPolicyForm: false,
+      policyEditorMode: "edit",
+      policyEditorBaseId: "policy-1",
       activeTab: "assets",
       activeAssetsTab: "connectors",
       selectedScanResult: null,
     };
 
     const endpoints = {
+      meta: "/api/v1/ui/meta",
       dsxaStatus: "/api/v1/ui/dsxa/status",
       overview: "/api/v1/ui/overview",
       connectors: "/api/v1/ui/assets/connectors",
@@ -1069,6 +1545,8 @@
     const themeModes = ["auto", "light", "operations", "security"];
     const themeStorageKey = "dsx-connect-ng-theme-mode";
     const navStorageKey = "dsx-connect-ng-nav-collapsed";
+    const policyStorageKey = "dsx-connect-v2-policy-catalog";
+    const defaultProfileStorageKey = "dsx-connect-v2-default-protection-profiles";
     let currentThemeMode = "auto";
 
     function systemPrefersDark() {
@@ -1131,6 +1609,35 @@
         .replaceAll('"', "&quot;");
     }
 
+    function copyButton(value, label = "Copy") {
+      const text = String(value ?? "");
+      if (!text || text === "not configured") return "";
+      return `
+        <button class="copy-button" type="button" data-copy-value="${escapeHtml(text)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      `;
+    }
+
+    async function copyTextToClipboard(value) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
     function parseOptionalJson(value) {
       if (!value.trim()) return {};
       return JSON.parse(value);
@@ -1164,6 +1671,36 @@
 
     function renderEmptyRow(target, colspan, message) {
       target.innerHTML = `<tr><td colspan="${colspan}"><div class="empty">${escapeHtml(message)}</div></td></tr>`;
+    }
+
+    function htmlAttributes(attributes = {}) {
+      return Object.entries(attributes)
+        .filter(([, value]) => value !== undefined && value !== null && value !== false)
+        .map(([key, value]) => value === true ? ` ${key}` : ` ${key}="${escapeHtml(value)}"`)
+        .join("");
+    }
+
+    function renderDataTable({ tableId, bodyId, columns, rows, emptyMessage, rowAttributes = null }) {
+      const table = document.getElementById(tableId);
+      const body = document.getElementById(bodyId);
+      const header = table.querySelector("thead");
+      header.innerHTML = `<tr>${columns.map((column) => {
+        const headerContent = column.headerHtml || escapeHtml(column.label || "");
+        return `<th${htmlAttributes(column.headerAttributes || {})}>${headerContent}</th>`;
+      }).join("")}</tr>`;
+      body.innerHTML = "";
+      if (!rows.length) {
+        renderEmptyRow(body, columns.length, emptyMessage);
+        return;
+      }
+      body.innerHTML = rows.map((row, index) => {
+        const attributes = rowAttributes ? rowAttributes(row, index) : {};
+        const cells = columns.map((column) => {
+          const className = column.className ? ` class="${escapeHtml(column.className)}"` : "";
+          return `<td${className}>${column.render(row, index)}</td>`;
+        }).join("");
+        return `<tr${htmlAttributes(attributes)}>${cells}</tr>`;
+      }).join("");
     }
 
     function selectTab(tabName) {
@@ -1234,53 +1771,113 @@
       }
     }
 
-    function renderConnectors() {
-      const body = document.getElementById("connectors-body");
-      body.innerHTML = "";
-      if (!state.connectorRows.length) {
-        renderEmptyRow(body, 9, "No repository connectors configured.");
-        return;
+    async function loadUiMeta() {
+      try {
+        const meta = await fetchJson(endpoints.meta);
+        const displayName = meta.display_name || `DSX-Connect v${meta.version || ""}`.trim();
+        document.getElementById("product-version").textContent = displayName;
+        document.title = `${displayName} Operator Console`;
+      } catch (error) {
+        document.getElementById("product-version").textContent = "DSX-Connect";
+        document.title = "DSX-Connect Operator Console";
       }
-      for (const row of state.connectorRows) {
-        const integration = row.integration;
-        const capabilities = integration.remediation_capabilities || {};
-        const instances = row.connector_instances || [];
-        const liveInstance = instances[0] || null;
-        const runtimeCapabilities = liveInstance?.capabilities || {};
-        const endpoint = row.health?.endpoint || row.proxy_base_url || liveInstance?.base_url || "not configured";
-        const instanceSummary = instances.length
-          ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span>`
-          : "none";
-        body.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td>
+    }
+
+    function renderConnectors() {
+      const columns = [
+        {
+          key: "connector",
+          label: "Connector",
+          render: (row) => {
+            const integration = row.integration;
+            return `
               <strong>${escapeHtml(integration.display_name)}</strong><br>
-              <span class="mono">${escapeHtml(integration.integration_id)}</span>
-            </td>
-            <td>${escapeHtml(integration.platform)}</td>
-            <td><span class="${pillClass(row.health?.status)}">${escapeHtml(row.health?.status || "unknown")}</span></td>
-            <td>${instanceSummary}</td>
-            <td>${row.scope_count}</td>
-            <td>${escapeHtml(row.reader_strategy || "unknown")}</td>
-            <td>
+              <span class="copy-line"><span class="mono copy-value">${escapeHtml(integration.integration_id)}</span>${copyButton(integration.integration_id)}</span>
+            `;
+          },
+        },
+        { key: "type", label: "Type", render: (row) => escapeHtml(row.integration.platform) },
+        {
+          key: "status",
+          label: "Status",
+          render: (row) => `<span class="${pillClass(row.health?.status)}">${escapeHtml(row.health?.status || "unknown")}</span>`,
+        },
+        {
+          key: "instances",
+          label: "Instances",
+          render: (row) => {
+            const instances = row.connector_instances || [];
+            const liveInstance = instances[0] || null;
+            return instances.length
+              ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span>`
+              : "none";
+          },
+        },
+        { key: "scopes", label: "Protected Scopes", render: (row) => String(row.scope_count) },
+        {
+          key: "default_profile",
+          label: "Default Protection Profile",
+          headerHtml: `
+            <span class="th-label">
+              <span>Default Protection Profile</span>
+              <span class="info-icon" tabindex="0" data-tooltip="Changing default profile only affects newly assigned protections, not existing ones." aria-label="Changing default profile only affects newly assigned protections, not existing ones." role="img">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 16v-4"></path>
+                  <path d="M12 8h.01"></path>
+                </svg>
+              </span>
+            </span>
+          `,
+          render: (row) => renderDefaultProfileSelect(row.integration.integration_id),
+        },
+        { key: "reader", label: "Reader", render: (row) => escapeHtml(row.reader_strategy || "unknown") },
+        {
+          key: "capabilities",
+          label: "Capabilities",
+          render: (row) => {
+            const capabilities = row.integration.remediation_capabilities || {};
+            const liveInstance = (row.connector_instances || [])[0] || null;
+            const runtimeCapabilities = liveInstance?.capabilities || {};
+            return `
               <span class="pill">discover ${runtimeCapabilities.discover ? "yes" : "no"}</span>
               <span class="pill">read ${runtimeCapabilities.read ? "yes" : "no"}</span>
               <span class="pill">write ${runtimeCapabilities.write ? "yes" : "no"}</span>
               <span class="pill">remediate ${runtimeCapabilities.remediate || capabilities.supports_move || capabilities.supports_tag ? "yes" : "no"}</span>
               <span class="pill">move ${capabilities.supports_move ? "yes" : "no"}</span>
               <span class="pill">tag ${capabilities.supports_tag ? "yes" : "no"}</span>
-            </td>
-            <td><span class="mono">${escapeHtml(endpoint)}</span></td>
-            <td class="actions">
-              <button type="button" data-action="toggle-integration" data-id="${escapeHtml(integration.integration_id)}" data-enabled="${integration.enabled ? "false" : "true"}">${integration.enabled ? "Disable" : "Enable"}</button>
-            </td>
-          </tr>
-        `);
-      }
+            `;
+          },
+        },
+        {
+          key: "endpoint",
+          label: "Endpoint",
+          render: (row) => {
+            const liveInstance = (row.connector_instances || [])[0] || null;
+            const endpoint = row.health?.endpoint || row.proxy_base_url || liveInstance?.base_url || "not configured";
+            return `<span class="copy-line"><span class="mono copy-value">${escapeHtml(endpoint)}</span>${copyButton(endpoint)}</span>`;
+          },
+        },
+        {
+          key: "actions",
+          label: "",
+          className: "actions",
+          render: (row) => {
+            const integration = row.integration;
+            return `<button type="button" data-action="toggle-integration" data-id="${escapeHtml(integration.integration_id)}" data-enabled="${integration.enabled ? "false" : "true"}">${integration.enabled ? "Disable" : "Enable"}</button>`;
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "connectors-table",
+        bodyId: "connectors-body",
+        columns,
+        rows: state.connectorRows,
+        emptyMessage: "No repository connectors configured.",
+      });
     }
 
     function renderProtectedAssets(payload = null) {
-      const body = document.getElementById("protected-assets-body");
       const assets = state.protectedAssets;
       const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
       const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
@@ -1288,147 +1885,587 @@
       document.getElementById("metric-protected").textContent = String(protectedCount);
       document.getElementById("metric-unprotected").textContent = String(unprotectedCount);
       document.getElementById("metric-unsupported").textContent = String((payload?.unsupported_integrations || []).length);
-      body.innerHTML = "";
-      if (!assets.length) {
-        renderEmptyRow(body, 8, "No assets returned for this filter.");
-        return;
-      }
-      for (const asset of assets) {
-        const policyId = asset.policy?.policy_id || asset.policy?.malicious_verdict?.action || "none";
-        const lastScan = asset.last_scan;
-        const findings = asset.findings || {};
-        const findingText = Object.keys(findings).length
-          ? `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`
-          : "none";
-        const lastScanText = lastScan
-          ? `${lastScan.state} ${lastScan.terminal_items || 0}/${lastScan.total_items || 0}`
-          : "never";
-        let actions = "";
-        if (asset.coverage_state === "unprotected") {
-          actions = `<button type="button" data-action="prefill-scope" data-integration="${escapeHtml(asset.integration_id)}" data-selector="${escapeHtml(asset.selector)}" data-name="${escapeHtml(asset.display_name || asset.selector)}">Protect</button>`;
-        } else if (asset.coverage_state === "protected") {
-          actions = `
-            <button type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>
-            <button type="button" data-action="toggle-scope-protection" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-enabled="false">Disable</button>
-          `;
-        } else if (asset.coverage_state === "disabled") {
-          actions = `<button type="button" data-action="toggle-scope-protection" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-enabled="true">Enable</button>`;
-        }
-        body.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td>
-              <strong>${escapeHtml(asset.display_name || asset.selector)}</strong><br>
-              <span class="mono">${escapeHtml(asset.selector)}</span>
-            </td>
-            <td>${escapeHtml(asset.integration_display_name)}<br><span class="mono">${escapeHtml(asset.integration_id)}</span></td>
-            <td>${escapeHtml(asset.asset_type)}</td>
-            <td><span class="${pillClass(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span></td>
-            <td>${escapeHtml(policyId)}</td>
-            <td>${lastScan ? `<span class="${pillClass(lastScan.state)}">${escapeHtml(lastScanText)}</span><br><span class="mono">${escapeHtml(lastScan.job_id)}</span>` : "never"}</td>
-            <td>${escapeHtml(findingText)}</td>
-            <td class="actions">${actions}</td>
-          </tr>
-        `);
-      }
+      const pageStart = assets.length ? state.protectedPageIndex * state.protectedPageLimit + 1 : 0;
+      const pageEnd = assets.length ? pageStart + assets.length - 1 : 0;
+      document.getElementById("protected-page-range").innerHTML = `<strong>${pageStart}-${pageEnd}</strong>`;
+      document.getElementById("protected-page-prev").disabled = state.protectedPageIndex <= 0;
+      document.getElementById("protected-page-next").disabled = !state.protectedNextCursor;
+      const columns = [
+        {
+          key: "asset",
+          label: "Asset",
+          render: (asset) => {
+            const assetName = asset.display_name || asset.selector;
+            const selectorDetail = asset.selector && asset.selector !== assetName
+              ? `<br><span class="mono">${escapeHtml(asset.selector)}</span>`
+              : "";
+            return `<span class="copy-line"><strong class="copy-value">${escapeHtml(assetName)}</strong>${copyButton(assetName)}</span>${selectorDetail}`;
+          },
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          className: "actions",
+          render: (asset) => asset.coverage_state === "protected"
+            ? `<button class="scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>`
+            : "",
+        },
+        {
+          key: "connector",
+          label: "Connector",
+          render: (asset) => `${escapeHtml(asset.integration_display_name)}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
+        },
+        { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
+        {
+          key: "coverage",
+          label: "Coverage",
+          render: (asset) => {
+            return `
+              <div class="coverage-cell">
+                <span class="${pillClass(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span>
+                ${renderProtectedAssetActionSelect(asset)}
+              </div>
+            `;
+          },
+        },
+        {
+          key: "policy",
+          label: "Protection Profile",
+          render: (asset) => {
+            const label = protectedAssetPolicyLabel(asset);
+            const policyId = asset.policy?.policy_id;
+            return policyId && policyId !== label
+              ? `${escapeHtml(label)}<br><span class="mono">${escapeHtml(policyId)}</span>`
+              : escapeHtml(label);
+          },
+        },
+        {
+          key: "last_scan",
+          label: "Last Scan",
+          render: (asset) => {
+            const lastScan = asset.last_scan;
+            if (!lastScan) return "never";
+            const lastScanText = `${lastScan.state} ${lastScan.terminal_items || 0}/${lastScan.total_items || 0}`;
+            return `<span class="${pillClass(lastScan.state)}">${escapeHtml(lastScanText)}</span><br><span class="mono">${escapeHtml(lastScan.job_id)}</span>`;
+          },
+        },
+        {
+          key: "findings",
+          label: "Findings",
+          render: (asset) => {
+            const findings = asset.findings || {};
+            return Object.keys(findings).length
+              ? escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`)
+              : "none";
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "protected-assets-table",
+        bodyId: "protected-assets-body",
+        columns,
+        rows: assets,
+        emptyMessage: "No assets returned for this filter.",
+      });
     }
 
     function renderScanResults() {
-      const body = document.getElementById("scan-results-body");
-      body.innerHTML = "";
-      if (!state.scanResults.length) {
-        renderEmptyRow(body, 8, "No scan results match this filter.");
-        renderTopStats();
-        return;
-      }
-      for (const result of state.scanResults) {
-        const job = result.job;
-        const progress = result.progress || {};
-        const findings = result.findings || {};
-        const remediation = result.remediation || {};
-        const progressText = `${progress.terminal_items || 0}/${progress.total_items || 0} (${progress.percent_complete ?? 0}%)`;
-        const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`;
-        const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
-        body.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td><strong>${escapeHtml(job.job_type)}</strong><br><span class="mono">${escapeHtml(job.job_id)}</span></td>
-            <td>${escapeHtml(result.target?.label || "unknown")}<br><span class="mono">${escapeHtml(result.target?.integration_id || "")}</span></td>
-            <td><span class="${pillClass(job.state)}">${escapeHtml(job.state)}</span></td>
-            <td>${escapeHtml(progressText)}</td>
-            <td>${escapeHtml(findingText)}</td>
-            <td>${escapeHtml(remediationText)}</td>
-            <td>${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}<br><span class="muted">in-flight files may finish</span></td>
-            <td class="actions"><button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(job.job_id)}">Inspect</button></td>
-          </tr>
-        `);
-      }
+      const columns = [
+        {
+          key: "job",
+          label: "Job",
+          render: (result) => `<strong>${escapeHtml(result.job.job_type)}</strong><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
+        },
+        {
+          key: "target",
+          label: "Target",
+          render: (result) => `${escapeHtml(result.target?.label || "unknown")}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.target?.integration_id || "")}</span>${copyButton(result.target?.integration_id || "")}</span>`,
+        },
+        {
+          key: "state",
+          label: "State",
+          render: (result) => `<span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>`,
+        },
+        {
+          key: "progress",
+          label: "Progress",
+          render: (result) => {
+            const progress = result.progress || {};
+            return escapeHtml(formatProgress(progress, result.job.state));
+          },
+        },
+        {
+          key: "findings",
+          label: "Findings",
+          render: (result) => {
+            const findings = result.findings || {};
+            return escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`);
+          },
+        },
+        {
+          key: "remediation",
+          label: "Remediation",
+          render: (result) => {
+            const remediation = result.remediation || {};
+            return escapeHtml(`done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`);
+          },
+        },
+        {
+          key: "cancel",
+          label: "Cancel",
+          render: (result) => `${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}<br><span class="muted">in-flight files may finish</span>`,
+        },
+        {
+          key: "actions",
+          label: "",
+          className: "actions",
+          render: (result) => `<button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(result.job.job_id)}">Inspect</button>`,
+        },
+      ];
+      renderDataTable({
+        tableId: "scan-results-table",
+        bodyId: "scan-results-body",
+        columns,
+        rows: state.scanResults,
+        emptyMessage: "No scan results match this filter.",
+        rowAttributes: (result) => ({
+          "data-job-id": result.job.job_id,
+          class: state.selectedScanResult === result.job.job_id ? "selected" : null,
+        }),
+      });
       renderTopStats();
     }
 
-    function renderPolicies() {
-      const body = document.getElementById("policies-body");
-      body.innerHTML = "";
-      if (!state.policies.length) {
-        renderEmptyRow(body, 6, "No policy assignments match this filter.");
-        return;
+    function cloneValue(value) {
+      return JSON.parse(JSON.stringify(value ?? {}));
+    }
+
+    function policyDisplayName(policy) {
+      return policy.display_name || policy.definition?.display_name || policy.definition?.policy_id || policy.policy_id;
+    }
+
+    function defaultPolicyCatalogEntry() {
+      return {
+        policy_id: "policy-1",
+        display_name: "Default Protection Profile",
+        definition: {
+          policy_id: "policy-1",
+          display_name: "Default Protection Profile",
+          malicious_verdict: {
+            action: "detect_only",
+            tag_on_detect: true,
+            tag_on_quarantine: false,
+          },
+          verdict_actions: {
+            malicious: "detect_only",
+            non_compliant: "detect_only",
+            not_scanned: "detect_only",
+          },
+          outcome_triggers: {
+            malicious: true,
+            not_scanned: false,
+            non_compliant: false,
+          },
+          non_compliance: {
+            blocked_file_types: [],
+            quarantine_target: {
+              path: "di-quarantine",
+              collision_strategy: "suffix_random",
+              preserve_relative_path: false,
+            },
+          },
+        },
+      };
+    }
+
+    function loadPolicyCatalog() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(policyStorageKey) || "[]");
+        state.policyCatalog = Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        state.policyCatalog = [];
       }
-      for (const policy of state.policies) {
-        const rules = policy.outcome_rules || {};
-        const triggers = rules.outcome_triggers || {};
-        const nonCompliance = rules.non_compliance || {};
-        const blockedTypes = nonCompliance.blocked_file_types || [];
-        const assignments = (policy.assignments || [])
-          .map((assignment) => `${assignment.scope_display_name} (${assignment.source})`)
-          .join(", ");
-        body.insertAdjacentHTML("beforeend", `
-          <tr>
-            <td><strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span></td>
-            <td><span class="${pillClass(policy.status)}">${escapeHtml(policy.status)}</span></td>
-            <td>
-              <span class="pill">${escapeHtml(rules.malicious_action || "detect_only")}</span>
-              ${triggers.not_scanned ? '<span class="pill warn">not-scanned</span>' : ""}
-              ${triggers.non_compliant ? '<span class="pill warn">non-compliant</span>' : ""}
+      if (!state.policyCatalog.length) {
+        state.policyCatalog.unshift(defaultPolicyCatalogEntry());
+      } else if (!state.policyCatalog.some((policy) => policy.policy_id === "policy-1")) {
+        const legacyDefault = state.policyCatalog.find((policy) => policy.policy_id === "default-policy");
+        if (legacyDefault) {
+          legacyDefault.policy_id = "policy-1";
+          legacyDefault.definition = legacyDefault.definition || {};
+          legacyDefault.definition.policy_id = "policy-1";
+        }
+      }
+      state.policyCatalog = state.policyCatalog.map(normalizePolicyCatalogEntry);
+      savePolicyCatalog();
+      state.activePolicyId = state.policyCatalog[0]?.policy_id || "policy-1";
+    }
+
+    function savePolicyCatalog() {
+      localStorage.setItem(policyStorageKey, JSON.stringify(state.policyCatalog));
+    }
+
+    function loadDefaultProfiles() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(defaultProfileStorageKey) || "{}");
+        state.defaultProfileByIntegration = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch (error) {
+        state.defaultProfileByIntegration = {};
+      }
+    }
+
+    function saveDefaultProfiles() {
+      localStorage.setItem(defaultProfileStorageKey, JSON.stringify(state.defaultProfileByIntegration));
+    }
+
+    function defaultProfileIdForIntegration(integrationId) {
+      const profileId = state.defaultProfileByIntegration[integrationId];
+      if (profileId && state.policyCatalog.some((policy) => policy.policy_id === profileId)) {
+        return profileId;
+      }
+      return state.policyCatalog[0]?.policy_id || "policy-1";
+    }
+
+    function defaultProfileForIntegration(integrationId) {
+      const profileId = defaultProfileIdForIntegration(integrationId);
+      return state.policyCatalog.find((policy) => policy.policy_id === profileId) || selectedPolicyEntry();
+    }
+
+    function renderDefaultProfileSelect(integrationId) {
+      const selected = defaultProfileIdForIntegration(integrationId);
+      const options = state.policyCatalog
+        .map((policy) => `<option value="${escapeHtml(policy.policy_id)}"${policy.policy_id === selected ? " selected" : ""}>${escapeHtml(policyDisplayName(policy))}</option>`)
+        .join("");
+      return `<select data-action="set-default-profile" data-integration="${escapeHtml(integrationId)}">${options}</select>`;
+    }
+
+    function renderProtectedAssetActionSelect(asset) {
+      const defaultProfile = defaultProfileForIntegration(asset.integration_id);
+      const defaultName = policyDisplayName(defaultProfile);
+      const attrs = `
+        class="coverage-action-select"
+        data-action="protected-asset-action"
+        data-integration="${escapeHtml(asset.integration_id)}"
+        data-selector="${escapeHtml(asset.selector)}"
+        data-name="${escapeHtml(asset.display_name || asset.selector)}"
+        data-scope="${escapeHtml(asset.matching_scope_id || "")}"
+      `;
+      const enableOptions = `
+        <option value="">Action</option>
+        <option value="protect-default">Enable protect (default: ${escapeHtml(defaultName)})</option>
+        <option value="protect-choose">Enable protect...</option>
+      `;
+      if (asset.coverage_state === "unprotected") {
+        return `<select ${attrs}>${enableOptions}</select>`;
+      }
+      if (asset.coverage_state === "disabled") {
+        return `<select ${attrs}>${enableOptions}<option value="enable-existing">Enable existing protection</option></select>`;
+      }
+      if (asset.coverage_state === "protected") {
+        return `<select ${attrs}><option value="">Action</option><option value="disable">Disable</option></select>`;
+      }
+      return "";
+    }
+
+    function protectedAssetPolicyLabel(asset) {
+      const policy = asset.policy || {};
+      return policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action || "none";
+    }
+
+    function formatProgress(progress = {}, state = "") {
+      const done = progress.terminal_items || 0;
+      const total = progress.total_items || 0;
+      const terminal = ["completed", "failed", "cancelled"].includes(String(state || "").toLowerCase());
+      const totalText = total ? `${terminal ? "" : "~"}${total}` : `${terminal ? "0" : "~?"}`;
+      const percent = total ? ` (${progress.percent_complete ?? 0}%)` : "";
+      return `${done}/${totalText}${percent}`;
+    }
+
+    function normalizePolicyCatalogEntry(policyEntry) {
+      policyEntry.definition = policyEntry.definition || {};
+      const definition = policyEntry.definition;
+      definition.policy_id = policyEntry.policy_id || definition.policy_id || "policy-1";
+      definition.display_name = policyDisplayName(policyEntry);
+      if (definition.non_compliance?.quarantine_target?.path === "non-compliant") {
+        definition.non_compliance.quarantine_target.path = "di-quarantine";
+      }
+      if (!definition.non_compliance?.quarantine_target?.path) {
+        definition.non_compliance = definition.non_compliance || {};
+        definition.non_compliance.quarantine_target = {
+          path: "di-quarantine",
+          collision_strategy: "suffix_random",
+          preserve_relative_path: false,
+        };
+      }
+      policyEntry.display_name = policyDisplayName(policyEntry);
+      if (policyEntry.display_name === "Default Policy") {
+        policyEntry.display_name = "Default Protection Profile";
+        definition.display_name = "Default Protection Profile";
+      }
+      return policyEntry;
+    }
+
+    function selectedPolicyEntry() {
+      return state.policyCatalog.find((policy) => policy.policy_id === state.activePolicyId) || state.policyCatalog[0] || defaultPolicyCatalogEntry();
+    }
+
+    function makePolicyId() {
+      const existing = new Set(state.policyCatalog.map((policy) => policy.policy_id));
+      const maxNumber = state.policyCatalog.reduce((max, policy) => {
+        const match = String(policy.policy_id || "").match(/^policy-(\d+)$/);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0);
+      let nextNumber = maxNumber + 1;
+      let candidate = `policy-${nextNumber}`;
+      while (existing.has(candidate)) {
+        nextNumber += 1;
+        candidate = `policy-${nextNumber}`;
+      }
+      return candidate;
+    }
+
+    function normalizePolicyAction(action) {
+      return ["detect_only", "quarantine", "delete"].includes(action) ? action : "detect_only";
+    }
+
+    function policyActionLabel(action) {
+      const normalized = normalizePolicyAction(action);
+      if (normalized === "quarantine") return "Quarantine";
+      if (normalized === "delete") return "Delete";
+      return "Detect Only";
+    }
+
+    function policyVerdictActions(definition) {
+      const malicious = normalizePolicyAction(definition.verdict_actions?.malicious || definition.malicious_verdict?.action);
+      return {
+        malicious,
+        non_compliant: normalizePolicyAction(
+          definition.verdict_actions?.non_compliant
+          || definition.non_compliance?.action
+          || (definition.outcome_triggers?.non_compliant ? malicious : "detect_only")
+        ),
+        not_scanned: normalizePolicyAction(
+          definition.verdict_actions?.not_scanned
+          || definition.not_scanned?.action
+          || (definition.outcome_triggers?.not_scanned ? malicious : "detect_only")
+        ),
+      };
+    }
+
+    function renderPolicyBaseOptions() {
+      const options = state.policyCatalog
+        .map((policy) => `<option value="${escapeHtml(policy.policy_id)}">${escapeHtml(policyDisplayName(policy))}</option>`)
+        .join("");
+      const basedOn = document.querySelector("#default-policy-form select[name='based_on_policy']");
+      basedOn.innerHTML = options;
+      basedOn.value = state.policyEditorBaseId || selectedPolicyEntry().policy_id;
+    }
+
+    function applyPolicyToForm(policyEntry, options = {}) {
+      const form = document.getElementById("default-policy-form");
+      const definition = cloneValue(policyEntry.definition || {});
+      const actions = policyVerdictActions(definition);
+      const isCreate = options.mode === "create";
+      const quarantinePath = definition.malicious_verdict?.quarantine_target?.path || definition.non_compliance?.quarantine_target?.path || "di-quarantine";
+      state.syncingPolicyForm = true;
+      form.policy_name.value = isCreate ? (options.name || "") : policyDisplayName(policyEntry) || "Policy";
+      if (isCreate) {
+        form.based_on_policy.value = state.policyEditorBaseId || policyEntry.policy_id;
+      }
+      form.policy_name.readOnly = !isCreate;
+      form.policy_name.classList.toggle("hidden", !isCreate);
+      const readonlyName = document.getElementById("policy-name-readonly");
+      readonlyName.textContent = isCreate ? "" : policyDisplayName(policyEntry) || "Policy";
+      readonlyName.classList.toggle("hidden", isCreate);
+      form.policy_id.value = isCreate ? "" : policyEntry.policy_id || definition.policy_id || "policy-1";
+      form.malicious_action.value = actions.malicious;
+      form.non_compliant_action.value = actions.non_compliant;
+      form.not_scanned_action.value = actions.not_scanned;
+      form.quarantine_folder_path.value = quarantinePath === "non-compliant" ? "di-quarantine" : quarantinePath;
+      const blockedTypes = new Set(definition.non_compliance?.blocked_file_types || []);
+      form.querySelectorAll("input[name='blocked_file_type']").forEach((input) => {
+        input.checked = blockedTypes.has(input.value);
+      });
+      state.syncingPolicyForm = false;
+      syncDefaultPolicySummary();
+    }
+
+    function localPolicyToSummary(policyEntry, serverSummary = null) {
+      const definition = cloneValue(policyEntry.definition || {});
+      const summary = {
+        policy_id: policyEntry.policy_id,
+        display_name: policyDisplayName(policyEntry),
+        status: serverSummary?.status || "active",
+        definition,
+        outcome_rules: {
+          malicious_action: policyVerdictActions(definition).malicious,
+          verdict_actions: policyVerdictActions(definition),
+          outcome_triggers: definition.outcome_triggers || {},
+          non_compliance: definition.non_compliance || {},
+          auto_dianna_on_verdicts: definition.auto_dianna_on_verdicts || [],
+        },
+        assigned_assets: serverSummary?.assigned_assets || 0,
+        assignments: serverSummary?.assignments || [],
+        updated_at: serverSummary?.updated_at || "",
+      };
+      return summary;
+    }
+
+    function mergedPolicyRows() {
+      const serverById = new Map(state.policies.map((policy) => [policy.policy_id, policy]));
+      return state.policyCatalog
+        .map((policy) => localPolicyToSummary(policy, serverById.get(policy.policy_id)))
+        .sort((a, b) => policyDisplayName(a).localeCompare(policyDisplayName(b)));
+    }
+
+    function renderPolicies() {
+      const columns = [
+        {
+          key: "policy",
+          label: "Protection Profile",
+          render: (policy) => `<strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span>`,
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (policy) => `<span class="${pillClass(policy.status)}">${escapeHtml(policy.status)}</span>`,
+        },
+        {
+          key: "outcome_rules",
+          label: "Outcome Rules",
+          render: (policy) => {
+            const rules = policy.outcome_rules || {};
+            const actions = rules.verdict_actions || {};
+            const nonCompliance = rules.non_compliance || {};
+            const blockedTypes = nonCompliance.blocked_file_types || [];
+            return `
+              <span class="pill">malicious: ${escapeHtml(policyActionLabel(actions.malicious || rules.malicious_action))}</span>
+              <span class="pill">non-compliant: ${escapeHtml(policyActionLabel(actions.non_compliant))}</span>
+              <span class="pill">not scanned: ${escapeHtml(policyActionLabel(actions.not_scanned))}</span>
               ${blockedTypes.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join(" ")}
               ${(rules.auto_dianna_on_verdicts || []).map((item) => `<span class="pill">dianna ${escapeHtml(item)}</span>`).join(" ")}
-            </td>
-            <td>${policy.assigned_assets || 0}</td>
-            <td>${escapeHtml(assignments || "none")}</td>
-            <td>${escapeHtml(policy.updated_at || "")}</td>
-          </tr>
-        `);
-      }
+            `;
+          },
+        },
+        { key: "assigned_assets", label: "Assigned Assets", render: (policy) => String(policy.assigned_assets || 0) },
+        {
+          key: "assignments",
+          label: "Assignments",
+          render: (policy) => {
+            const assignments = (policy.assignments || [])
+              .map((assignment) => `${assignment.scope_display_name} (${assignment.source})`)
+              .join(", ");
+            return escapeHtml(assignments || "none");
+          },
+        },
+        { key: "updated", label: "Updated", render: (policy) => escapeHtml(policy.updated_at || "") },
+      ];
+      renderDataTable({
+        tableId: "policies-table",
+        bodyId: "policies-body",
+        columns,
+        rows: mergedPolicyRows(),
+        emptyMessage: "No protection profiles match this filter.",
+        rowAttributes: (policy) => ({
+          "data-action": "edit-policy",
+          "data-policy-id": policy.policy_id,
+        }),
+      });
+    }
+
+    function protectionProfilePickerRows() {
+      return mergedPolicyRows();
+    }
+
+    function renderProtectionProfilePicker() {
+      const selectedId = state.selectedProtectionProfileId || defaultProfileIdForIntegration(state.protectionProfileAsset?.integrationId || "");
+      const columns = [
+        {
+          key: "select",
+          label: "",
+          className: "actions",
+          render: (policy) => `<input type="radio" name="protection_profile_choice" value="${escapeHtml(policy.policy_id)}"${policy.policy_id === selectedId ? " checked" : ""}>`,
+        },
+        {
+          key: "profile",
+          label: "Protection Profile",
+          render: (policy) => `<strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span>`,
+        },
+        {
+          key: "rules",
+          label: "Rules",
+          render: (policy) => {
+            const actions = policy.outcome_rules?.verdict_actions || {};
+            return `
+              <span class="pill">malicious: ${escapeHtml(policyActionLabel(actions.malicious || policy.outcome_rules?.malicious_action))}</span>
+              <span class="pill">non-compliant: ${escapeHtml(policyActionLabel(actions.non_compliant))}</span>
+              <span class="pill">not scanned: ${escapeHtml(policyActionLabel(actions.not_scanned))}</span>
+            `;
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "protection-profile-picker-table",
+        bodyId: "protection-profile-picker-body",
+        columns,
+        rows: protectionProfilePickerRows(),
+        emptyMessage: "No protection profiles are available.",
+        rowAttributes: (policy) => ({
+          "data-action": "select-protection-profile",
+          "data-policy-id": policy.policy_id,
+          class: policy.policy_id === selectedId ? "selected" : null,
+        }),
+      });
+      document.getElementById("protection-profile-picker-apply").disabled = !selectedId;
+    }
+
+    function selectedProtectionProfileEntry() {
+      return state.policyCatalog.find((policy) => policy.policy_id === state.selectedProtectionProfileId)
+        || defaultProfileForIntegration(state.protectionProfileAsset?.integrationId || "");
     }
 
     function currentDefaultPolicy() {
       const form = document.getElementById("default-policy-form");
-      const action = form.remediation_action.value;
-      const quarantineSubfolder = form.quarantine_subfolder.value.trim() || "quarantine";
-      const nonCompliantSubfolder = form.non_compliant_subfolder.value.trim() || "non-compliant";
-      const policyId = form.policy_id.value.trim() || "default-policy";
+      const maliciousAction = normalizePolicyAction(form.malicious_action.value);
+      const nonCompliantAction = normalizePolicyAction(form.non_compliant_action.value);
+      const notScannedAction = normalizePolicyAction(form.not_scanned_action.value);
+      const quarantineFolderPath = form.quarantine_folder_path.value.trim() || "di-quarantine";
+      const policyId = form.policy_id.value.trim() || "policy-1";
+      const displayName = form.policy_name.value.trim() || policyId;
       const blockedFileTypes = Array.from(form.querySelectorAll("input[name='blocked_file_type']:checked")).map((input) => input.value);
       const policy = {
         policy_id: policyId,
+        display_name: displayName,
         malicious_verdict: {
-          action,
-          tag_on_detect: action === "detect_only",
-          tag_on_quarantine: action === "quarantine",
+          action: maliciousAction,
+          tag_on_detect: maliciousAction === "detect_only",
+          tag_on_quarantine: maliciousAction === "quarantine",
+        },
+        verdict_actions: {
+          malicious: maliciousAction,
+          non_compliant: nonCompliantAction,
+          not_scanned: notScannedAction,
         },
         outcome_triggers: {
-          malicious: form.apply_malicious.checked,
-          not_scanned: form.apply_not_scanned.checked,
-          non_compliant: form.apply_non_compliant.checked,
+          malicious: true,
+          not_scanned: notScannedAction !== "detect_only",
+          non_compliant: nonCompliantAction !== "detect_only",
         },
         non_compliance: {
+          action: nonCompliantAction,
           blocked_file_types: blockedFileTypes,
           quarantine_target: {
-            path: nonCompliantSubfolder,
+            path: quarantineFolderPath,
             collision_strategy: "suffix_random",
             preserve_relative_path: false,
           },
         },
+        not_scanned: {
+          action: notScannedAction,
+        },
       };
-      if (action === "quarantine") {
+      if (maliciousAction === "quarantine") {
         policy.malicious_verdict.quarantine_target = {
-          path: quarantineSubfolder,
+          path: quarantineFolderPath,
           collision_strategy: "suffix_random",
           preserve_relative_path: false,
         };
@@ -1438,10 +2475,11 @@
 
     function syncDefaultPolicySummary() {
       const policy = currentDefaultPolicy();
-      const summary = policy.malicious_verdict.action === "quarantine"
-        ? "Quarantine, move and tag"
-        : "Detect only, tag if possible";
-      document.getElementById("default-policy-status").textContent = `${policy.policy_id}: ${summary}`;
+      const summary = `malicious ${policyActionLabel(policy.verdict_actions.malicious)}, non-compliant ${policyActionLabel(policy.verdict_actions.non_compliant)}, not scanned ${policyActionLabel(policy.verdict_actions.not_scanned)}`;
+      const label = state.policyEditorMode === "create"
+        ? `${policy.display_name || "New policy"}: ${summary}`
+        : `${policy.display_name} (${policy.policy_id}): ${summary}`;
+      setStatus("default-policy-status", label);
     }
 
     function renderScanResultDetail(jobId) {
@@ -1451,6 +2489,17 @@
         target.innerHTML = '<div class="empty">Result not found.</div>';
         return;
       }
+      state.selectedScanResult = jobId;
+      document.querySelectorAll("#scan-results-body tr").forEach((row) => {
+        row.classList.toggle("selected", row.dataset.jobId === jobId);
+      });
+      const progress = result.progress || {};
+      const findings = result.findings || {};
+      const remediation = result.remediation || {};
+      const targetLabel = result.target?.label || "unknown";
+      const progressText = formatProgress(progress, result.job.state);
+      const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`;
+      const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
       const latest = (result.latest_items || []).map((item) => `
         <tr>
           <td>${escapeHtml(item.object_identity)}</td>
@@ -1466,15 +2515,22 @@
           <div class="card">
             <div class="card-top">
               <div>
-                <h3>${escapeHtml(result.target?.label || result.job.job_id)}</h3>
-                <p>${escapeHtml(result.cancel?.message || "")}</p>
+                <h3>${escapeHtml(targetLabel)}</h3>
+                <p><span class="mono">${escapeHtml(result.job.job_id)}</span></p>
               </div>
               <span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>
             </div>
+            <div class="summary-grid">
+              <div class="summary-item"><span>Progress</span><strong>${escapeHtml(progressText)}</strong></div>
+              <div class="summary-item"><span>Findings</span><strong>${escapeHtml(findingText)}</strong></div>
+              <div class="summary-item"><span>Remediation</span><strong>${escapeHtml(remediationText)}</strong></div>
+              <div class="summary-item"><span>Cancel</span><strong>${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}</strong></div>
+            </div>
+            ${result.cancel?.message ? `<p>${escapeHtml(result.cancel.message)}</p>` : ""}
           </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Policy</th><th>Remediation</th><th>Failure</th></tr></thead>
+              <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Protection Profile</th><th>Remediation</th><th>Failure</th></tr></thead>
               <tbody>${latest || '<tr><td colspan="6"><div class="empty">No sampled items.</div></td></tr>'}</tbody>
             </table>
           </div>
@@ -1519,16 +2575,38 @@
       renderTopStats();
     }
 
+    function resetProtectedPagination() {
+      state.protectedPageIndex = 0;
+      state.protectedPageCursors = [""];
+      state.protectedNextCursor = null;
+    }
+
+    async function loadNextProtectedAssetsPage() {
+      if (!state.protectedNextCursor) return;
+      state.protectedPageIndex += 1;
+      state.protectedPageCursors[state.protectedPageIndex] = state.protectedNextCursor;
+      await loadProtectedAssets();
+    }
+
+    async function loadPreviousProtectedAssetsPage() {
+      if (state.protectedPageIndex <= 0) return;
+      state.protectedPageIndex -= 1;
+      await loadProtectedAssets();
+    }
+
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
       const integrationId = document.getElementById("protected-filter-integration").value;
       const assetType = document.getElementById("protected-filter-type").value;
       const source = document.getElementById("protected-filter-source").value;
       const coverage = document.getElementById("protected-filter-coverage").value;
-      const limit = document.getElementById("protected-filter-limit").value;
+      const assetFilterMode = document.getElementById("protected-filter-asset-mode").value;
+      const assetFilterValue = document.getElementById("protected-filter-asset-value").value.trim();
+      const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
       if (!integrationId) {
         state.protectedAssets = [];
         state.protectedAssetsLoaded = true;
+        state.protectedNextCursor = null;
         renderProtectedAssets({ unsupported_integrations: [] });
         document.getElementById("protected-assets-body").innerHTML = '<tr><td colspan="8"><div class="empty">Select a registered connector.</div></td></tr>';
         return;
@@ -1537,9 +2615,15 @@
       if (assetType) params.set("type", assetType);
       if (source) params.set("source", source);
       if (coverage) params.set("coverage_state", coverage);
-      if (limit) params.set("limit", limit);
+      params.set("limit", String(state.protectedPageLimit));
+      if (cursor) params.set("cursor", cursor);
+      if (assetFilterValue) {
+        params.set("asset_filter_mode", assetFilterMode);
+        params.set("asset_filter_value", assetFilterValue);
+      }
       const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
       state.protectedAssets = payload.assets || [];
+      state.protectedNextCursor = (payload.next_cursors || {})[integrationId] || null;
       state.protectedAssetsLoaded = true;
       renderProtectedAssets(payload);
     }
@@ -1552,10 +2636,8 @@
     async function loadScanResults() {
       const params = new URLSearchParams();
       const integrationId = document.getElementById("scan-results-filter-integration").value;
-      const stateFilter = document.getElementById("scan-results-filter-state").value;
       const itemLimit = document.getElementById("scan-results-filter-item-limit").value;
       if (integrationId) params.set("integration_id", integrationId);
-      if (stateFilter) params.set("state", stateFilter);
       params.set("item_limit", itemLimit);
       const payload = await fetchJson(`${endpoints.scanResults}?${params.toString()}`);
       state.scanResults = payload.results || [];
@@ -1588,7 +2670,100 @@
       document.getElementById("connector-drawer-backdrop").classList.toggle("open", open);
     }
 
+    function setPolicyEditorOpen(open) {
+      document.getElementById("policy-editor-drawer").classList.toggle("open", open);
+      document.getElementById("policy-editor-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("policy-editor-backdrop").classList.toggle("open", open);
+    }
+
+    function setProtectionProfilePickerOpen(open) {
+      document.getElementById("protection-profile-picker-drawer").classList.toggle("open", open);
+      document.getElementById("protection-profile-picker-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("protection-profile-picker-backdrop").classList.toggle("open", open);
+      if (!open) {
+        state.protectionProfileAsset = null;
+        state.selectedProtectionProfileId = "";
+      }
+    }
+
+    function openProtectionProfilePicker(asset) {
+      state.protectionProfileAsset = asset;
+      state.selectedProtectionProfileId = defaultProfileIdForIntegration(asset.integrationId);
+      document.getElementById("protection-profile-picker-caption").textContent = `Apply a protection profile to ${asset.name || asset.selector}.`;
+      renderProtectionProfilePicker();
+      setProtectionProfilePickerOpen(true);
+    }
+
+    function openPolicyEditor(policyId) {
+      const policy = state.policyCatalog.find((item) => item.policy_id === policyId) || selectedPolicyEntry();
+      state.activePolicyId = policy.policy_id;
+      state.policyEditorMode = "edit";
+      state.policyEditorBaseId = policy.policy_id;
+      document.getElementById("policy-editor-title").textContent = policyDisplayName(policy);
+      document.getElementById("policy-editor-caption").textContent = "Edit remediation and outcome handling.";
+      document.getElementById("policy-name-field").classList.remove("hidden");
+      document.getElementById("policy-based-on-field").classList.add("hidden");
+      document.getElementById("policy-editor-save").textContent = "Save";
+      renderPolicyBaseOptions();
+      applyPolicyToForm(policy, { mode: "edit" });
+      setPolicyEditorOpen(true);
+    }
+
+    function openPolicyCreate() {
+      const base = selectedPolicyEntry();
+      state.policyEditorMode = "create";
+      state.policyEditorBaseId = base.policy_id;
+      document.getElementById("policy-editor-title").textContent = "Create Protection Profile";
+      document.getElementById("policy-editor-caption").textContent = "Clone an existing protection profile as a starting point.";
+      document.getElementById("policy-name-field").classList.remove("hidden");
+      document.getElementById("policy-based-on-field").classList.remove("hidden");
+      document.getElementById("policy-editor-save").textContent = "Create Profile";
+      renderPolicyBaseOptions();
+      applyPolicyToForm(base, { mode: "create" });
+      setPolicyEditorOpen(true);
+      document.querySelector("#default-policy-form input[name='policy_name']").focus();
+    }
+
+    function cancelPolicyEditor() {
+      applyPolicyToForm(selectedPolicyEntry(), { mode: "edit" });
+      setPolicyEditorOpen(false);
+    }
+
+    function savePolicyEditor() {
+      const form = document.getElementById("default-policy-form");
+      if (state.policyEditorMode === "create") {
+        const name = form.policy_name.value.trim();
+        if (!name) {
+          setStatus("default-policy-status", "Profile Name is required.", true);
+          return;
+        }
+        const policyId = makePolicyId(name);
+        form.policy_id.value = policyId;
+        const definition = currentDefaultPolicy();
+        definition.policy_id = policyId;
+        definition.display_name = name;
+        state.policyCatalog.push({
+          policy_id: policyId,
+          display_name: name,
+          definition,
+        });
+        state.activePolicyId = policyId;
+      } else {
+        const entry = selectedPolicyEntry();
+        const definition = currentDefaultPolicy();
+        definition.policy_id = entry.policy_id;
+        definition.display_name = entry.display_name;
+        entry.definition = definition;
+      }
+      savePolicyCatalog();
+      renderPolicyBaseOptions();
+      renderPolicies();
+      renderConnectors();
+      setPolicyEditorOpen(false);
+    }
+
     async function protectAsset(asset) {
+      const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
       await fetchJson(endpoints.createScope, {
         method: "POST",
         body: JSON.stringify({
@@ -1598,13 +2773,23 @@
           resource_selector: asset.selector,
           mode: "full_scan",
           enabled: true,
-          post_scan_policy: currentDefaultPolicy(),
+          post_scan_policy: cloneValue(policyEntry.definition || currentDefaultPolicy()),
         }),
       });
       await refreshAll();
       if (state.activeAssetsTab === "protected") {
         await loadProtectedAssets();
       }
+    }
+
+    async function applySelectedProtectionProfile() {
+      if (!state.protectionProfileAsset) return;
+      const policyEntry = selectedProtectionProfileEntry();
+      await protectAsset({
+        ...state.protectionProfileAsset,
+        policyEntry,
+      });
+      setProtectionProfilePickerOpen(false);
     }
 
     async function scanScope(scopeId) {
@@ -1635,16 +2820,87 @@
     document.getElementById("open-add-connector").addEventListener("click", () => setConnectorDrawerOpen(true));
     document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.getElementById("create-policy").addEventListener("click", openPolicyCreate);
+    document.getElementById("close-policy-editor").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("policy-editor-cancel").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("policy-editor-save").addEventListener("click", savePolicyEditor);
+    document.getElementById("policy-editor-backdrop").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("close-protection-profile-picker").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-cancel").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-backdrop").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-apply").addEventListener("click", async () => {
+      const button = document.getElementById("protection-profile-picker-apply");
+      button.disabled = true;
+      try {
+        await applySelectedProtectionProfile();
+      } catch (error) {
+        alert(`Protect failed: ${error.message}`);
+        button.disabled = false;
+      }
+    });
+    document.querySelector("#default-policy-form select[name='based_on_policy']").addEventListener("change", (event) => {
+      if (state.policyEditorMode !== "create") return;
+      const name = document.querySelector("#default-policy-form input[name='policy_name']").value;
+      state.policyEditorBaseId = event.target.value;
+      const base = state.policyCatalog.find((policy) => policy.policy_id === event.target.value) || selectedPolicyEntry();
+      applyPolicyToForm(base, { mode: "create", name });
+      document.querySelector("#default-policy-form select[name='based_on_policy']").value = state.policyEditorBaseId;
+    });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         setConnectorDrawerOpen(false);
+        cancelPolicyEditor();
+        setProtectionProfilePickerOpen(false);
       }
     });
     document.getElementById("theme-mode").addEventListener("change", (event) => {
       setThemeMode(event.currentTarget.value);
     });
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy-value]");
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const originalTitle = button.title;
+      const originalLabel = button.getAttribute("aria-label") || originalTitle;
+      try {
+        await copyTextToClipboard(button.dataset.copyValue || "");
+        button.classList.add("copied");
+        button.title = "Copied";
+        button.setAttribute("aria-label", "Copied");
+        setTimeout(() => {
+          button.classList.remove("copied");
+          button.title = originalTitle;
+          button.setAttribute("aria-label", originalLabel);
+        }, 900);
+      } catch (error) {
+        button.title = "Copy failed";
+        button.setAttribute("aria-label", "Copy failed");
+        setTimeout(() => {
+          button.title = originalTitle;
+          button.setAttribute("aria-label", originalLabel);
+        }, 1200);
+      }
+    });
     document.getElementById("refresh-protected-assets").addEventListener("click", () => {
+      resetProtectedPagination();
       loadProtectedAssets().catch(showProtectedAssetsError);
+    });
+    [
+      "protected-filter-integration",
+      "protected-filter-coverage",
+      "protected-filter-type",
+      "protected-filter-source",
+      "protected-filter-asset-mode",
+    ].forEach((id) => {
+      document.getElementById(id).addEventListener("change", resetProtectedPagination);
+    });
+    document.getElementById("protected-filter-asset-value").addEventListener("input", resetProtectedPagination);
+    document.getElementById("protected-page-prev").addEventListener("click", () => {
+      loadPreviousProtectedAssetsPage().catch(showProtectedAssetsError);
+    });
+    document.getElementById("protected-page-next").addEventListener("click", () => {
+      loadNextProtectedAssetsPage().catch(showProtectedAssetsError);
     });
     document.getElementById("refresh-scan-results").addEventListener("click", () => {
       loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
@@ -1653,10 +2909,10 @@
       loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
     });
     document.getElementById("refresh-policies").addEventListener("click", () => {
-      loadPolicies().catch((error) => alert(`Policy refresh failed: ${error.message}`));
+      loadPolicies().catch((error) => alert(`Protection profile refresh failed: ${error.message}`));
     });
     document.getElementById("apply-policy-filter").addEventListener("click", () => {
-      loadPolicies().catch((error) => alert(`Policy refresh failed: ${error.message}`));
+      loadPolicies().catch((error) => alert(`Protection profile refresh failed: ${error.message}`));
     });
 
     document.getElementById("connectors-body").addEventListener("click", async (event) => {
@@ -1673,6 +2929,13 @@
         alert(`Connector update failed: ${error.message}`);
         button.disabled = false;
       }
+    });
+
+    document.getElementById("connectors-body").addEventListener("change", (event) => {
+      const select = event.target.closest("[data-action='set-default-profile']");
+      if (!select) return;
+      state.defaultProfileByIntegration[select.dataset.integration] = select.value;
+      saveDefaultProfiles();
     });
 
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
@@ -1718,11 +2981,71 @@
         }
       }
     });
+    document.getElementById("protected-assets-body").addEventListener("change", async (event) => {
+      const select = event.target.closest("[data-action='protected-asset-action']");
+      if (!select) return;
+      const action = select.value;
+      const asset = {
+        integrationId: select.dataset.integration,
+        selector: select.dataset.selector,
+        name: select.dataset.name,
+      };
+      select.disabled = true;
+      try {
+        if (action === "protect-default") {
+          await protectAsset(asset);
+        } else if (action === "protect-choose") {
+          openProtectionProfilePicker(asset);
+          select.disabled = false;
+          select.value = "";
+        } else if (action === "enable-existing" && select.dataset.scope) {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: true }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } else if (action === "disable" && select.dataset.scope) {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: false }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } else {
+          select.disabled = false;
+          select.value = "";
+        }
+      } catch (error) {
+        alert(`Protection update failed: ${error.message}`);
+        select.disabled = false;
+        select.value = "";
+      }
+    });
+    document.getElementById("protection-profile-picker-body").addEventListener("click", (event) => {
+      const row = event.target.closest("[data-action='select-protection-profile']");
+      if (!row) return;
+      state.selectedProtectionProfileId = row.dataset.policyId;
+      renderProtectionProfilePicker();
+    });
+    document.getElementById("protection-profile-picker-body").addEventListener("change", (event) => {
+      const input = event.target.closest("input[name='protection_profile_choice']");
+      if (!input) return;
+      state.selectedProtectionProfileId = input.value;
+      renderProtectionProfilePicker();
+    });
 
     document.getElementById("scan-results-body").addEventListener("click", (event) => {
       const button = event.target.closest("[data-action='inspect-scan-result']");
       if (!button) return;
       renderScanResultDetail(button.dataset.id);
+      document.getElementById("scan-result-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+
+    document.getElementById("policies-body").addEventListener("click", (event) => {
+      const row = event.target.closest("[data-action='edit-policy']");
+      if (!row) return;
+      openPolicyEditor(row.dataset.policyId);
     });
 
     document.getElementById("integration-form").addEventListener("submit", async (event) => {
@@ -1772,6 +3095,11 @@
 
     initTheme();
     initNav();
+    loadPolicyCatalog();
+    loadDefaultProfiles();
+    renderPolicyBaseOptions();
+    applyPolicyToForm(selectedPolicyEntry());
+    loadUiMeta();
     document.getElementById("default-policy-form").addEventListener("input", syncDefaultPolicySummary);
     syncDefaultPolicySummary();
     refreshAll().catch((error) => {

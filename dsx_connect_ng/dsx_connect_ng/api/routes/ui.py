@@ -36,6 +36,7 @@ from dsx_connect_ng.jobs.models import (
     StageUpdateRequest,
 )
 from dsx_connect_ng.jobs.service import JobService
+from dsx_connect_ng.version import DSX_CONNECT_VERSION
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 
@@ -56,6 +57,12 @@ class UIDsxaStatusResponse(BaseModel):
     base_url: str | None = None
     endpoint: str | None = None
     details: dict[str, Any] = Field(default_factory=dict)
+
+
+class UIMetaResponse(BaseModel):
+    product: str = "DSX-Connect"
+    version: str
+    display_name: str
 
 
 class UIIntegrationSummary(BaseModel):
@@ -163,6 +170,7 @@ class UIAssetsConnectorsResponse(BaseModel):
 class UIScopeScanRequest(BaseModel):
     reader_strategy: str = "proxy"
     path: str | None = None
+    limit: int = Field(default=100, ge=1, le=1000)
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -407,6 +415,8 @@ def _build_connector_assets_url(
     source: str,
     limit: int,
     cursor: str | None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
 ) -> str | None:
     if not base_url:
         return None
@@ -416,6 +426,9 @@ def _build_connector_assets_url(
     query = {"type": asset_type, "source": source, "limit": str(limit)}
     if cursor:
         query["cursor"] = cursor
+    if asset_filter_mode and asset_filter_value:
+        query["asset_filter_mode"] = asset_filter_mode
+        query["asset_filter_value"] = asset_filter_value
     return f"{endpoint}?{urllib_parse.urlencode(query)}"
 
 
@@ -428,6 +441,48 @@ def _build_connector_health_url(base_url: str | None, connector_name: str | None
     return urllib_parse.urljoin(normalized, "healthz")
 
 
+def _build_connector_repo_check_url(base_url: str | None, connector_name: str | None, *, preview_limit: int) -> str | None:
+    if not base_url:
+        return None
+    normalized = base_url.rstrip("/") + "/"
+    path = f"{connector_name.strip('/')}/repo_check" if connector_name else "repo_check"
+    endpoint = urllib_parse.urljoin(normalized, path)
+    return f"{endpoint}?{urllib_parse.urlencode({'preview': str(preview_limit)})}"
+
+
+def _fetch_connector_preview(base_url: str | None, connector_name: str | None, *, limit: int) -> list[str]:
+    endpoint = _build_connector_repo_check_url(base_url, connector_name, preview_limit=limit)
+    if endpoint is None:
+        return []
+    request = urllib_request.Request(endpoint, method="GET", headers={"Accept": "application/json"})
+    try:
+        with urllib_request.urlopen(request, timeout=30.0) as response:
+            body = response.read().decode("utf-8") or "{}"
+    except urllib_error.HTTPError:
+        return []
+    except urllib_error.URLError:
+        return []
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return []
+    preview = payload.get("preview") if isinstance(payload, dict) else None
+    if not isinstance(preview, list):
+        return []
+    return [item.strip() for item in preview if isinstance(item, str) and item.strip()][:limit]
+
+
+def _scope_relative_object_path(scope_selector: str, object_identity: str) -> str:
+    selector = scope_selector.strip().strip("/")
+    identity = object_identity.strip()
+    if selector and identity == selector:
+        return ""
+    prefix = selector + "/"
+    if selector and identity.startswith(prefix):
+        return identity[len(prefix):]
+    return identity
+
+
 def _fetch_connector_assets(
     base_url: str | None,
     connector_name: str | None,
@@ -436,6 +491,8 @@ def _fetch_connector_assets(
     source: str,
     limit: int,
     cursor: str | None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
 ) -> dict[str, Any]:
     endpoint = _build_connector_assets_url(
         base_url,
@@ -444,6 +501,8 @@ def _fetch_connector_assets(
         source=source,
         limit=limit,
         cursor=cursor,
+        asset_filter_mode=asset_filter_mode,
+        asset_filter_value=asset_filter_value,
     )
     if endpoint is None:
         return {
@@ -1073,6 +1132,41 @@ def _summarize_protected_assets_for_integration(
     return assets
 
 
+def _normalize_asset_filter_mode(mode: str | None) -> str | None:
+    if not mode:
+        return None
+    normalized = mode.strip().lower().replace("_", "-")
+    if normalized in {"begins-with", "starts-with", "prefix"}:
+        return "begins_with"
+    if normalized in {"ends-with", "suffix"}:
+        return "ends_with"
+    if normalized in {"contains", "substring"}:
+        return "contains"
+    raise HTTPException(status_code=400, detail=f"unsupported_asset_filter_mode:{mode}")
+
+
+def _asset_matches_filter(asset: UIProtectedAssetSummary, *, mode: str | None, value: str | None) -> bool:
+    if not mode or not value:
+        return True
+    needle = value.strip().lower()
+    if not needle:
+        return True
+    haystacks = [
+        asset.display_name or "",
+        asset.selector,
+        asset.id,
+    ]
+    for candidate in haystacks:
+        normalized = candidate.lower()
+        if mode == "begins_with" and normalized.startswith(needle):
+            return True
+        if mode == "ends_with" and normalized.endswith(needle):
+            return True
+        if mode == "contains" and needle in normalized:
+            return True
+    return False
+
+
 def _policy_source(integration: IntegrationRecord, scope: ProtectedScopeRecord) -> str | None:
     if scope.post_scan_policy:
         return "scope"
@@ -1162,6 +1256,12 @@ async def operator_console() -> HTMLResponse:
 @router.get("/", include_in_schema=False, response_class=HTMLResponse)
 async def operator_console_slash() -> HTMLResponse:
     return HTMLResponse(_load_operator_console_html())
+
+
+@router.get("/meta", response_model=UIMetaResponse)
+async def get_ui_meta() -> UIMetaResponse:
+    display_name = f"DSX-Connect v{DSX_CONNECT_VERSION}"
+    return UIMetaResponse(version=DSX_CONNECT_VERSION, display_name=display_name)
 
 
 @router.get("/status")
@@ -1283,8 +1383,11 @@ async def discover_integration_assets(
     source: str = Query(default="configured_asset"),
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),
+    asset_filter_mode: str | None = Query(default=None),
+    asset_filter_value: str | None = Query(default=None),
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> UIAssetDiscoveryResponse:
+    normalized_filter_mode = _normalize_asset_filter_mode(asset_filter_mode)
     integration = control_plane.get_integration_or_404(integration_id)
     base_url, connector_name = _connector_asset_endpoint(
         integration,
@@ -1297,6 +1400,8 @@ async def discover_integration_assets(
         source=source,
         limit=limit,
         cursor=cursor,
+        asset_filter_mode=normalized_filter_mode,
+        asset_filter_value=asset_filter_value,
     )
     scopes = control_plane.list_scopes(integration_id=integration_id)
     return _summarize_assets(
@@ -1317,9 +1422,12 @@ async def list_protected_assets(
     coverage_state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),
+    asset_filter_mode: str | None = Query(default=None),
+    asset_filter_value: str | None = Query(default=None),
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
     job_service: JobService = Depends(get_job_service),
 ) -> UIAssetsProtectedResponse:
+    normalized_filter_mode = _normalize_asset_filter_mode(asset_filter_mode)
     integrations = control_plane.list_integrations()
     if integration_id is not None:
         integrations = [integration for integration in integrations if integration.integration_id == integration_id]
@@ -1350,6 +1458,8 @@ async def list_protected_assets(
                 source=source,
                 limit=limit,
                 cursor=cursor,
+                asset_filter_mode=normalized_filter_mode,
+                asset_filter_value=asset_filter_value,
             )
         except HTTPException as exc:
             failed_integrations.append({"integration_id": integration.integration_id, "detail": exc.detail})
@@ -1374,6 +1484,12 @@ async def list_protected_assets(
         )
         if coverage_state is not None:
             integration_assets = [asset for asset in integration_assets if asset.coverage_state == coverage_state]
+        if normalized_filter_mode and asset_filter_value:
+            integration_assets = [
+                asset
+                for asset in integration_assets
+                if _asset_matches_filter(asset, mode=normalized_filter_mode, value=asset_filter_value)
+            ]
         assets.extend(integration_assets)
 
     return UIAssetsProtectedResponse(
@@ -1428,12 +1544,28 @@ async def scan_scope_selector(
 ) -> BatchJobRecord:
     request = payload or UIScopeScanRequest()
     scope = control_plane.get_scope_or_404(scope_id)
-    object_identity = request.path or scope.resource_selector
-    item_payload = {
-        "readerStrategy": request.reader_strategy,
-        "path": object_identity,
-        **request.payload,
-    }
+    integration = control_plane.get_integration_or_404(scope.integration_id)
+    base_url, connector_name = _connector_asset_endpoint(
+        integration,
+        control_plane.list_connector_instances(integration_id=scope.integration_id),
+    )
+    preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
+    object_identities = preview_items or [request.path or scope.resource_selector]
+    items = [
+        {
+            "object_identity": object_identity,
+            "payload": {
+                "readerStrategy": request.reader_strategy,
+                "path": (
+                    _scope_relative_object_path(scope.resource_selector, object_identity)
+                    if preview_items
+                    else object_identity
+                ),
+                **request.payload,
+            },
+        }
+        for object_identity in object_identities
+    ]
     return await job_service.submit_batch_job(
         BatchJobSubmitRequest(
             job_type="scan.batch",
@@ -1442,13 +1574,10 @@ async def scan_scope_selector(
             payload={
                 "source": "ui_scope_scan",
                 "scopeSelector": scope.resource_selector,
-                "enumerationMode": "selector_only",
+                "enumerationMode": "connector_preview" if preview_items else "selector_only",
+                "itemCount": len(items),
+                "enumerationLimit": request.limit,
             },
-            items=[
-                {
-                    "object_identity": object_identity,
-                    "payload": item_payload,
-                }
-            ],
+            items=items,
         )
     )

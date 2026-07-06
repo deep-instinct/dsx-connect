@@ -7,25 +7,15 @@ source "$script_dir/common.sh"
 
 usage() {
   cat <<'EOF'
-Usage: scripts/connectors/deploy-k3s.sh CONNECTOR --tag TAG [--registry REGISTRY] [--release NAME] [--namespace NS] [--values FILE] [--pull-policy POLICY] [--wait|--no-wait]
+Usage: scripts/dsx-connect-ng/deploy-k3s.sh --tag TAG [--registry REGISTRY] [--release NAME] [--namespace NS] [--values FILE] [--wait|--no-wait]
 
-Deploys a connector chart to the current Kubernetes context using Helm.
+Deploys DSX-Connect v2 to the current Kubernetes context using Helm.
 
 Examples:
-  scripts/connectors/deploy-k3s.sh google_cloud_storage --tag ci-abcd123 --release gcs --namespace dsx-connect
-  scripts/connectors/deploy-k3s.sh google_cloud_storage --tag 0.5.55 --values values-demo.yaml --wait
+  scripts/dsx-connect-ng/deploy-k3s.sh --tag dev --release dsx-connect --namespace dsx-connect
+  scripts/dsx-connect-ng/deploy-k3s.sh --tag 2.0.0 --values dsx_connect_ng/deploy/helm/values-local.yaml --no-wait
 EOF
 }
-
-if [[ $# -eq 1 && ( "$1" == "-h" || "$1" == "--help" ) ]]; then
-  usage
-  exit 0
-fi
-
-if [[ $# -lt 1 ]]; then
-  usage >&2
-  exit 2
-fi
 
 require_value() {
   local option="$1"
@@ -36,17 +26,13 @@ require_value() {
   fi
 }
 
-connector="$1"
-shift
-
 tag=""
-registry="${CONNECTOR_IMAGE_REGISTRY:-dsxconnect}"
-release=""
+registry="${DSX_CONNECT_NG_IMAGE_REGISTRY:-dsxconnect}"
+release="dsx-connect"
 namespace="dsx-connect"
 values_file=""
 wait="true"
 timeout="3m"
-pull_policy="${CONNECTOR_IMAGE_PULL_POLICY:-IfNotPresent}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -80,11 +66,6 @@ while [[ $# -gt 0 ]]; do
       timeout="${2:-}"
       shift 2
       ;;
-    --pull-policy)
-      require_value "$1" "${2:-}"
-      pull_policy="${2:-}"
-      shift 2
-      ;;
     --wait)
       wait="true"
       shift
@@ -115,9 +96,8 @@ if [[ -n "$values_file" && ! -f "$values_file" ]]; then
   exit 2
 fi
 
-chart_dir="$(connector_chart_dir "$connector")"
-image_name="$(connector_image_name "$connector")"
-release="${release:-${image_name%-connector}}"
+chart_dir="$(ng_chart_dir)"
+image_name="$(ng_image_name)"
 
 helm_args=(
   upgrade --install "$release" "$chart_dir"
@@ -125,7 +105,6 @@ helm_args=(
   --create-namespace
   --set "image.repository=$registry/$image_name"
   --set "image.tag=$tag"
-  --set "image.pullPolicy=$pull_policy"
 )
 
 if [[ -n "$values_file" ]]; then
@@ -140,8 +119,13 @@ echo "Deploying $registry/$image_name:$tag as release $release in namespace $nam
 helm "${helm_args[@]}"
 
 if [[ "$wait" == "true" ]]; then
-  kubectl rollout status deployment \
+  chart_name="dsx-connect"
+  if [[ "$release" == *"$chart_name"* ]]; then
+    api_deployment="$release-api"
+  else
+    api_deployment="$release-$chart_name-api"
+  fi
+  kubectl rollout status deployment "$api_deployment" \
     --namespace "$namespace" \
-    --selector "app.kubernetes.io/instance=$release" \
     --timeout "$timeout"
 fi

@@ -27,31 +27,106 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       connectors: ${{ steps.matrix.outputs.connectors }}
+      run_ci: ${{ steps.matrix.outputs.run_ci }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Select connectors
         id: matrix
         env:
           SELECTED_CONNECTOR: ${{ github.event.inputs.connector || 'all' }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before || '' }}
+          CURRENT_SHA: ${{ github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || '' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
         run: |
-          all='["aws_s3","azure_blob_storage","filesystem","google_cloud_storage","m365_mail","onedrive","salesforce","sharepoint"]'
-          if [ "$SELECTED_CONNECTOR" = "all" ]; then
-            echo "connectors=$all" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          python3 - "$SELECTED_CONNECTOR" "$all" <<'PY' >> "$GITHUB_OUTPUT"
+          python3 <<'PY' >> "$GITHUB_OUTPUT"
           import json
+          import os
+          import subprocess
           import sys
 
-          selected = sys.argv[1]
-          all_connectors = json.loads(sys.argv[2])
-          if selected not in all_connectors:
-              raise SystemExit(f"unknown connector: {selected}")
-          print("connectors=" + json.dumps([selected]))
+          all_connectors = [
+              "aws_s3",
+              "azure_blob_storage",
+              "filesystem",
+              "google_cloud_storage",
+              "m365_mail",
+              "onedrive",
+              "salesforce",
+              "sharepoint",
+          ]
+          selected = os.environ.get("SELECTED_CONNECTOR") or "all"
+          event_name = os.environ.get("EVENT_NAME") or ""
+
+          def emit(connectors):
+              connectors = sorted(set(connectors), key=all_connectors.index)
+              print("connectors=" + json.dumps(connectors))
+              print(f"run_ci={'true' if connectors else 'false'}")
+
+          if event_name == "workflow_dispatch":
+              if selected == "all":
+                  emit(all_connectors)
+              elif selected in all_connectors:
+                  emit([selected])
+              else:
+                  raise SystemExit(f"unknown connector: {selected}")
+              raise SystemExit(0)
+
+          if event_name == "pull_request":
+              base = os.environ.get("PR_BASE_SHA") or ""
+              head = os.environ.get("PR_HEAD_SHA") or os.environ.get("CURRENT_SHA") or "HEAD"
+          else:
+              base = os.environ.get("BEFORE_SHA") or ""
+              head = os.environ.get("CURRENT_SHA") or "HEAD"
+
+          paths = []
+          zero = "0" * 40
+          if base and base != zero:
+              result = subprocess.run(
+                  ["git", "diff", "--name-only", base, head],
+                  check=True,
+                  text=True,
+                  stdout=subprocess.PIPE,
+              )
+              paths = [line for line in result.stdout.splitlines() if line]
+          else:
+              result = subprocess.run(
+                  ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", head],
+                  check=True,
+                  text=True,
+                  stdout=subprocess.PIPE,
+              )
+              paths = [line for line in result.stdout.splitlines() if line]
+
+          selected_connectors = set()
+          for path in paths:
+              parts = path.split("/")
+              if path == ".github/workflows/ci-connectors.yml":
+                  emit(all_connectors)
+                  raise SystemExit(0)
+              if path.startswith("shared/") or path.startswith("scripts/connectors/"):
+                  emit(all_connectors)
+                  raise SystemExit(0)
+              if len(parts) >= 2 and parts[0] == "connectors":
+                  connector = parts[1]
+                  if connector == "framework" or connector == "__init__.py":
+                      emit(all_connectors)
+                      raise SystemExit(0)
+                  if connector in all_connectors:
+                      selected_connectors.add(connector)
+
+          emit(selected_connectors)
           PY
 
   connector-ci:
     name: ${{ matrix.connector }}
     needs: connector-matrix
+    if: needs.connector-matrix.outputs.run_ci == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

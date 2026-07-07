@@ -41,6 +41,9 @@ on:
         required: false
         type: boolean
         default: true
+  push:
+    tags:
+      - "connector-*-v*"
 
 permissions:
   contents: read
@@ -48,10 +51,68 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    environment: connector-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve connector release target
+        id: target
+        env:
+          INPUT_CONNECTOR: ${{ inputs.connector || '' }}
+          INPUT_VERSION: ${{ inputs.version || '' }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+          import pathlib
+          import re
+          import sys
+
+          connectors = [
+              "aws_s3",
+              "azure_blob_storage",
+              "filesystem",
+              "google_cloud_storage",
+              "m365_mail",
+              "onedrive",
+              "salesforce",
+              "sharepoint",
+          ]
+
+          event_name = os.environ["EVENT_NAME"]
+          connector = os.environ.get("INPUT_CONNECTOR") or ""
+          version = os.environ.get("INPUT_VERSION") or ""
+
+          if event_name == "push":
+              tag = os.environ["REF_NAME"]
+              match = None
+              for candidate in connectors:
+                  prefix = f"connector-{candidate}-v"
+                  if tag.startswith(prefix):
+                      match = (candidate, tag[len(prefix):])
+                      break
+              if match is None:
+                  raise SystemExit(
+                      "connector release tags must use connector-<connector_slug>-v<version>"
+                  )
+              connector, version = match
+
+          if connector not in connectors:
+              raise SystemExit(f"unknown connector: {connector}")
+
+          if not version:
+              version_file = pathlib.Path("connectors") / connector / "version.py"
+              text = version_file.read_text()
+              m = re.search(r'__version__\s*=\s*["\']([^"\']+)["\']', text)
+              if not m:
+                  raise SystemExit(f"could not resolve version from {version_file}")
+              version = m.group(1)
+
+          print(f"connector={connector}")
+          print(f"version={version}")
+          print(f"Resolved connector release: {connector} {version}", file=sys.stderr)
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -67,31 +128,30 @@ jobs:
       - name: Log in to OCI registry for Docker
         uses: docker/login-action@v3
         with:
-          registry: ${{ inputs.registry_host }}
           username: ${{ secrets.OCR_USERNAME }}
           password: ${{ secrets.OCR_TOKEN }}
 
       - name: Log in to OCI registry for Helm
         run: |
-          echo "${{ secrets.OCR_TOKEN }}" | helm registry login "${{ inputs.registry_host }}" \
+          echo "${{ secrets.OCR_TOKEN }}" | helm registry login "${{ inputs.registry_host || 'registry-1.docker.io' }}" \
             --username "${{ secrets.OCR_USERNAME }}" \
             --password-stdin
 
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip pytest
-          if [ -f "connectors/${{ inputs.connector }}/requirements.txt" ]; then
-            python -m pip install -r "connectors/${{ inputs.connector }}/requirements.txt"
+          if [ -f "connectors/${{ steps.target.outputs.connector }}/requirements.txt" ]; then
+            python -m pip install -r "connectors/${{ steps.target.outputs.connector }}/requirements.txt"
           fi
 
       - name: Release connector
         env:
-          CONNECTOR: ${{ inputs.connector }}
-          VERSION: ${{ inputs.version }}
-          IMAGE_REGISTRY: ${{ inputs.image_registry }}
-          HELM_REPO: ${{ inputs.helm_repo }}
-          PLATFORMS: ${{ inputs.platforms }}
-          PUSH_LATEST: ${{ inputs.push_latest }}
+          CONNECTOR: ${{ steps.target.outputs.connector }}
+          VERSION: ${{ steps.target.outputs.version }}
+          IMAGE_REGISTRY: ${{ inputs.image_registry || 'dsxconnect' }}
+          HELM_REPO: ${{ inputs.helm_repo || 'oci://registry-1.docker.io/dsxconnect' }}
+          PLATFORMS: ${{ inputs.platforms || 'linux/amd64,linux/arm64' }}
+          PUSH_LATEST: ${{ github.event_name == 'workflow_dispatch' && inputs.push_latest == false && 'false' || 'true' }}
         run: |
           args=(
             "$CONNECTOR"

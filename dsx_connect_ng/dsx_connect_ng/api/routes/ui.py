@@ -130,6 +130,7 @@ class UIScanResultTargetSummary(BaseModel):
     scope_id: str | None = None
     object_identity: str | None = None
     source: str | None = None
+    source_label: str | None = None
     label: str | None = None
 
 
@@ -170,7 +171,7 @@ class UIAssetsConnectorsResponse(BaseModel):
 class UIScopeScanRequest(BaseModel):
     reader_strategy: str = "proxy"
     path: str | None = None
-    limit: int = Field(default=100, ge=1, le=1000)
+    limit: int = Field(default=10000, ge=1, le=100000)
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -353,8 +354,21 @@ def _summarize_remediation(items: list[JobItemRecord]) -> UIScanResultRemediatio
     return summary
 
 
+def _scan_source_label(source: Any) -> str | None:
+    raw = str(source or "").strip()
+    if not raw:
+        return None
+    labels = {
+        "connector": "Connector request",
+        "connector_monitor": "Monitor event",
+        "ui_scope_scan": "Manual scan",
+    }
+    return labels.get(raw, raw.replace("_", " ").title())
+
+
 def _scan_result_target(job: JobRecord) -> UIScanResultTargetSummary:
     payload = job.payload or {}
+    source = payload.get("source")
     label = (
         payload.get("scopeSelector")
         or payload.get("selector")
@@ -367,7 +381,8 @@ def _scan_result_target(job: JobRecord) -> UIScanResultTargetSummary:
         integration_id=job.integration_id,
         scope_id=job.scope_id,
         object_identity=job.object_identity,
-        source=payload.get("source"),
+        source=source,
+        source_label=_scan_source_label(source),
         label=str(label) if label is not None else None,
     )
 
@@ -448,6 +463,100 @@ def _build_connector_repo_check_url(base_url: str | None, connector_name: str | 
     path = f"{connector_name.strip('/')}/repo_check" if connector_name else "repo_check"
     endpoint = urllib_parse.urljoin(normalized, path)
     return f"{endpoint}?{urllib_parse.urlencode({'preview': str(preview_limit)})}"
+
+
+def _build_connector_objects_url(
+    base_url: str | None,
+    connector_name: str | None,
+    *,
+    scope: str,
+    limit: int,
+    cursor: str | None,
+) -> str | None:
+    if not base_url:
+        return None
+    normalized = base_url.rstrip("/") + "/"
+    path = f"{connector_name.strip('/')}/objects" if connector_name else "objects"
+    endpoint = urllib_parse.urljoin(normalized, path)
+    query = {"scope": scope, "limit": str(limit)}
+    if cursor:
+        query["cursor"] = cursor
+    return f"{endpoint}?{urllib_parse.urlencode(query)}"
+
+
+def _fetch_connector_objects_page(
+    base_url: str | None,
+    connector_name: str | None,
+    *,
+    scope: str,
+    limit: int,
+    cursor: str | None,
+) -> dict[str, Any] | None:
+    endpoint = _build_connector_objects_url(
+        base_url,
+        connector_name,
+        scope=scope,
+        limit=limit,
+        cursor=cursor,
+    )
+    if endpoint is None:
+        return None
+    request = urllib_request.Request(endpoint, method="GET", headers={"Accept": "application/json"})
+    try:
+        with urllib_request.urlopen(request, timeout=30.0) as response:
+            body = response.read().decode("utf-8") or "{}"
+    except urllib_error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise HTTPException(status_code=502, detail={"code": "connector_object_listing_http_error", "status_code": exc.code}) from exc
+    except (urllib_error.URLError, TimeoutError):
+        return None
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _fetch_connector_object_listing(
+    base_url: str | None,
+    connector_name: str | None,
+    *,
+    scope: str,
+    max_items: int,
+) -> tuple[list[dict[str, Any]], bool, int]:
+    objects: list[dict[str, Any]] = []
+    cursor: str | None = None
+    pages = 0
+    supported = False
+    while len(objects) < max_items:
+        page_limit = min(1000, max_items - len(objects))
+        payload = _fetch_connector_objects_page(
+            base_url,
+            connector_name,
+            scope=scope,
+            limit=page_limit,
+            cursor=cursor,
+        )
+        if payload is None:
+            return objects, supported, pages
+        supported = not bool(payload.get("unsupported"))
+        if not supported:
+            return objects, supported, pages
+        if str(payload.get("status") or "success").lower() != "success":
+            return objects, False, pages
+        pages += 1
+        for raw in payload.get("objects") or []:
+            if isinstance(raw, dict):
+                identity = str(raw.get("identity") or "").strip()
+                if identity:
+                    objects.append(raw)
+                    if len(objects) >= max_items:
+                        break
+        cursor = payload.get("next_cursor") or payload.get("nextCursor")
+        if not cursor:
+            break
+    return objects, supported, pages
 
 
 def _fetch_connector_preview(base_url: str | None, connector_name: str | None, *, limit: int) -> list[str]:
@@ -1549,23 +1658,44 @@ async def scan_scope_selector(
         integration,
         control_plane.list_connector_instances(integration_id=scope.integration_id),
     )
-    preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
-    object_identities = preview_items or [request.path or scope.resource_selector]
-    items = [
-        {
-            "object_identity": object_identity,
-            "payload": {
-                "readerStrategy": request.reader_strategy,
-                "path": (
-                    _scope_relative_object_path(scope.resource_selector, object_identity)
-                    if preview_items
-                    else object_identity
-                ),
-                **request.payload,
-            },
+    listed_objects, listing_supported, listing_pages = _fetch_connector_object_listing(
+        base_url,
+        connector_name,
+        scope=scope.resource_selector,
+        max_items=request.limit,
+    )
+    preview_items: list[str] = []
+    if not listed_objects and not listing_supported:
+        preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
+    if listed_objects:
+        object_identities = [str(item.get("identity") or "").strip() for item in listed_objects]
+        object_identities = [item for item in object_identities if item]
+    elif preview_items:
+        object_identities = preview_items
+    elif listing_supported:
+        object_identities = []
+    else:
+        object_identities = [request.path or scope.resource_selector]
+    items = []
+    for index, object_identity in enumerate(object_identities):
+        payload_item = {
+            "readerStrategy": request.reader_strategy,
+            **request.payload,
         }
-        for object_identity in object_identities
-    ]
+        if listed_objects:
+            listed = listed_objects[index]
+            payload_item["path"] = str(listed.get("location") or "").strip() or _scope_relative_object_path(
+                scope.resource_selector,
+                object_identity,
+            )
+            if listed.get("size_in_bytes") is not None:
+                payload_item["sizeInBytes"] = listed.get("size_in_bytes")
+        elif preview_items:
+            payload_item["path"] = _scope_relative_object_path(scope.resource_selector, object_identity)
+        else:
+            payload_item["path"] = object_identity
+        items.append({"object_identity": object_identity, "payload": payload_item})
+    enumeration_mode = "connector_object_listing" if listing_supported else "connector_preview" if preview_items else "selector_only"
     return await job_service.submit_batch_job(
         BatchJobSubmitRequest(
             job_type="scan.batch",
@@ -1574,9 +1704,11 @@ async def scan_scope_selector(
             payload={
                 "source": "ui_scope_scan",
                 "scopeSelector": scope.resource_selector,
-                "enumerationMode": "connector_preview" if preview_items else "selector_only",
+                "enumerationMode": enumeration_mode,
                 "itemCount": len(items),
                 "enumerationLimit": request.limit,
+                "enumerationPages": listing_pages if listing_supported else 0,
+                "enumerationComplete": (len(items) < request.limit) if listing_supported else None,
             },
             items=items,
         )

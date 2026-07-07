@@ -72,6 +72,30 @@ class GoogleCloudStorageConnectorConfig(BaseConnectorConfig):
             "PUBSUB_ENDPOINT",
         ),
     )
+    pubsub_batch_max_items: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Maximum number of Pub/Sub object events to coalesce into one scan batch.",
+        validation_alias=AliasChoices(
+            "DSXCONNECTOR_PUBSUB_BATCH_MAX_ITEMS",
+            "DSXCONNECTOR_GCS_PUBSUB_BATCH_MAX_ITEMS",
+            "GCS_PUBSUB_BATCH_MAX_ITEMS",
+            "PUBSUB_BATCH_MAX_ITEMS",
+        ),
+    )
+    pubsub_batch_max_seconds: float = Field(
+        default=2.0,
+        ge=0.1,
+        le=60.0,
+        description="Maximum time to wait before flushing a partial Pub/Sub scan batch.",
+        validation_alias=AliasChoices(
+            "DSXCONNECTOR_PUBSUB_BATCH_MAX_SECONDS",
+            "DSXCONNECTOR_GCS_PUBSUB_BATCH_MAX_SECONDS",
+            "GCS_PUBSUB_BATCH_MAX_SECONDS",
+            "PUBSUB_BATCH_MAX_SECONDS",
+        ),
+    )
     google_application_credentials: Optional[str] = Field(
         default=None,
         description="Optional path to a Google service account JSON credentials file.",

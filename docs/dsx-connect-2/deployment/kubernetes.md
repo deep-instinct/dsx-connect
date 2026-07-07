@@ -18,7 +18,7 @@ For a registry-backed deployment, build and push instead:
 
 ```bash
 scripts/dsx-connect-ng/build-image.sh \
-  --tag 2.0.0 \
+  --tag 2.0.1 \
   --registry dsxconnect \
   --push \
   --platform linux/amd64,linux/arm64

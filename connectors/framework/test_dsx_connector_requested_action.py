@@ -446,6 +446,64 @@ def test_ng_only_batch_scan_request_uses_execution_batch_endpoint(monkeypatch: p
     assert {item["payload"]["readerStrategy"] for item in calls[0][1]["items"]} == {"proxy"}
 
 
+def test_ng_only_batch_scan_request_preserves_scan_source_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeResponse:
+        content = b"{}"
+
+        def json(self):
+            return {"job_id": "job_batch_1"}
+
+        def raise_for_status(self):
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append((url, json or {}))
+            return _FakeResponse()
+
+    from connectors.framework import dsx_connector as connector_module
+
+    monkeypatch.setattr(connector_module.httpx, "AsyncClient", _FakeAsyncClient)
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            ng_integration_id="int_gcs",
+            instance_id="gcs-pod-1",
+        )
+    )
+    connector.connector_running_model.status = ConnectorStatusEnum.READY
+
+    result = asyncio.run(
+        connector.scan_file_request_batch(
+            [
+                ScanRequestModel(
+                    location="incoming/a.pdf",
+                    metainfo="lg-test-01/incoming/a.pdf",
+                    scan_source="connector_monitor",
+                ),
+            ]
+        )
+    )
+
+    assert result.status.value == "success"
+    assert calls[0][1]["payload"]["source"] == "connector_monitor"
+
+
 def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DSXCONNECTOR_DATA_DIR", str(tmp_path))
 

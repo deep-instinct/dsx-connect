@@ -84,10 +84,12 @@ class PolicyRuntimeConfig(BaseModel):
     auto_dianna_on_verdicts: list[PolicyVerdict] | None = None
     wait_for_dianna_on_auto_request: bool | None = None
     malicious_verdict: MaliciousVerdictPolicyConfig | None = None
+    verdict_actions: dict[str, Any] | None = None
     non_compliant_treatment: PolicyFallbackTreatment | None = None
     not_scanned_treatment: PolicyFallbackTreatment | None = None
     outcome_triggers: dict[str, Any] | None = None
     non_compliance: dict[str, Any] | None = None
+    not_scanned: dict[str, Any] | None = None
     remediation_plan_by_verdict: dict[PolicyVerdict, dict[str, Any]] | None = None
     result_delivery_policy: StageResultDeliveryPolicy | None = None
     delivery: PolicyDeliveryTargetsConfig | None = None
@@ -140,10 +142,12 @@ def resolve_policy_runtime_config(
         auto_dianna_on_verdicts=_resolve("auto_dianna_on_verdicts"),
         wait_for_dianna_on_auto_request=_resolve("wait_for_dianna_on_auto_request"),
         malicious_verdict=_resolve("malicious_verdict"),
+        verdict_actions=_resolve("verdict_actions"),
         non_compliant_treatment=_resolve("non_compliant_treatment"),
         not_scanned_treatment=_resolve("not_scanned_treatment"),
         outcome_triggers=_resolve("outcome_triggers"),
         non_compliance=_resolve("non_compliance"),
+        not_scanned=_resolve("not_scanned"),
         remediation_plan_by_verdict=_resolve("remediation_plan_by_verdict"),
         result_delivery_policy=_resolve("result_delivery_policy"),
         delivery=_resolve("delivery"),

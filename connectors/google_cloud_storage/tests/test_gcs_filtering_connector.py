@@ -290,6 +290,36 @@ async def test_asset_discovery_reports_bucket_listing_failure(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_object_listing_handler_lists_paged_gcs_objects(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-gcs"
+    gc.config.asset_bucket = "bucket-gcs"
+    gc.config.asset_prefix_root = ""
+    gc.config.filter = ""
+
+    calls: list[tuple] = []
+
+    def fake_list_object_page(bucket, *, base_prefix, filter_str, limit, cursor):
+        calls.append((bucket, base_prefix, filter_str, limit, cursor))
+        return [
+            {"Key": "one.pdf", "Size": 123},
+            {"Key": "nested/two.docx", "Size": None},
+        ], "page-2"
+
+    monkeypatch.setattr(gc.gcs_client, "list_object_page", fake_list_object_page)
+
+    resp = await gc.object_listing_handler(scope="bucket-gcs", limit=2, cursor=None)
+
+    assert resp.status == "success"
+    assert resp.next_cursor == "page-2"
+    assert calls == [("bucket-gcs", "", "", 2, None)]
+    assert [item.identity for item in resp.objects] == ["bucket-gcs/one.pdf", "bucket-gcs/nested/two.docx"]
+    assert resp.objects[0].location == "one.pdf"
+    assert resp.objects[0].size_in_bytes == 123
+
+
+@pytest.mark.asyncio
 async def test_item_action_handler_uses_requested_movetag(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 

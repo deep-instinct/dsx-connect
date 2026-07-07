@@ -96,6 +96,89 @@ def _default_remediation_plan_for_verdict(policy_config: PolicyRuntimeConfig, ef
     return plan
 
 
+def _configured_action(policy_config: PolicyRuntimeConfig, verdict_key: str) -> str:
+    actions = policy_config.outcome_triggers or {}
+    verdict_actions = getattr(policy_config, "verdict_actions", None) or {}
+    if isinstance(verdict_actions, dict):
+        value = verdict_actions.get(verdict_key)
+        if value:
+            return str(value)
+    if verdict_key == "non_compliant" and isinstance(policy_config.non_compliance, dict):
+        value = policy_config.non_compliance.get("action")
+        if value:
+            return str(value)
+    not_scanned = getattr(policy_config, "not_scanned", None) or {}
+    if verdict_key == "not_scanned" and isinstance(not_scanned, dict):
+        value = not_scanned.get("action")
+        if value:
+            return str(value)
+    if actions.get(verdict_key) is True:
+        return "quarantine"
+    return "detect_only"
+
+
+def _remediation_plan_for_action(policy_config: PolicyRuntimeConfig, action: str, *, target_source: str) -> dict:
+    normalized = str(action or "detect_only").strip().lower()
+    if normalized in {"detect_only", "nothing", "none"}:
+        return {}
+    if normalized == "delete":
+        return {"action": "delete"}
+    if normalized == "tag_only":
+        return {"action": "tag_only", "tag": True}
+
+    plan: dict[str, Any] = {"action": "quarantine", "tag": True}
+    target = None
+    if target_source == "non_compliance" and isinstance(policy_config.non_compliance, dict):
+        target = policy_config.non_compliance.get("quarantine_target") or policy_config.non_compliance.get("quarantineTarget")
+    if target is None and policy_config.malicious_verdict is not None:
+        target = policy_config.malicious_verdict.quarantine_target
+    if target is not None:
+        target_data = target.model_dump(mode="json") if hasattr(target, "model_dump") else dict(target)
+        target_path = target_data.get("target_path") or target_data.get("targetPath") or target_data.get("path") or target_data.get("prefix")
+        if target_path is not None:
+            plan["targetPath"] = target_path
+        plan["quarantineTarget"] = target_data
+    return plan
+
+
+def _scan_file_info(handoff: PolicyHandoffRequest) -> dict[str, Any]:
+    return handoff.scan_result.file_info or {}
+
+
+def _file_type_tokens(handoff: PolicyHandoffRequest) -> set[str]:
+    file_info = _scan_file_info(handoff)
+    file_type = str(file_info.get("file_type") or "").lower()
+    object_identity = str(handoff.object_identity or "").lower()
+    tokens: set[str] = set()
+    if "pdf" in file_type or object_identity.endswith(".pdf"):
+        tokens.add("pdf")
+    if any(marker in file_type for marker in ("pe", "elf", "macho", "mach-o", "executable", "eicar")):
+        tokens.update({"executables", "windows_executable"})
+    if "office" in file_type:
+        office_data = file_info.get("additional_office_data") or {}
+        has_macro = any(bool(office_data.get(key)) for key in ("vba", "xl4_macros"))
+        if has_macro:
+            tokens.add("office_macro")
+        elif object_identity.endswith((".doc", ".docx")) or "_doc" in object_identity:
+            tokens.add("office_word")
+        elif object_identity.endswith((".xls", ".xlsx")) or "_xls" in object_identity or "_xlsx" in object_identity:
+            tokens.add("office_excel")
+        else:
+            tokens.add("office_other")
+    return tokens
+
+
+def _non_compliance_match(policy_config: PolicyRuntimeConfig, handoff: PolicyHandoffRequest) -> str | None:
+    if not isinstance(policy_config.non_compliance, dict):
+        return None
+    blocked = {str(value).strip().lower() for value in policy_config.non_compliance.get("blocked_file_types", [])}
+    if not blocked:
+        return None
+    tokens = _file_type_tokens(handoff)
+    matched = sorted(blocked.intersection(tokens))
+    return matched[0] if matched else None
+
+
 def _targets_from_policy_config(policy_config: PolicyRuntimeConfig, fallback_targets: list[dict]) -> DeliveryDispatchDecision:
     delivery = policy_config.delivery
     if delivery is None:
@@ -135,10 +218,16 @@ def _content_preservation_for_verdict(policy_config: PolicyRuntimeConfig, verdic
     return ContentPreservationDecision(mode=mode, reason=reason)
 
 
-def _build_stub_handoff_decision(handoff: PolicyHandoffRequest, decision: PolicyDecision) -> PolicyHandoffDecision:
+def _build_stub_handoff_decision(
+    handoff: PolicyHandoffRequest,
+    decision: PolicyDecision,
+    *,
+    effective_verdict_override: str | None = None,
+    policy_reason: str | None = None,
+) -> PolicyHandoffDecision:
     verdict = handoff.scan_result.verdict
     policy_config = _extract_policy_runtime_config(handoff)
-    effective_verdict = _effective_policy_verdict(policy_config, verdict)
+    effective_verdict = effective_verdict_override or _effective_policy_verdict(policy_config, verdict)
     remediation = (
         StageApplicabilityDecision(state="requested", details={"remediation_plan": decision.remediation_plan})
         if decision.remediation_plan
@@ -176,6 +265,7 @@ def _build_stub_handoff_decision(handoff: PolicyHandoffRequest, decision: Policy
                 "source": "policy_worker",
                 "verdict": _normalized_verdict(verdict),
                 "effective_verdict": effective_verdict,
+                **({"policy_reason": policy_reason} if policy_reason else {}),
             }
         ),
         remediation=remediation,
@@ -207,6 +297,12 @@ async def stub_policy_engine(handoff: PolicyHandoffRequest) -> PolicyHandoffDeci
     item_payload = _extract_item_payload(handoff)
     policy_config = _extract_policy_runtime_config(handoff)
     effective_verdict = _effective_policy_verdict(policy_config, handoff.scan_result.verdict)
+    non_compliance_reason = _non_compliance_match(policy_config, handoff)
+    not_scanned_action = _configured_action(policy_config, "not_scanned")
+    if non_compliance_reason and _configured_action(policy_config, "non_compliant") != "detect_only":
+        effective_verdict = "malicious"
+    if _normalized_verdict(handoff.scan_result.verdict) in {"not scanned", "not_scanned", "notscanned"} and not_scanned_action != "detect_only":
+        effective_verdict = "malicious"
     explicit = item_payload.get("policyDecision") or item_payload.get("policy_decision")
     if explicit:
         decision = PolicyDecision.model_validate(explicit)
@@ -217,9 +313,22 @@ async def stub_policy_engine(handoff: PolicyHandoffRequest) -> PolicyHandoffDeci
         item_payload.get("remediationPlan")
         or item_payload.get("remediation_plan")
         or remediation_by_verdict.get(effective_verdict)
-        or _default_remediation_plan_for_verdict(policy_config, effective_verdict)
         or {}
     )
+    if not remediation_plan and non_compliance_reason:
+        remediation_plan = _remediation_plan_for_action(
+            policy_config,
+            _configured_action(policy_config, "non_compliant"),
+            target_source="non_compliance",
+        )
+    if not remediation_plan and _normalized_verdict(handoff.scan_result.verdict) in {"not scanned", "not_scanned", "notscanned"}:
+        remediation_plan = _remediation_plan_for_action(
+            policy_config,
+            not_scanned_action,
+            target_source="non_compliance",
+        )
+    if not remediation_plan:
+        remediation_plan = _default_remediation_plan_for_verdict(policy_config, effective_verdict)
     request_dianna = bool(item_payload.get("requestDianna") or item_payload.get("request_dianna"))
     if not request_dianna:
         auto_dianna = policy_config.auto_dianna_on_verdicts or []
@@ -237,7 +346,17 @@ async def stub_policy_engine(handoff: PolicyHandoffRequest) -> PolicyHandoffDeci
         request_dianna=request_dianna,
         wait_for_dianna_before_delivery=wait_for_dianna,
     )
-    return _build_stub_handoff_decision(handoff, decision)
+    policy_reason = None
+    if non_compliance_reason:
+        policy_reason = f"blocked_file_type:{non_compliance_reason}"
+    elif _normalized_verdict(handoff.scan_result.verdict) in {"not scanned", "not_scanned", "notscanned"} and not_scanned_action != "detect_only":
+        policy_reason = "not_scanned_action"
+    return _build_stub_handoff_decision(
+        handoff,
+        decision,
+        effective_verdict_override=effective_verdict,
+        policy_reason=policy_reason,
+    )
 
 
 async def stub_policy_evaluator(request: PolicyEvaluationRequested) -> PolicyDecision:

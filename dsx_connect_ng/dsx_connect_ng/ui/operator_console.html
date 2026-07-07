@@ -1990,7 +1990,7 @@
         {
           key: "job",
           label: "Job",
-          render: (result) => `<strong>${escapeHtml(result.job.job_type)}</strong><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
+          render: (result) => `<strong>${escapeHtml(result.job.job_type)}</strong><br><span class="muted">${escapeHtml(scanSourceLabel(result))}</span><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
         },
         {
           key: "target",
@@ -2004,7 +2004,7 @@
         },
         {
           key: "progress",
-          label: "Progress",
+          label: "Processed",
           render: (result) => {
             const progress = result.progress || {};
             return escapeHtml(formatProgress(progress, result.job.state));
@@ -2164,6 +2164,7 @@
         data-selector="${escapeHtml(asset.selector)}"
         data-name="${escapeHtml(asset.display_name || asset.selector)}"
         data-scope="${escapeHtml(asset.matching_scope_id || "")}"
+        data-scope-type="${escapeHtml(asset.asset_type || "path")}"
       `;
       const enableOptions = `
         <option value="">Action</option>
@@ -2177,7 +2178,7 @@
         return `<select ${attrs}>${enableOptions}<option value="enable-existing">Enable existing protection</option></select>`;
       }
       if (asset.coverage_state === "protected") {
-        return `<select ${attrs}><option value="">Action</option><option value="disable">Disable</option></select>`;
+        return `<select ${attrs}><option value="">Action</option><option value="protect-choose">Change profile...</option><option value="disable">Disable</option></select>`;
       }
       return "";
     }
@@ -2187,11 +2188,22 @@
       return policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action || "none";
     }
 
+    function scanSourceLabel(result) {
+      const target = result.target || {};
+      if (target.source_label) return target.source_label;
+      const source = String(target.source || "").trim();
+      if (!source) return "Unknown source";
+      if (source === "connector_monitor") return "Monitor event";
+      if (source === "connector") return "Connector request";
+      if (source === "ui_scope_scan") return "Manual scan";
+      return source.replaceAll("_", " ");
+    }
+
     function formatProgress(progress = {}, state = "") {
       const done = progress.terminal_items || 0;
       const total = progress.total_items || 0;
       const terminal = ["completed", "failed", "cancelled"].includes(String(state || "").toLowerCase());
-      const totalText = total ? `${terminal ? "" : "~"}${total}` : `${terminal ? "0" : "~?"}`;
+      const totalText = total ? `${terminal ? "" : "~"}${total} queued` : `${terminal ? "0 queued" : "~? queued"}`;
       const percent = total ? ` (${progress.percent_complete ?? 0}%)` : "";
       return `${done}/${totalText}${percent}`;
     }
@@ -2513,6 +2525,7 @@
       const findings = result.findings || {};
       const remediation = result.remediation || {};
       const targetLabel = result.target?.label || "unknown";
+      const sourceText = scanSourceLabel(result);
       const progressText = formatProgress(progress, result.job.state);
       const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`;
       const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
@@ -2538,6 +2551,7 @@
             </div>
             <div class="summary-grid">
               <div class="summary-item"><span>Progress</span><strong>${escapeHtml(progressText)}</strong></div>
+              <div class="summary-item"><span>Source</span><strong>${escapeHtml(sourceText)}</strong></div>
               <div class="summary-item"><span>Findings</span><strong>${escapeHtml(findingText)}</strong></div>
               <div class="summary-item"><span>Remediation</span><strong>${escapeHtml(remediationText)}</strong></div>
               <div class="summary-item"><span>Cancel</span><strong>${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}</strong></div>
@@ -2780,6 +2794,22 @@
 
     async function protectAsset(asset) {
       const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
+      const policy = cloneValue(policyEntry.definition || currentDefaultPolicy());
+      if (asset.matchingScopeId) {
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/policy`, {
+          method: "PUT",
+          body: JSON.stringify({ policy }),
+        });
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/enabled`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: true }),
+        });
+        await refreshAll();
+        if (state.activeAssetsTab === "protected") {
+          await loadProtectedAssets();
+        }
+        return;
+      }
       await fetchJson(endpoints.createScope, {
         method: "POST",
         body: JSON.stringify({
@@ -2789,7 +2819,7 @@
           resource_selector: asset.selector,
           mode: "full_scan",
           enabled: true,
-          post_scan_policy: cloneValue(policyEntry.definition || currentDefaultPolicy()),
+          post_scan_policy: policy,
         }),
       });
       await refreshAll();
@@ -2811,7 +2841,7 @@
     async function scanScope(scopeId) {
       const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
         method: "POST",
-        body: JSON.stringify({ reader_strategy: "proxy" }),
+        body: JSON.stringify({ reader_strategy: "proxy", limit: 10000 }),
       });
       await loadScanResults();
       selectTab("scan-results");
@@ -3005,6 +3035,8 @@
         integrationId: select.dataset.integration,
         selector: select.dataset.selector,
         name: select.dataset.name,
+        matchingScopeId: select.dataset.scope || "",
+        scopeType: select.dataset.scopeType || "path",
       };
       select.disabled = true;
       try {

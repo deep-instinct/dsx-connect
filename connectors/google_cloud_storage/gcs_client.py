@@ -84,6 +84,52 @@ class GCSClient:
                 for item in _emit(blob):
                     yield item
 
+    def list_object_page(
+        self,
+        bucket: str,
+        *,
+        base_prefix: str = "",
+        filter_str: str = "",
+        limit: int = 1000,
+        cursor: str | None = None,
+    ) -> tuple[list[dict], str | None]:
+        """
+        Return one GCS list_blobs page. Filtering is applied after GCS returns the
+        page, so callers should keep following next_cursor until it is empty.
+        """
+        client = self._get_client()
+        bp = (base_prefix or "").strip("/")
+        prefix = f"{bp}/" if bp else None
+        effective_limit = max(1, min(int(limit or 1000), 5000))
+        iterator = client.list_blobs(
+            bucket,
+            prefix=prefix,
+            max_results=effective_limit,
+            page_token=cursor,
+        )
+        page_iter = iterator.pages
+        try:
+            page = next(page_iter)
+        except StopIteration:
+            return [], None
+
+        def _rel(key: str) -> str:
+            if not prefix:
+                return key
+            return key[len(prefix):] if key.startswith(prefix) else key
+
+        objects: list[dict] = []
+        for blob in page:
+            key = getattr(blob, "name", "") or ""
+            if not key or key.endswith("/"):
+                continue
+            rel = _rel(key)
+            if filter_str and not relpath_matches_filter(rel, filter_str):
+                continue
+            objects.append({"Key": key, "Size": getattr(blob, "size", None)})
+        next_cursor = getattr(page, "next_page_token", None) or getattr(iterator, "next_page_token", None)
+        return objects, next_cursor
+
     def get_object(self, bucket: str, key: str) -> io.BytesIO:
         try:
             client = self._get_client()

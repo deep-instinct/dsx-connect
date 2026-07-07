@@ -73,8 +73,8 @@ def test_ui_meta_returns_display_version() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "product": "DSX-Connect",
-        "version": "2.0.0",
-        "display_name": "DSX-Connect v2.0.0",
+        "version": "2.0.1",
+        "display_name": "DSX-Connect v2.0.1",
     }
 
 
@@ -426,6 +426,68 @@ def test_ui_scope_scan_uses_connector_preview_items(monkeypatch) -> None:
     items = client.get(f"/api/v1/execution/jobs/{job_id}/items").json()
     assert [item["object_identity"] for item in items] == ["bucket-a/eicar.com", "bucket-a/clean.txt"]
     assert [item["payload"]["path"] for item in items] == ["eicar.com", "clean.txt"]
+
+
+def test_ui_scope_scan_uses_connector_object_listing(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    service.create_integration(
+        IntegrationCreate(
+            integration_id="gcs-a",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            config={
+                "reader": {
+                    "default_strategy": "proxy",
+                    "proxy": {
+                        "base_url": "http://127.0.0.1:8630",
+                        "connector_name": "google-cloud-storage-connector",
+                    },
+                },
+            },
+        )
+    )
+    service.create_scope(
+        ProtectedScopeCreate(
+            scope_id="scope-a",
+            integration_id="gcs-a",
+            scope_type="path",
+            resource_selector="bucket-a",
+            display_name="Bucket A",
+            mode="full_scan",
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    monkeypatch.setattr(
+        ui_routes,
+        "_fetch_connector_object_listing",
+        lambda base_url, connector_name, *, scope, max_items: (
+            [
+                {"identity": "bucket-a/one.pdf", "location": "one.pdf", "size_in_bytes": 123},
+                {"identity": "bucket-a/nested/two.docx", "location": "nested/two.docx"},
+            ],
+            True,
+            2,
+        ),
+    )
+
+    client = TestClient(app)
+    response = client.post("/api/v1/ui/scopes/scope-a/scan", json={"reader_strategy": "proxy", "limit": 10})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["job"]["payload"]["enumerationMode"] == "connector_object_listing"
+    assert payload["job"]["payload"]["enumerationPages"] == 2
+    assert payload["job"]["payload"]["itemCount"] == 2
+
+    job_id = payload["job"]["job_id"]
+    items = client.get(f"/api/v1/execution/jobs/{job_id}/items").json()
+    assert [item["object_identity"] for item in items] == ["bucket-a/one.pdf", "bucket-a/nested/two.docx"]
+    assert [item["payload"]["path"] for item in items] == ["one.pdf", "nested/two.docx"]
+    assert items[0]["payload"]["sizeInBytes"] == 123
 
 
 def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:

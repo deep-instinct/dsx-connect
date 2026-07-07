@@ -6,7 +6,7 @@ from starlette.responses import StreamingResponse
 
 from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
 from connectors.google_cloud_storage.gcs_client import GCSClient
-from shared.models.connector_models import AssetDiscoveryItem, AssetDiscoveryResponse, ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
+from shared.models.connector_models import AssetDiscoveryItem, AssetDiscoveryResponse, ObjectListingItem, ObjectListingResponse, ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 from connectors.google_cloud_storage.config import ConfigManager
@@ -198,6 +198,14 @@ def _resolve_quarantine_object_key(
     return f"{target_prefix}/{resolved_filename}"
 
 
+def _relative_to_configured_prefix(key: str) -> str:
+    bp = (config.asset_prefix_root or "").strip("/")
+    if not bp:
+        return key
+    bp = bp + "/"
+    return key[len(bp):] if key.startswith(bp) else key
+
+
 def _should_monitor() -> bool:
     if not getattr(config, "monitor", False):
         return False
@@ -241,6 +249,73 @@ def _start_pubsub_monitor():
     bucket_prefix = (config.asset_prefix_root or "").strip("/")
     if bucket_prefix:
         bucket_prefix = bucket_prefix + "/"
+    batch_max_items = max(1, int(getattr(config, "pubsub_batch_max_items", 100) or 100))
+    batch_max_seconds = max(0.1, float(getattr(config, "pubsub_batch_max_seconds", 2.0) or 2.0))
+    pending: list[tuple[ScanRequestModel, object, str, str]] = []
+    pending_lock = threading.Lock()
+    pending_ready = threading.Event()
+
+    def _ack_message(message) -> None:
+        try:
+            message.ack()
+        except Exception:
+            pass
+
+    def _nack_message(message) -> None:
+        try:
+            message.nack()
+        except Exception:
+            pass
+
+    def flush_pending(reason: str) -> None:
+        with pending_lock:
+            batch = list(pending)
+            pending.clear()
+            pending_ready.clear()
+        if not batch:
+            return
+
+        requests = [entry[0] for entry in batch]
+
+        async def enqueue_scan_batch():
+            return await connector.scan_file_request_batch(requests, batch_size=len(requests))
+
+        try:
+            result = run_async(enqueue_scan_batch())
+            result_status = getattr(result.status, "value", result.status)
+            if result_status == StatusResponseEnum.SUCCESS.value:
+                for _request, message, _full_path, _event_type in batch:
+                    _ack_message(message)
+                sample = ", ".join(entry[2] for entry in batch[:3])
+                if len(batch) > 3:
+                    sample = f"{sample}, ..."
+                dsx_logging.info(
+                    f"GCS Pub/Sub batch enqueue for {len(batch)} object(s) "
+                    f"(reason={reason}, sample={sample})"
+                )
+                return
+
+            if result_status == StatusResponseEnum.NOTHING.value:
+                for _request, message, _full_path, _event_type in batch:
+                    _ack_message(message)
+                sample = ", ".join(entry[2] for entry in batch[:3])
+                if len(batch) > 3:
+                    sample = f"{sample}, ..."
+                dsx_logging.debug(
+                    f"GCS Pub/Sub batch skipped {len(batch)} object(s) "
+                    f"(reason={reason}, description={result.description}, sample={sample})"
+                )
+                return
+
+            for _request, message, _full_path, _event_type in batch:
+                _nack_message(message)
+            dsx_logging.warning(
+                f"GCS Pub/Sub batch enqueue failed for {len(batch)} object(s): {result}"
+            )
+        except Exception as exc:
+            for _request, message, _full_path, _event_type in batch:
+                _nack_message(message)
+            dsx_logging.error(f"Failed to enqueue GCS Pub/Sub scan batch: {exc}")
 
     def handle_message(message):
         try:
@@ -275,34 +350,36 @@ def _start_pubsub_monitor():
                 return
 
             full_path = f"{config.asset_bucket}/{obj}" if config.asset_bucket else obj
-
-            async def enqueue_scan():
-                await connector.scan_file_request(
-                    ScanRequestModel(location=obj, metainfo=full_path)
-                )
-
-            run_async(enqueue_scan())
-            dsx_logging.info(f"GCS Pub/Sub enqueue for {full_path} ({event_type or 'unknown event'})")
-            message.ack()
+            request = ScanRequestModel(
+                location=obj,
+                metainfo=full_path,
+                scan_source="connector_monitor",
+            )
+            with pending_lock:
+                pending.append((request, message, full_path, event_type or "unknown event"))
+                should_flush = len(pending) >= batch_max_items
+            if should_flush:
+                pending_ready.set()
         except Exception as exc:
             dsx_logging.error(f"Failed to process Pub/Sub message: {exc}")
-            try:
-                message.nack()
-            except Exception:
-                pass
+            _nack_message(message)
 
     def worker():
         dsx_logging.info(
-            f"Starting GCS Pub/Sub monitor on {subscription_path} (events: {', '.join(sorted(accepted_types))})"
+            f"Starting GCS Pub/Sub monitor on {subscription_path} "
+            f"(events: {', '.join(sorted(accepted_types))}; "
+            f"batch_max_items={batch_max_items}; batch_max_seconds={batch_max_seconds})"
         )
         streaming_future = subscriber.subscribe(subscription_path, callback=handle_message)
         try:
-            while not _monitor_stop.wait(5):
-                continue
+            while not _monitor_stop.is_set():
+                signaled = pending_ready.wait(timeout=batch_max_seconds)
+                flush_pending("max_items" if signaled else "timer")
         except Exception as exc:
             dsx_logging.error(f"Pub/Sub subscriber error: {exc}")
         finally:
             streaming_future.cancel()
+            flush_pending("shutdown")
             subscriber.close()
             dsx_logging.info("GCS Pub/Sub monitor stopped")
 
@@ -398,18 +475,11 @@ async def full_scan_handler(
         SimpleResponse: A response indicating success if the full scan is initiated, or an error if the
             functionality is not supported. (For connectors without full scan support, return an error response.)
     """
-    def _rel(k: str) -> str:
-        bp = (config.asset_prefix_root or "").strip("/")
-        if not bp:
-            return k
-        bp = bp + "/"
-        return k[len(bp):] if k.startswith(bp) else k
-
     requests: list[ScanRequestModel] = []
     count = 0
     for blob in gcs_client.keys(config.asset_bucket, base_prefix=config.asset_prefix_root, filter_str=config.filter):
         key = blob['Key']
-        if config.filter and not relpath_matches_filter(_rel(key), config.filter):
+        if config.filter and not relpath_matches_filter(_relative_to_configured_prefix(key), config.filter):
             continue
         full_path = f"{config.asset_bucket}/{key}"
         requests.append(ScanRequestModel(location=key, metainfo=full_path))
@@ -462,7 +532,7 @@ async def preview_provider(limit: int) -> list[str]:
             key = blob.get('Key')
             if not key:
                 continue
-            if config.filter and not relpath_matches_filter(_rel(key), config.filter):
+            if config.filter and not relpath_matches_filter(_relative_to_configured_prefix(key), config.filter):
                 continue
             items.append(f"{config.asset_bucket}/{key}")
             if len(items) >= max(1, limit):
@@ -470,6 +540,73 @@ async def preview_provider(limit: int) -> list[str]:
     except Exception:
         pass
     return items
+
+
+@connector.object_listing
+async def object_listing_handler(scope: str = "", limit: int = 1000, cursor: str | None = None) -> ObjectListingResponse:
+    requested_scope = (scope or config.asset or config.asset_bucket or "").strip().strip("/")
+    configured_bucket = (config.asset_bucket or "").strip()
+    if not configured_bucket:
+        return ObjectListingResponse(
+            scope=requested_scope,
+            status="not_configured",
+            objects=[],
+            message="asset_bucket_not_configured",
+        )
+
+    bucket = configured_bucket
+    requested_prefix = (config.asset_prefix_root or "").strip("/")
+    if requested_scope:
+        if requested_scope == configured_bucket:
+            requested_prefix = (config.asset_prefix_root or "").strip("/")
+        elif requested_scope.startswith(configured_bucket + "/"):
+            requested_prefix = requested_scope[len(configured_bucket) + 1:].strip("/")
+        else:
+            return ObjectListingResponse(
+                scope=requested_scope,
+                status="unsupported_scope",
+                objects=[],
+                message=f"scope_not_served_by_connector:{requested_scope}",
+            )
+
+    try:
+        blobs, next_cursor = gcs_client.list_object_page(
+            bucket,
+            base_prefix=requested_prefix,
+            filter_str=config.filter,
+            limit=limit,
+            cursor=cursor,
+        )
+    except Exception as exc:
+        dsx_logging.warning(f"GCS object listing failed: {exc}")
+        return ObjectListingResponse(
+            scope=requested_scope or bucket,
+            status="error",
+            objects=[],
+            message=f"object_listing_failed:{exc}",
+        )
+
+    objects: list[ObjectListingItem] = []
+    for blob in blobs:
+        key = str(blob.get("Key") or "").strip()
+        if not key:
+            continue
+        identity = f"{bucket}/{key}"
+        objects.append(
+            ObjectListingItem(
+                identity=identity,
+                location=key,
+                display_name=_relative_to_configured_prefix(key),
+                size_in_bytes=blob.get("Size") if isinstance(blob.get("Size"), int) else None,
+                metadata={"provider": "gcs", "bucket": bucket},
+            )
+        )
+    return ObjectListingResponse(
+        scope=requested_scope or bucket,
+        status="success",
+        objects=objects,
+        next_cursor=next_cursor,
+    )
 
 
 def _matches_asset_filter(value: str, *, mode: str | None, needle: str | None) -> bool:

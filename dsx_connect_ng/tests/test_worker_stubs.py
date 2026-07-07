@@ -274,6 +274,70 @@ def test_stub_policy_engine_maps_non_compliant_to_malicious_policy() -> None:
     assert decision.remediation.details["remediation_plan"]["action"] == "delete"
 
 
+def test_stub_policy_engine_quarantines_blocked_pdf_file_type() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/report.pdf",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(
+            verdict="Benign",
+            scanGuid="scan-1",
+            file_info={"file_type": "PDFFileType"},
+        ),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "verdict_actions": {"non_compliant": "quarantine"},
+                "non_compliance": {
+                    "action": "quarantine",
+                    "blocked_file_types": ["pdf"],
+                    "quarantine_target": {"path": "di-quarantine"},
+                },
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "requested"
+    assert decision.remediation.details["remediation_plan"]["action"] == "quarantine"
+    assert decision.remediation.details["remediation_plan"]["targetPath"] == "di-quarantine"
+    assert decision.policy_stage_result.decision_trace["effective_verdict"] == "malicious"
+    assert decision.policy_stage_result.decision_trace["policy_reason"] == "blocked_file_type:pdf"
+
+
+def test_stub_policy_engine_quarantines_not_scanned_from_ui_policy_action() -> None:
+    request = PolicyHandoffRequest(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="/finance/eicar_encrypted.zip",
+        content_source=ContentSource(mode="original"),
+        delivery_requirements=DeliveryRequirements(wait_for_dianna=False),
+        scan_result=ScanResult(verdict="Not Scanned", scanGuid="scan-1", file_info={"file_type": "ZIPFileType"}),
+        item_payload={},
+        policy_context={
+            "resolved_policy": {
+                "policy_id": "scope-policy-1",
+                "verdict_actions": {"not_scanned": "quarantine"},
+                "not_scanned": {"action": "quarantine"},
+                "non_compliance": {
+                    "quarantine_target": {"path": "di-quarantine"},
+                },
+            }
+        },
+    )
+
+    decision = asyncio.run(stub_policy_engine(request))
+
+    assert decision.remediation.state == "requested"
+    assert decision.remediation.details["remediation_plan"]["action"] == "quarantine"
+    assert decision.remediation.details["remediation_plan"]["targetPath"] == "di-quarantine"
+    assert decision.policy_stage_result.decision_trace["effective_verdict"] == "malicious"
+
+
 def test_stub_policy_engine_maps_not_scanned_to_benign_policy() -> None:
     request = PolicyHandoffRequest(
         job_id="job-1",

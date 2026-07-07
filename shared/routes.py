@@ -63,6 +63,7 @@ class ConnectorAPI(str, Enum):
     WEBHOOK_EVENT = "webhook/event"
     REPO_CHECK = "repo_check"
     ASSETS = "assets"
+    OBJECTS = "objects"
     ESTIMATE = "estimate"
     CONFIG = "config"
     READYZ = "readyz"

@@ -113,6 +113,30 @@ class JobService:
                 },
             )
 
+    def _infer_batch_scope_id(self, payload: BatchJobSubmitRequest) -> str | None:
+        if payload.scope_id or self.control_plane is None or not payload.integration_id:
+            return payload.scope_id
+        source = str((payload.payload or {}).get("source") or "")
+        if source not in {"connector", "connector_monitor"}:
+            return None
+
+        matched_scope_ids: set[str] = set()
+        for item in payload.items:
+            selector = str(item.object_identity or "").strip()
+            if not selector:
+                return None
+            matched = self.control_plane.match_scope(
+                integration_id=payload.integration_id,
+                scope_type="path",
+                resource_selector=selector,
+            )
+            if matched is None:
+                return None
+            matched_scope_ids.add(matched.scope_id)
+            if len(matched_scope_ids) > 1:
+                return None
+        return next(iter(matched_scope_ids), None)
+
     def list_jobs(
         self,
         *,
@@ -1720,9 +1744,10 @@ class JobService:
             existing = self.repo.get_job_by_idempotency_key(payload.idempotency_key)
             if existing is not None:
                 return self.get_batch_job_or_404(existing.job_id)
+        inferred_scope_id = self._infer_batch_scope_id(payload)
         self._validate_control_plane_references(
             integration_id=payload.integration_id,
-            scope_id=payload.scope_id,
+            scope_id=inferred_scope_id,
         )
         effective_recovery_mode, recovery_policy_snapshot = self._resolve_effective_recovery_mode(payload.recovery_mode)
 
@@ -1732,7 +1757,7 @@ class JobService:
                 job_type=payload.job_type,
                 state="accepted",
                 integration_id=payload.integration_id,
-                scope_id=payload.scope_id,
+                scope_id=inferred_scope_id,
                 idempotency_key=payload.idempotency_key,
                 payload={
                     **payload.payload,

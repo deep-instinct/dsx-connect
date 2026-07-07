@@ -70,6 +70,23 @@ class AssetDiscoveryResponse(BaseModel):
     required_permission: str | None = None
 
 
+class ObjectListingItem(BaseModel):
+    identity: str
+    location: str | None = None
+    display_name: str | None = None
+    size_in_bytes: int | None = Field(default=None, ge=0)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ObjectListingResponse(BaseModel):
+    scope: str
+    status: str = "success"
+    objects: list[ObjectListingItem] = Field(default_factory=list)
+    next_cursor: str | None = None
+    unsupported: bool = False
+    message: str | None = None
+
+
 class ScanRequestModel(BaseModel):
     connector: ConnectorInstanceModel = None
     location: str
@@ -85,3 +102,5 @@ class ScanRequestModel(BaseModel):
     # Logical per-item identifier used by the core workflow.
     # When present, connectors can use this to create stable quarantine object names.
     job_item_id: str | None = None
+    # Optional origin hint for control-plane jobs created through connector-side enqueueing.
+    scan_source: str | None = None

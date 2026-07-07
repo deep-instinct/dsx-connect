@@ -17,7 +17,7 @@ from typing import Callable, Awaitable, Optional
 from starlette.responses import StreamingResponse, JSONResponse, Response
 
 from connectors.framework.base_config import BaseConnectorConfig
-from shared.models.connector_models import AssetDiscoveryResponse, ScanRequestModel, ConnectorInstanceModel, ConnectorStatusEnum, \
+from shared.models.connector_models import AssetDiscoveryResponse, ObjectListingResponse, ScanRequestModel, ConnectorInstanceModel, ConnectorStatusEnum, \
     ItemActionEnum
 from shared.routes import DSXConnectAPI, ConnectorAPI, service_url, API_PREFIX_V1, ConnectorPath, ScanPath, route_path, \
      format_route
@@ -307,6 +307,7 @@ class DSXConnector:
         self.read_file_handler: Optional[Callable[[ScanRequestModel], StreamingResponse | StatusResponse]] = None
         self.webhook_handler: Optional[Callable[[ScanRequestModel], StatusResponse]] = None
         self.asset_discovery_handler: Optional[Callable[..., Awaitable[AssetDiscoveryResponse] | AssetDiscoveryResponse]] = None
+        self.object_listing_handler: Optional[Callable[..., Awaitable[ObjectListingResponse] | ObjectListingResponse]] = None
 
         # Allow sync OR async repo check that returns bool
         self.repo_check_connection_handler: Optional[Callable[[], bool | Awaitable[bool]]] = None
@@ -484,6 +485,11 @@ class DSXConnector:
     def asset_discovery(self, func: Callable[..., Awaitable[AssetDiscoveryResponse] | AssetDiscoveryResponse]):
         """Register a non-mutating asset inventory provider."""
         self.asset_discovery_handler = func
+        return func
+
+    def object_listing(self, func: Callable[..., Awaitable[ObjectListingResponse] | ObjectListingResponse]):
+        """Register a paged, non-mutating object listing provider for protected scopes."""
+        self.object_listing_handler = func
         return func
 
     def estimate(self, func: Callable[[], Awaitable[dict]]):
@@ -967,7 +973,7 @@ class DSXConnector:
             if self._should_enqueue_scans_with_ng():
                 return await self._scan_file_request_ng(scan_request)
 
-            payload = jsonable_encoder(scan_request)
+            payload = jsonable_encoder(scan_request, exclude={"scan_source"})
             if self._sdk is not None:
                 body = await self._sdk.scan.request(payload)
             else:
@@ -1008,7 +1014,7 @@ class DSXConnector:
             if not ok:
                 skipped += 1
                 continue
-            prepared.append(jsonable_encoder(req))
+            prepared.append(jsonable_encoder(req, exclude={"scan_source"}))
             prepared_requests.append(req)
 
         if not prepared:
@@ -1090,6 +1096,13 @@ class DSXConnector:
         if not integration_id:
             raise ValueError("dsx-connect-ng integration_id is not available; connector must register before enqueueing scans")
 
+        source = "connector"
+        for scan_request in scan_requests:
+            hinted_source = str(getattr(scan_request, "scan_source", "") or "").strip()
+            if hinted_source:
+                source = hinted_source
+                break
+
         items: list[dict[str, Any]] = []
         for scan_request in scan_requests:
             encoded = jsonable_encoder(scan_request)
@@ -1110,7 +1123,7 @@ class DSXConnector:
             "job_type": "scan.batch",
             "integration_id": integration_id,
             "payload": {
-                "source": "connector",
+                "source": source,
                 "connectorInstanceId": self.connector_instance_id,
                 "connectorName": self.connector_id,
                 "itemCount": len(items),
@@ -1362,6 +1375,12 @@ class DSXAConnectorRouter(APIRouter):
                  response_model=AssetDiscoveryResponse,
                  dependencies=[Depends(require_dsx_hmac)],
                  )(self.get_assets)
+
+        self.get(route_path(ConnectorAPI.OBJECTS.value),
+                 description="List repository objects within a protected scope",
+                 response_model=ObjectListingResponse,
+                 dependencies=[Depends(require_dsx_hmac)],
+                 )(self.get_objects)
 
         # Optional estimation endpoint: returns count preflight if supported by connector.
         self.get(route_path(ConnectorAPI.ESTIMATE.value),
@@ -1630,6 +1649,33 @@ class DSXAConnectorRouter(APIRouter):
         if isinstance(res, AssetDiscoveryResponse):
             return res
         return AssetDiscoveryResponse.model_validate(res)
+
+    async def get_objects(
+        self,
+        scope: str = Query(default=""),
+        limit: int = Query(default=1000, ge=1, le=5000),
+        cursor: str | None = Query(default=None),
+    ) -> ObjectListingResponse:
+        dsx_logging.debug(f"object_listing called (scope={scope}, limit={limit})")
+        if self._connector.object_listing_handler is None:
+            return ObjectListingResponse(
+                scope=scope,
+                status="unsupported",
+                objects=[],
+                unsupported=True,
+                message="object_listing_not_supported",
+            )
+        handler = self._connector.object_listing_handler
+        parameters = inspect.signature(handler).parameters
+        if "cursor" in parameters:
+            res = handler(scope, limit, cursor)
+        else:
+            res = handler(scope, limit)
+        if inspect.isawaitable(res):
+            res = await res  # type: ignore[assignment]
+        if isinstance(res, ObjectListingResponse):
+            return res
+        return ObjectListingResponse.model_validate(res)
 
     async def get_estimate(self, request: Request) -> dict:
         """

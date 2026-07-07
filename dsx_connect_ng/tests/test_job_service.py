@@ -279,6 +279,62 @@ def test_submit_batch_job_creates_parent_and_items() -> None:
     assert created.job.recovery_policy_snapshot["source"] == "settings_default"
 
 
+def test_connector_batch_without_scope_uses_matching_protected_scope() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    control_plane = build_control_plane_service()
+    service = JobService(repo=repo, bus=bus, control_plane=control_plane)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                integration_id="integration-a",
+                payload={"source": "connector_monitor"},
+                items=[
+                    {"object_identity": "/finance/a.pdf", "payload": {"selector": "/finance/a.pdf"}},
+                    {"object_identity": "/finance/b.pdf", "payload": {"selector": "/finance/b.pdf"}},
+                ],
+            )
+        )
+    )
+
+    assert created.job.scope_id == "scope-a"
+    assert {envelope.scope_id for envelope in bus.snapshot()} == {"scope-a"}
+
+
+def test_connector_batch_without_scope_does_not_infer_mixed_scopes() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    control_plane = build_control_plane_service()
+    control_plane.create_scope(
+        ProtectedScopeCreate(
+            scope_id="scope-b-hr",
+            integration_id="integration-a",
+            scope_type="path",
+            resource_selector="/hr",
+            display_name="HR",
+            mode="full_scan",
+        )
+    )
+    service = JobService(repo=repo, bus=bus, control_plane=control_plane)
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                integration_id="integration-a",
+                payload={"source": "connector_monitor"},
+                items=[
+                    {"object_identity": "/finance/a.pdf"},
+                    {"object_identity": "/hr/b.pdf"},
+                ],
+            )
+        )
+    )
+
+    assert created.job.scope_id is None
+    assert {envelope.scope_id for envelope in bus.snapshot()} == {None}
+
+
 def test_submit_batch_job_can_defer_publish_to_outbox_relay() -> None:
     repo = InMemoryJobRepository()
     bus = InMemoryJobBus()

@@ -112,7 +112,7 @@ echo "hello dsx" | sudo tee "$HOST_SCAN_PATH/test.txt" >/dev/null
 
 ```bash
 helm upgrade --install fs \
-  oci://registry-1.docker.io/dsxconnect/filesystem-connector \
+  oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
   --namespace $NAMESPACE \
   --set scanVolume.enabled=true \
   --set scanVolume.hostPath=$HOST_SCAN_PATH

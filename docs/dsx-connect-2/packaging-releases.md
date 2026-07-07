@@ -17,7 +17,7 @@ For a DSX-Connect 2 release such as `2.0.0`:
 | Artifact | Example |
 | --- | --- |
 | Image | `dsxconnect/dsx-connect:2.0.0` |
-| Chart | `oci://registry-1.docker.io/dsxconnect/dsx-connect --version 2.0.0` |
+| Chart | `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --version 2.0.0` |
 | Chart `appVersion` | `2.0.0` |
 
 For a connector release such as GCS connector `0.5.56`:
@@ -25,7 +25,7 @@ For a connector release such as GCS connector `0.5.56`:
 | Artifact | Example |
 | --- | --- |
 | Image | `dsxconnect/google-cloud-storage-connector:0.5.56` |
-| Chart | `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector --version 0.5.56` |
+| Chart | `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart --version 0.5.56` |
 
 GitHub Releases should remain the human-facing release surface:
 
@@ -65,7 +65,7 @@ scripts/dsx-connect-ng/package-chart.sh \
 Consumers can install from the OCI chart reference:
 
 ```bash
-helm install dsx-connect oci://registry-1.docker.io/dsxconnect/dsx-connect \
+helm install dsx-connect oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version 2.0.0 \
   -n dsx-connect \
   --create-namespace
@@ -145,7 +145,7 @@ The workflow publishes:
 
 ```text
 dsxconnect/dsx-connect:2.0.0
-oci://registry-1.docker.io/dsxconnect/dsx-connect --version 2.0.0
+oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --version 2.0.0
 ```
 
 If `push_latest` is enabled, it also publishes:

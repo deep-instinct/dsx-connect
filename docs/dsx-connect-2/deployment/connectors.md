@@ -53,7 +53,7 @@ env:
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "connector-instance-1"
-  DSXCONNECTOR_NG_PLATFORM: "gcp"
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
   DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
 ```
 
@@ -88,7 +88,7 @@ scripts/connectors/deploy-k3s.sh google_cloud_storage \
 The local GCS values configure:
 
 ```yaml
-DSXCONNECTOR_NG_PLATFORM: gcp
+DSXCONNECTOR_NG_PLATFORM: gcs
 DSXCONNECTOR_NG_PLATFORM_KEY: demo-project
 DSXCONNECTOR_ASSET: lg-test-01
 DSXCONNECTOR_MONITOR: "false"

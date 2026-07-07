@@ -26,6 +26,6 @@ dataVolume:
   mountPath: "/app/data"
 
 # Example helm install (adjust release name, version, and path):
-#   helm install fs oci://registry-1.docker.io/dsxconnect/filesystem-connector \
+#   helm install fs oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
 #     --version <chart-version> \
 #     -f connectors/filesystem/deploy/helm/examples/volume-mounts/hostpath-macos-colima.yaml

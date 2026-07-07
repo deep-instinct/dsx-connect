@@ -280,6 +280,7 @@ class DSXConnector:
         if not self.register_with_core:
             dsx_logging.info("Connector registration with 1g dsx-connect is disabled for this runtime.")
         self.dsx_connect_ng_url = str(getattr(connector_config, "dsx_connect_ng_url", None) or self.dsx_connect_url).rstrip("/")
+        self._ng_registered_integration_id = str(getattr(connector_config, "ng_integration_id", "") or "").strip() or None
         if self.register_with_ng_control_plane:
             dsx_logging.info("Connector registration with dsx-connect-ng control plane is enabled.")
 
@@ -766,6 +767,8 @@ class DSXConnector:
                 resp = await client.post(url, json=self._ng_registration_payload(), headers=headers)
                 resp.raise_for_status()
                 data = resp.json()
+            if isinstance(data, dict) and data.get("integration_id"):
+                self._ng_registered_integration_id = str(data["integration_id"])
             dsx_logging.info(
                 "Registered connector with dsx-connect-ng control plane: %s",
                 data.get("connector_instance_id", self.connector_instance_id) if isinstance(data, dict) else self.connector_instance_id,
@@ -961,6 +964,9 @@ class DSXConnector:
             # Non-fatal: continue enqueue if state check fails
             pass
         try:
+            if self._should_enqueue_scans_with_ng():
+                return await self._scan_file_request_ng(scan_request)
+
             payload = jsonable_encoder(scan_request)
             if self._sdk is not None:
                 body = await self._sdk.scan.request(payload)
@@ -995,6 +1001,7 @@ class DSXConnector:
             return StatusResponse(status=StatusResponseEnum.NOTHING, message="No scan requests", description="empty_batch")
 
         prepared: list[dict[str, Any]] = []
+        prepared_requests: list[ScanRequestModel] = []
         skipped = 0
         for req in scan_requests:
             ok, _ = self._prepare_scan_request_common(req, count_enqueued=False)
@@ -1002,6 +1009,7 @@ class DSXConnector:
                 skipped += 1
                 continue
             prepared.append(jsonable_encoder(req))
+            prepared_requests.append(req)
 
         if not prepared:
             return StatusResponse(
@@ -1026,6 +1034,9 @@ class DSXConnector:
             payload["batch_size"] = batch_size
 
         try:
+            if self._should_enqueue_scans_with_ng():
+                return await self._scan_file_request_batch_ng(prepared_requests)
+
             if self._sdk is not None:
                 body = await self._sdk.scan.request_batch(payload)
             else:
@@ -1070,6 +1081,73 @@ class DSXConnector:
                 description="Unexpected error in batch scan request",
                 message=str(e),
             )
+
+    def _should_enqueue_scans_with_ng(self) -> bool:
+        return self.register_with_ng_control_plane and not self.register_with_core
+
+    def _ng_scan_batch_payload(self, scan_requests: list[ScanRequestModel]) -> dict[str, Any]:
+        integration_id = self._ng_registered_integration_id
+        if not integration_id:
+            raise ValueError("dsx-connect-ng integration_id is not available; connector must register before enqueueing scans")
+
+        items: list[dict[str, Any]] = []
+        for scan_request in scan_requests:
+            encoded = jsonable_encoder(scan_request)
+            object_identity = str(scan_request.metainfo or scan_request.location)
+            item_payload: dict[str, Any] = {
+                "readerStrategy": "proxy",
+                "location": scan_request.location,
+                "path": scan_request.location,
+                "metainfo": scan_request.metainfo,
+            }
+            if scan_request.size_in_bytes is not None:
+                item_payload["sizeInBytes"] = scan_request.size_in_bytes
+            if scan_request.requested_action is not None:
+                item_payload["requestedAction"] = encoded.get("requested_action")
+            items.append({"object_identity": object_identity, "payload": item_payload})
+
+        return {
+            "job_type": "scan.batch",
+            "integration_id": integration_id,
+            "payload": {
+                "source": "connector",
+                "connectorInstanceId": self.connector_instance_id,
+                "connectorName": self.connector_id,
+                "itemCount": len(items),
+                "deferPublish": True,
+            },
+            "items": items,
+        }
+
+    async def _scan_file_request_ng(self, scan_request: ScanRequestModel) -> StatusResponse:
+        payload = self._ng_scan_batch_payload([scan_request])
+        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
+        headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
+        async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        self.scan_request_count += 1
+        return StatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            message="Queued in dsx-connect-ng",
+            description=str(body.get("job_id") or url),
+        )
+
+    async def _scan_file_request_batch_ng(self, scan_requests: list[ScanRequestModel]) -> StatusResponse:
+        payload = self._ng_scan_batch_payload(scan_requests)
+        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
+        headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
+        async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        self.scan_request_count += len(scan_requests)
+        return StatusResponse(
+            status=StatusResponseEnum.SUCCESS,
+            message="Queued batch in dsx-connect-ng",
+            description=str(body.get("job_id") or url),
+        )
 
     async def get_status(self):
         dsxa_status = await self.test_dsx_connect()

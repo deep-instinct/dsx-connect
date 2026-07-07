@@ -9,7 +9,7 @@ from connectors.framework.dsx_connector import (
     apply_requested_action_config_update,
     resolve_item_action_request,
 )
-from shared.models.connector_models import ScanRequestModel, ItemActionEnum
+from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorStatusEnum
 
 
 class _JsonRequest:
@@ -256,6 +256,194 @@ def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatc
     assert calls[0][1].endswith("/api/v1/control-plane/connectors/gcs-pod-1/heartbeat")
     assert calls[1][1].endswith("/api/v1/control-plane/connectors/register")
     assert "/dsx-connect/api/v1/" not in calls[1][1]
+
+
+def test_ng_only_scan_request_uses_execution_batch_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeResponse:
+        content = b"{}"
+
+        def json(self):
+            return {"job_id": "job_monitor_1"}
+
+        def raise_for_status(self):
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append((url, json or {}))
+            return _FakeResponse()
+
+    from connectors.framework import dsx_connector as connector_module
+
+    monkeypatch.setattr(connector_module.httpx, "AsyncClient", _FakeAsyncClient)
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            ng_integration_id="int_gcs",
+            instance_id="gcs-pod-1",
+        )
+    )
+    connector.connector_running_model.status = ConnectorStatusEnum.READY
+
+    result = asyncio.run(
+        connector.scan_file_request(
+            ScanRequestModel(location="incoming/file.pdf", metainfo="lg-test-01/incoming/file.pdf")
+        )
+    )
+
+    assert result.status.value == "success"
+    assert calls[0][0].endswith("/api/v1/execution/jobs/batch")
+    assert "/dsx-connect/api/v1/" not in calls[0][0]
+    assert calls[0][1]["integration_id"] == "int_gcs"
+    assert calls[0][1]["payload"]["source"] == "connector"
+    assert calls[0][1]["payload"]["deferPublish"] is True
+    assert calls[0][1]["items"] == [
+        {
+            "object_identity": "lg-test-01/incoming/file.pdf",
+            "payload": {
+                "readerStrategy": "proxy",
+                "location": "incoming/file.pdf",
+                "path": "incoming/file.pdf",
+                "metainfo": "lg-test-01/incoming/file.pdf",
+            },
+        }
+    ]
+
+
+def test_ng_registration_response_sets_scan_integration_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeResponse:
+        content = b"{}"
+
+        def __init__(self, payload: dict):
+            self._payload = payload
+            self.status_code = 200
+
+        def json(self):
+            return self._payload
+
+        def raise_for_status(self):
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append((url, json or {}))
+            if url.endswith("/control-plane/connectors/register"):
+                return _FakeResponse({"connector_instance_id": "gcs-pod-1", "integration_id": "int_from_register"})
+            return _FakeResponse({"job_id": "job_monitor_1"})
+
+    from connectors.framework import dsx_connector as connector_module
+
+    monkeypatch.setattr(connector_module.httpx, "AsyncClient", _FakeAsyncClient)
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            instance_id="gcs-pod-1",
+        )
+    )
+    connector.connector_running_model.status = ConnectorStatusEnum.READY
+
+    register_result = asyncio.run(connector.register_ng_control_plane())
+    scan_result = asyncio.run(
+        connector.scan_file_request(
+            ScanRequestModel(location="incoming/file.pdf", metainfo="lg-test-01/incoming/file.pdf")
+        )
+    )
+
+    assert register_result.status.value == "success"
+    assert scan_result.status.value == "success"
+    assert calls[1][1]["integration_id"] == "int_from_register"
+
+
+def test_ng_only_batch_scan_request_uses_execution_batch_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, dict]] = []
+
+    class _FakeResponse:
+        content = b"{}"
+
+        def json(self):
+            return {"job_id": "job_batch_1"}
+
+        def raise_for_status(self):
+            return None
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, json=None, headers=None):
+            calls.append((url, json or {}))
+            return _FakeResponse()
+
+    from connectors.framework import dsx_connector as connector_module
+
+    monkeypatch.setattr(connector_module.httpx, "AsyncClient", _FakeAsyncClient)
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="google-cloud-storage-connector",
+            connector_url="http://gcs:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            ng_integration_id="int_gcs",
+            instance_id="gcs-pod-1",
+        )
+    )
+    connector.connector_running_model.status = ConnectorStatusEnum.READY
+
+    result = asyncio.run(
+        connector.scan_file_request_batch(
+            [
+                ScanRequestModel(location="incoming/a.pdf", metainfo="lg-test-01/incoming/a.pdf"),
+                ScanRequestModel(location="incoming/b.pdf", metainfo="lg-test-01/incoming/b.pdf"),
+            ]
+        )
+    )
+
+    assert result.status.value == "success"
+    assert calls[0][0].endswith("/api/v1/execution/jobs/batch")
+    assert calls[0][1]["integration_id"] == "int_gcs"
+    assert calls[0][1]["payload"]["itemCount"] == 2
+    assert [item["object_identity"] for item in calls[0][1]["items"]] == [
+        "lg-test-01/incoming/a.pdf",
+        "lg-test-01/incoming/b.pdf",
+    ]
+    assert {item["payload"]["readerStrategy"] for item in calls[0][1]["items"]} == {"proxy"}
 
 
 def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

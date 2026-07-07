@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 import uvicorn
 
 from dsx_connect_ng.api.routes.control_plane import router as control_plane_router
@@ -9,6 +11,8 @@ from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.bootstrap import bootstrap_control_plane
 from dsx_connect_ng.jobs.bootstrap import bootstrap_job_bus, bootstrap_job_service
 from dsx_connect_ng.version import DSX_CONNECT_VERSION
+
+_UI_ASSETS_DIR = Path(__file__).resolve().parent / "ui" / "assets"
 
 
 def create_app() -> FastAPI:
@@ -29,6 +33,11 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(control_plane_router, prefix=settings.api_prefix)
     app.include_router(execution_router, prefix=settings.api_prefix)
+    app.mount(
+        f"{settings.api_prefix}/ui-static",
+        StaticFiles(directory=_UI_ASSETS_DIR),
+        name="dsx-connect-ui-assets",
+    )
     app.include_router(ui_router, prefix=settings.api_prefix)
     return app
 

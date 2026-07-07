@@ -41,11 +41,11 @@ When source docs (./docs/* or mkdocs.yml) are committed to GitHub repository, th
 ## Docs: Preview MkDocs Locally
 
 1. Ensure the repo’s Python env is active (e.g., `python -m venv .venv && source .venv/bin/activate`).
-2. Install doc tooling if not already available: `pip install -r docs/requirements.txt` (or `pip install mkdocs mkdocs-material`).
+2. Install doc tooling if not already available: `python -m pip install -r docs/requirements.txt`.
 3. From the repo root run:
    ```bash
-   mkdocs serve
+   python -m mkdocs serve
    ```
 4. Visit `http://127.0.0.1:8000` to browse the deployment guides, reference material, and connector docs. Changes to files under `docs/` hot-reload automatically.
 
-For CI-quality builds use `mkdocs build` (outputs to `site/`). Keep docs up to date when adding new features so deployment teams have the latest instructions.
+For CI-quality builds use `python -m mkdocs build` (outputs to `site/`). Keep docs up to date when adding new features so deployment teams have the latest instructions.

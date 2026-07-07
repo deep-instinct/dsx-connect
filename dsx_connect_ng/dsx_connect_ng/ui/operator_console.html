@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DSX-Connect Operator Console</title>
+  <link rel="icon" type="image/svg+xml" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-16.png">
+  <link rel="apple-touch-icon" sizes="128x128" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-128.png">
+  <link rel="manifest" href="/api/v1/ui-static/manifest.webmanifest">
   <style>
     :root,
     :root[data-theme="light"] {
@@ -413,7 +418,17 @@
 
     .brand {
       display: grid;
-      gap: var(--space-1);
+      grid-template-columns: 32px minmax(0, auto);
+      align-items: center;
+      column-gap: var(--space-4);
+      row-gap: var(--space-1);
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      grid-row: 1 / span 2;
+      display: block;
     }
 
     .brand small {
@@ -1112,6 +1127,7 @@
   <div class="app">
     <header class="topbar">
       <div class="brand">
+        <img class="brand-mark" src="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg" alt="" aria-hidden="true">
         <small id="product-version">DSX-Connect</small>
         <h1>Operator Console</h1>
       </div>

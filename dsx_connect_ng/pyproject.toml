@@ -43,3 +43,11 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["dsx_connect_ng*"]
+
+[tool.setuptools.package-data]
+dsx_connect_ng = [
+  "ui/*.html",
+  "ui/assets/**/*.png",
+  "ui/assets/**/*.svg",
+  "ui/assets/**/*.json",
+]

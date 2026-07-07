@@ -29,6 +29,9 @@ def test_operator_console_page_renders() -> None:
     assert "Preconfigure a repository boundary before a runtime instance registers." in response.text
     assert 'id="connectors-table"' in response.text
     assert "function renderDataTable" in response.text
+    assert 'href="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg"' in response.text
+    assert 'src="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg"' in response.text
+    assert 'href="/api/v1/ui-static/manifest.webmanifest"' in response.text
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
     assert 'id="connector-drawer"' in response.text
     assert "Protection Profile Editor" in response.text
@@ -44,6 +47,22 @@ def test_operator_console_page_renders() -> None:
     assert '<option value="security">Security Console</option>' in response.text
     assert 'id="stat-dsxa"' in response.text
     assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
+
+
+def test_operator_console_serves_icon_assets() -> None:
+    client = TestClient(create_app())
+
+    svg_response = client.get("/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg")
+    png_response = client.get("/api/v1/ui-static/icons/dsx-connect-icon-squircle-32.png")
+    manifest_response = client.get("/api/v1/ui-static/manifest.webmanifest")
+
+    assert svg_response.status_code == 200
+    assert "image/svg+xml" in svg_response.headers["content-type"]
+    assert "<svg" in svg_response.text
+    assert png_response.status_code == 200
+    assert png_response.headers["content-type"] == "image/png"
+    assert manifest_response.status_code == 200
+    assert manifest_response.json()["short_name"] == "DSX-Connect"
 
 
 def test_ui_meta_returns_display_version() -> None:

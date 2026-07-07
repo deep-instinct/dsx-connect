@@ -1,0 +1,24 @@
+{
+  "name": "DSX-Connect Operator Console",
+  "short_name": "DSX-Connect",
+  "icons": [
+    {
+      "src": "/api/v1/ui-static/icons/dsx-connect-icon-squircle-16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/v1/ui-static/icons/dsx-connect-icon-squircle-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/api/v1/ui-static/icons/dsx-connect-icon-squircle-128.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#146f68",
+  "background_color": "#f2f5f4",
+  "display": "standalone"
+}

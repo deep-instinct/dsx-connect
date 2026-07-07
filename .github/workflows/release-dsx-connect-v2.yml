@@ -138,13 +138,6 @@ jobs:
           username: ${{ secrets.OCR_USERNAME }}
           password: ${{ secrets.OCR_TOKEN }}
 
-      - name: Verify Docker push permission
-        run: |
-          image="${{ needs.resolve-version.outputs.image_registry }}/dsx-connect:gha-auth-check-${GITHUB_RUN_ID}"
-          docker pull hello-world
-          docker tag hello-world "$image"
-          docker push "$image"
-
       - name: Log in to OCI registry for Helm
         run: |
           echo "${{ secrets.OCR_TOKEN }}" | helm registry login "${{ needs.resolve-version.outputs.registry_host }}" \

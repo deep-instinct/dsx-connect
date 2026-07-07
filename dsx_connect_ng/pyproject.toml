@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+  "httpx2",
   "pytest>=8.0",
 ]
 workers = [
@@ -50,4 +51,5 @@ dsx_connect_ng = [
   "ui/assets/**/*.png",
   "ui/assets/**/*.svg",
   "ui/assets/**/*.json",
+  "ui/assets/**/*.webmanifest",
 ]

@@ -111,6 +111,27 @@ jobs:
       - name: Set up Helm
         uses: azure/setup-helm@v4
 
+      - name: Check release secrets are present
+        run: |
+          test -n "${{ secrets.OCR_USERNAME }}" || (echo "OCR_USERNAME missing" && exit 1)
+          test -n "${{ secrets.OCR_TOKEN }}" || (echo "OCR_TOKEN missing" && exit 1)
+          echo "OCR_USERNAME present"
+          echo "OCR_TOKEN present"
+
+      - name: Show release target
+        run: |
+          echo "Registry host: ${{ needs.resolve-version.outputs.registry_host }}"
+          echo "Image registry: ${{ needs.resolve-version.outputs.image_registry }}"
+          echo "Helm repo: ${{ needs.resolve-version.outputs.helm_repo }}"
+          echo "Version: ${{ needs.resolve-version.outputs.version }}"
+
+      - name: Verify Docker Hub credentials
+        run: |
+          echo "${{ secrets.OCR_TOKEN }}" | docker login "${{ needs.resolve-version.outputs.registry_host }}" \
+            --username "${{ secrets.OCR_USERNAME }}" \
+            --password-stdin
+          docker logout "${{ needs.resolve-version.outputs.registry_host }}"
+
       - name: Log in to OCI registry for Docker
         uses: docker/login-action@v3
         with:

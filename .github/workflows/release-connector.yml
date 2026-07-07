@@ -139,7 +139,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python -m pip install --upgrade pip pytest
+          python -m pip install --upgrade pip pytest pytest-asyncio
           if [ -f "connectors/${{ steps.target.outputs.connector }}/requirements.txt" ]; then
             python -m pip install -r "connectors/${{ steps.target.outputs.connector }}/requirements.txt"
           fi

@@ -135,9 +135,15 @@ jobs:
       - name: Log in to OCI registry for Docker
         uses: docker/login-action@v3
         with:
-          registry: ${{ needs.resolve-version.outputs.registry_host }}
           username: ${{ secrets.OCR_USERNAME }}
           password: ${{ secrets.OCR_TOKEN }}
+
+      - name: Verify Docker push permission
+        run: |
+          image="${{ needs.resolve-version.outputs.image_registry }}/dsx-connect:gha-auth-check-${GITHUB_RUN_ID}"
+          docker pull hello-world
+          docker tag hello-world "$image"
+          docker push "$image"
 
       - name: Log in to OCI registry for Helm
         run: |

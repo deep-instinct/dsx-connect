@@ -112,7 +112,7 @@ echo "hello dsx" | sudo tee "$HOST_SCAN_PATH/test.txt" >/dev/null
 
 ```bash
 helm upgrade --install fs \
-  oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
+  oci://registry-1.docker.io/dsxconnect/filesystem-connector \
   --namespace $NAMESPACE \
   --set scanVolume.enabled=true \
   --set scanVolume.hostPath=$HOST_SCAN_PATH
@@ -121,7 +121,7 @@ helm upgrade --install fs \
 Check logs:
 
 ```bash
-kubectl logs deploy/fs-filesystem-connector-chart -n $NAMESPACE -f
+kubectl logs deploy/fs-filesystem-connector -n $NAMESPACE -f
 ```
 
 Look for:

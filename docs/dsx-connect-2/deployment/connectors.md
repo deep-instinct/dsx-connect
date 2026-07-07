@@ -133,8 +133,8 @@ kubectl get pods -n dsx-connect
 Check connector logs:
 
 ```bash
-kubectl logs -n dsx-connect deploy/gcs-google-cloud-storage-connector-chart
-kubectl logs -n dsx-connect deploy/fs-filesystem-connector-chart
+kubectl logs -n dsx-connect deploy/gcs-google-cloud-storage-connector
+kubectl logs -n dsx-connect deploy/fs-filesystem-connector
 ```
 
 Open the Operator Console:

@@ -96,7 +96,6 @@ jobs:
   release:
     needs: resolve-version
     runs-on: ubuntu-latest
-    environment: dsx-connect-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4

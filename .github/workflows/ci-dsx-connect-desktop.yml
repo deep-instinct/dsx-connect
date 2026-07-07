@@ -2,6 +2,8 @@ name: CI DSX-Connect Desktop (Electron)
 
 on:
   push:
+    branches:
+      - '**'
     paths:
       - '.github/workflows/ci-dsx-connect-desktop.yml'
       - '.github/workflows/release-dsx-connect-desktop.yml'

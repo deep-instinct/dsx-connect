@@ -2,6 +2,8 @@ name: CI DSXA Desktop (Tauri)
 
 on:
   push:
+    branches:
+      - '**'
     paths:
       - '.github/workflows/ci-dsxa-desktop.yml'
       - '.github/workflows/release-dsxa-desktop.yml'

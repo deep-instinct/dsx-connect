@@ -76,6 +76,69 @@ DSX_CONNECT_NG_SCANNER__MODE: stub
 DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: native
 ```
 
+## Update a Lab Stack from Released Charts
+
+For a persistent lab VM or k3s host, keep environment-specific values files on the VM and update the stack from released OCI Helm charts.
+This avoids local image builds and does not require GitHub Actions to reach into the lab.
+
+Example VM layout:
+
+```bash
+~/.dsx-connect-lab/
+  dsx-connect-values.yaml
+  gcs-values.yaml
+  filesystem-values.yaml
+```
+
+Update all three releases using the versions in the checked-out repo:
+
+```bash
+scripts/dsx-connect-ng/update-lab-stack.sh \
+  --namespace dsx-connect \
+  --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
+  --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
+  --filesystem-values ~/.dsx-connect-lab/filesystem-values.yaml
+```
+
+Update to explicit released versions:
+
+```bash
+scripts/dsx-connect-ng/update-lab-stack.sh \
+  --connect-version 2.0.1 \
+  --gcs-version 2.0.2 \
+  --filesystem-version 2.0.2 \
+  --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
+  --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
+  --filesystem-values ~/.dsx-connect-lab/filesystem-values.yaml
+```
+
+Update only DSX-Connect and GCS:
+
+```bash
+scripts/dsx-connect-ng/update-lab-stack.sh \
+  --skip-filesystem \
+  --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
+  --gcs-values ~/.dsx-connect-lab/gcs-values.yaml
+```
+
+Preview without applying:
+
+```bash
+scripts/dsx-connect-ng/update-lab-stack.sh \
+  --dry-run \
+  --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
+  --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
+  --filesystem-values ~/.dsx-connect-lab/filesystem-values.yaml
+```
+
+The script installs these OCI charts by default:
+
+```text
+oci://registry-1.docker.io/dsxconnect/dsx-connect-chart
+oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart
+oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart
+```
+
 ## Open the Operator Console
 
 Port-forward the API service:

@@ -1971,7 +1971,7 @@
           render: (asset) => {
             const findings = asset.findings || {};
             return Object.keys(findings).length
-              ? escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`)
+              ? escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`)
               : "none";
           },
         },
@@ -2015,7 +2015,7 @@
           label: "Findings",
           render: (result) => {
             const findings = result.findings || {};
-            return escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`);
+            return escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`);
           },
         },
         {
@@ -2164,7 +2164,7 @@
         data-selector="${escapeHtml(asset.selector)}"
         data-name="${escapeHtml(asset.display_name || asset.selector)}"
         data-scope="${escapeHtml(asset.matching_scope_id || "")}"
-        data-scope-type="${escapeHtml(asset.asset_type || "path")}"
+        data-scope-type="path"
       `;
       const enableOptions = `
         <option value="">Action</option>
@@ -2527,7 +2527,7 @@
       const targetLabel = result.target?.label || "unknown";
       const sourceText = scanSourceLabel(result);
       const progressText = formatProgress(progress, result.job.state);
-      const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, unknown ${findings.unknown || 0}`;
+      const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`;
       const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
       const latest = (result.latest_items || []).map((item) => `
         <tr>
@@ -2795,6 +2795,7 @@
     async function protectAsset(asset) {
       const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
       const policy = cloneValue(policyEntry.definition || currentDefaultPolicy());
+      const scopeType = asset.scopeType === "identity" ? "identity" : "path";
       if (asset.matchingScopeId) {
         await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/policy`, {
           method: "PUT",
@@ -2815,7 +2816,7 @@
         body: JSON.stringify({
           integration_id: asset.integrationId,
           display_name: asset.name || asset.selector,
-          scope_type: asset.scopeType || "path",
+          scope_type: scopeType,
           resource_selector: asset.selector,
           mode: "full_scan",
           enabled: true,

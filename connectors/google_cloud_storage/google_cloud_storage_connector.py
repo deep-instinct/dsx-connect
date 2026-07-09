@@ -206,6 +206,36 @@ def _relative_to_configured_prefix(key: str) -> str:
     return key[len(bp):] if key.startswith(bp) else key
 
 
+def _inventory_scope_configured() -> bool:
+    return bool(_normalize_asset_inventory_scope(getattr(config, "asset_inventory_scope", "")))
+
+
+def _split_bucket_scope(scope: str | None) -> tuple[str, str]:
+    raw = str(scope or "").strip().strip("/")
+    if not raw:
+        return "", ""
+    if "/" not in raw:
+        return raw, ""
+    bucket, prefix = raw.split("/", 1)
+    return bucket.strip(), prefix.strip("/")
+
+
+def _resolve_bucket_and_key_for_request(scan_request: ScanRequestModel) -> tuple[str, str]:
+    location = str(scan_request.location or "").strip().lstrip("/")
+    metainfo = str(scan_request.metainfo or "").strip().strip("/")
+    configured_bucket = (config.asset_bucket or "").strip()
+
+    if metainfo and metainfo != location:
+        bucket, key = _split_bucket_scope(metainfo)
+        if bucket and key:
+            return bucket, key
+    bucket, key = _split_bucket_scope(location)
+    if bucket and key and bucket == configured_bucket:
+        return bucket, key
+
+    return configured_bucket, location
+
+
 def _should_monitor() -> bool:
     if not getattr(config, "monitor", False):
         return False
@@ -546,7 +576,7 @@ async def preview_provider(limit: int) -> list[str]:
 async def object_listing_handler(scope: str = "", limit: int = 1000, cursor: str | None = None) -> ObjectListingResponse:
     requested_scope = (scope or config.asset or config.asset_bucket or "").strip().strip("/")
     configured_bucket = (config.asset_bucket or "").strip()
-    if not configured_bucket:
+    if not configured_bucket and not requested_scope:
         return ObjectListingResponse(
             scope=requested_scope,
             status="not_configured",
@@ -562,12 +592,14 @@ async def object_listing_handler(scope: str = "", limit: int = 1000, cursor: str
         elif requested_scope.startswith(configured_bucket + "/"):
             requested_prefix = requested_scope[len(configured_bucket) + 1:].strip("/")
         else:
-            return ObjectListingResponse(
-                scope=requested_scope,
-                status="unsupported_scope",
-                objects=[],
-                message=f"scope_not_served_by_connector:{requested_scope}",
-            )
+            bucket, requested_prefix = _split_bucket_scope(requested_scope)
+            if not bucket:
+                return ObjectListingResponse(
+                    scope=requested_scope,
+                    status="unsupported_scope",
+                    objects=[],
+                    message=f"scope_not_served_by_connector:{requested_scope}",
+                )
 
     try:
         blobs, next_cursor = gcs_client.list_object_page(
@@ -841,24 +873,24 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
         SimpleResponse: A response indicating that the remediation action was performed successfully,
             or an error if the action is not implemented.
     """
-    file_path = scan_event_queue_info.location
+    source_bucket, file_path = _resolve_bucket_and_key_for_request(scan_event_queue_info)
     requested_action, target_prefix, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
     preserve_relative_path, resolved_filename = _quarantine_target_config(scan_event_queue_info)
-    if not gcs_client.key_exists(config.asset_bucket, file_path):
+    if not gcs_client.key_exists(source_bucket, file_path):
         return ItemActionStatusResponse(
             status=StatusResponseEnum.ERROR,
             item_action=requested_action,
             message="Item action failed.",
-            description=f"File does not exist at {config.asset}: {file_path}",
+            description=f"File does not exist at {source_bucket}: {file_path}",
         )
 
     if requested_action == ItemActionEnum.DELETE:
-        gcs_client.delete_object(config.asset_bucket, file_path)
+        gcs_client.delete_object(source_bucket, file_path)
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
             item_action=ItemActionEnum.DELETE,
             message="File deleted.",
-            description=f"File deleted from {config.asset}: {file_path}",
+            description=f"File deleted from {source_bucket}: {file_path}",
         )
     if requested_action == ItemActionEnum.MOVE:
         if not target_prefix:
@@ -882,20 +914,20 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                 message="Item action failed.",
                 description=str(exc),
             )
-        gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
+        gcs_client.move_object(source_bucket, file_path, source_bucket, dest_key)
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
             item_action=ItemActionEnum.MOVE,
             message="File moved.",
-            description=f"File moved from {config.asset}: {file_path} to {dest_key}",
+            description=f"File moved from {source_bucket}: {file_path} to {dest_key}",
         )
     if requested_action == ItemActionEnum.TAG:
-        gcs_client.tag_object(config.asset_bucket, file_path, requested_tags)
+        gcs_client.tag_object(source_bucket, file_path, requested_tags)
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
             item_action=ItemActionEnum.TAG,
             message="File tagged.",
-            description=f"File tagged at {config.asset}: {file_path}",
+            description=f"File tagged at {source_bucket}: {file_path}",
         )
     if requested_action == ItemActionEnum.MOVE_TAG:
         if not target_prefix:
@@ -919,13 +951,13 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
                 message="Item action failed.",
                 description=str(exc),
             )
-        gcs_client.move_object(config.asset_bucket, file_path, config.asset_bucket, dest_key)
-        gcs_client.tag_object(config.asset_bucket, dest_key, requested_tags)
+        gcs_client.move_object(source_bucket, file_path, source_bucket, dest_key)
+        gcs_client.tag_object(source_bucket, dest_key, requested_tags)
         return ItemActionStatusResponse(
             status=StatusResponseEnum.SUCCESS,
             item_action=ItemActionEnum.MOVE_TAG,
             message="File moved and tagged.",
-            description=f"File moved from {config.asset}: {file_path} to {dest_key} and tagged.",
+            description=f"File moved from {source_bucket}: {file_path} to {dest_key} and tagged.",
         )
     return ItemActionStatusResponse(
         status=StatusResponseEnum.NOTHING,
@@ -1103,7 +1135,8 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
             or a SimpleResponse with an error message if file reading is not supported.
     """
     try:
-        file_stream = gcs_client.get_object(config.asset_bucket, scan_event_queue_info.location)
+        bucket, key = _resolve_bucket_and_key_for_request(scan_event_queue_info)
+        file_stream = gcs_client.get_object(bucket, key)
         return StreamingResponse(stream_blob(file_stream), media_type="application/octet-stream")
     except Exception as e:
         return StatusResponse(status=StatusResponseEnum.ERROR, message=str(e))

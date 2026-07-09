@@ -15,8 +15,9 @@ Use these pages as the deployment path:
 
 | Page | Purpose |
 | --- | --- |
-| [Kubernetes Helm](kubernetes.md) | Build and deploy the DSX-Connect 2 control plane |
+| [Kubernetes Helm](kubernetes.md) | Deploy the DSX-Connect 2 control plane from released Helm charts |
 | [Connectors](connectors.md) | Build and deploy repository connectors for DSX-Connect 2 |
+| [Development deployment](development.md) | Local image builds, local chart testing, and helper scripts |
 
 Future pages should stay focused:
 
@@ -35,9 +36,9 @@ The current quick path assumes:
 * Kubernetes is available, such as k3s under Colima
 * `kubectl` points at the intended cluster
 * `helm` is installed
-* images are built locally and loaded into the local Docker image store
+* released images are reachable from the cluster, or local images are loaded for development testing
 
-For a remote cluster, push images to a registry the cluster can pull from and use that registry in the deploy commands.
+For a remote cluster, use released images or push development images to a registry the cluster can pull from.
 
 ## Namespace
 

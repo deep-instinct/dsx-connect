@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Dict, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class VerdictEnum(str, Enum):
@@ -61,6 +61,29 @@ class ScanResponse(BaseModel):
 
     class Config:
         populate_by_name = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_nested_dsxa_response(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        details = value.get("details")
+        if not isinstance(details, dict):
+            return value
+        normalized = dict(value)
+        if "verdict_details" not in normalized and "verdictDetails" in details:
+            normalized["verdict_details"] = details.get("verdictDetails")
+        if "file_info" not in normalized and "fileInfo" in details:
+            normalized["file_info"] = details.get("fileInfo")
+        if "container_files_scanned" not in normalized and "containerFilesScanned" in details:
+            normalized["container_files_scanned"] = details.get("containerFilesScanned")
+        if "container_files_scanned_size" not in normalized and "containerFilesScannedSize" in details:
+            normalized["container_files_scanned_size"] = details.get("containerFilesScannedSize")
+        if "X-Custom-Metadata" not in normalized and "xCustomMetadata" in details:
+            normalized["X-Custom-Metadata"] = details.get("xCustomMetadata")
+        if "last_update_time" not in normalized and "lastUpdateTime" in details:
+            normalized["last_update_time"] = details.get("lastUpdateTime")
+        return normalized
 
 
 class ScanByPathResponse(BaseModel):

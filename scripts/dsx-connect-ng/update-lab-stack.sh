@@ -29,7 +29,7 @@ Examples:
     --gcs-values ~/.dsx-connect-lab/gcs-values.yaml
 
   scripts/dsx-connect-ng/update-lab-stack.sh \
-    --connect-version 2.0.1 \
+    --connect-version 2.0.2 \
     --gcs-version 2.0.2 \
     --filesystem-version 2.0.2 \
     --skip-filesystem
@@ -286,7 +286,7 @@ if [[ "$skip_core" != "true" ]]; then
   core_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$core_release" \
-    "$chart_repo/dsx-connect-chart" \
+    "$chart_repo/dsx-connect" \
     "$connect_version" \
     "$core_values" \
     "${core_set_args[@]}"
@@ -300,7 +300,7 @@ if [[ "$skip_gcs" != "true" ]]; then
   gcs_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$gcs_release" \
-    "$chart_repo/google-cloud-storage-connector-chart" \
+    "$chart_repo/google-cloud-storage-connector" \
     "$gcs_version" \
     "$gcs_values" \
     "${gcs_set_args[@]}"
@@ -314,7 +314,7 @@ if [[ "$skip_filesystem" != "true" ]]; then
   filesystem_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$filesystem_release" \
-    "$chart_repo/filesystem-connector-chart" \
+    "$chart_repo/filesystem-connector" \
     "$filesystem_version" \
     "$filesystem_values" \
     "${filesystem_set_args[@]}"

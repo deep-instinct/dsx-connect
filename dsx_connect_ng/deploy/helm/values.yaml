@@ -1,9 +1,17 @@
+# DSX-Connect 2 Helm values.
+# Defaults are intentionally small: API-only, in-memory backends, and stub scanner.
+# For a full-stack lab deployment, see docs/dsx-connect-2/deployment/examples/dsx-connect-full-stack-values.yaml.
+
 image:
   repository: dsxconnect/dsx-connect
   pullPolicy: IfNotPresent
+  # Empty tag means use Chart.appVersion.
   tag: ""
 
+# Optional image pull secrets for private registries.
 imagePullSecrets: []
+
+# Optional Helm naming overrides.
 nameOverride: ""
 fullnameOverride: ""
 
@@ -11,21 +19,38 @@ service:
   type: ClusterIP
   port: 8091
 
+# API deployment tuning.
 api:
+  # Number of API pods.
   replicaCount: 1
   host: "0.0.0.0"
+  # Number of Uvicorn worker processes inside each API pod.
   workers: 1
 
 env:
+  # Free-form environment label shown in logs and diagnostics.
   DSX_CONNECT_NG__ENVIRONMENT: "dev"
+
+  # Default chart profile is API-only with in-memory state/job bus.
+  # For real connector registration and scans, use postgres/rabbitmq instead.
   DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "memory"
   DSX_CONNECT_NG__JOB_BUS_BACKEND: "memory"
+
+  # DSXA scanner mode.
+  # "stub" is useful for control-plane smoke tests.
+  # Use "dsxa" and set DSX_CONNECT_NG_SCANNER__BASE_URL when Kubernetes can reach a real DSXA scanner.
   DSX_CONNECT_NG_SCANNER__MODE: "stub"
+  # DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
+
+  # Worker reader mode. "native" lets workers read content through registered connectors.
   DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
 
+# Optional list of Secret names projected with envFrom.
 envSecretRefs: []
 
 postgresql:
+  # Embedded PostgreSQL is convenient for lab and local validation.
+  # For production, use an externally managed PostgreSQL service and keep this disabled.
   enabled: false
   image:
     repository: postgres
@@ -38,10 +63,14 @@ postgresql:
   service:
     port: 5432
   persistence:
+    # false uses emptyDir and loses data when the pod is deleted.
+    # Set true and configure storage for durable lab or production use.
     enabled: false
     size: 8Gi
 
 rabbitmq:
+  # Embedded RabbitMQ is convenient for lab and local validation.
+  # For production, use an externally managed RabbitMQ service and keep this disabled.
   enabled: false
   image:
     repository: rabbitmq
@@ -54,37 +83,73 @@ rabbitmq:
     amqpPort: 5672
     managementPort: 15672
   persistence:
+    # false uses emptyDir and loses queue state when the pod is deleted.
+    # Set true and configure storage for durable lab or production use.
     enabled: false
     size: 8Gi
 
 workers:
   relay:
+    # Relay is disabled by default because memory mode does not use RabbitMQ.
     enabled: false
+    # Number of relay pods.
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.relay_worker"]
+    # Relay pulls pending outbox records and publishes RabbitMQ work messages.
+    # Common tuning:
+    #   ["--batch-size", "100", "--poll-interval-seconds", "0.25", "--max-active-scan-items", "1000"]
     args: []
+
   scan:
     enabled: false
+    # Number of scan worker pods.
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.scan_worker"]
-    args: ["--prefetch-count", "10"]
+    # Scan worker concurrency is controlled by both pod count and args.
+    # Effective parallelism is roughly replicaCount * prefetch-count, bounded by DSXA and connector read speed.
+    args:
+      # Number of RabbitMQ scan messages each scan worker may hold in flight.
+      - "--prefetch-count"
+      - "10"
+      # Additional scan-only batch tuning can be added when scanning large buckets:
+      # - "--scan-only-completion-batch-size"
+      # - "10"
+      # - "--scan-only-completion-flush-interval-seconds"
+      # - "1.0"
+      # - "--scan-batch-window-size"
+      # - "100"
+      # - "--scan-batch-window-wait-seconds"
+      # - "0.5"
+      # - "--scan-batch-concurrency"
+      # - "6"
+      # - "--scan-batch-ack-mode"
+      # - "scanned"
+      # - "--scan-batch-trust-items"
+
   policy:
     enabled: false
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.policy_worker"]
+    # Common tuning: ["--prefetch-count", "10"]
     args: []
+
   remediation:
     enabled: false
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.remediation_worker"]
+    # Common tuning: ["--prefetch-count", "5"]
     args: []
+
   resultSink:
     enabled: false
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.result_sink_worker"]
+    # Common tuning: ["--prefetch-count", "10"]
     args: []
+
   dianna:
     enabled: false
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.dianna_worker"]
+    # Common tuning: ["--prefetch-count", "5"]
     args: []

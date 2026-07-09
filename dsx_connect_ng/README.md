@@ -211,7 +211,7 @@ Scan worker modes:
 - `stub` keeps the current synthetic scan behavior for local pipeline testing
 - `dsxa` uses the real DSXA SDK path and requires:
   - `DSX_CONNECT_NG_SCANNER__BASE_URL`
-  - optional `DSX_CONNECT_NG_SCANNER__AUTH_TOKEN`
+  - optional `DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN`
   - optional `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY`
   - optional `DSX_CONNECT_NG_SCANNER__VERIFY_TLS`
 - the current real scan path now goes through a worker-hosted reader abstraction

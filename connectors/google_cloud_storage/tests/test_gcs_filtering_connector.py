@@ -320,6 +320,91 @@ async def test_object_listing_handler_lists_paged_gcs_objects(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_object_listing_handler_uses_requested_bucket(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-default"
+    gc.config.asset_bucket = "bucket-default"
+    gc.config.asset_prefix_root = ""
+    gc.config.asset_inventory_scope = ""
+    gc.config.filter = ""
+
+    calls: list[tuple] = []
+
+    def fake_list_object_page(bucket, *, base_prefix, filter_str, limit, cursor):
+        calls.append((bucket, base_prefix, filter_str, limit, cursor))
+        return [{"Key": "incoming/one.pdf", "Size": 123}], None
+
+    monkeypatch.setattr(gc.gcs_client, "list_object_page", fake_list_object_page)
+
+    resp = await gc.object_listing_handler(scope="bucket-requested/incoming", limit=10, cursor="page-a")
+
+    assert resp.status == "success"
+    assert calls == [("bucket-requested", "incoming", "", 10, "page-a")]
+    assert [item.identity for item in resp.objects] == ["bucket-requested/incoming/one.pdf"]
+    assert resp.objects[0].location == "incoming/one.pdf"
+    assert resp.objects[0].metadata["bucket"] == "bucket-requested"
+
+
+@pytest.mark.asyncio
+async def test_read_file_handler_uses_metainfo_bucket(monkeypatch):
+    import io
+
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-default"
+    gc.config.asset_bucket = "bucket-default"
+    gc.config.asset_inventory_scope = ""
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_object(bucket, key):
+        calls.append((bucket, key))
+        return io.BytesIO(b"content")
+
+    monkeypatch.setattr(gc.gcs_client, "get_object", fake_get_object)
+
+    resp = await gc.read_file_handler(
+        ScanRequestModel(
+            location="incoming/one.pdf",
+            metainfo="bucket-requested/incoming/one.pdf",
+        )
+    )
+
+    assert calls == [("bucket-requested", "incoming/one.pdf")]
+    assert not isinstance(resp, gc.StatusResponse)
+
+
+@pytest.mark.asyncio
+async def test_read_file_handler_uses_configured_bucket_for_relative_location(monkeypatch):
+    import io
+
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-default"
+    gc.config.asset_bucket = "bucket-default"
+    gc.config.asset_inventory_scope = ""
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_get_object(bucket, key):
+        calls.append((bucket, key))
+        return io.BytesIO(b"content")
+
+    monkeypatch.setattr(gc.gcs_client, "get_object", fake_get_object)
+
+    resp = await gc.read_file_handler(
+        ScanRequestModel(
+            location="incoming/one.pdf",
+            metainfo="incoming/one.pdf",
+        )
+    )
+
+    assert calls == [("bucket-default", "incoming/one.pdf")]
+    assert not isinstance(resp, gc.StatusResponse)
+
+
+@pytest.mark.asyncio
 async def test_item_action_handler_uses_requested_movetag(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 
@@ -358,6 +443,48 @@ async def test_item_action_handler_uses_requested_movetag(monkeypatch):
     assert calls == [
         ("move", "bucket-gcs", "path/to/file.exe", "bucket-gcs", "tenant-quarantine/path/to/file.exe"),
         ("tag", "bucket-gcs", "tenant-quarantine/path/to/file.exe", {"Verdict": "Malicious", "Source": "2g"}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_item_action_handler_uses_metainfo_bucket(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-default"
+    gc.config.asset_bucket = "bucket-default"
+    gc.config.item_action = ItemActionEnum.NOTHING
+
+    calls: list[tuple] = []
+
+    monkeypatch.setattr(gc.gcs_client, "key_exists", lambda bucket, key: True)
+    monkeypatch.setattr(
+        gc.gcs_client,
+        "move_object",
+        lambda src_bucket, src_key, dest_bucket, dest_key: calls.append(("move", src_bucket, src_key, dest_bucket, dest_key)) or True,
+    )
+    monkeypatch.setattr(
+        gc.gcs_client,
+        "tag_object",
+        lambda bucket, key, tags=None: calls.append(("tag", bucket, key, tags)) or True,
+    )
+
+    resp = await gc.item_action_handler(
+        ScanRequestModel(
+            location="path/to/file.exe",
+            metainfo="bucket-requested/path/to/file.exe",
+            requested_action={
+                "type": "movetag",
+                "destination": {"path": "tenant-quarantine"},
+                "tags": {"Verdict": "Malicious"},
+            },
+        )
+    )
+
+    assert resp.status.value == "success"
+    assert resp.item_action == ItemActionEnum.MOVE_TAG
+    assert calls == [
+        ("move", "bucket-requested", "path/to/file.exe", "bucket-requested", "tenant-quarantine/path/to/file.exe"),
+        ("tag", "bucket-requested", "tenant-quarantine/path/to/file.exe", {"Verdict": "Malicious"}),
     ]
 
 

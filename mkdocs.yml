@@ -175,6 +175,7 @@ nav:
           - Overview: dsx-connect-2/deployment/index.md
           - Kubernetes Helm Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
           - Kubernetes Helm: dsx-connect-2/deployment/kubernetes.md
+          - Development: dsx-connect-2/deployment/development.md
           - Connectors: dsx-connect-2/deployment/connectors.md
       - Packaging Releases: dsx-connect-2/packaging-releases.md
 

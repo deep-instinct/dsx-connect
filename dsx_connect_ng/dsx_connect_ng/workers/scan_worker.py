@@ -415,6 +415,7 @@ class ScanOnlyBatchCoordinator:
                 job_item_id=request.job_item_id,
                 object_identity=request.object_identity,
                 verdict=result.verdict,
+                verdict_details=result.verdict_details,
                 scan_guid=result.scan_guid,
                 file_type=result.file_type,
                 active=self._active,
@@ -553,7 +554,7 @@ def _import_dsxa_client():
 def _dsxa_client_key() -> tuple[Any, ...]:
     return (
         settings.scanner.base_url.rstrip("/"),
-        settings.scanner.auth_token,
+        settings.scanner.dsxa_auth_token,
         settings.scanner.timeout_seconds,
         settings.scanner.verify_tls,
         settings.scanner.protected_entity,
@@ -1085,6 +1086,7 @@ async def process_scan_message(
             job_item_id=request.job_item_id,
             object_identity=request.object_identity,
             verdict=result.verdict,
+            verdict_details=result.verdict_details,
             scan_guid=result.scan_guid,
             file_type=result.file_type,
             scanner_metadata=scan_stage_request.metadata,

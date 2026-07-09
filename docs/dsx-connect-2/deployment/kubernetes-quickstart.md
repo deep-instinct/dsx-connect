@@ -30,7 +30,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 ```bash
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.1
+export DSX_CONNECT_VERSION=2.0.2
 export CONNECTOR_VERSION=2.0.2
 ```
 
@@ -89,7 +89,7 @@ This values file keeps PostgreSQL and RabbitMQ non-persistent for quick local te
 
 ```bash
 helm upgrade --install $RELEASE \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect \
   --version $DSX_CONNECT_VERSION \
   --namespace $NAMESPACE \
   -f /tmp/dsx-connect-2-values.yaml
@@ -184,7 +184,7 @@ Install the connector:
 
 ```bash
 helm upgrade --install fs \
-  oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
+  oci://registry-1.docker.io/dsxconnect/filesystem-connector \
   --version $CONNECTOR_VERSION \
   --namespace $NAMESPACE \
   -f /tmp/filesystem-connector-2-values.yaml
@@ -249,7 +249,7 @@ Then upgrade the control plane:
 
 ```bash
 helm upgrade --install $RELEASE \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect \
   --version $VERSION \
   --namespace $NAMESPACE \
   -f /tmp/dsx-connect-2-values.yaml \

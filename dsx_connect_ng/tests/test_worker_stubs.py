@@ -1711,7 +1711,7 @@ def test_map_dsxa_scan_response_maps_sdk_fields() -> None:
 
 def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
-    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", 1)
@@ -1797,7 +1797,7 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
 
 def test_execute_scan_via_dsxa_can_use_per_task_client_scope(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
-    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", 1)
@@ -2146,7 +2146,7 @@ def test_execute_scan_via_dsxa_preserves_non_owned_reader_artifact(monkeypatch, 
 
 def test_execute_scan_via_dsxa_maps_auth_error_terminal(monkeypatch) -> None:
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
-    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", 1)
@@ -2189,7 +2189,7 @@ def test_execute_scan_via_dsxa_maps_auth_error_terminal(monkeypatch) -> None:
 
 def test_execute_scan_via_dsxa_maps_transport_error_retryable(monkeypatch) -> None:
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
-    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
     monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", 1)

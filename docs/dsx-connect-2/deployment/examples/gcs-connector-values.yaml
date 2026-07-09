@@ -1,0 +1,32 @@
+env:
+  LOG_LEVEL: "debug"
+  DSXCONNECTOR_APP_ENV: "dev"
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_INSTANCE_ID: "gcs-local-1"
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
+  DSXCONNECTOR_ASSET: "lg-test-01"
+  DSXCONNECTOR_FILTER: ""
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+  DSXCONNECTOR_MONITOR: "false"
+  GCS_PUBSUB_PROJECT_ID: ""
+  GCS_PUBSUB_SUBSCRIPTION: ""
+
+auth_dsxconnect:
+  enabled: false
+  enrollmentSecretName: "dsx-dsx-connect-api-auth-enrollment"
+  enrollmentKey: ENROLLMENT_TOKEN
+
+gcp:
+  credentialsSecretName: "gcp-sa"
+  mountPath: "/app/creds"
+  filename: "service-account.json"
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"

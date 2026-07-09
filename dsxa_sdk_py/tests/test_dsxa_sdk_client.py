@@ -84,6 +84,40 @@ def test_scan_binary_without_token(monkeypatch, transport):
     client.close()
 
 
+def test_scan_response_preserves_nested_not_scanned_reason(monkeypatch):
+    class NestedDetailsTransport(httpx.BaseTransport):
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                json={
+                    "scan_guid": "guid-123",
+                    "verdict": "Not Scanned",
+                    "details": {
+                        "verdictDetails": {
+                            "reason": "Other: 23",
+                            "event_description": "Other: 23",
+                        },
+                        "fileInfo": {
+                            "file_type": "Unknown",
+                            "file_size_in_bytes": 69,
+                        },
+                    },
+                },
+            )
+
+    httpx_client = httpx.Client(transport=NestedDetailsTransport())
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
+    client = DSXAClient(base_url="https://scanner.example.com", auth_token=None)
+
+    resp = client.scan_binary(b"data")
+
+    assert resp.verdict.value == "Not Scanned"
+    assert resp.verdict_details.reason == "Other: 23"
+    assert resp.verdict_details.event_description == "Other: 23"
+    assert resp.file_info.file_size_in_bytes == 69
+    client.close()
+
+
 def test_default_protected_entity(monkeypatch, transport):
     httpx_client = httpx.Client(transport=transport)
     monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)

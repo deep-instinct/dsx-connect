@@ -1,7 +1,7 @@
 # DSX-Connect Helm Deployment
 
 This chart deploys DSX-Connect v2. The Python package is still named
-`dsx_connect_ng` internally, but chart names, images, and Kubernetes resources
+`dsx_connect_ng` internally, but images and Kubernetes resources
 use the product-facing `dsx-connect` name.
 
 ## Local k3s API-Only Smoke Deploy

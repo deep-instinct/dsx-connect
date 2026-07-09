@@ -73,8 +73,8 @@ def test_ui_meta_returns_display_version() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "product": "DSX-Connect",
-        "version": "2.0.1",
-        "display_name": "DSX-Connect v2.0.1",
+        "version": "2.0.2",
+        "display_name": "DSX-Connect v2.0.2",
     }
 
 
@@ -828,13 +828,14 @@ def test_ui_scan_results_returns_operator_summary() -> None:
                 items=[
                     {"object_identity": "bucket-a/clean.pdf"},
                     {"object_identity": "bucket-a/malware.exe"},
+                    {"object_identity": "bucket-a/not-scanned.zip"},
                     {"object_identity": "bucket-a/pending.docx"},
                 ],
             )
         )
     )
     items = job_service.list_job_items(job_id=batch.job.job_id, limit=10)
-    clean, malicious, _pending = items
+    clean, malicious, not_scanned, _pending = items
     job_service.complete_scan_only(
         clean.job_item_id,
         StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-clean"}),
@@ -842,6 +843,10 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     job_service.complete_scan_only(
         malicious.job_item_id,
         StageUpdateRequest(state="completed", result={"verdict": "Malicious", "scanGuid": "scan-malicious"}),
+    )
+    job_service.complete_scan_only(
+        not_scanned.job_item_id,
+        StageUpdateRequest(state="completed", result={"verdict": "Not Scanned", "scanGuid": "scan-not-scanned"}),
     )
     job_service.update_remediation_stage(
         malicious.job_item_id,
@@ -860,13 +865,14 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     assert result["target"]["scope_id"] == "scope-a"
     assert result["target"]["source"] == "ui_scope_scan"
     assert result["target"]["label"] == "bucket-a"
-    assert result["progress"]["total_items"] == 3
-    assert result["progress"]["terminal_items"] == 2
-    assert result["progress"]["completed_items"] == 2
+    assert result["progress"]["total_items"] == 4
+    assert result["progress"]["terminal_items"] == 3
+    assert result["progress"]["completed_items"] == 3
     assert result["findings"]["clean"] == 1
     assert result["findings"]["malicious"] == 1
+    assert result["findings"]["not_scanned"] == 1
     assert result["findings"]["unknown"] == 1
-    assert result["findings"]["sampled_items"] == 3
+    assert result["findings"]["sampled_items"] == 4
     assert result["remediation"]["completed"] == 1
     assert result["cancel"]["mode"] == "cooperative"
     assert result["cancel"]["immediate_file_level_cancel"] is False
@@ -1108,13 +1114,14 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
         json={
             "scope_id": "scope-bucket-a",
             "integration_id": "gcs-a",
-            "scope_type": "path",
+            "scope_type": "bucket",
             "resource_selector": "bucket-a",
             "display_name": "Bucket A",
             "mode": "full_scan",
         },
     )
     assert scope_response.status_code == 200
+    assert scope_response.json()["scope_type"] == "path"
 
     toggle_scope = client.post("/api/v1/ui/scopes/scope-bucket-a/enabled", json={"enabled": False})
     assert toggle_scope.status_code == 200

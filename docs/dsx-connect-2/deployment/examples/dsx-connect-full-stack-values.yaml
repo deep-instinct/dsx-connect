@@ -1,0 +1,128 @@
+# Full-stack DSX-Connect 2 values file.
+# This profile runs the API, PostgreSQL, RabbitMQ, and all workers in one Helm release.
+
+# API deployment tuning.
+api:
+  # Number of API pods.
+  replicaCount: 1
+  # Number of Uvicorn worker processes inside each API pod.
+  workers: 1
+
+env:
+  # Free-form environment label shown in logs and diagnostics.
+  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+
+  # Use the in-cluster PostgreSQL and RabbitMQ services enabled below.
+  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_NG__JOB_BUS_BACKEND: "rabbitmq"
+
+  # Auto-apply the database schema from the API pod on startup.
+  # For stricter production workflows, handle migrations separately and set this to "false".
+  DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
+  DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
+
+  # DSXA scanner mode.
+  # Use "dsxa" when the cluster can reach a real DSXA scanner.
+  # Use "stub" only for control-plane smoke tests where no real scanning is required.
+  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
+
+  # Worker reader mode. "native" lets workers read content through registered connectors.
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+
+postgresql:
+  # Embedded PostgreSQL is convenient for lab and local validation.
+  # For production, use an externally managed PostgreSQL service and set enabled=false.
+  enabled: true
+  persistence:
+    # false uses emptyDir and loses data when the pod is deleted.
+    # Set true and configure storage for durable lab or production use.
+    enabled: false
+
+rabbitmq:
+  # Embedded RabbitMQ is convenient for lab and local validation.
+  # For production, use an externally managed RabbitMQ service and set enabled=false.
+  enabled: true
+  persistence:
+    # false uses emptyDir and loses queue state when the pod is deleted.
+    # Set true and configure storage for durable lab or production use.
+    enabled: false
+
+workers:
+  relay:
+    enabled: true
+    # Number of relay pods.
+    replicaCount: 1
+    # Relay pulls pending outbox records and publishes RabbitMQ work messages.
+    args:
+      - "--batch-size"
+      - "100"
+      - "--poll-interval-seconds"
+      - "0.25"
+      # Backpressure guard: stop publishing new scan items when active scan work is above this count.
+      # Remove or raise this when increasing scan-worker capacity.
+      - "--max-active-scan-items"
+      - "1000"
+
+  scan:
+    enabled: true
+    # Number of scan worker pods.
+    replicaCount: 1
+    # Scan worker concurrency is controlled by both pod count and these args.
+    # Effective parallelism is roughly replicaCount * prefetch-count, bounded by DSXA and connector read speed.
+    args:
+      # Number of RabbitMQ scan messages each scan worker may hold in flight.
+      - "--prefetch-count"
+      - "10"
+      # Batch coarse scan-only completions before persisting terminal item state.
+      - "--scan-only-completion-batch-size"
+      - "10"
+      - "--scan-only-completion-flush-interval-seconds"
+      - "1.0"
+      # Collect up to this many scan-only messages into an async read/scan batch.
+      - "--scan-batch-window-size"
+      - "100"
+      - "--scan-batch-window-wait-seconds"
+      - "0.5"
+      # Maximum concurrent read/scan coroutines inside each scan batch.
+      # Set to 0 to use prefetch-count.
+      - "--scan-batch-concurrency"
+      - "6"
+      # Ack messages after scan completion is buffered.
+      # Options: completed, scanned, accepted.
+      - "--scan-batch-ack-mode"
+      - "scanned"
+      - "--scan-batch-trust-items"
+
+  policy:
+    enabled: true
+    replicaCount: 1
+    args:
+      # Number of policy messages each policy worker may process concurrently.
+      - "--prefetch-count"
+      - "10"
+
+  remediation:
+    enabled: true
+    replicaCount: 1
+    args:
+      # Number of remediation messages each remediation worker may process concurrently.
+      - "--prefetch-count"
+      - "5"
+
+  resultSink:
+    enabled: true
+    replicaCount: 1
+    args:
+      # Number of result-sink messages each result-sink worker may process concurrently.
+      - "--prefetch-count"
+      - "10"
+
+  dianna:
+    enabled: true
+    replicaCount: 1
+    args:
+      # Number of DIANNA messages each DIANNA worker may process concurrently.
+      - "--prefetch-count"
+      - "5"

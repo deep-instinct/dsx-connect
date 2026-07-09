@@ -109,6 +109,7 @@ class UIScanResultFindingsSummary(BaseModel):
     clean: int = 0
     malicious: int = 0
     suspicious: int = 0
+    not_scanned: int = 0
     unknown: int = 0
     failed: int = 0
     cancelled: int = 0
@@ -173,6 +174,34 @@ class UIScopeScanRequest(BaseModel):
     path: str | None = None
     limit: int = Field(default=10000, ge=1, le=100000)
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class UIProtectedScopeCreateRequest(BaseModel):
+    scope_id: str | None = None
+    integration_id: str = Field(min_length=1)
+    scope_type: str = "path"
+    resource_selector: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    mode: str = "full_scan"
+    enabled: bool = True
+    filter_expression: str | None = None
+    post_scan_policy: dict[str, Any] = Field(default_factory=dict)
+
+    def to_protected_scope_create(self) -> ProtectedScopeCreate:
+        normalized_scope_type = self.scope_type.strip().lower().replace("-", "_")
+        if normalized_scope_type != "identity":
+            normalized_scope_type = "path"
+        return ProtectedScopeCreate(
+            scope_id=self.scope_id,
+            integration_id=self.integration_id,
+            scope_type=normalized_scope_type,
+            resource_selector=self.resource_selector,
+            display_name=self.display_name,
+            mode="monitor" if self.mode == "monitor" else "full_scan",
+            enabled=self.enabled,
+            filter_expression=self.filter_expression,
+            post_scan_policy=self.post_scan_policy,
+        )
 
 
 class UIAssetSummary(BaseModel):
@@ -307,6 +336,8 @@ def _verdict_bucket(verdict: str | None) -> str:
         return "malicious"
     if normalized in {"suspicious"}:
         return "suspicious"
+    if normalized in {"not scanned", "not_scanned", "notscanned"}:
+        return "not_scanned"
     return "unknown"
 
 
@@ -329,6 +360,8 @@ def _summarize_findings(items: list[JobItemRecord], *, sample_limit: int) -> UIS
             findings.malicious += 1
         elif bucket == "suspicious":
             findings.suspicious += 1
+        elif bucket == "not_scanned":
+            findings.not_scanned += 1
         else:
             findings.unknown += 1
     return findings
@@ -791,8 +824,8 @@ def _probe_dsxa_status() -> UIDsxaStatusResponse:
             details={"effective_mode": mode, "reason": "scanner_base_url_not_configured"},
         )
     headers = {"Accept": "application/json"}
-    if settings.scanner.auth_token:
-        headers["Authorization"] = f"Bearer {settings.scanner.auth_token}"
+    if settings.scanner.dsxa_auth_token:
+        headers["Authorization"] = f"Bearer {settings.scanner.dsxa_auth_token}"
     timeout = min(max(float(settings.scanner.timeout_seconds or 2.0), 0.1), 2.0)
     result = _probe_dsxa_endpoint(
         endpoint=endpoint,
@@ -1611,10 +1644,10 @@ async def list_protected_assets(
 
 @router.post("/assets/protected", response_model=ProtectedScopeRecord)
 async def create_protected_asset_scope(
-    payload: ProtectedScopeCreate,
+    payload: UIProtectedScopeCreateRequest,
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> ProtectedScopeRecord:
-    return control_plane.create_scope(payload)
+    return control_plane.create_scope(payload.to_protected_scope_create())
 
 
 @router.patch("/scopes/{scope_id}", response_model=ProtectedScopeRecord)

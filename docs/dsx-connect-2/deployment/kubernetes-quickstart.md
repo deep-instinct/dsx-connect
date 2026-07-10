@@ -183,7 +183,7 @@ workers:
   resultSink:
     enabled: true
   dianna:
-    enabled: true
+    enabled: false
 EOF
 ```
 

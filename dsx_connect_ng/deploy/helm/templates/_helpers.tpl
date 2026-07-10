@@ -1,5 +1,5 @@
 {{- define "dsx-connect.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- default (.Chart.Name | trimSuffix "-chart") .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
 {{- define "dsx-connect.fullname" -}}

@@ -17,15 +17,20 @@ For a DSX-Connect 2 release such as `2.0.0`:
 | Artifact | Example |
 | --- | --- |
 | Image | `dsxconnect/dsx-connect:2.0.0` |
-| Chart | `oci://registry-1.docker.io/dsxconnect/dsx-connect --version 2.0.0` |
+| Chart | `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --version 2.0.0` |
 | Chart `appVersion` | `2.0.0` |
+
+!!! warning "Keep image and chart OCI refs separate"
+    Do not publish the Helm chart and container image to the same OCI repository and tag.
+    For example, `dsxconnect/dsx-connect:2.0.0` must remain the runnable container image, while `dsxconnect/dsx-connect-chart:2.0.0` is the Helm chart artifact.
+    If both artifacts use `dsxconnect/dsx-connect:2.0.0`, Kubernetes can pull the chart artifact as the pod image and fail before `python` starts.
 
 For a connector release such as GCS connector `0.5.56`:
 
 | Artifact | Example |
 | --- | --- |
 | Image | `dsxconnect/google-cloud-storage-connector:0.5.56` |
-| Chart | `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector --version 0.5.56` |
+| Chart | `oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart --version 0.5.56` |
 
 GitHub Releases should remain the human-facing release surface:
 
@@ -65,7 +70,7 @@ scripts/dsx-connect-ng/package-chart.sh \
 Consumers can install from the OCI chart reference:
 
 ```bash
-helm install dsx-connect oci://registry-1.docker.io/dsxconnect/dsx-connect \
+helm install dsx-connect oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version 2.0.0 \
   -n dsx-connect \
   --create-namespace
@@ -145,7 +150,7 @@ The workflow publishes:
 
 ```text
 dsxconnect/dsx-connect:2.0.0
-oci://registry-1.docker.io/dsxconnect/dsx-connect --version 2.0.0
+oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --version 2.0.0
 ```
 
 If `push_latest` is enabled, it also publishes:
@@ -183,37 +188,5 @@ Recommended rules:
 
 ## Local Testing Before Release
 
-Before publishing release artifacts, validate the local path:
-
-```bash
-scripts/dsx-connect-ng/build-image.sh \
-  --tag dev \
-  --registry local/dsx-connect \
-  --load
-
-scripts/dsx-connect-ng/deploy-k3s.sh \
-  --tag dev \
-  --registry local/dsx-connect \
-  --release dsx-connect \
-  --namespace dsx-connect \
-  -f dsx_connect_ng/deploy/helm/values-local-stack.yaml
-```
-
-Then build and deploy connector images locally:
-
-```bash
-scripts/connectors/build-image.sh google_cloud_storage \
-  --tag dev \
-  --registry local/dsx-connect \
-  --load
-
-scripts/connectors/deploy-k3s.sh google_cloud_storage \
-  --tag dev \
-  --registry local/dsx-connect \
-  --release gcs \
-  --namespace dsx-connect \
-  -f connectors/google_cloud_storage/deploy/helm/values-local-ng.yaml \
-  --pull-policy IfNotPresent
-```
-
+Before publishing release artifacts, validate the local path with the workflows in [Development deployment](deployment/development.md).
 Use the Operator Console to confirm connector registration, asset inventory, and scan dispatch before cutting a release.

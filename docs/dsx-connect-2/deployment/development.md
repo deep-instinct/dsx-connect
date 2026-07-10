@@ -28,6 +28,40 @@ docker buildx build \
 
 Use `--push` instead of `--load` when deploying to a remote cluster that pulls from a registry.
 
+## Build Local Connector Images
+
+Build and load connector images for local k3s or Colima:
+
+```bash
+scripts/connectors/build-image.sh google_cloud_storage \
+  --tag dev \
+  --registry local/dsx-connect \
+  --load
+
+scripts/connectors/build-image.sh filesystem \
+  --tag dev \
+  --registry local/dsx-connect \
+  --load
+```
+
+Equivalent Docker commands:
+
+```bash
+docker buildx build \
+  --load \
+  --tag local/dsx-connect/google-cloud-storage-connector:dev \
+  -f connectors/google_cloud_storage/Dockerfile \
+  .
+
+docker buildx build \
+  --load \
+  --tag local/dsx-connect/filesystem-connector:dev \
+  -f connectors/filesystem/Dockerfile \
+  .
+```
+
+For a remote cluster, push images to a registry the cluster can pull from and use that registry in the connector values.
+
 ## Deploy API-Only Mode
 
 API-only mode is useful for a quick Operator Console and API smoke test.
@@ -87,6 +121,87 @@ image:
   pullPolicy: IfNotPresent
   tag: dev
 ```
+
+## Deploy Local Connector Images
+
+After the DSX-Connect 2 full-stack local mode is running, deploy locally built connector images with the helper scripts.
+
+### Google Cloud Storage
+
+Create the GCP service-account Secret:
+
+```bash
+kubectl create secret generic gcp-sa \
+  -n dsx-connect \
+  --from-file=service-account.json=/path/to/gcp-sa.json
+```
+
+Deploy the local image:
+
+```bash
+scripts/connectors/deploy-k3s.sh google_cloud_storage \
+  --tag dev \
+  --registry local/dsx-connect \
+  --release gcs \
+  --namespace dsx-connect \
+  -f connectors/google_cloud_storage/deploy/helm/values-local-ng.yaml \
+  --pull-policy IfNotPresent
+```
+
+Equivalent Helm command using the local chart directory:
+
+```bash
+export NAMESPACE=dsx-connect
+export GCS_RELEASE=gcs
+
+cp docs/dsx-connect-2/deployment/examples/gcs-connector-values.yaml \
+  /tmp/gcs-connector-values.yaml
+
+helm upgrade --install "$GCS_RELEASE" \
+  ./connectors/google_cloud_storage/deploy/helm \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f /tmp/gcs-connector-values.yaml \
+  --set image.repository=local/dsx-connect/google-cloud-storage-connector \
+  --set image.tag=dev \
+  --set image.pullPolicy=IfNotPresent
+```
+
+### Filesystem
+
+Deploy the local image:
+
+```bash
+scripts/connectors/deploy-k3s.sh filesystem \
+  --tag dev \
+  --registry local/dsx-connect \
+  --release filesystem \
+  --namespace dsx-connect \
+  -f connectors/filesystem/deploy/helm/values-local-ng.yaml \
+  --pull-policy IfNotPresent
+```
+
+Equivalent Helm command using the local chart directory:
+
+```bash
+export NAMESPACE=dsx-connect
+export FS_RELEASE=filesystem
+
+cp docs/dsx-connect-2/deployment/examples/filesystem-connector-values.yaml \
+  /tmp/filesystem-connector-values.yaml
+
+helm upgrade --install "$FS_RELEASE" \
+  ./connectors/filesystem/deploy/helm \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f /tmp/filesystem-connector-values.yaml \
+  --set image.repository=local/dsx-connect/filesystem-connector \
+  --set image.tag=dev \
+  --set image.pullPolicy=IfNotPresent
+```
+
+The filesystem `hostPath` must exist on the Kubernetes node where the pod runs.
+For Colima, create it inside the Colima VM or start Colima with the host path mounted.
 
 ## Start a Single Local DSXA
 
@@ -180,9 +295,9 @@ scripts/dsx-connect-ng/update-lab-stack.sh \
 The helper installs these OCI charts by default:
 
 ```text
-oci://registry-1.docker.io/dsxconnect/dsx-connect
-oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector
-oci://registry-1.docker.io/dsxconnect/filesystem-connector
+oci://registry-1.docker.io/dsxconnect/dsx-connect-chart
+oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart
+oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart
 ```
 
 ## Verify Local Deployment

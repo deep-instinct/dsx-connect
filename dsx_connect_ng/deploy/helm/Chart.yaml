@@ -1,5 +1,5 @@
 apiVersion: v2
-name: dsx-connect
+name: dsx-connect-chart
 description: DSX-Connect v2 control plane and workers
 type: application
 version: 2.0.2

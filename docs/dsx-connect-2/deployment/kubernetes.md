@@ -7,7 +7,7 @@ This Helm chart deploys the DSX-Connect 2 control plane:
 * RabbitMQ-backed job dispatch
 * relay, scan, policy, remediation, result sink, and DIANNA workers
 
-Connector deployment is covered separately in [Deploy connectors](connectors.md).
+Connector deployment is covered separately in [Deploy connectors](connectors/index.md).
 Development builds and helper-script workflows are covered in [Development deployment](development.md).
 
 This guide focuses on standard Kubernetes deployment with `kubectl` and Helm.
@@ -21,7 +21,7 @@ This guide focuses on standard Kubernetes deployment with `kubectl` and Helm.
 * Access to the DSX-Connect 2 chart:
 
 ```text
-oci://registry-1.docker.io/dsxconnect/dsx-connect
+oci://registry-1.docker.io/dsxconnect/dsx-connect-chart
 ```
 
 For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../reference/installations/kubernetes.md).
@@ -51,7 +51,7 @@ When examples show a release name or namespace, they use these values.
 DSX-Connect 2 release builds publish both:
 
 * a container image, such as `dsxconnect/dsx-connect:2.0.2`
-* an OCI Helm chart, such as `dsxconnect/dsx-connect:2.0.2`
+* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.2`
 
 The chart `appVersion` is intended to match the DSX-Connect image version for release builds.
 If you deploy a released chart without overriding `image.tag`, the chart uses the matching released image tag.
@@ -60,7 +60,7 @@ Pin the chart version for repeatable deployments:
 
 ```bash
 helm upgrade --install "$RELEASE" \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version "$DSX_CONNECT_VERSION" \
   --namespace "$NAMESPACE" \
   -f dsx-connect-values.yaml
@@ -127,7 +127,7 @@ envSecretRefs:
   - dsx-connect-runtime-env
 ```
 
-Connector-specific secrets, such as GCS service account JSON credentials, are covered in [Deploy connectors](connectors.md).
+Connector-specific secrets, such as GCS service account JSON credentials, are covered in [Deploy connectors](connectors/index.md).
 
 ## Deploy DSX-Connect 2
 
@@ -135,7 +135,7 @@ For the full list of chart values, inspect the released chart defaults:
 
 ```bash
 helm show values \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version "$DSX_CONNECT_VERSION"
 ```
 
@@ -146,7 +146,7 @@ It deploys the full stack with in-cluster PostgreSQL and RabbitMQ and uses the s
 
 ```bash
 helm upgrade --install "$RELEASE" \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version "$DSX_CONNECT_VERSION" \
   --namespace "$NAMESPACE" \
   --create-namespace \
@@ -185,11 +185,11 @@ This is the most common and recommended method for managing deployments.
 
 First, start by pulling the latest dsx-connect helm chart (--untar will unpack the chart):
 ```
-helm pull oci://registry-1.docker.io/dsxconnect/dsx-connect --untar
+helm pull oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --untar
 ```
 or, if using a specific chart version:
 ```
-helm pull oci://registry-1.docker.io/dsxconnect/dsx-connect --version <x.x.x> --untar
+helm pull oci://registry-1.docker.io/dsxconnect/dsx-connect-chart --version <x.x.x> --untar
 ```
 
 The `--untar` flag will unzip the archive downloaded, as a convenience.  After `helm pull --untar`, the chart folder looks like:
@@ -209,7 +209,8 @@ The DSX-Connect 2 Helm chart does not currently deploy DSXA in-cluster.
 It can run with the stub scanner for control-plane validation, or it can point at an external DSXA scanner that is reachable from inside Kubernetes.
 For a local one-command stack that starts a single DSXA container alongside DSX-Connect 2 services, use the local runtime described in [Development deployment](development.md#start-a-single-local-dsxa).
 
-Configure your `values.yaml`, setting variables as needed (see: [Configuration Reference](configuration-reference.md)).
+Configure your `values.yaml`, setting variables as needed.
+Use `helm show values` for the complete chart value reference.
 Install the chart, referencing your values file with the `-f` flag.
 The `.` assumes you are currently in the `dsx-connect/` chart directory.
 
@@ -362,7 +363,7 @@ Install the chart with your values file:
 
 ```bash
 helm upgrade --install "$RELEASE" \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version "$DSX_CONNECT_VERSION" \
   --namespace "$NAMESPACE" \
   --create-namespace \
@@ -377,7 +378,7 @@ For production, store environment-specific values files in a GitOps repository a
 
 The GitOps repository should pin:
 
-* chart repository: `oci://registry-1.docker.io/dsxconnect/dsx-connect`
+* chart repository: `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart`
 * chart version, such as `2.0.2`
 * environment-specific values
 * any required Secrets through your chosen secret-management workflow
@@ -495,7 +496,7 @@ Update the pinned chart version and run Helm again:
 export DSX_CONNECT_VERSION=2.0.2
 
 helm upgrade --install "$RELEASE" \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version "$DSX_CONNECT_VERSION" \
   --namespace "$NAMESPACE" \
   -f dsx-connect-values.yaml
@@ -513,6 +514,6 @@ If you used the local example values with non-persistent PostgreSQL and RabbitMQ
 
 ## Next Steps
 
-* Deploy a repository connector: [Deploy connectors](connectors.md)
+* Deploy a repository connector: [Deploy connectors](connectors/index.md)
 * Review packaging and release flow: [Packaging releases](../packaging-releases.md)
 * For local image builds and helper scripts: [Development deployment](development.md)

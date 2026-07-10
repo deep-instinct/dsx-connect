@@ -5,9 +5,10 @@ This quickstart deploys:
 * DSX-Connect 2 control plane
 * PostgreSQL and RabbitMQ for local state and job dispatch
 * DSX-Connect 2 workers
+* Optional single DSXA scanner instance
 * The Filesystem connector
 
-The example uses released OCI Helm charts and a stub scanner. It is intended for local k3s, Colima, or lab Kubernetes validation.
+The example uses released OCI Helm charts and a DSXA scanner. It is intended for local k3s, Colima, or lab Kubernetes validation.
 
 By the end, you will:
 
@@ -22,10 +23,15 @@ By the end, you will:
 * Helm 3+
 * kubectl configured for your cluster
 * A node-local path that can be mounted with `hostPath`
+* A reachable DSXA scanner, or DSXA registration values for the optional scanner step
 
 For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../reference/installations/kubernetes.md).
 
 ## 1) Set Variables
+
+!!! note
+    Helm chart `--version` expects a chart version such as `2.0.2`.
+    To install the latest chart, omit the `--version` argument instead of setting it to `latest`.
 
 ```bash
 export NAMESPACE=dsx-connect
@@ -37,15 +43,112 @@ export CONNECTOR_VERSION=2.0.2
 Create the namespace:
 
 ```bash
-kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace $NAMESPACE
 ```
 
-## 2) Create DSX-Connect 2 Values
+## 2) Deploy a DSXA Scanner (Optional)
+
+If you have a DSXA scanner deployed already and want to use it, skip this step and set:
+
+```bash
+export DSXA_SCANNER_BASE_URL="http://<dsxa-host>:15000"
+```
+
+Use an address that is reachable from inside the Kubernetes cluster, not only from your laptop.
+
+Otherwise, take this step to deploy a single DSXA scanner instance.
+
+Set DSXA registration values:
+
+```bash
+export DSXA_IMAGE="dsxconnect/dpa-rocky9:4.2.0.2176"
+export DSXA_APPLIANCE_URL="<your-appliance>.deepinstinctweb.com"
+export DSXA_TOKEN="<scanner-registration-token>"
+export DSXA_SCANNER_ID="<scanner-id>"
+export DSXA_SCANNER_BASE_URL="http://dsxa-scanner:15000"
+```
+
+Create the DSXA Secret:
+
+```bash
+kubectl create secret generic dsxa-scanner-env \
+  --namespace "$NAMESPACE" \
+  --from-literal=APPLIANCE_URL="$DSXA_APPLIANCE_URL" \
+  --from-literal=TOKEN="$DSXA_TOKEN" \
+  --from-literal=SCANNER_ID="$DSXA_SCANNER_ID" \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Deploy one DSXA scanner pod and an internal service:
+
+```bash
+cat > /tmp/dsxa-scanner.yaml <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsxa-scanner
+  namespace: ${NAMESPACE}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dsxa-scanner
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dsxa-scanner
+    spec:
+      containers:
+        - name: dsxa-scanner
+          image: ${DSXA_IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: dsxa-scanner-env
+          env:
+            - name: FLAVOR
+              value: "rest,config"
+            - name: NO_SSL
+              value: "true"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dsxa-scanner
+  namespace: ${NAMESPACE}
+spec:
+  selector:
+    app.kubernetes.io/name: dsxa-scanner
+  ports:
+    - name: http
+      port: 15000
+      targetPort: 5000
+EOF
+
+kubectl apply -f /tmp/dsxa-scanner.yaml
+```
+
+Wait for the scanner to start:
+
+```bash
+kubectl rollout status deployment/dsxa-scanner -n "$NAMESPACE" --timeout=5m
+kubectl logs -n "$NAMESPACE" deploy/dsxa-scanner --tail=80
+```
+
+Look for registration and classifier initialization messages before running scans.
+
+## 3) Create DSX-Connect 2 Values
 
 Create a local values file for the full stack:
 
 ```bash
-cat > /tmp/dsx-connect-2-values.yaml <<'EOF'
+cat > /tmp/dsx-connect-2-values.yaml <<EOF
+image:
+  pullPolicy: "Always"
+
 env:
   DSX_CONNECT_NG__ENVIRONMENT: "dev"
   DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
@@ -53,7 +156,8 @@ env:
   DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
   DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
   DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
-  DSX_CONNECT_NG_SCANNER__MODE: "stub"
+  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_NG_SCANNER__BASE_URL: "${DSXA_SCANNER_BASE_URL}"
   DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
 
 postgresql:
@@ -85,11 +189,11 @@ EOF
 
 This values file keeps PostgreSQL and RabbitMQ non-persistent for quick local testing.
 
-## 3) Install DSX-Connect 2
+## 4) Install DSX-Connect 2
 
 ```bash
 helm upgrade --install $RELEASE \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
   --version $DSX_CONNECT_VERSION \
   --namespace $NAMESPACE \
   -f /tmp/dsx-connect-2-values.yaml
@@ -113,7 +217,7 @@ Expected pods include:
 * `dsx-connect-result-sink`
 * `dsx-connect-dianna`
 
-## 4) Create Test Files
+## 5) Create Test Files
 
 Choose one option based on your local cluster.
 
@@ -146,7 +250,7 @@ sudo mkdir -p "$HOST_SCAN_PATH"
 echo "hello dsx connect 2" | sudo tee "$HOST_SCAN_PATH/test.txt" >/dev/null
 ```
 
-## 5) Install the Filesystem Connector
+## 6) Install the Filesystem Connector
 
 Create a values file for DSX-Connect 2 registration:
 
@@ -184,7 +288,7 @@ Install the connector:
 
 ```bash
 helm upgrade --install fs \
-  oci://registry-1.docker.io/dsxconnect/filesystem-connector \
+  oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
   --version $CONNECTOR_VERSION \
   --namespace $NAMESPACE \
   -f /tmp/filesystem-connector-2-values.yaml
@@ -202,7 +306,7 @@ Look for connector registration messages, then check pod readiness:
 kubectl get pods -n $NAMESPACE
 ```
 
-## 6) Access the Operator Console
+## 7) Access the Operator Console
 
 Port-forward the API service:
 
@@ -222,7 +326,7 @@ You should see:
 * Filesystem connector under **Assets > Connectors**
 * The filesystem asset under **Assets > Protected**
 
-## 7) Enable Protection and Run a Scan
+## 8) Enable Protection and Run a Scan
 
 In the Operator Console:
 
@@ -233,36 +337,16 @@ In the Operator Console:
 5. Click **Scan**.
 6. Open **Scan Results** and monitor progress.
 
-Because this quickstart uses the stub scanner, the scan path validates the control-plane, connector, queue, worker, and result flow without requiring DSXA credentials.
-
-## Use a Real DSXA Scanner
-
-To use a reachable DSXA scanner instead of the stub scanner, set these values on the DSX-Connect 2 chart:
-
-```yaml
-env:
-  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
-  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
-```
-
-Then upgrade the control plane:
-
-```bash
-helm upgrade --install $RELEASE \
-  oci://registry-1.docker.io/dsxconnect/dsx-connect \
-  --version $VERSION \
-  --namespace $NAMESPACE \
-  -f /tmp/dsx-connect-2-values.yaml \
-  --set env.DSX_CONNECT_NG_SCANNER__MODE=dsxa \
-  --set env.DSX_CONNECT_NG_SCANNER__BASE_URL=http://<dsxa-host>:15000
-```
-
-Use an address that is reachable from inside the Kubernetes cluster, not only from your laptop.
+This quickstart uses DSXA scanner mode, so scan results come from the configured DSXA scanner.
+For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_NG_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.
 
 ## Cleanup
 
 ```bash
 helm uninstall fs -n $NAMESPACE
+kubectl delete deployment dsxa-scanner -n $NAMESPACE 2>/dev/null || true
+kubectl delete service dsxa-scanner -n $NAMESPACE 2>/dev/null || true
+kubectl delete secret dsxa-scanner-env -n $NAMESPACE 2>/dev/null || true
 helm uninstall $RELEASE -n $NAMESPACE
 kubectl delete namespace $NAMESPACE
 ```
@@ -270,5 +354,5 @@ kubectl delete namespace $NAMESPACE
 ## Next Steps
 
 * [Deploy DSX-Connect 2 with Helm](kubernetes.md)
-* [Deploy Connectors for DSX-Connect 2](connectors.md)
+* [Deploy Connectors for DSX-Connect 2](connectors/index.md)
 * [Packaging Releases](../packaging-releases.md)

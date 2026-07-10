@@ -22,6 +22,7 @@ Defaults:
   GCS connector version:     current connectors/google_cloud_storage/version.py
   Filesystem version:        current connectors/filesystem/version.py
   OCI chart repo:            oci://registry-1.docker.io/dsxconnect
+  OCI chart names:           dsx-connect-chart, google-cloud-storage-connector-chart, filesystem-connector-chart
 
 Examples:
   scripts/dsx-connect-ng/update-lab-stack.sh \
@@ -286,7 +287,7 @@ if [[ "$skip_core" != "true" ]]; then
   core_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$core_release" \
-    "$chart_repo/dsx-connect" \
+    "$chart_repo/dsx-connect-chart" \
     "$connect_version" \
     "$core_values" \
     "${core_set_args[@]}"
@@ -300,7 +301,7 @@ if [[ "$skip_gcs" != "true" ]]; then
   gcs_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$gcs_release" \
-    "$chart_repo/google-cloud-storage-connector" \
+    "$chart_repo/google-cloud-storage-connector-chart" \
     "$gcs_version" \
     "$gcs_values" \
     "${gcs_set_args[@]}"
@@ -314,7 +315,7 @@ if [[ "$skip_filesystem" != "true" ]]; then
   filesystem_set_args+=(--set "image.pullPolicy=$pull_policy")
   helm_upgrade \
     "$filesystem_release" \
-    "$chart_repo/filesystem-connector" \
+    "$chart_repo/filesystem-connector-chart" \
     "$filesystem_version" \
     "$filesystem_values" \
     "${filesystem_set_args[@]}"

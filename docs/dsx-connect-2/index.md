@@ -206,7 +206,7 @@ Documentation and user-facing UI should refer to this platform as **DSX-Connect 
 
 * [Deployment overview](deployment/index.md)
 * [Deploy DSX-Connect 2 with Helm](deployment/kubernetes.md)
-* [Deploy connectors](deployment/connectors.md)
+* [Deploy connectors](deployment/connectors/index.md)
 * [Packaging releases](packaging-releases.md)
 
 ## Runtime Model

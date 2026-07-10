@@ -16,8 +16,8 @@ Use these pages as the deployment path:
 | Page | Purpose |
 | --- | --- |
 | [Kubernetes Helm](kubernetes.md) | Deploy the DSX-Connect 2 control plane from released Helm charts |
-| [Connectors](connectors.md) | Build and deploy repository connectors for DSX-Connect 2 |
-| [Development deployment](development.md) | Local image builds, local chart testing, and helper scripts |
+| [Connectors](connectors/index.md) | Deploy repository connectors for DSX-Connect 2 |
+| [Development](development.md) | Build local images and use helper scripts for development deployments |
 
 Future pages should stay focused:
 

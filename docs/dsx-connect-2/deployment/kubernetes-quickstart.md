@@ -326,6 +326,8 @@ kubectl get pods -n $NAMESPACE
 
 For k3s and Colima labs, Traefik gives you a stable browser URL without keeping a `kubectl port-forward` process open. This is the recommended quickstart path when Traefik is available.
 
+For information on installing, checking, and configuring Traefik, see [Reference > Traefik](../../reference/traefik.md).
+
 Verify that the chart created the ingress:
 
 ```bash

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 import uvicorn
@@ -6,7 +7,7 @@ import uvicorn
 from dsx_connect_ng.api.routes.control_plane import router as control_plane_router
 from dsx_connect_ng.api.routes.execution import router as execution_router
 from dsx_connect_ng.api.routes.health import router as health_router
-from dsx_connect_ng.api.routes.ui import router as ui_router
+from dsx_connect_ng.api.routes.ui import _load_operator_console_html, router as ui_router
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.bootstrap import bootstrap_control_plane
 from dsx_connect_ng.jobs.bootstrap import bootstrap_job_bus, bootstrap_job_service
@@ -39,6 +40,11 @@ def create_app() -> FastAPI:
         name="dsx-connect-ui-assets",
     )
     app.include_router(ui_router, prefix=settings.api_prefix)
+
+    @app.get("/", include_in_schema=False, response_class=HTMLResponse)
+    async def root_operator_console() -> HTMLResponse:
+        return HTMLResponse(_load_operator_console_html())
+
     return app
 
 

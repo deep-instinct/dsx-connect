@@ -34,14 +34,14 @@ The examples use:
 | --- | --- |
 | Helm release | `dsx-connect` |
 | Namespace | `dsx-connect` |
-| Chart version | `2.0.5` |
+| Chart version | `2.0.6` |
 
 Set these variables once for the shell session:
 
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.5
+export DSX_CONNECT_VERSION=2.0.6
 ```
 
 When examples show a release name or namespace, they use these values.
@@ -50,8 +50,8 @@ When examples show a release name or namespace, they use these values.
 
 DSX-Connect 2 release builds publish both:
 
-* a container image, such as `dsxconnect/dsx-connect:2.0.5`
-* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.5`
+* a container image, such as `dsxconnect/dsx-connect:2.0.6`
+* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.6`
 
 The chart `appVersion` is intended to match the DSX-Connect image version for release builds.
 If you deploy a released chart without overriding `image.tag`, the chart uses the matching released image tag.
@@ -432,7 +432,7 @@ kubectl port-forward -n "$NAMESPACE" svc/dsx-connect-api 8091:8091
 Open:
 
 ```text
-http://127.0.0.1:8091/api/v1/ui/
+http://127.0.0.1:8091/
 ```
 
 To expose the port from a lab VM to another machine on the same network, bind to all interfaces:
@@ -444,7 +444,7 @@ kubectl port-forward -n "$NAMESPACE" svc/dsx-connect-api 8091:8091 --address 0.0
 Then open:
 
 ```text
-http://<cluster-host-ip>:8091/api/v1/ui/
+http://<cluster-host-ip>:8091/
 ```
 
 Port-forwarding stops when the command exits.
@@ -490,7 +490,7 @@ kubectl describe ingress -n "$NAMESPACE" dsx-connect-api
 Open:
 
 ```text
-http://dsx-connect.10.2.4.103.nip.io/api/v1/ui/
+http://dsx-connect.10.2.4.103.nip.io/
 ```
 
 If Traefik redirects HTTP to HTTPS, create a TLS secret and add it to the same values file:
@@ -524,7 +524,7 @@ ingress:
 Update the pinned chart version and run Helm again:
 
 ```bash
-export DSX_CONNECT_VERSION=2.0.5
+export DSX_CONNECT_VERSION=2.0.6
 
 helm upgrade --install "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \

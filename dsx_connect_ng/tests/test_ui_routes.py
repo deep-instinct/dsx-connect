@@ -49,6 +49,16 @@ def test_operator_console_page_renders() -> None:
     assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
 
 
+def test_operator_console_page_renders_at_root() -> None:
+    client = TestClient(create_app())
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "DSX-Connect Operator Console" in response.text
+    assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
+
+
 def test_operator_console_serves_icon_assets() -> None:
     client = TestClient(create_app())
 
@@ -73,8 +83,8 @@ def test_ui_meta_returns_display_version() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "product": "DSX-Connect",
-        "version": "2.0.5",
-        "display_name": "DSX-Connect v2.0.5",
+        "version": "2.0.6",
+        "display_name": "DSX-Connect v2.0.6",
     }
 
 

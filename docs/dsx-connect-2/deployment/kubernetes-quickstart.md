@@ -37,7 +37,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 ```bash
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.5
+export DSX_CONNECT_VERSION=2.0.6
 export CONNECTOR_VERSION=2.0.3
 export CLUSTER_HOST_IP=10.2.4.103
 export DSX_CONNECT_HOST="dsx-connect.${CLUSTER_HOST_IP}.nip.io"
@@ -338,13 +338,13 @@ kubectl describe ingress -n "$NAMESPACE" dsx-connect-api
 Open:
 
 ```text
-http://dsx-connect.10.2.4.103.nip.io/api/v1/ui/
+http://dsx-connect.10.2.4.103.nip.io/
 ```
 
 If you changed `CLUSTER_HOST_IP`, use:
 
 ```bash
-echo "http://${DSX_CONNECT_HOST}/api/v1/ui/"
+echo "http://${DSX_CONNECT_HOST}/"
 ```
 
 For TLS termination or HTTP-to-HTTPS redirects with Traefik, see [Reference > Traefik](../../reference/traefik.md).
@@ -360,7 +360,7 @@ kubectl port-forward -n $NAMESPACE svc/dsx-connect-api 8091:8091
 Open:
 
 ```text
-http://127.0.0.1:8091/api/v1/ui/
+http://127.0.0.1:8091/
 ```
 
 You should see:

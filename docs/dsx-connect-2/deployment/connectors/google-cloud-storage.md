@@ -257,7 +257,7 @@ kubectl logs -n dsx-connect deploy/gcs-google-cloud-storage-connector
 Open the Operator Console:
 
 ```text
-http://127.0.0.1:8091/api/v1/ui/
+http://127.0.0.1:8091/
 ```
 
 The connector should appear under **Assets > Connectors**.

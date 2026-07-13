@@ -278,7 +278,7 @@ Update to explicit released versions:
 
 ```bash
 scripts/dsx-connect-ng/update-lab-stack.sh \
-  --connect-version 2.0.5 \
+  --connect-version 2.0.6 \
   --gcs-version 2.0.3 \
   --filesystem-version 2.0.3 \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
@@ -321,5 +321,5 @@ kubectl port-forward -n dsx-connect svc/dsx-connect-api 8091:8091
 Open:
 
 ```text
-http://127.0.0.1:8091/api/v1/ui/
+http://127.0.0.1:8091/
 ```

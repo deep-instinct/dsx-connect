@@ -20,10 +20,30 @@ from shared.streaming import stream_blob
 config = ConfigManager.reload_config()
 
 DEFAULT_PUBSUB_EVENTS: set[str] = {"OBJECT_FINALIZE", "OBJECT_METADATA_UPDATE"}
+_UNCONFIGURED_ASSET_VALUES = {
+    "",
+    "YOUR_BUCKET",
+    "YOUR_BUCKET_OR_BUCKET_PREFIX",
+    "your-bucket",
+    "your-bucket/prefix",
+}
+
+
+def _normalize_configured_asset(value: str | None) -> str:
+    raw = (value or "").strip()
+    return "" if raw in _UNCONFIGURED_ASSET_VALUES else raw
+
+
+def _ng_only_registration_enabled() -> bool:
+    return bool(getattr(config, "register_with_ng_control_plane", False)) and not bool(
+        getattr(config, "register_with_core", True)
+    )
+
 
 # Derive bucket and base prefix from asset, supporting both "bucket" and "bucket/prefix" forms
 try:
-    raw_asset = (config.asset or "").strip()
+    raw_asset = _normalize_configured_asset(config.asset)
+    config.asset = raw_asset
     if "/" in raw_asset:
         bucket, prefix = raw_asset.split("/", 1)
         config.asset_bucket = bucket.strip()
@@ -716,7 +736,7 @@ async def asset_discovery_handler(
             unsupported=True,
             message=f"unsupported_asset_type:{normalized_type}",
         )
-    configured_selector = (config.asset or config.asset_bucket or "").strip()
+    configured_selector = _normalize_configured_asset(config.asset or config.asset_bucket)
     if requested_source == "configured_asset":
         if not configured_selector:
             return AssetDiscoveryResponse(
@@ -1152,7 +1172,19 @@ async def repo_check_handler() -> StatusResponse:
     Returns:
         bool: True if the repository connectivity OK, False otherwise.
     """
-    if gcs_client.test_gcs_connection(bucket=config.asset_bucket):
+    configured_bucket = _normalize_configured_asset(getattr(config, "asset_bucket", ""))
+    if not configured_bucket:
+        if _ng_only_registration_enabled():
+            return StatusResponse(
+                status=StatusResponseEnum.SUCCESS,
+                message="No configured GCS bucket; DSX-Connect 2 discovery/protected scopes will provide scan targets.",
+            )
+        return StatusResponse(
+            status=StatusResponseEnum.ERROR,
+            message="No GCS bucket configured.",
+            description="Set DSXCONNECTOR_ASSET for DSX-Connect 1.x/core or configured-asset deployments.",
+        )
+    if gcs_client.test_gcs_connection(bucket=configured_bucket):
         return StatusResponse(status=StatusResponseEnum.SUCCESS, message=f"Connection to {config.asset} successful.")
     return StatusResponse(status=StatusResponseEnum.ERROR, message=f"Connection to {config.asset} failed.")
 

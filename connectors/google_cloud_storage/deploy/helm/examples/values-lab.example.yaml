@@ -36,7 +36,7 @@ env:
   # In DSX-Connect 2, discovered/protected scopes normally identify the bucket to scan.
   # This value remains useful for single-bucket labs, repo checks, and the
   # configured_asset discovery source.
-  DSXCONNECTOR_ASSET: "YOUR_BUCKET_OR_BUCKET_PREFIX"
+  DSXCONNECTOR_ASSET: ""
   # Optional include/exclude filter relative to DSXCONNECTOR_ASSET.
   DSXCONNECTOR_FILTER: ""
 

@@ -177,6 +177,61 @@ async def test_asset_discovery_reports_configured_bucket_by_default(monkeypatch)
 
 
 @pytest.mark.asyncio
+async def test_repo_check_allows_ng_only_without_configured_asset(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    monkeypatch.setattr(gc.config, "register_with_core", False)
+    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", True)
+    monkeypatch.setattr(gc.config, "asset", "")
+    monkeypatch.setattr(gc.config, "asset_bucket", "")
+
+    def fail_if_called(bucket):
+        raise AssertionError(f"unexpected bucket repo check: {bucket}")
+
+    monkeypatch.setattr(gc.gcs_client, "test_gcs_connection", fail_if_called)
+
+    resp = await gc.repo_check_handler()
+
+    assert resp.status == gc.StatusResponseEnum.SUCCESS
+    assert "discovery/protected scopes" in resp.message
+
+
+@pytest.mark.asyncio
+async def test_repo_check_treats_placeholder_asset_as_unconfigured_for_ng(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    monkeypatch.setattr(gc.config, "register_with_core", False)
+    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", True)
+    monkeypatch.setattr(gc.config, "asset", "YOUR_BUCKET_OR_BUCKET_PREFIX")
+    monkeypatch.setattr(gc.config, "asset_bucket", "YOUR_BUCKET_OR_BUCKET_PREFIX")
+
+    def fail_if_called(bucket):
+        raise AssertionError(f"unexpected bucket repo check: {bucket}")
+
+    monkeypatch.setattr(gc.gcs_client, "test_gcs_connection", fail_if_called)
+
+    resp = await gc.repo_check_handler()
+
+    assert resp.status == gc.StatusResponseEnum.SUCCESS
+    assert "discovery/protected scopes" in resp.message
+
+
+@pytest.mark.asyncio
+async def test_repo_check_requires_asset_for_core_only(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    monkeypatch.setattr(gc.config, "register_with_core", True)
+    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", False)
+    monkeypatch.setattr(gc.config, "asset", "")
+    monkeypatch.setattr(gc.config, "asset_bucket", "")
+
+    resp = await gc.repo_check_handler()
+
+    assert resp.status == gc.StatusResponseEnum.ERROR
+    assert resp.message == "No GCS bucket configured."
+
+
+@pytest.mark.asyncio
 async def test_asset_discovery_lists_gcs_buckets_for_inventory_enumeration(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 

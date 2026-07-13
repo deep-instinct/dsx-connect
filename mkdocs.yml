@@ -214,6 +214,7 @@ nav:
         - Salesforce Credentials: reference/salesforce-credentials.md
       - Kubernetes:
           - Storage: reference/kubernetes-storage.md
+          - Traefik: reference/traefik.md
       - UI Display Icons: reference/display-icons.md
 
   - Development:

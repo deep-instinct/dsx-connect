@@ -450,9 +450,13 @@ http://<cluster-host-ip>:8091/api/v1/ui/
 Port-forwarding stops when the command exits.
 For longer-lived access, use an ingress or load balancer appropriate for the cluster.
 
-### Ingress Example for k3s / Traefik
+### Establish Ingress
 
-For k3s with Traefik, enable the chart ingress in your DSX-Connect values file:
+The DSX-Connect chart can manage the API/UI `Ingress` resource. Ingress is disabled by default because clusters differ on ingress controller, TLS, DNS, WAF, and load-balancer strategy.
+
+For k3s with Traefik, use `ingress.className: traefik`. See [Reference > Traefik](../../reference/traefik.md) for k3s Traefik setup, HTTP-to-HTTPS redirects, and TLS-secret examples.
+
+Add this to your DSX-Connect values file:
 
 ```yaml
 ingress:
@@ -463,6 +467,24 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+```
+
+Apply the chart with the updated values:
+
+```bash
+helm upgrade --install "$RELEASE" \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
+  --version "$DSX_CONNECT_VERSION" \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f dsx-connect-values.yaml
+```
+
+Verify the ingress:
+
+```bash
+kubectl get ingress -n "$NAMESPACE"
+kubectl describe ingress -n "$NAMESPACE" dsx-connect-api
 ```
 
 Open:
@@ -479,6 +501,8 @@ kubectl create secret tls dsx-connect-tls \
   --cert=/path/to/tls.crt \
   --key=/path/to/tls.key
 ```
+
+Then add `tls` to the ingress values:
 
 ```yaml
 ingress:

@@ -1,7 +1,7 @@
 image:
   repository: dsxconnect/dsx-connect
   pullPolicy: IfNotPresent
-  tag: "2.0.4"
+  tag: "2.0.5"
 
 env:
   DSX_CONNECT_NG__ENVIRONMENT: "dev"

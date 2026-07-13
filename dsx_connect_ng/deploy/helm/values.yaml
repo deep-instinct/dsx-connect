@@ -19,6 +19,24 @@ service:
   type: ClusterIP
   port: 8091
 
+# Optional API/UI ingress. Cluster ingress controllers such as Traefik, nginx,
+# ALB, and cert-manager remain external to this chart.
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: dsx-connect.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  # Example:
+  # tls:
+  #   - secretName: dsx-connect-tls
+  #     hosts:
+  #       - dsx-connect.example.com
+
 # API deployment tuning.
 api:
   # Number of API pods.

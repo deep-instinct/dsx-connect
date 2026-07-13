@@ -34,14 +34,14 @@ The examples use:
 | --- | --- |
 | Helm release | `dsx-connect` |
 | Namespace | `dsx-connect` |
-| Chart version | `2.0.4` |
+| Chart version | `2.0.5` |
 
 Set these variables once for the shell session:
 
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.4
+export DSX_CONNECT_VERSION=2.0.5
 ```
 
 When examples show a release name or namespace, they use these values.
@@ -50,8 +50,8 @@ When examples show a release name or namespace, they use these values.
 
 DSX-Connect 2 release builds publish both:
 
-* a container image, such as `dsxconnect/dsx-connect:2.0.4`
-* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.4`
+* a container image, such as `dsxconnect/dsx-connect:2.0.5`
+* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.5`
 
 The chart `appVersion` is intended to match the DSX-Connect image version for release builds.
 If you deploy a released chart without overriding `image.tag`, the chart uses the matching released image tag.
@@ -452,34 +452,17 @@ For longer-lived access, use an ingress or load balancer appropriate for the clu
 
 ### Ingress Example for k3s / Traefik
 
-For k3s with Traefik, create an ingress similar to:
+For k3s with Traefik, enable the chart ingress in your DSX-Connect values file:
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: dsx-connect-api
-  namespace: dsx-connect
-spec:
-  ingressClassName: traefik
-  rules:
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
     - host: dsx-connect.10.2.4.103.nip.io
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: dsx-connect-api
-                port:
-                  number: 8091
-```
-
-Apply the ingress:
-
-```bash
-kubectl apply -f dsx-connect-ingress.yaml
-kubectl get ingress -n "$NAMESPACE"
+      paths:
+        - path: /
+          pathType: Prefix
 ```
 
 Open:
@@ -488,12 +471,36 @@ Open:
 http://dsx-connect.10.2.4.103.nip.io/api/v1/ui/
 ```
 
+If Traefik redirects HTTP to HTTPS, create a TLS secret and add it to the same values file:
+
+```bash
+kubectl create secret tls dsx-connect-tls \
+  -n "$NAMESPACE" \
+  --cert=/path/to/tls.crt \
+  --key=/path/to/tls.key
+```
+
+```yaml
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: dsx-connect.10.2.4.103.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: dsx-connect-tls
+      hosts:
+        - dsx-connect.10.2.4.103.nip.io
+```
+
 ## Upgrade
 
 Update the pinned chart version and run Helm again:
 
 ```bash
-export DSX_CONNECT_VERSION=2.0.4
+export DSX_CONNECT_VERSION=2.0.5
 
 helm upgrade --install "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \

@@ -36,7 +36,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 ```bash
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.4
+export DSX_CONNECT_VERSION=2.0.5
 export CONNECTOR_VERSION=2.0.3
 ```
 

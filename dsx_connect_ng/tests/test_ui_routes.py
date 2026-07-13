@@ -73,8 +73,8 @@ def test_ui_meta_returns_display_version() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "product": "DSX-Connect",
-        "version": "2.0.4",
-        "display_name": "DSX-Connect v2.0.4",
+        "version": "2.0.5",
+        "display_name": "DSX-Connect v2.0.5",
     }
 
 

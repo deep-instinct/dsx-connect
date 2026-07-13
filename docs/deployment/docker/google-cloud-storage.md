@@ -126,7 +126,7 @@ Next, configure the Pub/Sub settings from that setup.
 
 Important distinctions:
 
-- `GCS_PUBSUB_PROJECT_ID` is the GCP project ID, for example `se-project-388112`.
+- `GCS_PUBSUB_PROJECT_ID` is the GCP project ID, for example `example-gcs-project`.
 - Do not use the numeric project number here. The project number is only used during the IAM publisher-binding step in the Pub/Sub setup guide.
 - `GCS_PUBSUB_SUBSCRIPTION` is the operator-created Google Cloud Pub/Sub subscription that receives bucket event messages.
 - In the Google Cloud Console, this is the subscription shown on the Subscriptions page. The connector accepts either:
@@ -148,8 +148,8 @@ Example:
 
 ```env
 DSXCONNECTOR_MONITOR=true
-GCS_PUBSUB_PROJECT_ID=se-project-388112
-GCS_PUBSUB_SUBSCRIPTION=projects/se-project-388112/subscriptions/dsx-gcs-sub
+GCS_PUBSUB_PROJECT_ID=example-gcs-project
+GCS_PUBSUB_SUBSCRIPTION=projects/example-gcs-project/subscriptions/dsx-gcs-sub
 ```
 
 ---

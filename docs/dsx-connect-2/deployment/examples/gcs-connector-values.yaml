@@ -16,7 +16,7 @@ env:
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
   DSXCONNECTOR_DATA_DIR: "/app/data"
   DSXCONNECTOR_MONITOR: "true"
-  GCS_PUBSUB_PROJECT_ID: "se-project-388112"
+  GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
   GCS_PUBSUB_SUBSCRIPTION: "gcs-events-dsx-connector"
 
 auth_dsxconnect:

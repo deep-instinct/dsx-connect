@@ -26,7 +26,7 @@ If a bucket publishes Pub/Sub events but protection is not enabled for that buck
 Set these variables for the examples below:
 
 ```bash
-export PROJECT_ID="se-project-388112"
+export PROJECT_ID="example-gcs-project"
 export BUCKET="lg-test-01"
 export TOPIC="gcs-object-events"
 export SUBSCRIPTION="gcs-events-dsx-connector"
@@ -149,7 +149,7 @@ Configure the connector with the Pub/Sub resources created above:
 ```yaml
 env:
   DSXCONNECTOR_MONITOR: "true"
-  GCS_PUBSUB_PROJECT_ID: "se-project-388112"
+  GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
   GCS_PUBSUB_SUBSCRIPTION: "gcs-events-dsx-connector"
 ```
 
@@ -172,7 +172,7 @@ gcs-events-dsx-connector
 or:
 
 ```text
-projects/se-project-388112/subscriptions/gcs-events-dsx-connector
+projects/example-gcs-project/subscriptions/gcs-events-dsx-connector
 ```
 
 The subscription must be attached to the same topic used by the bucket notification.

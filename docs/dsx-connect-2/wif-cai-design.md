@@ -125,8 +125,8 @@ Examples:
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/se-project-388112"
-  DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/se-project-388112"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
 ```
 
 ```yaml

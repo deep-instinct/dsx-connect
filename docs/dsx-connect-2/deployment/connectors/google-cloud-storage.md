@@ -91,7 +91,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
       --set-string env.DSXCONNECTOR_NG_PLATFORM=gcs \
       --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=demo-project \
       --set-string env.DSXCONNECTOR_MONITOR=true \
-      --set-string env.GCS_PUBSUB_PROJECT_ID=se-project-388112 \
+      --set-string env.GCS_PUBSUB_PROJECT_ID=example-gcs-project \
       --set-string env.GCS_PUBSUB_SUBSCRIPTION=gcs-events-dsx-connector \
       --set gcp.credentialsSecretName=gcp-sa
     ```
@@ -130,7 +130,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
       DSXCONNECTOR_NG_PLATFORM: "gcs"
       DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
       DSXCONNECTOR_MONITOR: "true"
-      GCS_PUBSUB_PROJECT_ID: "se-project-388112"
+      GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
       GCS_PUBSUB_SUBSCRIPTION: "gcs-events-dsx-connector"
 
     gcp:
@@ -219,7 +219,7 @@ Then configure the connector with the Pub/Sub settings from that setup:
 ```yaml
 env:
   DSXCONNECTOR_MONITOR: "true"
-  GCS_PUBSUB_PROJECT_ID: "se-project-388112"
+  GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
   GCS_PUBSUB_SUBSCRIPTION: "gcs-events-dsx-connector"
 ```
 
@@ -227,7 +227,7 @@ Important distinctions:
 
 * `env.GCS_PUBSUB_PROJECT_ID` is the Google Cloud project ID that owns the Pub/Sub subscription. Do not use the numeric project number here.
 * `env.GCS_PUBSUB_SUBSCRIPTION` is the operator-created Google Cloud Pub/Sub subscription that receives bucket event messages.
-* `env.GCS_PUBSUB_SUBSCRIPTION` can be either the subscription name, such as `gcs-events-dsx-connector`, or the full path, such as `projects/se-project-388112/subscriptions/gcs-events-dsx-connector`.
+* `env.GCS_PUBSUB_SUBSCRIPTION` can be either the subscription name, such as `gcs-events-dsx-connector`, or the full path, such as `projects/example-gcs-project/subscriptions/gcs-events-dsx-connector`.
 * The subscription must be attached to the same topic used by the bucket notifications.
 * In native Pub/Sub mode, the connector consumes the subscription directly using Google's client SDK. It does not use `/webhook/event`.
 

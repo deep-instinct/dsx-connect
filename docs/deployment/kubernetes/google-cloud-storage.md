@@ -207,8 +207,8 @@ Example:
 ```yaml
 env:
   DSXCONNECTOR_MONITOR: "true"
-  GCS_PUBSUB_PROJECT_ID: "se-project-388112"
-  GCS_PUBSUB_SUBSCRIPTION: "projects/se-project-388112/subscriptions/dsx-gcs-sub"
+  GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
+  GCS_PUBSUB_SUBSCRIPTION: "projects/example-gcs-project/subscriptions/dsx-gcs-sub"
 ```
 
 {% include-markdown "shared/_common_connector.md" %}

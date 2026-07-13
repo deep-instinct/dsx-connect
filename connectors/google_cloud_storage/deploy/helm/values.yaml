@@ -33,18 +33,58 @@ env:
   DSXCONNECTOR_APP_ENV: "dev"
   # Optional friendly display name shown in the dsx-connect UI card
   # DSXCONNECTOR_DISPLAY_NAME: "Google Cloud Storage Connector"
+
+  # DSX-Connect registration.
+  # DSX-Connect 2 deployments should set REGISTER_WITH_NG_CONTROL_PLANE=true.
+  # DSX-Connect 1.x/core deployments should set REGISTER_WITH_CORE=true.
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"
+
+  # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
+  # DSXCONNECTOR_DSX_CONNECT_NG_URL is used for DSX-Connect 2 registration and heartbeats.
+  # For in-cluster DSX-Connect 2 installs, both usually point at http://dsx-connect-api:8091.
+  # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
+  # DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+
+  # Stable identity for this running connector instance.
+  # Changing this value creates a new connector identity in DSX-Connect 2.
+  DSXCONNECTOR_INSTANCE_ID: ""
+
+  # DSX-Connect 2 platform metadata.
+  # PLATFORM is the connector adapter type; for this connector it should remain "gcs".
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  # PLATFORM_KEY is a stable, operator-chosen key for the boundary this connector
+  # represents in the DSX-Connect 2 console/API. It may be an actual GCP project,
+  # folder, org, tenant, or account name, but it can also be a friendly lab label.
+  # Access is controlled by the mounted GCP service account and IAM, not by this value.
+  DSXCONNECTOR_NG_PLATFORM_KEY: ""
+
   DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
   DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
   # DSXCONNECTOR_VERIFY_TLS: "true"
   # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
-  # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
+
+  # Legacy/default connector remediation behavior.
+  # DSX-Connect 2 protection profiles send requested remediation actions at runtime;
+  # these values are fallback defaults when no requested action is provided, and are
+  # the primary remediation controls for DSX-Connect 1.x/core.
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
-  DSXCONNECTOR_ASSET: ""          # bucket name
+
+  # Optional configured bucket or bucket/prefix.
+  # In DSX-Connect 2, discovered/protected scopes normally identify the bucket to scan.
+  # This value remains useful for single-bucket labs, repo checks, and the
+  # configured_asset discovery source.
+  DSXCONNECTOR_ASSET: ""
+  # Optional include/exclude filter relative to DSXCONNECTOR_ASSET.
   DSXCONNECTOR_FILTER: ""
+
   # Optional Cloud Asset Inventory parent for bucket discovery: projects/ID, folders/ID, or organizations/ID
   # DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: ""
   DSXCONNECTOR_DATA_DIR: "/app/data"
+
+  # GCS monitoring consumes Pub/Sub object events.
+  # Enable only after the topic, subscription, and IAM permissions are ready.
   DSXCONNECTOR_MONITOR: "false"
   GCS_PUBSUB_PROJECT_ID: ""
   GCS_PUBSUB_SUBSCRIPTION: ""

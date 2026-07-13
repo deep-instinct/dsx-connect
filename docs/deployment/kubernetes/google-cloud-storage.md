@@ -146,6 +146,8 @@ kubectl apply -f connectors/google_cloud_storage/deploy/helm/examples/gcp-sa-sec
     ```
 
     This example references a Kubernetes Secret named `gcp-sa`, but does not contain credentials.
+    It defaults to DSX-Connect 2 registration.
+    For DSX-Connect 1.x/core deployments, set `DSXCONNECTOR_REGISTER_WITH_CORE: "true"` and `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"` in the values file.
 
 ---
 
@@ -185,7 +187,7 @@ Enable monitoring:
 | --- | --- |
 | `env.DSXCONNECTOR_MONITOR` | `"true"` to enable on-access scanning via Pub/Sub. |
 | `env.GCS_PUBSUB_PROJECT_ID` | GCP project ID that owns the subscription. |
-| `env.GCS_PUBSUB_SUBSCRIPTION` | Subscription name or full path (`projects/<project-id>/subscriptions/<sub>`). |
+| `env.GCS_PUBSUB_SUBSCRIPTION` | Operator-created Google Cloud Pub/Sub subscription that receives bucket event messages. |
 | `env.GCS_PUBSUB_ENDPOINT` | Optional endpoint override (for local emulators). |
 
 Notes:

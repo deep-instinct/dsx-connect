@@ -6,14 +6,47 @@ image:
 env:
   LOG_LEVEL: "debug"
   DSXCONNECTOR_APP_ENV: "dev"
+
+  # DSX-Connect 2 registration.
+  # For DSX-Connect 1.x/core deployments, set REGISTER_WITH_CORE=true and
+  # REGISTER_WITH_NG_CONTROL_PLANE=false.
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+
+  # For in-cluster DSX-Connect 2 installs, keep both URLs pointed at the API service.
+  # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
+  # DSXCONNECTOR_DSX_CONNECT_NG_URL is used for DSX-Connect 2 registration and heartbeats.
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+
+  # Stable identity for this running connector instance.
+  # Changing this value creates a new connector identity in DSX-Connect 2.
+  DSXCONNECTOR_INSTANCE_ID: "gcs-local-1"
+
+  # DSX-Connect 2 platform metadata.
+  # PLATFORM is the connector adapter type; for this connector it should remain "gcs".
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  # PLATFORM_KEY is a stable, operator-chosen key for the boundary this connector
+  # represents in the DSX-Connect 2 console/API. It may be an actual GCP project,
+  # folder, org, tenant, or account name, but it can also be a friendly lab label.
+  # Access is controlled by the mounted GCP service account and IAM, not by this value.
+  DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
+
+  # Optional configured bucket or bucket/prefix.
+  # In DSX-Connect 2, discovered/protected scopes normally identify the bucket to scan.
+  # This value remains useful for single-bucket labs, repo checks, and the
+  # configured_asset discovery source.
   DSXCONNECTOR_ASSET: "YOUR_BUCKET_OR_BUCKET_PREFIX"
+  # Optional include/exclude filter relative to DSXCONNECTOR_ASSET.
   DSXCONNECTOR_FILTER: ""
+
+  # Legacy/default connector remediation behavior.
+  # DSX-Connect 2 protection profiles send requested remediation actions at runtime;
+  # these values are fallback defaults when no requested action is provided, and are
+  # the primary remediation controls for DSX-Connect 1.x/core.
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
   DSXCONNECTOR_DATA_DIR: "/app/data"
-
-  # Use the in-cluster DSX Connect service name when core is deployed.
-  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api"
 
   # Leave disabled for connector-only smoke tests.
   # Enable only after Pub/Sub topic/subscription and permissions are ready.

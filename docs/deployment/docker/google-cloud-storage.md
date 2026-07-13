@@ -128,7 +128,7 @@ Important distinctions:
 
 - `GCS_PUBSUB_PROJECT_ID` is the GCP project ID, for example `se-project-388112`.
 - Do not use the numeric project number here. The project number is only used during the IAM publisher-binding step in the Pub/Sub setup guide.
-- `GCS_PUBSUB_SUBSCRIPTION` is the Pub/Sub subscription name or full subscription path.
+- `GCS_PUBSUB_SUBSCRIPTION` is the operator-created Google Cloud Pub/Sub subscription that receives bucket event messages.
 - In the Google Cloud Console, this is the subscription shown on the Subscriptions page. The connector accepts either:
   - the subscription name you created, for example `dsx-gcs-sub`
   - the full subscription path for that same subscription, for example `projects/<project-id>/subscriptions/dsx-gcs-sub`
@@ -139,7 +139,7 @@ The subscription must be attached to the same topic used by the bucket notificat
 | ------------------------- | --------------------------------------------------------------------------- |
 | `DSXCONNECTOR_MONITOR`    | Enable monitoring (`true` or `false`).                                      |
 | `GCS_PUBSUB_PROJECT_ID`   | GCP project ID that owns the Pub/Sub subscription.                          |
-| `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription name or full path that receives bucket event messages. |
+| `GCS_PUBSUB_SUBSCRIPTION` | Operator-created Google Cloud Pub/Sub subscription that receives bucket event messages. |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
 The connector consumes Pub/Sub directly using Google's client SDK. It does not use `/webhook/event` when running in native Pub/Sub mode.

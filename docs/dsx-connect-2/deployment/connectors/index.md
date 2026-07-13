@@ -8,7 +8,7 @@ Deploy the DSX-Connect 2 control plane before deploying connectors:
 ```bash
 helm upgrade --install dsx-connect \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
-  --version 2.0.2 \
+  --version 2.0.3 \
   --namespace dsx-connect \
   --create-namespace \
   -f dsx-connect-values.yaml
@@ -37,10 +37,14 @@ env:
   DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "connector-instance-1"
   DSXCONNECTOR_NG_PLATFORM: "<platform>"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "<tenant-or-project-boundary>"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "<operator-chosen-platform-boundary>"
 ```
 
 Use a stable `DSXCONNECTOR_INSTANCE_ID` for a running connector instance.
-Use `DSXCONNECTOR_NG_PLATFORM_KEY` to identify the account, project, tenant, host, or other platform boundary represented by the connector.
+Changing it creates a separate connector identity in DSX-Connect 2.
+
+Use `DSXCONNECTOR_NG_PLATFORM_KEY` as the stable console/API key for the account, project, tenant, host, or other platform boundary represented by the connector.
+This value is operator-chosen.
+It may match a real cloud project, folder, organization, subscription, or host name when that is the boundary you operate, but it is not automatically derived from provider credentials and does not grant access by itself.
 
 For local build scripts, local image loading, and helper-script deployment workflows, see [Development deployment](../development.md).

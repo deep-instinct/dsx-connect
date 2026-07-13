@@ -128,6 +128,9 @@ values_file: connectors/google_cloud_storage/deploy/helm/examples/values-lab.exa
 wait: false
 ```
 
+The GCS lab values file defaults to DSX-Connect 2 registration.
+For DSX-Connect 1.x/core smoke tests, set `DSXCONNECTOR_REGISTER_WITH_CORE: "true"` and `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"` in the values file.
+
 ## A note on secrets and `--set`
 - Avoid putting real secrets in `helm --set ...` or `kubectl create secret --from-literal ...` in shared environments; these often leak into shell history and CI logs.
 - Prefer Secrets referenced by the chart (for example, `envSecretRefs`) and a secrets manager integration (External Secrets Operator), or encrypted secrets with SOPS/Sealed Secrets.

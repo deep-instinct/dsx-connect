@@ -7,9 +7,11 @@ env:
   DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "gcs-local-1"
   DSXCONNECTOR_NG_PLATFORM: "gcs"
+  # Operator-chosen platform boundary label for DSX-Connect 2. This may match
+  # a GCP project, but access comes from the mounted GCP credential and IAM.
   DSXCONNECTOR_NG_PLATFORM_KEY: "se-project-388112"
-  DSXCONNECTOR_ASSET: "lg-test-01"
-  DSXCONNECTOR_FILTER: ""
+  # Legacy/default remediation fallback. DSX-Connect 2 protection profiles send
+  # requested remediation actions at runtime.
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
   DSXCONNECTOR_DATA_DIR: "/app/data"

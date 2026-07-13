@@ -157,6 +157,10 @@ export GCS_RELEASE=gcs
 cp docs/dsx-connect-2/deployment/examples/gcs-connector-values.yaml \
   /tmp/gcs-connector-values.yaml
 
+# Edit /tmp/gcs-connector-values.yaml for your Pub/Sub project and subscription.
+# For scan-only local testing before Pub/Sub is configured, set
+# env.DSXCONNECTOR_MONITOR: "false".
+
 helm upgrade --install "$GCS_RELEASE" \
   ./connectors/google_cloud_storage/deploy/helm \
   --namespace "$NAMESPACE" \
@@ -274,9 +278,9 @@ Update to explicit released versions:
 
 ```bash
 scripts/dsx-connect-ng/update-lab-stack.sh \
-  --connect-version 2.0.2 \
-  --gcs-version 2.0.2 \
-  --filesystem-version 2.0.2 \
+  --connect-version 2.0.3 \
+  --gcs-version 2.0.3 \
+  --filesystem-version 2.0.3 \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
   --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
   --filesystem-values ~/.dsx-connect-lab/filesystem-values.yaml

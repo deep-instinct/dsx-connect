@@ -30,14 +30,14 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 ## 1) Set Variables
 
 !!! note
-    Helm chart `--version` expects a chart version such as `2.0.2`.
+    Helm chart `--version` expects a chart version such as `2.0.3`.
     To install the latest chart, omit the `--version` argument instead of setting it to `latest`.
 
 ```bash
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.2
-export CONNECTOR_VERSION=2.0.2
+export DSX_CONNECT_VERSION=2.0.3
+export CONNECTOR_VERSION=2.0.3
 ```
 
 Create the namespace:

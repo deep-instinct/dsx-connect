@@ -34,14 +34,14 @@ The examples use:
 | --- | --- |
 | Helm release | `dsx-connect` |
 | Namespace | `dsx-connect` |
-| Chart version | `2.0.2` |
+| Chart version | `2.0.3` |
 
 Set these variables once for the shell session:
 
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.2
+export DSX_CONNECT_VERSION=2.0.3
 ```
 
 When examples show a release name or namespace, they use these values.
@@ -50,8 +50,8 @@ When examples show a release name or namespace, they use these values.
 
 DSX-Connect 2 release builds publish both:
 
-* a container image, such as `dsxconnect/dsx-connect:2.0.2`
-* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.2`
+* a container image, such as `dsxconnect/dsx-connect:2.0.3`
+* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.3`
 
 The chart `appVersion` is intended to match the DSX-Connect image version for release builds.
 If you deploy a released chart without overriding `image.tag`, the chart uses the matching released image tag.
@@ -203,7 +203,7 @@ dsx-connect/
 ```
 
 Typically one should copy `values.yaml`, or one of the DSX-Connect 2 example values files, and edit the copy.  This makes it easy to return back to defaults,
-experiment with types of deployments, and/or pin specific environments and versions of deployments (e.g. `values-staging.yaml`, `values-prod.yaml`, `values-prod-us-west-1.yaml`, `values-prod-2.0.2.yaml`, etc...)
+experiment with types of deployments, and/or pin specific environments and versions of deployments (e.g. `values-staging.yaml`, `values-prod.yaml`, `values-prod-us-west-1.yaml`, `values-prod-2.0.3.yaml`, etc...)
 
 The DSX-Connect 2 Helm chart does not currently deploy DSXA in-cluster.
 It can run with the stub scanner for control-plane validation, or it can point at an external DSXA scanner that is reachable from inside Kubernetes.
@@ -379,7 +379,7 @@ For production, store environment-specific values files in a GitOps repository a
 The GitOps repository should pin:
 
 * chart repository: `oci://registry-1.docker.io/dsxconnect/dsx-connect-chart`
-* chart version, such as `2.0.2`
+* chart version, such as `2.0.3`
 * environment-specific values
 * any required Secrets through your chosen secret-management workflow
 
@@ -493,7 +493,7 @@ http://dsx-connect.10.2.4.103.nip.io/api/v1/ui/
 Update the pinned chart version and run Helm again:
 
 ```bash
-export DSX_CONNECT_VERSION=2.0.2
+export DSX_CONNECT_VERSION=2.0.3
 
 helm upgrade --install "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \

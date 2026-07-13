@@ -30,9 +30,9 @@ Examples:
     --gcs-values ~/.dsx-connect-lab/gcs-values.yaml
 
   scripts/dsx-connect-ng/update-lab-stack.sh \
-    --connect-version 2.0.2 \
-    --gcs-version 2.0.2 \
-    --filesystem-version 2.0.2 \
+    --connect-version 2.0.3 \
+    --gcs-version 2.0.3 \
+    --filesystem-version 2.0.3 \
     --skip-filesystem
 
 Options:

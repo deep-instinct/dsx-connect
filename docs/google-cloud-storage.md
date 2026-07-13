@@ -131,10 +131,11 @@ Next, set the project_id and subscription obtained from the Pub/Sub setup.
 | ------------------------- | --------------------------------------------------------------------------- |
 | `DSXCONNECTOR_MONITOR`    | Enable monitoring (`true` or `false`).                                      |
 | `GCS_PUBSUB_PROJECT_ID`   | Project containing the Pub/Sub subscription receiving bucket notifications. |
-| `GCS_PUBSUB_SUBSCRIPTION` | Pub/Sub subscription that receives bucket event notifications.              |
+| `GCS_PUBSUB_SUBSCRIPTION` | Operator-created Google Cloud Pub/Sub subscription that receives bucket event messages. |
 | `GCS_PUBSUB_ENDPOINT`     | Optional override for the Pub/Sub endpoint (useful for local emulators).    |
 
-Google's client SDK handles the Pub/Sub connection and handling - under the covers, it calls the connector's /webhook/event endpoint.
+The connector consumes Pub/Sub directly using Google's client SDK.
+It does not use `/webhook/event` when running in native Pub/Sub mode.
 
 ---
 
@@ -158,6 +159,4 @@ compliance/runtime constraints around Pub/Sub.
 For external callbacks into the connector, expose or tunnel the host port mapped to `8630` (compose default). 
 Upstream systems should hit that public address. Internally, set `DSXCONNECTOR_CONNECTOR_URL` to the Docker-service URL 
 (e.g., `http://google-cloud-storage-connector:8630`) so dsx-connect can reach the container.
-
-
 

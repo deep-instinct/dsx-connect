@@ -10,9 +10,10 @@ WORKDIR /app
 RUN python -m pip install --no-cache-dir --upgrade pip
 
 COPY shared/ shared/
+COPY dsxa_sdk_py/ dsxa_sdk_py/
 COPY dsx_connect_ng/ dsx_connect_ng/
 
-RUN python -m pip install --no-cache-dir -e "./dsx_connect_ng[workers]"
+RUN python -m pip install --no-cache-dir -e "./dsxa_sdk_py" -e "./dsx_connect_ng[workers]"
 
 EXPOSE 8091
 

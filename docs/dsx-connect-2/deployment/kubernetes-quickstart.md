@@ -24,8 +24,9 @@ By the end, you will:
 * kubectl configured for your cluster
 * A node-local path that can be mounted with `hostPath`
 * A reachable DSXA scanner, or DSXA registration values for the optional scanner step
+* Traefik available as the cluster ingress controller for the ingress path
 
-For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../reference/installations/kubernetes.md).
+For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../reference/installations/kubernetes.md). For k3s / Traefik ingress details, see [Reference > Traefik](../../reference/traefik.md).
 
 ## 1) Set Variables
 
@@ -38,7 +39,11 @@ export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
 export DSX_CONNECT_VERSION=2.0.5
 export CONNECTOR_VERSION=2.0.3
+export CLUSTER_HOST_IP=10.2.4.103
+export DSX_CONNECT_HOST="dsx-connect.${CLUSTER_HOST_IP}.nip.io"
 ```
+
+Set `CLUSTER_HOST_IP` to the IP address where Traefik is reachable. For k3s and Colima labs, this is usually the host or VM IP that exposes ports `80` and `443`.
 
 Create the namespace:
 
@@ -184,10 +189,19 @@ workers:
     enabled: true
   dianna:
     enabled: false
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: "${DSX_CONNECT_HOST}"
+      paths:
+        - path: /
+          pathType: Prefix
 EOF
 ```
 
-This values file keeps PostgreSQL and RabbitMQ non-persistent for quick local testing.
+This values file keeps PostgreSQL and RabbitMQ non-persistent for quick local testing and creates a Traefik `Ingress` for the Operator Console. If your cluster does not use Traefik, set `ingress.enabled: false` and use the port-forward option in step 7.
 
 ## 4) Install DSX-Connect 2
 
@@ -308,7 +322,34 @@ kubectl get pods -n $NAMESPACE
 
 ## 7) Access the Operator Console
 
-Port-forward the API service:
+### Option A: Traefik Ingress
+
+For k3s and Colima labs, Traefik gives you a stable browser URL without keeping a `kubectl port-forward` process open. This is the recommended quickstart path when Traefik is available.
+
+Verify that the chart created the ingress:
+
+```bash
+kubectl get ingress -n "$NAMESPACE"
+kubectl describe ingress -n "$NAMESPACE" dsx-connect-api
+```
+
+Open:
+
+```text
+http://dsx-connect.10.2.4.103.nip.io/api/v1/ui/
+```
+
+If you changed `CLUSTER_HOST_IP`, use:
+
+```bash
+echo "http://${DSX_CONNECT_HOST}/api/v1/ui/"
+```
+
+For TLS termination or HTTP-to-HTTPS redirects with Traefik, see [Reference > Traefik](../../reference/traefik.md).
+
+### Option B: Port-Forward Fallback
+
+Use port-forwarding when Traefik is not installed or when the cluster host ports are not reachable from your browser:
 
 ```bash
 kubectl port-forward -n $NAMESPACE svc/dsx-connect-api 8091:8091

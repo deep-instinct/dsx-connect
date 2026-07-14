@@ -432,7 +432,6 @@ def _stop_dsxa_container(container_name: str) -> None:
 def _dsxa_logs_show_fatal_startup_failure(logs: str) -> bool:
     normalized = logs.lower()
     fatal_markers = (
-        "register failed with status code 409",
         "failed registering product after",
         "failed resetting client id",
         "registarion error",
@@ -466,7 +465,7 @@ def _wait_for_dsxa_ready(container_name: str, host: str, port: int, *, timeout_s
         try:
             sock.connect((host, port))
             sock.close()
-            if _dsxa_logs_show_ready(logs):
+            if _dsxa_logs_show_ready(logs) or "app is running" in logs.lower():
                 return
             time.sleep(0.5)
         except OSError as exc:
@@ -636,6 +635,13 @@ def _runtime_env_overrides(ctx: typer.Context) -> dict[str, str]:
         auth_token = ctx.obj.get("dsxa_auth_token")
         if auth_token:
             overrides["DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN"] = str(auth_token)
+    else:
+        scanner_mode = os.environ.get("DSX_CONNECT_NG_SCANNER__MODE")
+        scanner_base_url = os.environ.get("DSX_CONNECT_NG_SCANNER__BASE_URL")
+        if scanner_mode is not None:
+            overrides["DSX_CONNECT_NG_SCANNER__MODE"] = scanner_mode
+        if scanner_base_url is not None:
+            overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] = scanner_base_url
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_PREFETCH_COUNT"] = str(ctx.obj.get("scan_worker_prefetch_count", 1000))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_WORKER_COUNT"] = str(ctx.obj.get("scan_worker_count", 1))
     overrides["DSX_CONNECT_NG_LOCAL__SCAN_ONLY_COMPLETION_BATCH_SIZE"] = str(ctx.obj.get("scan_only_completion_batch_size", 1))

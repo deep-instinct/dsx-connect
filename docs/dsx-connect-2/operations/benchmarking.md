@@ -1,0 +1,130 @@
+# Benchmarking DSX-Connect 2
+
+Use a layered benchmark so DSX-Connect 2 results can be compared fairly with older DSX-Connect 1G runs.
+
+The goal is to separate:
+
+* connector enumeration time
+* connector proxy read time
+* DSXA scan time
+* queue and persistence overhead
+* policy, remediation, and result delivery overhead
+
+## Compare Equivalent Shapes
+
+When comparing with 1G, keep these inputs consistent:
+
+| Input | Guidance |
+| --- | --- |
+| Dataset | Use the same bucket, prefix, object count, and approximate byte mix. |
+| DSXA scanner | Use the same scanner deployment and resources. |
+| Connector | Record connector image version and replica count. |
+| DSX-Connect | Record image/chart version, worker replicas, prefetch, and scan concurrency. |
+| Result mode | Do not compare scan-only runs to policy/remediation workflow runs as if they are the same workload. |
+
+Old 1G GCS batch reference from local benchmark work:
+
+| Connector | Corpus | Batch enqueue | Batch total |
+| --- | ---: | ---: | ---: |
+| Google Cloud Storage | `1002` | `11s` | `159s` |
+
+That is about `6.3 files/s` end to end.
+
+## Run A DSX-Connect 2 Protected-Scope Benchmark
+
+Start a protected-scope scan and watch it to completion:
+
+```bash
+export DSX_CONNECT_URL="https://dsx-connect.10.2.4.103.nip.io/api/v1"
+export SCOPE_ID="<scope-id>"
+
+./scripts/benchmark_ng_job.py \
+  --api-base-url "$DSX_CONNECT_URL" \
+  --scope-id "$SCOPE_ID" \
+  --label "2G GCS protected scope" \
+  --mode "2g-gcs-protected-scope" \
+  --reader-strategy proxy \
+  --limit 1000 \
+  --poll-interval-seconds 5 \
+  --progress-item-limit 1000 \
+  --sample-items-limit 100 \
+  --insecure \
+  --output-json /tmp/dsx-connect-2-gcs-benchmark.json
+```
+
+Omit `--insecure` when the HTTPS certificate is trusted.
+
+The script prints:
+
+* progress events while the job runs
+* final JSON summary
+* a Markdown table row for benchmark notes
+
+## Watch An Existing Job
+
+If a scan is already running:
+
+```bash
+export JOB_ID="<job-id>"
+
+./scripts/benchmark_ng_job.py \
+  --api-base-url "$DSX_CONNECT_URL" \
+  --job-id "$JOB_ID" \
+  --label "2G GCS existing job" \
+  --mode "2g-gcs-existing-job" \
+  --poll-interval-seconds 5 \
+  --progress-item-limit 1000 \
+  --sample-items-limit 100 \
+  --insecure
+```
+
+## Metrics To Compare
+
+The benchmark output includes:
+
+| Metric | Meaning |
+| --- | --- |
+| `elapsed_seconds` | Total observed job runtime from DSX-Connect progress. |
+| `items_per_second` | End-to-end terminal item throughput. |
+| `reader_elapsed_ms` | Time to acquire readable content from the selected reader. |
+| `stream_read_elapsed_ms` | Time spent reading the content stream while sending to DSXA. |
+| `scanner_response_wait_elapsed_ms` | DSXA request time not spent reading the stream. |
+| `scanner_engine_elapsed_ms` | Scanner engine time reported by DSXA. |
+| `dsxa_elapsed_ms` | Wall time for the DSXA request. |
+| `queue_wait_ms` | Time between accepted work and scan-stage activity when available. |
+
+Interpretation:
+
+* High `reader_elapsed_ms` usually points to connector setup, connector lookup, or proxy response delay.
+* High `stream_read_elapsed_ms` usually points to repository read speed, connector proxy throughput, or network.
+* High `scanner_response_wait_elapsed_ms` with low stream time usually points to scanner-side queueing or DSXA response latency.
+* High `queue_wait_ms` usually points to relay, RabbitMQ, worker capacity, or active item caps.
+
+## Recommended Comparison Table
+
+Use this table shape when comparing with 1G:
+
+| Label | Mode | Items | Elapsed sec | Items/sec | Failures | Reader avg/p95 ms | Stream avg/p95 ms | DSXA avg/p95 ms | Engine avg/p95 ms | Notes |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 1G GCS batch | `1g-gcs-batch` | `1002` | `159` | `6.3` | `0` | | | | | historical local benchmark |
+| 2G local GCS protected scope (stub scanner) | `2g-local-gcs-protected-scope-stub` | `1000` | `114.746` | `8.715` | `0` | | | | | Stub scanner isolates GCS read plus 2G workflow overhead. |
+
+Paste the row emitted by `benchmark_ng_job.py` under the 1G row.
+
+The stub-scanner row is not a DSXA capacity measurement. It is useful because it removes DSXA from the path and still exercises protected-scope enumeration, connector proxy reads, RabbitMQ dispatch, persistence, policy completion, and item finalization. In the July 14, 2026 local run, scan-stage latency averaged `77.865 ms` with `181.805 ms` p95, while queue wait averaged `57953.586 ms` with `95898.633 ms` p95. That points first at relay/queue/worker/policy workflow throughput rather than DSXA.
+
+## Tune After Baseline
+
+Take one baseline run before changing concurrency.
+Then change one thing at a time:
+
+| Knob | What it tests |
+| --- | --- |
+| scan worker replicas | Horizontal scan capacity. |
+| `--prefetch-count` | RabbitMQ in-flight work per scan worker. |
+| `--scan-batch-concurrency` | Read/scan coroutines inside scan-only worker batches. |
+| relay active item cap | Whether scan workers are being starved by relay refill. |
+| connector replicas | Whether connector proxy reads are the bottleneck. |
+| DSXA scanner replicas/resources | Whether scanner capacity is the bottleneck. |
+
+Keep each run tied to the exact values used so results remain explainable.

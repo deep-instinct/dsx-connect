@@ -1106,6 +1106,8 @@ class JobService:
         refresh_parent: bool = True,
     ) -> JobItemRecord:
         existing_stage = getattr(current, stage_name)
+        if payload.state == "running" and existing_stage.state in {"completed", "failed", "skipped"}:
+            return current
         started_at = existing_stage.started_at
         if payload.state == "running" and started_at is None:
             started_at = datetime.now(timezone.utc)

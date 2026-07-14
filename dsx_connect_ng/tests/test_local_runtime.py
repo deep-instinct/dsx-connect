@@ -118,6 +118,32 @@ def test_runtime_env_overrides_configure_local_dsxa_docker() -> None:
     assert overrides["DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN"] == "rest-token"
 
 
+def test_runtime_env_overrides_allow_scanner_env_without_local_dsxa(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DSX_CONNECT_NG_SCANNER__MODE", "stub")
+    monkeypatch.setenv("DSX_CONNECT_NG_SCANNER__BASE_URL", "")
+
+    class Ctx:
+        obj = {
+            "with_postgres_docker": False,
+            "with_rabbit_docker": False,
+            "with_dsxa_docker": False,
+            "scan_worker_prefetch_count": 10,
+            "scan_worker_count": 1,
+            "policy_worker_prefetch_count": 1,
+            "result_sink_worker_prefetch_count": 1,
+            "relay_max_active_scan_items": None,
+            "relay_batch_size": None,
+            "relay_poll_interval_seconds": None,
+        }
+
+    overrides = _runtime_env_overrides(Ctx())
+
+    assert overrides["DSX_CONNECT_NG_SCANNER__MODE"] == "stub"
+    assert overrides["DSX_CONNECT_NG_SCANNER__BASE_URL"] == ""
+
+
 def test_runtime_env_overrides_use_resolved_dsxa_host_port() -> None:
     class Ctx:
         obj = {
@@ -462,26 +488,39 @@ def test_ensure_dsxa_container_recreates_exited_container_with_current_env(monke
 def test_dsxa_log_helpers_detect_ready_and_fatal_registration_failure() -> None:
     assert _dsxa_logs_show_ready("2026 I Registration succeeded")
     assert _dsxa_logs_show_ready("Result: true\nClassifier initialized.")
-    assert _dsxa_logs_show_fatal_startup_failure("Register failed with status code 409")
+    assert not _dsxa_logs_show_fatal_startup_failure("Register failed with status code 409")
     assert _dsxa_logs_show_fatal_startup_failure("Failed resetting client id. Error: Registarion error. Exiting docker")
     assert not _dsxa_logs_show_fatal_startup_failure("Failed registering product. Retrying")
 
 
-def test_wait_for_dsxa_ready_reports_fatal_registration_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wait_for_dsxa_ready_tolerates_registration_conflict_when_app_is_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(
         "dsx_connect_ng.local.dsx_connect_ng_local._rabbitmq_container_state",
         lambda container_name: "running",
     )
     monkeypatch.setattr(
         "dsx_connect_ng.local.dsx_connect_ng_local._docker_logs",
-        lambda container_name, tail=100: "Failed registering product. Error: Register failed with status code 409",
+        lambda container_name, tail=100: (
+            "App is running\n"
+            "Failed registering product. Error: Register failed with status code 409"
+        ),
     )
 
-    with pytest.raises(RuntimeError) as excinfo:
-        _wait_for_dsxa_ready("dsx-ng-dsxa", "127.0.0.1", 15000, timeout_seconds=0.5)
+    class Socket:
+        def settimeout(self, timeout: float) -> None:
+            pass
 
-    assert "fatal_startup_failure" in str(excinfo.value)
-    assert "status code 409" in str(excinfo.value)
+        def connect(self, address: tuple[str, int]) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("socket.socket", lambda *args, **kwargs: Socket())
+
+    _wait_for_dsxa_ready("dsx-ng-dsxa", "127.0.0.1", 15000, timeout_seconds=0.5)
 
 
 def test_wait_for_rabbitmq_ready_reports_container_state_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:

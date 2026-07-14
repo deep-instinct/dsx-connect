@@ -1655,6 +1655,66 @@ def test_scan_only_policy_completion_uses_single_multi_stage_update() -> None:
     assert repo.multi_stage_updates == 1
 
 
+def test_late_policy_running_update_does_not_regress_completed_item() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                items=[
+                    {
+                        "object_identity": "/finance/a.pdf",
+                        "payload": {},
+                    }
+                ]
+            )
+        )
+    )
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+
+    asyncio.run(
+        service.advance_scan_stage(
+            item.job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+        )
+    )
+    completed = asyncio.run(
+        service.advance_policy_stage(
+            item.job_item_id,
+            StageUpdateRequest(
+                state="completed",
+                result={
+                    "policy_stage_result": {"policy_id": "policy-1"},
+                    "remediation": {"state": "skipped", "reason": "benign_verdict"},
+                    "dianna": {"state": "skipped", "reason": "not_auto_requested", "details": {"verdict": "Benign"}},
+                    "delivery": {
+                        "request_now": False,
+                        "wait_for_dianna": False,
+                        "workflow_summary_targets": [],
+                        "workflow_summary_targets_configured": True,
+                    },
+                    "content_preservation": {"mode": "none", "reason": "not_needed"},
+                    "result_delivery_policy": {
+                        "scan": "never",
+                        "remediation": "all_outcomes",
+                        "dianna": "completed_only",
+                    },
+                },
+            ),
+        )
+    )
+
+    regressed = service.update_policy_stage(item.job_item_id, StageUpdateRequest(state="running"))
+
+    assert completed.state == "completed"
+    assert completed.policy_stage.state == "completed"
+    assert regressed.state == "completed"
+    assert regressed.policy_stage.state == "completed"
+    assert regressed.remediation_stage.state == "skipped"
+    assert regressed.delivery_stage.state == "skipped"
+
+
 def test_complete_scan_only_defers_parent_refresh_until_progress_poll() -> None:
     repo = CountingJobRepository()
     bus = InMemoryJobBus()

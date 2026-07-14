@@ -57,6 +57,7 @@ class DeadLetterPath(str, Enum):
 
 class ConnectorAPI(str, Enum):
     """Connector endpoints (called by dsx_connect). All are relative segments."""
+    VERSION = "version"
     READ_FILE = "read_file"
     ITEM_ACTION = "item_action"
     FULL_SCAN = "full_scan"

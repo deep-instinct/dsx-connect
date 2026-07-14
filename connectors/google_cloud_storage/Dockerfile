@@ -25,11 +25,7 @@ COPY connectors/google_cloud_storage/requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY connectors/framework connectors/framework
-COPY connectors/google_cloud_storage/__init__.py connectors/google_cloud_storage/
-COPY connectors/google_cloud_storage/config.py connectors/google_cloud_storage/
-COPY connectors/google_cloud_storage/gcs_client.py connectors/google_cloud_storage/
-COPY connectors/google_cloud_storage/google_cloud_storage_connector.py connectors/google_cloud_storage/
-COPY connectors/google_cloud_storage/version.py connectors/google_cloud_storage/
+COPY connectors/google_cloud_storage/*.py connectors/google_cloud_storage/
 COPY shared/ shared/
 # Optional dev/demo certs under shared/deploy/certs
 COPY shared/deploy/certs/ certs/
@@ -37,8 +33,6 @@ COPY shared/deploy/certs/ certs/
 RUN chown -R appuser:appuser certs \
     && chmod 0644 certs/*.crt || true \
     && chmod 0600 certs/*.key || true
-COPY connectors/google_cloud_storage/start.py connectors/google_cloud_storage/
-
 ENV PYTHONPATH=/app
 RUN mkdir -p data && chown appuser:appuser data
 

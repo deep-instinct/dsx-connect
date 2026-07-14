@@ -92,9 +92,14 @@ def test_register_connector_instance_reuses_existing_integration_and_heartbeat_u
 
     heartbeat = service.heartbeat_connector_instance(
         "fs-pod-1",
-        ConnectorInstanceHeartbeat(health="healthy", capabilities={"discover": True, "read": True, "write": False}),
+        ConnectorInstanceHeartbeat(
+            health="healthy",
+            connector_version="0.5.56",
+            capabilities={"discover": True, "read": True, "write": False},
+        ),
     )
     assert heartbeat.health == "healthy"
+    assert heartbeat.connector_version == "0.5.56"
     assert heartbeat.capabilities["write"] is False
     assert len(service.list_connector_instances(integration_id=integration.integration_id)) == 1
 

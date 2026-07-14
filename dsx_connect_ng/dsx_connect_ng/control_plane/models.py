@@ -77,6 +77,7 @@ class ConnectorInstanceRegister(ConnectorInstanceBase):
 
 class ConnectorInstanceHeartbeat(BaseModel):
     health: ConnectorHealth | None = None
+    connector_version: str | None = None
     capabilities: dict | None = None
     labels: dict | None = None
     lease_seconds: int | None = Field(default=None, ge=15, le=86400)

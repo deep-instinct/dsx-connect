@@ -261,6 +261,7 @@ def test_ui_integrations_summary_prefers_registered_connector_health() -> None:
     payload = response.json()
     assert payload[0]["connector_instance_count"] == 1
     assert payload[0]["connector_instances"][0]["connector_instance_id"] == "gcs-pod-1"
+    assert payload[0]["connector_instances"][0]["connector_version"] == "0.5.55"
     assert payload[0]["health"]["status"] == "healthy"
     assert payload[0]["health"]["endpoint"] == "http://gcs:80"
     assert payload[0]["health"]["details"]["connector_instance_id"] == "gcs-pod-1"

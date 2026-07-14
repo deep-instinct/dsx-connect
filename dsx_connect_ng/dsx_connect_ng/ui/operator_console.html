@@ -1824,8 +1824,9 @@
           render: (row) => {
             const instances = row.connector_instances || [];
             const liveInstance = instances[0] || null;
+            const version = liveInstance?.connector_version ? `v${liveInstance.connector_version}` : "version unknown";
             return instances.length
-              ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span>`
+              ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span><br><span class="muted">${escapeHtml(version)}</span>`
               : "none";
           },
         },

@@ -19,15 +19,11 @@ from dsx_connect_ng.control_plane.models import (
     ProtectedScopeUpdate,
 )
 from dsx_connect_ng.control_plane.repository import ControlPlaneRepository
-from dsx_connect_ng.jobs.postgres_repo import migration_files
+from dsx_connect_ng.jobs.postgres_repo import apply_schema as apply_job_schema
 
 
 def apply_schema(db_url: str) -> None:
-    with psycopg.connect(db_url) as conn:
-        with conn.cursor() as cur:
-            for migration in migration_files():
-                cur.execute(migration.read_text(encoding="utf-8"))
-        conn.commit()
+    apply_job_schema(db_url)
 
 
 class PostgresControlPlaneRepository(ControlPlaneRepository):
@@ -263,6 +259,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
             return None
         lease_seconds = payload.lease_seconds or current.lease_seconds
         health = payload.health or current.health
+        connector_version = payload.connector_version if payload.connector_version is not None else current.connector_version
         capabilities = payload.capabilities if payload.capabilities is not None else current.capabilities
         labels = payload.labels if payload.labels is not None else current.labels
         with self._connect() as conn, conn.cursor() as cur:
@@ -270,6 +267,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
                 """
                 UPDATE cp_connector_instances
                 SET health = %s,
+                    connector_version = %s,
                     capabilities_json = %s::jsonb,
                     labels_json = %s::jsonb,
                     lease_seconds = %s,
@@ -285,6 +283,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
                 """,
                 (
                     health,
+                    connector_version,
                     psycopg.types.json.Json(capabilities),
                     psycopg.types.json.Json(labels),
                     lease_seconds,

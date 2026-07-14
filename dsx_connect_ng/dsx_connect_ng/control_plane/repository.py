@@ -177,6 +177,8 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
         }
         if payload.health is not None:
             update["health"] = payload.health
+        if payload.connector_version is not None:
+            update["connector_version"] = payload.connector_version
         if payload.capabilities is not None:
             update["capabilities"] = payload.capabilities
         if payload.labels is not None:

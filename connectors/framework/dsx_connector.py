@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import os
 import sys
 from pathlib import Path
@@ -234,6 +235,7 @@ class DSXConnector:
 
         self.register_with_core = bool(getattr(connector_config, "register_with_core", True))
         self.register_with_ng_control_plane = bool(getattr(connector_config, "register_with_ng_control_plane", False))
+        self.connector_version = self._resolve_connector_version()
 
         # Ensure per-connector default data dir for UUID persistence in local/dev.
         # If DSXCONNECTOR_DATA_DIR is not set, derive it from the connector's config module path.
@@ -702,6 +704,35 @@ class DSXConnector:
             return "unhealthy"
         return "degraded"
 
+    def _resolve_connector_version(self) -> str | None:
+        for env_name in ("DSXCONNECTOR_VERSION", "APP_VERSION"):
+            value = os.getenv(env_name)
+            if value:
+                return value
+
+        explicit = getattr(self.connector_config, "connector_version", None)
+        if explicit:
+            return str(explicit)
+
+        config_module_name = self.connector_config.__class__.__module__
+        package_name = config_module_name.rsplit(".", 1)[0] if "." in config_module_name else ""
+        if not package_name:
+            return None
+        try:
+            version_module = importlib.import_module(f"{package_name}.version")
+        except Exception:
+            return None
+        version = getattr(version_module, "CONNECTOR_VERSION", None)
+        return str(version) if version else None
+
+    def version_payload(self) -> dict[str, Any]:
+        return {
+            "connector_name": self.connector_running_model.name,
+            "connector_id": self.connector_id,
+            "connector_instance_id": self.connector_instance_id,
+            "version": self.connector_version,
+        }
+
     def _ng_registration_payload(self) -> dict[str, Any]:
         integration_id = str(getattr(self.connector_config, "ng_integration_id", "") or "").strip() or None
         payload: dict[str, Any] = {
@@ -711,7 +742,7 @@ class DSXConnector:
             "platform_key": self._ng_platform_key(),
             "display_name": self.connector_running_model.display_name or self.connector_running_model.name,
             "connector_name": self.connector_running_model.name,
-            "connector_version": os.getenv("DSXCONNECTOR_VERSION") or os.getenv("APP_VERSION") or None,
+            "connector_version": self.connector_version,
             "base_url": self.connector_running_model.url,
             "capabilities": self._ng_capabilities(),
             "health": self._ng_health(),
@@ -723,6 +754,7 @@ class DSXConnector:
     def _ng_heartbeat_payload(self) -> dict[str, Any]:
         return {
             "health": self._ng_health(),
+            "connector_version": self.connector_version,
             "capabilities": self._ng_capabilities(),
             "labels": getattr(self.connector_config, "ng_connector_labels", {}) or {},
             "lease_seconds": int(getattr(self.connector_config, "ng_lease_seconds", 120) or 120),
@@ -1339,6 +1371,8 @@ class DSXAConnectorRouter(APIRouter):
         self._connector = connector
 
         self.get("/", description="Connector status and availability")(self.home)
+        self.get(route_path(ConnectorAPI.VERSION.value),
+                 description="Connector version")(self.version)
         self.get(route_path(ConnectorAPI.HEALTHZ.value))(self.healthz)
         self.get(route_path(ConnectorAPI.READYZ.value))(self.readyz)
 
@@ -1405,6 +1439,9 @@ class DSXAConnectorRouter(APIRouter):
 
     async def home(self):
         return await self._connector.get_status()
+
+    async def version(self):
+        return JSONResponse(self._connector.version_payload(), status_code=200)
 
     async def healthz(self):
         return JSONResponse({"ok": True}, status_code=200)

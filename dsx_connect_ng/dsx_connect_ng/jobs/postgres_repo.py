@@ -24,6 +24,7 @@ from dsx_connect_ng.jobs.repository import JobRepository
 
 OUTBOX_NOTIFY_CHANNEL = "dsx_ng_outbox"
 _TERMINAL_STAGE_STATES = {"completed", "failed", "skipped"}
+_SCHEMA_ADVISORY_LOCK_ID = 0x44535802
 
 
 def _migration_dir() -> Path:
@@ -37,6 +38,7 @@ def migration_files() -> list[Path]:
 def apply_schema(db_url: str) -> None:
     with psycopg.connect(db_url) as conn:
         with conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_lock(%s)", (_SCHEMA_ADVISORY_LOCK_ID,))
             for migration in migration_files():
                 cur.execute(migration.read_text(encoding="utf-8"))
         conn.commit()

@@ -87,10 +87,11 @@ def test_inmemory_repository_connector_instance_upsert_and_heartbeat() -> None:
 
     heartbeat = repo.update_connector_instance_heartbeat(
         "gcs-pod-1",
-        ConnectorInstanceHeartbeat(health="healthy", labels={"pod": "gcs-pod-1"}),
+        ConnectorInstanceHeartbeat(health="healthy", connector_version="0.5.57", labels={"pod": "gcs-pod-1"}),
     )
     assert heartbeat is not None
     assert heartbeat.health == "healthy"
+    assert heartbeat.connector_version == "0.5.57"
     assert heartbeat.labels == {"pod": "gcs-pod-1"}
 
 

@@ -38,7 +38,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
 export DSX_CONNECT_VERSION=2.0.8
-export CONNECTOR_VERSION=2.0.5
+export FILESYSTEM_CONNECTOR_VERSION=2.0.3
 export CLUSTER_HOST_IP=10.2.4.103
 export DSX_CONNECT_HOST="dsx-connect.${CLUSTER_HOST_IP}.nip.io"
 ```
@@ -304,7 +304,7 @@ Install the connector:
 ```bash
 helm upgrade --install fs \
   oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
-  --version $CONNECTOR_VERSION \
+  --version $FILESYSTEM_CONNECTOR_VERSION \
   --namespace $NAMESPACE \
   -f /tmp/filesystem-connector-2-values.yaml
 ```

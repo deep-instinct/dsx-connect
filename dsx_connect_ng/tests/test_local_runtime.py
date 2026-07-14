@@ -37,7 +37,7 @@ def test_default_env_template_mentions_rabbitmq_mode() -> None:
     assert "DSX_CONNECT_NG_LOCAL__SCAN_ONLY_RUNTIME_LEASES=false" in content
     assert "DSX_CONNECT_NG_LOCAL__DSXA_IMAGE=" in content
     assert "APPLIANCE_URL=<your-appliance.deepinstinctweb.com>" in content
-    assert "DSX_CONNECT_NG_LOCAL__POLICY_PREFETCH_COUNT=1" in content
+    assert "DSX_CONNECT_NG_LOCAL__POLICY_PREFETCH_COUNT=100" in content
     assert "DSX_CONNECT_NG_LOCAL__RESULT_SINK_PREFETCH_COUNT=1" in content
     assert "DSX_CONNECT_NG_RESULT_SINK__BACKEND=stdout" in content
 
@@ -215,7 +215,7 @@ def test_service_specs_include_api_relay_scan_policy_remediation_delivery_and_di
     assert "--scan-batch-trust-items" in scan_spec.command
     assert "--no-scan-batch-trust-items" not in scan_spec.command
     policy_spec = next(spec for spec in specs if spec.name == "policy-worker")
-    assert policy_spec.command[-2:] == ["--prefetch-count", "1"]
+    assert policy_spec.command[-2:] == ["--prefetch-count", "100"]
     result_sink_spec = next(spec for spec in specs if spec.name == "result-sink-worker")
     assert result_sink_spec.command[-2:] == ["--prefetch-count", "1"]
 

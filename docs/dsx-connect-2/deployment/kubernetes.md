@@ -332,7 +332,7 @@ workers:
     args:
       # Number of policy messages each policy worker may process concurrently.
       - "--prefetch-count"
-      - "10"
+      - "100"
 
   remediation:
     enabled: true

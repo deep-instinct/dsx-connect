@@ -31,6 +31,7 @@ workers:
     args: ["--prefetch-count", "10"]
   policy:
     enabled: true
+    args: ["--prefetch-count", "100"]
   remediation:
     enabled: true
   resultSink:

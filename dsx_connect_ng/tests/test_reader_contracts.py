@@ -15,11 +15,16 @@ from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 from dsx_connect_ng.readers.cached import CachedArtifactReader
 from dsx_connect_ng.readers.contracts import ArtifactRef, ConnectorProxyReadRequest, ConnectorProxyReadResponse, ReaderErrorPayload
+from dsx_connect_ng.readers.gcs_native import GCSNativeReader, resolve_gcs_object_ref
 from dsx_connect_ng.readers import proxy as proxy_module
 from dsx_connect_ng.readers.base import TerminalScanError
 from dsx_connect_ng.readers.proxy import ConnectorProxyReader, ConnectorProxyRuntimeConfig, build_legacy_connector_read_payload, http_connector_proxy_read
 from dsx_connect_ng.readers.resolver import build_scan_reader
 from dsx_connect_ng.workers import scan_worker
+
+
+async def _collect_async_chunks(data) -> list[bytes]:
+    return [chunk async for chunk in data]
 
 
 def _scan_request_from_submitted_item(*, object_identity: str, payload: dict) -> ScanItemRequested:
@@ -206,6 +211,89 @@ def test_gcs_batch_payload_path_flows_to_legacy_connector_location() -> None:
     assert payload["location"] == "BadMojoResume"
     assert payload["metainfo"] == "BadMojoResume"
     assert payload["scan_job_id"] == request.job_id
+
+
+def test_native_gcs_reader_resolves_protected_scope_bucket_and_relative_path() -> None:
+    request = _scan_request_from_submitted_item(
+        object_identity="lg-test-01/benchmarks/1kdocs/a.pdf",
+        payload={
+            "readerStrategy": "native",
+            "scopeSelector": "lg-test-01",
+            "path": "benchmarks/1kdocs/a.pdf",
+        },
+    )
+
+    resolved = resolve_gcs_object_ref(request)
+
+    assert resolved.bucket == "lg-test-01"
+    assert resolved.key == "benchmarks/1kdocs/a.pdf"
+
+
+def test_native_gcs_reader_resolves_prefixed_scope_path() -> None:
+    request = ScanItemRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="bucket-a/prefix-a/object.pdf",
+        scan_options={
+            "readerStrategy": "native",
+            "scopeSelector": "bucket-a/prefix-a",
+            "path": "object.pdf",
+        },
+    )
+
+    resolved = resolve_gcs_object_ref(request)
+
+    assert resolved.bucket == "bucket-a"
+    assert resolved.key == "prefix-a/object.pdf"
+
+
+def test_native_gcs_reader_streams_and_closes_blob() -> None:
+    class FakeStream:
+        def __init__(self) -> None:
+            self.chunks = [b"abc", b"def", b""]
+            self.closed = False
+
+        def read(self, _size: int) -> bytes:
+            return self.chunks.pop(0)
+
+        def close(self) -> None:
+            self.closed = True
+
+    stream = FakeStream()
+    seen: dict[str, str] = {}
+
+    class FakeBlob:
+        def open(self, mode: str, *, chunk_size: int):
+            assert mode == "rb"
+            assert chunk_size == 4
+            return stream
+
+    class FakeBucket:
+        def blob(self, key: str) -> FakeBlob:
+            seen["key"] = key
+            return FakeBlob()
+
+    class FakeClient:
+        def bucket(self, bucket: str) -> FakeBucket:
+            seen["bucket"] = bucket
+            return FakeBucket()
+
+    request = ScanItemRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="bucket-a/object.pdf",
+        scan_options={"readerStrategy": "native", "sizeInBytes": 6},
+    )
+    reader = GCSNativeReader(client_factory=lambda: FakeClient(), chunk_size=4)
+
+    result = asyncio.run(reader.acquire(request))
+    chunks = asyncio.run(_collect_async_chunks(result.content_stream))
+
+    assert chunks == [b"abc", b"def"]
+    assert stream.closed is True
+    assert result.content_length == 6
+    assert result.details["reader"] == "gcs_native"
+    assert seen == {"bucket": "bucket-a", "key": "object.pdf"}
 
 
 def test_http_connector_proxy_read_downloads_binary_to_local_artifact(monkeypatch) -> None:

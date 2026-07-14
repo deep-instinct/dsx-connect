@@ -7,6 +7,7 @@ from dsx_connect_ng.jobs.contracts import ScanItemRequested
 from dsx_connect_ng.readers.base import Reader
 from dsx_connect_ng.readers.cached import CachedArtifactReader
 from dsx_connect_ng.readers.contracts import ReaderStrategy
+from dsx_connect_ng.readers.gcs_native import GCSNativeReader
 from dsx_connect_ng.readers.local_path import LocalPathReader
 from dsx_connect_ng.readers.proxy import build_connector_proxy_reader
 
@@ -54,4 +55,9 @@ def build_scan_reader(
         return build_connector_proxy_reader(request, control_plane=control_plane)
     if strategy == "cached":
         return CachedArtifactReader()
+    if strategy == "native" and control_plane is not None and request.integration_id:
+        integration = control_plane.get_integration_or_404(request.integration_id)
+        platform = integration.platform.strip().lower().replace("_", "-")
+        if platform in {"gcs", "google-cloud-storage", "google-cloud-storage-connector"}:
+            return GCSNativeReader()
     return LocalPathReader()

@@ -123,8 +123,10 @@ Then change one thing at a time:
 | scan worker replicas | Horizontal scan capacity. |
 | `--prefetch-count` | RabbitMQ in-flight work per scan worker. |
 | `--scan-batch-concurrency` | Read/scan coroutines inside scan-only worker batches. |
+| policy worker `--prefetch-count` | Whether policy/finalization is serializing `scanned -> completed` transitions. For high-volume bucket scans, start at `100`. |
 | relay active item cap | Whether scan workers are being starved by relay refill. |
 | connector replicas | Whether connector proxy reads are the bottleneck. |
+| reader strategy | Compare `proxy` with `native`. For GCS, native reads stream directly from GCS in the scan worker instead of routing content bytes through the connector. |
 | DSXA scanner replicas/resources | Whether scanner capacity is the bottleneck. |
 
 Keep each run tied to the exact values used so results remain explainable.

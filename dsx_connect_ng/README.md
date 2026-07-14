@@ -225,8 +225,10 @@ Scan worker modes:
   - `proxy`
   - `cached`
   - `quarantine`
-- `native`, `cached`, and `quarantine` currently resolve to the local-path reader implementation
-- `proxy` now uses a `ConnectorProxyReader` that calls a connector-compatible `read_file` endpoint and stages the response to a local temp file for DSXA scanning
+- `native` uses a worker-hosted native reader when one exists for the integration platform. GCS integrations use the native GCS reader, which streams object bytes directly from GCS to the scan transport.
+- `native` falls back to the local-path reader for platforms without a native reader.
+- `cached` and `quarantine` currently resolve to local artifact readers.
+- `proxy` uses a `ConnectorProxyReader` that calls a connector-compatible `read_file` endpoint and streams the response to DSXA scanning.
 - result sink backends currently supported are:
   - `stdout`
   - `json_lines`

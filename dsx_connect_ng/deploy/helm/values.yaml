@@ -148,7 +148,7 @@ workers:
     enabled: false
     replicaCount: 1
     command: ["python", "-m", "dsx_connect_ng.workers.policy_worker"]
-    # Common tuning: ["--prefetch-count", "10"]
+    # Common tuning for high-volume scans: ["--prefetch-count", "100"]
     args: []
 
   remediation:

@@ -1,5 +1,6 @@
 from google.api_core.exceptions import NotFound, GoogleAPIError
 import io, hashlib, pathlib, os
+from typing import BinaryIO
 from shared import file_ops
 from shared.file_ops import relpath_matches_filter, compute_prefix_hints
 from shared.dsx_logging import dsx_logging
@@ -142,6 +143,17 @@ class GCSClient:
             raise FileNotFoundError(f"{key} not found in bucket {bucket}")
         except Exception as e:
             dsx_logging.error(f"GCS get_object error: {e}")
+            raise
+
+    def open_object_stream(self, bucket: str, key: str) -> BinaryIO:
+        try:
+            client = self._get_client()
+            blob = client.bucket(bucket).blob(key)
+            return blob.open("rb", chunk_size=CHUNK_SIZE)
+        except NotFound:
+            raise FileNotFoundError(f"{key} not found in bucket {bucket}")
+        except Exception as e:
+            dsx_logging.error(f"GCS open_object_stream error: {e}")
             raise
 
     def delete_object(self, bucket: str, key: str) -> bool:

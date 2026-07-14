@@ -413,11 +413,11 @@ async def test_read_file_handler_uses_metainfo_bucket(monkeypatch):
 
     calls: list[tuple[str, str]] = []
 
-    def fake_get_object(bucket, key):
+    def fake_open_object_stream(bucket, key):
         calls.append((bucket, key))
         return io.BytesIO(b"content")
 
-    monkeypatch.setattr(gc.gcs_client, "get_object", fake_get_object)
+    monkeypatch.setattr(gc.gcs_client, "open_object_stream", fake_open_object_stream)
 
     resp = await gc.read_file_handler(
         ScanRequestModel(
@@ -442,11 +442,11 @@ async def test_read_file_handler_uses_configured_bucket_for_relative_location(mo
 
     calls: list[tuple[str, str]] = []
 
-    def fake_get_object(bucket, key):
+    def fake_open_object_stream(bucket, key):
         calls.append((bucket, key))
         return io.BytesIO(b"content")
 
-    monkeypatch.setattr(gc.gcs_client, "get_object", fake_get_object)
+    monkeypatch.setattr(gc.gcs_client, "open_object_stream", fake_open_object_stream)
 
     resp = await gc.read_file_handler(
         ScanRequestModel(

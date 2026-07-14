@@ -180,6 +180,8 @@ nav:
               - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
               - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
           - Development: dsx-connect-2/deployment/development.md
+      - Operations:
+          - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
       - Packaging Releases: dsx-connect-2/packaging-releases.md
 
   - Connectors:

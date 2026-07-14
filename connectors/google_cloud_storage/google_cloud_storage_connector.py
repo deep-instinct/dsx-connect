@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+from typing import BinaryIO
 
 from starlette.responses import StreamingResponse
 
@@ -14,7 +15,6 @@ from connectors.google_cloud_storage.version import CONNECTOR_VERSION
 from shared.async_ops import run_async
 from shared.file_ops import relpath_matches_filter
 from shared.log_sanitizer import config_for_log
-from shared.streaming import stream_blob
 
 # Reload config to pick up environment variables
 config = ConfigManager.reload_config()
@@ -254,6 +254,22 @@ def _resolve_bucket_and_key_for_request(scan_request: ScanRequestModel) -> tuple
         return bucket, key
 
     return configured_bucket, location
+
+
+def _stream_with_first_chunk_and_close(file_stream: BinaryIO, first_chunk: bytes, chunk_size: int = 1024 * 1024):
+    try:
+        if first_chunk:
+            yield first_chunk
+        while True:
+            chunk = file_stream.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+    finally:
+        try:
+            file_stream.close()
+        except Exception:
+            pass
 
 
 def _should_monitor() -> bool:
@@ -1156,8 +1172,12 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
     """
     try:
         bucket, key = _resolve_bucket_and_key_for_request(scan_event_queue_info)
-        file_stream = gcs_client.get_object(bucket, key)
-        return StreamingResponse(stream_blob(file_stream), media_type="application/octet-stream")
+        file_stream = gcs_client.open_object_stream(bucket, key)
+        first_chunk = file_stream.read(1024 * 1024)
+        return StreamingResponse(
+            _stream_with_first_chunk_and_close(file_stream, first_chunk),
+            media_type="application/octet-stream",
+        )
     except Exception as e:
         return StatusResponse(status=StatusResponseEnum.ERROR, message=str(e))
 

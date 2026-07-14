@@ -383,6 +383,8 @@ In the Operator Console:
 This quickstart uses DSXA scanner mode, so scan results come from the configured DSXA scanner.
 For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_NG_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.
 
+If scan work exhausts retries and lands in a dead letter queue, see [Dead Letter Queues](../operations/dead-letter-queues.md) for the current RabbitMQ inspection and scan restart flow.
+
 ## Cleanup
 
 ```bash

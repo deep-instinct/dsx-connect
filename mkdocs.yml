@@ -175,6 +175,7 @@ nav:
           - Overview: dsx-connect-2/deployment/index.md
           - Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
           - Kubernetes Helm: dsx-connect-2/deployment/kubernetes.md
+          - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
           - Connectors:
               - Overview: dsx-connect-2/deployment/connectors/index.md
               - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md

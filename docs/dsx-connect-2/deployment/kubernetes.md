@@ -12,6 +12,9 @@ Development builds and helper-script workflows are covered in [Development deplo
 
 This guide focuses on standard Kubernetes deployment with `kubectl` and Helm.
 
+For customer environments that cannot run Helm in production, render the same charts to YAML and apply them with `kubectl`.
+See [Static Kubernetes Manifests](static-manifests.md).
+
 ## Prerequisites
 
 * Kubernetes 1.19+

@@ -16,6 +16,7 @@ Use these pages as the deployment path:
 | Page | Purpose |
 | --- | --- |
 | [Kubernetes Helm](kubernetes.md) | Deploy the DSX-Connect 2 control plane from released Helm charts |
+| [Static Kubernetes Manifests](static-manifests.md) | Render Helm charts to YAML for customers that cannot run Helm in production |
 | [Connectors](connectors/index.md) | Deploy repository connectors for DSX-Connect 2 |
 | [Development](development.md) | Build local images and use helper scripts for development deployments |
 

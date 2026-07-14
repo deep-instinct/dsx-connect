@@ -23,6 +23,7 @@ from dsx_connect_ng.jobs.models import (
 from dsx_connect_ng.jobs.repository import JobRepository
 
 OUTBOX_NOTIFY_CHANNEL = "dsx_ng_outbox"
+_TERMINAL_STAGE_STATES = {"completed", "failed", "skipped"}
 
 
 def _migration_dir() -> Path:
@@ -414,6 +415,31 @@ class PostgresJobRepository(JobRepository):
         if stage_column is None:
             raise ValueError(f"unsupported_stage:{stage_name}")
         with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT job_item_id, job_id, item_index, object_identity, state,
+                       payload_json AS payload, content_source_json AS content_source,
+                       delivery_requirements_json AS delivery_requirements, error_json AS error,
+                       scan_stage_json AS scan_stage,
+                       policy_stage_json AS policy_stage,
+                       remediation_stage_json AS remediation_stage,
+                       delivery_stage_json AS delivery_stage,
+                       dianna_stage_json AS dianna_stage,
+                       created_at, updated_at, completed_at
+                FROM cp_job_items
+                WHERE job_item_id = %s
+                FOR UPDATE
+                """,
+                (job_item_id,),
+            )
+            current_row = cur.fetchone()
+            if current_row is None:
+                return None
+            current_stage = current_row.get(stage_name) or {}
+            current_stage_state = current_stage.get("state") if isinstance(current_stage, dict) else None
+            if stage_record.state == "running" and current_stage_state in _TERMINAL_STAGE_STATES:
+                conn.commit()
+                return JobItemRecord.model_validate(current_row)
             cur.execute(
                 f"""
                 UPDATE cp_job_items

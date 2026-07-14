@@ -78,6 +78,52 @@ export JOB_ID="<job-id>"
   --insecure
 ```
 
+## Compare GCS Reader Throughput
+
+Use the reader-only benchmark when the question is `proxy` versus `native` read speed. This benchmark streams bytes from the same GCS objects through each reader path without DSXA, RabbitMQ, policy, remediation, or result delivery in the measurement.
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.dsx-connect-local/google-cloud-storage-connector-2g/gcp-sa.json"
+
+./scripts/benchmark_gcs_readers.py \
+  --bucket lg-test-01 \
+  --prefix benchmarks/1kdocs \
+  --limit 1000 \
+  --mode both \
+  --proxy-endpoint http://127.0.0.1:8595/google-cloud-storage-connector/read_file \
+  --concurrency 8 \
+  --chunk-size 1048576 \
+  --output-json /tmp/dsx-gcs-reader-benchmark-1000-c8.json
+```
+
+For lab runs, point `--proxy-endpoint` at the connector `read_file` endpoint reachable from the benchmark host. Native mode uses `GOOGLE_APPLICATION_CREDENTIALS` and reads GCS directly from the benchmark process.
+DSX-Connect 2 reader chunk size is controlled by `DSX_CONNECT_NG_READERS__CHUNK_SIZE_BYTES`, defaulting to `1048576`.
+The GCS connector accepts `DSXCONNECTOR_CHUNK_SIZE_BYTES`; the older `CHUNK_SIZE` environment variable remains supported for compatibility.
+
+Local July 14, 2026 result against `lg-test-01/benchmarks/1kdocs`:
+
+| Mode | Success | MiB Read | Elapsed sec | Items/sec | MiB/sec | Avg Read ms | P95 Read ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| native, before client cache | `988/988` | `101.748` | `112.695` | `8.767` | `0.903` | `900.567` | `1248.951` |
+| proxy, before pooled/threaded transport | `988/988` | `101.748` | `122.604` | `8.058` | `0.830` | `991.269` | `1568.168` |
+| raw `google.cloud.storage`, one shared client | `988/988` | `101.748` | `35.177` | `28.087` | `2.892` | `278.135` | `474.666` |
+| raw connector `GCSClient.open_object_stream`, one shared client | `988/988` | `101.748` | `32.792` | `30.129` | `3.103` | `257.189` | `422.796` |
+| raw connector `GCSClient.get_object`, one shared client | `988/988` | `101.748` | `20.868` | `47.345` | `4.876` | `165.952` | `353.109` |
+| native, cached shared client | `988/988` | `101.748` | `30.177` | `32.740` | `3.372` | `235.665` | `421.421` |
+| proxy, pooled NG HTTP + threaded connector read | `988/988` | `101.748` | `29.585` | `33.395` | `3.439` | `225.665` | `392.939` |
+
+The first native run showed only a small advantage over proxy because it constructed a new Google SDK client per item. After caching the native GCS client per process, native read throughput moved into the same range as raw shared-client GCS reads. Proxy then reached the same range after two transport fixes: pooled async HTTP from NG to the connector, and moving connector-side blocking GCS stream reads off the connector event loop. Native still has architectural advantages because it removes a process hop, but this local corpus does not show a decisive reader-only advantage once proxy is optimized.
+
+Native chunk-size sweep, same corpus and concurrency:
+
+| Chunk size | Success | Elapsed sec | Items/sec | MiB/sec | Avg Read ms | P95 Read ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `262144` | `988/988` | `31.642` | `31.225` | `3.216` | `239.863` | `588.434` |
+| `1048576` | `988/988` | `30.177` | `32.740` | `3.372` | `235.665` | `421.421` |
+| `4194304` | `988/988` | `28.321` | `34.885` | `3.593` | `224.644` | `423.162` |
+
+The `1kdocs` corpus averages about `108 KiB` per object, so chunk size is not the primary lever. The `4 MiB` run was best in this local sample, but keep this configurable and retest with larger-object corpora before changing production defaults.
+
 ## Metrics To Compare
 
 The benchmark output includes:
@@ -111,7 +157,7 @@ Use this table shape when comparing with 1G:
 
 Paste the row emitted by `benchmark_ng_job.py` under the 1G row.
 
-The stub-scanner row is not a DSXA capacity measurement. It is useful because it removes DSXA from the path and still exercises protected-scope enumeration, connector proxy reads, RabbitMQ dispatch, persistence, policy completion, and item finalization. In the July 14, 2026 local run, scan-stage latency averaged `77.865 ms` with `181.805 ms` p95, while queue wait averaged `57953.586 ms` with `95898.633 ms` p95. That points first at relay/queue/worker/policy workflow throughput rather than DSXA.
+The stub-scanner row is not a DSXA or reader throughput measurement. The stub scanner does not open the object stream, so it is useful for isolating protected-scope enumeration, RabbitMQ dispatch, persistence, policy completion, and item finalization. In the July 14, 2026 local run, scan-stage latency averaged `77.865 ms` with `181.805 ms` p95, while queue wait averaged `57953.586 ms` with `95898.633 ms` p95. That points first at relay/queue/worker/policy workflow throughput rather than DSXA.
 
 ## Tune After Baseline
 

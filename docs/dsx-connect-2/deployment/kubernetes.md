@@ -34,14 +34,14 @@ The examples use:
 | --- | --- |
 | Helm release | `dsx-connect` |
 | Namespace | `dsx-connect` |
-| Chart version | `2.0.6` |
+| Chart version | `2.0.7` |
 
 Set these variables once for the shell session:
 
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.6
+export DSX_CONNECT_VERSION=2.0.7
 ```
 
 When examples show a release name or namespace, they use these values.
@@ -50,8 +50,8 @@ When examples show a release name or namespace, they use these values.
 
 DSX-Connect 2 release builds publish both:
 
-* a container image, such as `dsxconnect/dsx-connect:2.0.6`
-* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.6`
+* a container image, such as `dsxconnect/dsx-connect:2.0.7`
+* an OCI Helm chart, such as `dsxconnect/dsx-connect-chart --version 2.0.7`
 
 The chart `appVersion` is intended to match the DSX-Connect image version for release builds.
 If you deploy a released chart without overriding `image.tag`, the chart uses the matching released image tag.
@@ -524,7 +524,7 @@ ingress:
 Update the pinned chart version and run Helm again:
 
 ```bash
-export DSX_CONNECT_VERSION=2.0.6
+export DSX_CONNECT_VERSION=2.0.7
 
 helm upgrade --install "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \

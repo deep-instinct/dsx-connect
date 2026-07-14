@@ -1,12 +1,13 @@
 import json
 import os
 import threading
-from typing import BinaryIO
-
 from starlette.responses import StreamingResponse
 
 from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
 from connectors.google_cloud_storage.gcs_client import GCSClient
+from connectors.google_cloud_storage.gcs_discoverer import GCSDiscoverer
+from connectors.google_cloud_storage.gcs_reader import GCSReader
+from shared.object_storage import ObjectRef, ObjectScope
 from shared.models.connector_models import AssetDiscoveryItem, AssetDiscoveryResponse, ObjectListingItem, ObjectListingResponse, ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
@@ -58,6 +59,8 @@ except Exception:
 connector = DSXConnector(config)
 
 gcs_client = GCSClient()
+gcs_reader = GCSReader(client=gcs_client)
+gcs_discoverer = GCSDiscoverer(client=gcs_client)
 
 _monitor_thread: threading.Thread | None = None
 _monitor_stop = threading.Event()
@@ -256,20 +259,11 @@ def _resolve_bucket_and_key_for_request(scan_request: ScanRequestModel) -> tuple
     return configured_bucket, location
 
 
-def _stream_with_first_chunk_and_close(file_stream: BinaryIO, first_chunk: bytes, chunk_size: int = 1024 * 1024):
-    try:
-        if first_chunk:
-            yield first_chunk
-        while True:
-            chunk = file_stream.read(chunk_size)
-            if not chunk:
-                break
-            yield chunk
-    finally:
-        try:
-            file_stream.close()
-        except Exception:
-            pass
+async def _stream_with_first_chunk(first_chunk: bytes, chunks):
+    if first_chunk:
+        yield first_chunk
+    async for chunk in chunks:
+        yield chunk
 
 
 def _should_monitor() -> bool:
@@ -543,8 +537,9 @@ async def full_scan_handler(
     """
     requests: list[ScanRequestModel] = []
     count = 0
-    for blob in gcs_client.keys(config.asset_bucket, base_prefix=config.asset_prefix_root, filter_str=config.filter):
-        key = blob['Key']
+    scope = ObjectScope(bucket=config.asset_bucket, prefix=config.asset_prefix_root, filter=config.filter)
+    async for obj in gcs_discoverer.list_objects(scope):
+        key = obj.ref.key
         if config.filter and not relpath_matches_filter(_relative_to_configured_prefix(key), config.filter):
             continue
         full_path = f"{config.asset_bucket}/{key}"
@@ -594,8 +589,9 @@ async def full_scan_handler(
 async def preview_provider(limit: int) -> list[str]:
     items: list[str] = []
     try:
-        for blob in gcs_client.keys(config.asset_bucket, base_prefix=config.asset_prefix_root, filter_str=config.filter):
-            key = blob.get('Key')
+        scope = ObjectScope(bucket=config.asset_bucket, prefix=config.asset_prefix_root, filter=config.filter)
+        async for obj in gcs_discoverer.list_objects(scope):
+            key = obj.ref.key
             if not key:
                 continue
             if config.filter and not relpath_matches_filter(_relative_to_configured_prefix(key), config.filter):
@@ -1172,10 +1168,10 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
     """
     try:
         bucket, key = _resolve_bucket_and_key_for_request(scan_event_queue_info)
-        file_stream = gcs_client.open_object_stream(bucket, key)
-        first_chunk = file_stream.read(1024 * 1024)
+        chunks = gcs_reader.open_object(ObjectRef(bucket=bucket, key=key, uri=f"gs://{bucket}/{key}"))
+        first_chunk = await anext(chunks, b"")
         return StreamingResponse(
-            _stream_with_first_chunk_and_close(file_stream, first_chunk),
+            _stream_with_first_chunk(first_chunk, chunks),
             media_type="application/octet-stream",
         )
     except Exception as e:

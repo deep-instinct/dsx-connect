@@ -156,6 +156,37 @@ def test_postgres_job_repository_updates_stage(postgres_repo: PostgresJobReposit
     assert updated.state == "scanning"
 
 
+def test_postgres_job_repository_does_not_regress_terminal_stage_to_running(postgres_repo: PostgresJobRepository) -> None:
+    suffix = uuid.uuid4().hex
+    job = postgres_repo.create_job(
+        JobCreate(
+            job_type="scan.batch",
+            state="accepted",
+            idempotency_key=f"idem-stage-regression-{suffix}",
+        )
+    )
+    item = postgres_repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity=f"/finance/{suffix}.pdf",
+            state="scanned",
+            policy_stage=StageRecord(state="completed", result={"policy": "allow"}),
+        )
+    )
+    updated = postgres_repo.update_job_item_stage(
+        item.job_item_id,
+        stage_name="policy_stage",
+        stage_record=StageRecord(state="running"),
+        state="scanned",
+        error=None,
+        completed_at=None,
+    )
+    assert updated is not None
+    assert updated.policy_stage.state == "completed"
+    assert updated.policy_stage.result == {"policy": "allow"}
+
+
 def test_postgres_job_repository_bulk_updates_stages(postgres_repo: PostgresJobRepository) -> None:
     suffix = uuid.uuid4().hex
     job = postgres_repo.create_job(

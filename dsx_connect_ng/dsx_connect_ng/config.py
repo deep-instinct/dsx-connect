@@ -87,6 +87,7 @@ class ReaderSettings(BaseSettings):
     )
 
     default_strategy: ReaderStrategy = "native"
+    chunk_size_bytes: int = Field(default=1024 * 1024, ge=1)
 
 
 class ResultSinkSettings(BaseSettings):

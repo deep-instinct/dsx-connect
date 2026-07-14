@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import AsyncIterator
 
 from connectors.google_cloud_storage.gcs_client import GCSClient, CHUNK_SIZE
@@ -15,9 +16,12 @@ class GCSReader:
         self.client.ensure_ready(bucket=bucket)
 
     async def open_object(self, ref: ObjectRef) -> AsyncIterator[bytes]:
-        content = self.client.get_object(ref.bucket, ref.key)
-        while True:
-            chunk = content.read(self.chunk_size)
-            if not chunk:
-                break
-            yield chunk
+        stream = self.client.open_object_stream(ref.bucket, ref.key)
+        try:
+            while True:
+                chunk = await asyncio.to_thread(stream.read, self.chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            await asyncio.to_thread(stream.close)

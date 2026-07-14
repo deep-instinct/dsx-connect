@@ -702,7 +702,8 @@ def _cleanup_owned_read_result(read_result) -> None:
         )
 
 
-async def _iter_file_chunks(path: Path, *, chunk_size: int = 1024 * 1024):
+async def _iter_file_chunks(path: Path, *, chunk_size: int | None = None):
+    chunk_size = chunk_size or settings.readers.chunk_size_bytes
     with path.open("rb") as source:
         while True:
             chunk = await asyncio.to_thread(source.read, chunk_size)
@@ -726,7 +727,8 @@ async def _timed_chunks(chunks: AsyncIterable[bytes], timing: StreamTiming) -> A
         yield chunk
 
 
-async def _timed_file_chunks(path: Path, timing: StreamTiming, *, chunk_size: int = 1024 * 1024) -> AsyncIterable[bytes]:
+async def _timed_file_chunks(path: Path, timing: StreamTiming, *, chunk_size: int | None = None) -> AsyncIterable[bytes]:
+    chunk_size = chunk_size or settings.readers.chunk_size_bytes
     with path.open("rb") as source:
         while True:
             started = time.perf_counter()

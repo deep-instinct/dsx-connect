@@ -6,7 +6,7 @@ from shared.file_ops import relpath_matches_filter, compute_prefix_hints
 from shared.dsx_logging import dsx_logging
 from connectors.google_cloud_storage.config import config
 
-CHUNK_SIZE = int(os.getenv('CHUNK_SIZE', 1024 * 1024))
+CHUNK_SIZE = int(os.getenv("DSXCONNECTOR_CHUNK_SIZE_BYTES") or os.getenv("CHUNK_SIZE", 1024 * 1024))
 
 
 class GCSClient:

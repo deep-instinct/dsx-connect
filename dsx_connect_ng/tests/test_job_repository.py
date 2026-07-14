@@ -120,3 +120,30 @@ def test_inmemory_job_repository_updates_stage_record() -> None:
     assert updated is not None
     assert updated.scan_stage.state == "running"
     assert updated.state == "scanning"
+
+
+def test_inmemory_job_repository_does_not_regress_terminal_stage_to_running() -> None:
+    repo = InMemoryJobRepository()
+    job = repo.create_job(JobCreate(job_type="scan.batch", state="accepted"))
+    item = repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity="/finance/a.pdf",
+            state="scanned",
+            policy_stage=StageRecord(state="completed", result={"policy": "allow"}),
+        )
+    )
+
+    updated = repo.update_job_item_stage(
+        item.job_item_id,
+        stage_name="policy_stage",
+        stage_record=StageRecord(state="running"),
+        state="scanned",
+        error=None,
+        completed_at=None,
+    )
+
+    assert updated is not None
+    assert updated.policy_stage.state == "completed"
+    assert updated.policy_stage.result == {"policy": "allow"}

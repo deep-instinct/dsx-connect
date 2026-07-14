@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from dataclasses import dataclass
 from typing import Any, BinaryIO, Callable
 
@@ -10,6 +11,8 @@ from dsx_connect_ng.readers.base import ReadResult, Reader, TerminalScanError
 
 _BUCKET_KEYS = ("bucket", "bucketName", "bucket_name", "gcsBucket", "gcs_bucket")
 _KEY_KEYS = ("key", "objectKey", "object_key", "path", "location", "selector")
+_DEFAULT_CLIENT: Any | None = None
+_DEFAULT_CLIENT_LOCK = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -95,6 +98,23 @@ def resolve_gcs_object_ref(request: ScanItemRequested) -> GCSObjectRef:
 
 
 def _default_storage_client():
+    global _DEFAULT_CLIENT
+    if _DEFAULT_CLIENT is not None:
+        return _DEFAULT_CLIENT
+    with _DEFAULT_CLIENT_LOCK:
+        if _DEFAULT_CLIENT is not None:
+            return _DEFAULT_CLIENT
+        _DEFAULT_CLIENT = _uncached_storage_client()
+        return _DEFAULT_CLIENT
+
+
+def reset_default_storage_client() -> None:
+    global _DEFAULT_CLIENT
+    with _DEFAULT_CLIENT_LOCK:
+        _DEFAULT_CLIENT = None
+
+
+def _uncached_storage_client():
     try:
         from google.cloud import storage
     except Exception as exc:  # pragma: no cover - exercised only without optional dependency

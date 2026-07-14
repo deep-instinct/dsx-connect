@@ -25,6 +25,9 @@ class FakeGCSClient:
     def get_object(self, bucket: str, key: str) -> io.BytesIO:
         return io.BytesIO(self.objects[(bucket, key)])
 
+    def open_object_stream(self, bucket: str, key: str) -> io.BytesIO:
+        return io.BytesIO(self.objects[(bucket, key)])
+
     def keys(self, bucket: str, base_prefix: str = "", filter_str: str = ""):
         self.listed.append((bucket, base_prefix, filter_str))
         yield {"Key": f"{base_prefix.rstrip('/')}/a.txt".lstrip("/"), "Size": 5}

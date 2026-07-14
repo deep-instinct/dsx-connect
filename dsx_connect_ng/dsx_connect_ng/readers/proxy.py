@@ -11,6 +11,9 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, urlunparse
 from urllib.request import Request, urlopen
 
+import httpx
+
+from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config
 from dsx_connect_ng.control_plane.models import utcnow
 from dsx_connect_ng.control_plane.service import ControlPlaneService
@@ -22,6 +25,7 @@ from shared.auth.hmac import make_hmac_header
 
 ConnectorProxyExecutor = Callable[[ConnectorProxyReadRequest], Awaitable[ConnectorProxyReadResponse | ReadResult]]
 _READ_PATH_KEYS = ("path", "file_path", "filePath", "local_path", "localPath", "selector", "location")
+_ASYNC_PROXY_CLIENTS: dict[tuple[int, float], httpx.AsyncClient] = {}
 
 
 @dataclass(frozen=True)
@@ -324,7 +328,91 @@ def _connector_http_stream_request(
     return Request(config.endpoint_url, data=body, headers=headers, method="POST"), payload
 
 
+def _get_async_proxy_client(config: ConnectorProxyRuntimeConfig) -> httpx.AsyncClient:
+    try:
+        loop_id = id(asyncio.get_running_loop())
+    except RuntimeError:
+        loop_id = 0
+    key = (loop_id, config.timeout_seconds)
+    client = _ASYNC_PROXY_CLIENTS.get(key)
+    if client is None or client.is_closed:
+        timeout = httpx.Timeout(config.timeout_seconds, connect=min(config.timeout_seconds, 10.0))
+        limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        client = httpx.AsyncClient(timeout=timeout, limits=limits)
+        _ASYNC_PROXY_CLIENTS[key] = client
+    return client
+
+
+async def close_async_proxy_clients() -> None:
+    clients = list(_ASYNC_PROXY_CLIENTS.values())
+    _ASYNC_PROXY_CLIENTS.clear()
+    for client in clients:
+        await client.aclose()
+
+
+def _httpx_error_details(response: httpx.Response, *, endpoint_url: str, raw: bytes) -> dict[str, Any]:
+    details: dict[str, Any] = {"endpointUrl": endpoint_url, "statusCode": response.status_code}
+    if raw:
+        try:
+            details["response"] = json.loads(raw.decode("utf-8"))
+        except Exception:
+            details["responseText"] = raw.decode("utf-8", errors="replace")
+    return details
+
+
+def _raise_httpx_status_error(response: httpx.Response, *, endpoint_url: str, raw: bytes) -> None:
+    details = _httpx_error_details(response, endpoint_url=endpoint_url, raw=raw)
+    status_code = response.status_code
+    if status_code in (429, 500, 502, 503, 504):
+        raise RuntimeError(f"connector proxy transient read failure: http {status_code}")
+    if status_code == 404:
+        raise TerminalScanError("object_not_found", "connector proxy reported object not found", details=details)
+    if status_code == 401:
+        raise TerminalScanError("auth_error", "connector proxy authentication failed", details=details)
+    if status_code == 403:
+        raise TerminalScanError("permission_error", "connector proxy authorization failed", details=details)
+    raise TerminalScanError("connector_proxy_read_failed", f"connector proxy read failed with http {status_code}", details=details)
+
+
 async def _connector_http_stream_chunks(
+    request: ConnectorProxyReadRequest,
+    config: ConnectorProxyRuntimeConfig,
+    *,
+    chunk_size: int = 1024 * 1024,
+) -> AsyncIterable[bytes]:
+    req, _payload = _connector_http_stream_request(request, config)
+    client = _get_async_proxy_client(config)
+    headers = dict(req.header_items())
+    try:
+        async with client.stream("POST", config.endpoint_url, content=req.data or b"", headers=headers) as response:
+            if response.status_code >= 400:
+                raw = await response.aread()
+                _raise_httpx_status_error(response, endpoint_url=config.endpoint_url, raw=raw)
+
+            content_type = response.headers.get("Content-Type", "")
+            if "application/json" in content_type:
+                raw = await response.aread()
+                payload = json.loads(raw.decode("utf-8") or "{}")
+                if isinstance(payload, dict):
+                    _raise_structured_connector_json_error(payload, endpoint_url=config.endpoint_url)
+                raise TerminalScanError(
+                    "connector_proxy_unexpected_json_response",
+                    "connector proxy returned JSON instead of file content",
+                    details={"endpointUrl": config.endpoint_url, "response": payload},
+                )
+            async for chunk in response.aiter_bytes(chunk_size=chunk_size):
+                if chunk:
+                    yield chunk
+    except httpx.HTTPStatusError as exc:
+        raw = await exc.response.aread()
+        _raise_httpx_status_error(exc.response, endpoint_url=config.endpoint_url, raw=raw)
+    except httpx.HTTPError as exc:
+        raise RuntimeError(f"connector proxy transport failure: {exc}") from exc
+    except (HTTPError, URLError):
+        raise
+
+
+async def _connector_http_stream_chunks_urllib(
     request: ConnectorProxyReadRequest,
     config: ConnectorProxyRuntimeConfig,
     *,
@@ -377,11 +465,13 @@ async def _connector_http_stream_chunks(
 async def http_connector_proxy_stream(
     request: ConnectorProxyReadRequest,
     config: ConnectorProxyRuntimeConfig,
+    *,
+    chunk_size: int = 1024 * 1024,
 ) -> ReadResult:
     _req, payload = _connector_http_stream_request(request, config)
     size_in_bytes = payload.get("size_in_bytes")
     return ReadResult(
-        content_stream=_connector_http_stream_chunks(request, config),
+        content_stream=_connector_http_stream_chunks(request, config, chunk_size=chunk_size),
         content_length=size_in_bytes if isinstance(size_in_bytes, int) else None,
         details={
             "reader": "connector_proxy",
@@ -478,4 +568,11 @@ def build_connector_proxy_reader(
     control_plane: ControlPlaneService | None,
 ) -> ConnectorProxyReader:
     config = resolve_connector_proxy_runtime_config(request, control_plane=control_plane)
-    return ConnectorProxyReader(lambda proxy_request: http_connector_proxy_stream(proxy_request, config), prefer_stream=True)
+    return ConnectorProxyReader(
+        lambda proxy_request: http_connector_proxy_stream(
+            proxy_request,
+            config,
+            chunk_size=settings.readers.chunk_size_bytes,
+        ),
+        prefer_stream=True,
+    )

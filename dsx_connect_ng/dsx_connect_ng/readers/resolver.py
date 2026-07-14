@@ -59,5 +59,5 @@ def build_scan_reader(
         integration = control_plane.get_integration_or_404(request.integration_id)
         platform = integration.platform.strip().lower().replace("_", "-")
         if platform in {"gcs", "google-cloud-storage", "google-cloud-storage-connector"}:
-            return GCSNativeReader()
+            return GCSNativeReader(chunk_size=settings.readers.chunk_size_bytes)
     return LocalPathReader()

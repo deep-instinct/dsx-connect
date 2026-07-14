@@ -17,6 +17,9 @@ from dsx_connect_ng.jobs.models import (
 )
 
 
+_TERMINAL_STAGE_STATES = {"completed", "failed", "skipped"}
+
+
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -322,6 +325,9 @@ class InMemoryJobRepository(JobRepository):
         current = self._job_items.get(job_item_id)
         if current is None:
             return None
+        current_stage = getattr(current, stage_name)
+        if stage_record.state == "running" and current_stage.state in _TERMINAL_STAGE_STATES:
+            return current
         merged = current.model_copy(
             update={
                 stage_name: stage_record,

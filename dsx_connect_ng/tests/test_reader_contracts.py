@@ -8,6 +8,7 @@ from urllib.request import Request
 
 from pydantic import ValidationError
 
+from dsx_connect_ng.config import ReaderSettings
 from dsx_connect_ng.jobs.bus import InMemoryJobBus
 from dsx_connect_ng.jobs.contracts import ScanItemRequested
 from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, ContentSource
@@ -15,6 +16,7 @@ from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 from dsx_connect_ng.readers.cached import CachedArtifactReader
 from dsx_connect_ng.readers.contracts import ArtifactRef, ConnectorProxyReadRequest, ConnectorProxyReadResponse, ReaderErrorPayload
+from dsx_connect_ng.readers import gcs_native as gcs_native_module
 from dsx_connect_ng.readers.gcs_native import GCSNativeReader, resolve_gcs_object_ref
 from dsx_connect_ng.readers import proxy as proxy_module
 from dsx_connect_ng.readers.base import TerminalScanError
@@ -45,6 +47,14 @@ def _scan_request_from_submitted_item(*, object_identity: str, payload: dict) ->
         )
     )
     return ScanItemRequested.from_envelope(bus.snapshot()[0])
+
+
+def test_reader_settings_accept_chunk_size_env(monkeypatch) -> None:
+    monkeypatch.setenv("DSX_CONNECT_NG_READERS__CHUNK_SIZE_BYTES", "2097152")
+
+    settings = ReaderSettings()
+
+    assert settings.chunk_size_bytes == 2 * 1024 * 1024
 
 
 def test_connector_proxy_read_request_can_be_built_from_scan_request() -> None:
@@ -296,6 +306,28 @@ def test_native_gcs_reader_streams_and_closes_blob() -> None:
     assert seen == {"bucket": "bucket-a", "key": "object.pdf"}
 
 
+def test_native_gcs_default_client_is_cached(monkeypatch) -> None:
+    created: list[object] = []
+
+    def fake_uncached_client():
+        client = object()
+        created.append(client)
+        return client
+
+    gcs_native_module.reset_default_storage_client()
+    monkeypatch.setattr(gcs_native_module, "_uncached_storage_client", fake_uncached_client)
+
+    first = gcs_native_module._default_storage_client()
+    second = gcs_native_module._default_storage_client()
+    gcs_native_module.reset_default_storage_client()
+    third = gcs_native_module._default_storage_client()
+    gcs_native_module.reset_default_storage_client()
+
+    assert first is second
+    assert third is not first
+    assert created == [first, third]
+
+
 def test_http_connector_proxy_read_downloads_binary_to_local_artifact(monkeypatch) -> None:
     seen: dict[str, object] = {}
 
@@ -370,22 +402,39 @@ def test_http_connector_proxy_stream_yields_binary_without_local_artifact(monkey
             }
             self._chunks = [b"abc", b"def", b""]
             self.closed = False
+            self.chunk_sizes: list[int] = []
+            self.status_code = 200
 
-        def read(self, _size: int = -1) -> bytes:
-            return self._chunks.pop(0)
+        async def aiter_bytes(self, chunk_size: int):
+            self.chunk_sizes.append(chunk_size)
+            for chunk in self._chunks:
+                if chunk:
+                    yield chunk
 
-        def close(self) -> None:
-            self.closed = True
+        async def aread(self) -> bytes:
+            return b""
+
+    class FakeStream:
+        def __init__(self, response: FakeResponse) -> None:
+            self.response = response
+
+        async def __aenter__(self) -> FakeResponse:
+            return self.response
+
+        async def __aexit__(self, exc_type, exc, tb) -> None:
+            self.response.closed = True
+
+    class FakeClient:
+        def stream(self, method: str, url: str, *, content: bytes, headers: dict):
+            seen["method"] = method
+            seen["url"] = url
+            seen["body"] = content.decode("utf-8")
+            seen["headers"] = headers
+            return FakeStream(fake_response)
 
     fake_response = FakeResponse()
 
-    def fake_urlopen(req: Request, timeout: float):
-        assert timeout == 5.0
-        seen["url"] = req.full_url
-        seen["body"] = req.data.decode("utf-8") if req.data else ""
-        return fake_response
-
-    monkeypatch.setattr(proxy_module, "urlopen", fake_urlopen)
+    monkeypatch.setattr(proxy_module, "_get_async_proxy_client", lambda config: FakeClient())
 
     request = ConnectorProxyReadRequest(
         job_id="job-1",
@@ -401,7 +450,7 @@ def test_http_connector_proxy_stream_yields_binary_without_local_artifact(monkey
         timeout_seconds=5.0,
     )
 
-    read_result = asyncio.run(proxy_module.http_connector_proxy_stream(request, config))
+    read_result = asyncio.run(proxy_module.http_connector_proxy_stream(request, config, chunk_size=4))
     assert read_result.local_path is None
     assert read_result.content_stream is not None
     assert read_result.content_length == 6
@@ -411,7 +460,9 @@ def test_http_connector_proxy_stream_yields_binary_without_local_artifact(monkey
         return b"".join([chunk async for chunk in read_result.content_stream])
 
     assert asyncio.run(collect()) == b"abcdef"
+    assert fake_response.chunk_sizes == [4]
     assert fake_response.closed is True
+    assert seen["method"] == "POST"
     assert seen["url"] == "http://127.0.0.1:8620/filesystem/read_file"
     assert json.loads(seen["body"])["location"] == "/finance/a.txt"
 

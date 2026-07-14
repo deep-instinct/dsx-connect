@@ -48,3 +48,14 @@ Defaults to the DSX connector's logical name, which is different from the chart 
 {{- define "google-cloud-storage-connector.routeBase" -}}
 {{- default "google-cloud-storage-connector" .Values.routeBase -}}
 {{- end -}}
+
+{{/*
+Create the name of the service account to use.
+*/}}
+{{- define "google-cloud-storage-connector.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "google-cloud-storage-connector.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}

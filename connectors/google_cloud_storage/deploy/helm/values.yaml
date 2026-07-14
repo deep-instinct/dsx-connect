@@ -92,6 +92,17 @@ env:
 # Optional list of Secret names projected via envFrom (each Secret should contain DSXCONNECTOR_* keys)
 envSecretRefs: []
 
+serviceAccount:
+  # Create a Kubernetes ServiceAccount for this connector.
+  # For GKE Workload Identity Federation, set create=true and add:
+  # annotations:
+  #   iam.gke.io/gcp-service-account: dsx-gcs-connector@PROJECT_ID.iam.gserviceaccount.com
+  create: false
+  # Empty name uses the chart fullname when create=true, otherwise "default".
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: true
+
 auth_dsxconnect:
   enabled: false
   clockSkewSeconds: 60

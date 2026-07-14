@@ -1,6 +1,9 @@
 # Google Cloud Credentials
 
-Use these steps to configure the Google Cloud Storage connector with the necessary permissions for both object access and Pub/Sub monitoring.
+Use these steps to configure the Google Cloud Storage connector with a service account JSON key.
+For production GKE deployments, prefer [Google Cloud WIF for GCS Connector on GKE](google-cloud-wif-gke.md) so the connector can use Workload Identity Federation instead of a long-lived JSON key.
+
+This JSON-key path remains useful for local labs, non-GKE Kubernetes, and transitional deployments.
 
 ## 1. Enable APIs
 ```bash

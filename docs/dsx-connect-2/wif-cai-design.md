@@ -330,12 +330,30 @@ These details should flow into the Operator Console.
 Evaluate non-GKE Kubernetes WIF after the GKE path is stable.
 This may be useful for lab, k3s, or customer-managed Kubernetes, but it should not block the first production WIF design.
 
-## Current Gaps
+## Current Implementation Status
 
-The current GCS connector deployment still expects service account JSON credentials for local Helm examples.
-The chart does not yet provide first-class Kubernetes service account configuration for WIF annotations.
+The GCS connector runtime can already use Google Application Default Credentials when `GOOGLE_APPLICATION_CREDENTIALS` is not configured.
+The GCS Helm chart now has first-class Kubernetes service account support for GKE Workload Identity Federation:
 
-The connector can represent broader GCS boundaries conceptually, but CAI-backed organization and folder discovery needs to be hardened, documented, and surfaced cleanly in the UI.
+* `serviceAccount.create`
+* `serviceAccount.name`
+* `serviceAccount.annotations`
+* `serviceAccount.automountServiceAccountToken`
+* `templates/serviceaccount.yaml`
+* `spec.serviceAccountName` in the Deployment
+
+When `gcp.credentialsSecretName` is empty, the chart does not mount `/app/creds` and does not set `GOOGLE_APPLICATION_CREDENTIALS`.
+Use `connectors/google_cloud_storage/deploy/helm/examples/values-gke-wif.example.yaml` as the starting point for GKE WIF deployments.
+Use `docs/reference/google-cloud-wif-gke.md` for the Google Cloud service account, IAM, and GKE WIF setup steps.
+
+Cloud Asset Inventory bucket discovery is also implemented in the connector and is enabled by setting `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE`.
+
+## Remaining Gaps
+
+The local and lab Helm examples still use service account JSON credentials for convenience.
+That path remains supported and should not be treated as the production recommendation.
+
+CAI-backed project, organization, and folder discovery needs more live validation, documentation, and UI surfacing.
 
 The Operator Console should also grow better status for permission-specific failures.
 For broad connector deployments, a generic failure is not enough; operators need to know whether the problem is discovery, read access, monitoring, remediation, or DSX-Connect reachability.

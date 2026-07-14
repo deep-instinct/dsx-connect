@@ -1,0 +1,54 @@
+# GKE Workload Identity Federation example for DSX-Connect 2.
+#
+# Prerequisites:
+# - GKE Workload Identity Federation is enabled on the cluster.
+# - The Google service account below has the required IAM permissions for:
+#   Cloud Asset Inventory discovery, Storage object reads, Pub/Sub monitoring,
+#   and remediation actions as needed.
+# - The Kubernetes service account is bound to the Google service account per
+#   Google Cloud's GKE Workload Identity Federation guidance.
+
+env:
+  LOG_LEVEL: "debug"
+  DSXCONNECTOR_APP_ENV: "prod"
+
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+
+  DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/PROJECT_ID"
+  DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/PROJECT_ID"
+
+  # In DSX-Connect 2, discovered/protected scopes normally identify the bucket.
+  DSXCONNECTOR_ASSET: ""
+  DSXCONNECTOR_FILTER: ""
+
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "dsxconnect-quarantine"
+  DSXCONNECTOR_DATA_DIR: "/app/data"
+
+  DSXCONNECTOR_MONITOR: "false"
+  GCS_PUBSUB_PROJECT_ID: ""
+  GCS_PUBSUB_SUBSCRIPTION: ""
+
+serviceAccount:
+  create: true
+  name: "gcs-connector"
+  annotations:
+    iam.gke.io/gcp-service-account: "dsx-gcs-connector@PROJECT_ID.iam.gserviceaccount.com"
+  automountServiceAccountToken: true
+
+gcp:
+  # Empty credentialsSecretName keeps GOOGLE_APPLICATION_CREDENTIALS unset.
+  # The Google client libraries resolve credentials through ADC/WIF.
+  credentialsSecretName: ""
+
+dataVolume:
+  enabled: true
+  mountPath: "/app/data"
+
+workers: 1
+replicaCount: 1

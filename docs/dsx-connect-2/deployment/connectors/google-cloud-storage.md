@@ -6,18 +6,30 @@
 
 ## Prerequisites
 
-Before deploying the connector you must create a Google Cloud service account with access to the target bucket.
+Before deploying the connector you must configure Google Cloud credentials and IAM.
+
+Recommended for production on GKE:
+
+* Workload Identity Federation for GKE
+* no mounted service account JSON key
+* Cloud Asset Inventory scope for project, folder, or organization bucket discovery
+
+See [Google Cloud WIF for GCS Connector on GKE](../../../reference/google-cloud-wif-gke.md).
+
+Supported for local labs and transitional deployments:
+
+* mounted service account JSON credential
+* bucket-level or project-level object permissions
 
 Required:
 
-* a service account JSON credential
 * permission to list and read objects
 
 Optional, for remediation actions:
 
 * permission to move or delete objects
 
-See [Google Cloud Credentials](../../../reference/google-cloud-credentials.md).
+See [Google Cloud Credentials](../../../reference/google-cloud-credentials.md) for the JSON-key path.
 
 ---
 
@@ -42,7 +54,7 @@ Operationally:
 
 ---
 
-## Minimal Deployment
+## Minimal JSON-Key Deployment
 
 The following steps install the connector with minimal configuration changes for DSX-Connect 2 registration and optional Pub/Sub monitoring.
 
@@ -76,7 +88,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
     ```bash
     export NAMESPACE=dsx-connect
-    export GCS_VERSION=2.0.5
+    export GCS_VERSION=2.0.6
 
     helm upgrade --install gcs \
       oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -170,6 +182,63 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
 ---
 
+## GKE WIF Deployment
+
+For production GKE deployments, prefer Workload Identity Federation instead of a mounted service account JSON key.
+Complete the GCP setup in [Google Cloud WIF for GCS Connector on GKE](../../../reference/google-cloud-wif-gke.md), then deploy with the chart's WIF values example.
+
+```bash
+export NAMESPACE=dsx-connect
+export GCS_VERSION=2.0.6
+
+helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
+  --version "$GCS_VERSION" \
+  --untar
+
+cp google-cloud-storage-connector-chart/examples/values-gke-wif.example.yaml \
+  gcs-wif-values.yaml
+```
+
+Edit the values for your project, Google service account, DSX-Connect URL, and Cloud Asset Inventory scope:
+
+```yaml
+env:
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
+
+serviceAccount:
+  create: true
+  name: "gcs-connector"
+  annotations:
+    iam.gke.io/gcp-service-account: "dsx-gcs-connector@example-gcs-project.iam.gserviceaccount.com"
+  automountServiceAccountToken: true
+
+gcp:
+  credentialsSecretName: ""
+```
+
+Install:
+
+```bash
+helm upgrade --install gcs \
+  oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
+  --version "$GCS_VERSION" \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f gcs-wif-values.yaml
+```
+
+With `gcp.credentialsSecretName: ""`, the chart does not mount `/app/creds` and does not set `GOOGLE_APPLICATION_CREDENTIALS`.
+The Google SDK resolves credentials through GKE Workload Identity Federation.
+
+---
+
 ## Platform Identity and Repository Scope
 
 The GCS connector has two related but separate concepts:
@@ -196,7 +265,10 @@ Actual bucket access comes from the mounted Google Cloud credential and IAM perm
 | `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Stable operator-chosen key for the platform boundary shown and routed by DSX-Connect 2. It may match a GCP project, folder, org, tenant, or lab/account label, but it is not the credential source. |
 | `env.DSXCONNECTOR_ASSET` | Optional configured bucket or `bucket/prefix` fallback. In DSX-Connect 2, protected scopes usually provide the actual scan target. |
 | `env.DSXCONNECTOR_FILTER` | Optional rsync-style include/exclude list relative to `DSXCONNECTOR_ASSET` when the configured-asset path is used. |
-| `gcp.credentialsSecretName` | Secret name containing `service-account.json`. |
+| `env.DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` | Optional Cloud Asset Inventory scope for broad bucket discovery, such as `projects/PROJECT_ID`, `folders/FOLDER_ID`, or `organizations/ORG_ID`. |
+| `serviceAccount.create` | Creates a Kubernetes service account for WIF deployments when `true`. |
+| `serviceAccount.annotations` | Kubernetes service account annotations, including `iam.gke.io/gcp-service-account` for GKE WIF. |
+| `gcp.credentialsSecretName` | Secret name containing `service-account.json`. Leave empty for WIF/ADC. |
 
 ## Legacy and Fallback Settings
 

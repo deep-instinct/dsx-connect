@@ -1,0 +1,269 @@
+# Google Cloud WIF for GCS Connector on GKE
+
+Use this guide when deploying the Google Cloud Storage connector on GKE without a long-lived service account JSON key.
+This is the recommended production credential path for GKE.
+
+For local labs or non-GKE deployments, a mounted service account JSON key is still supported.
+See [Google Cloud Credentials](google-cloud-credentials.md).
+
+## What WIF Does
+
+Workload Identity Federation for GKE lets a Kubernetes workload authenticate to Google Cloud APIs without mounting a static key file.
+For the GCS connector, the Kubernetes service account used by the pod is allowed to impersonate a Google service account.
+The Google client libraries then resolve credentials through Application Default Credentials.
+
+WIF is only authentication.
+The Google service account still needs IAM roles for the specific GCS, Pub/Sub, and Cloud Asset Inventory operations that DSX-Connect should perform.
+
+## Variables
+
+Set these values for the examples below:
+
+```bash
+export PROJECT_ID="example-gcs-project"
+export PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+export CLUSTER_NAME="example-gke"
+export CLUSTER_LOCATION="us-central1"
+export NAMESPACE="dsx-connect"
+export KSA_NAME="gcs-connector"
+export GSA_NAME="dsx-gcs-connector"
+export GSA_EMAIL="${GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+# Set one of these for broad bucket discovery.
+export ASSET_INVENTORY_SCOPE="projects/${PROJECT_ID}"
+# export ASSET_INVENTORY_SCOPE="folders/FOLDER_ID"
+# export ASSET_INVENTORY_SCOPE="organizations/ORG_ID"
+```
+
+## Enable APIs
+
+```bash
+gcloud services enable \
+  container.googleapis.com \
+  iamcredentials.googleapis.com \
+  cloudasset.googleapis.com \
+  storage.googleapis.com \
+  pubsub.googleapis.com \
+  --project "$PROJECT_ID"
+```
+
+## Enable WIF on GKE
+
+Autopilot clusters have Workload Identity Federation for GKE enabled.
+For Standard clusters, enable it on the cluster and ensure the node pool uses the GKE metadata server:
+
+```bash
+gcloud container clusters update "$CLUSTER_NAME" \
+  --location "$CLUSTER_LOCATION" \
+  --workload-pool="${PROJECT_ID}.svc.id.goog"
+
+gcloud container node-pools update NODEPOOL_NAME \
+  --cluster "$CLUSTER_NAME" \
+  --location "$CLUSTER_LOCATION" \
+  --workload-metadata=GKE_METADATA
+```
+
+Then get cluster credentials:
+
+```bash
+gcloud container clusters get-credentials "$CLUSTER_NAME" \
+  --location "$CLUSTER_LOCATION" \
+  --project "$PROJECT_ID"
+```
+
+## Create the Google Service Account
+
+```bash
+gcloud iam service-accounts create "$GSA_NAME" \
+  --project "$PROJECT_ID" \
+  --display-name "DSX GCS Connector"
+```
+
+## Grant DSX Connector Permissions
+
+Grant only the roles needed for the deployment.
+Discovery, object reads, monitoring, and remediation are intentionally separate.
+
+### Cloud Asset Inventory Discovery
+
+For project scope:
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/cloudasset.viewer"
+
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/serviceusage.serviceUsageConsumer"
+```
+
+For folder or organization scope, grant `roles/cloudasset.viewer` at that scope instead.
+Some environments also require `roles/serviceusage.serviceUsageConsumer` on the selected quota/billing project used by the caller.
+
+### Object Reads
+
+Grant read access where DSX-Connect should scan.
+Bucket-level access is usually the safest default:
+
+```bash
+export BUCKET="example-bucket"
+
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/storage.objectViewer"
+```
+
+For broad project-level access, grant the same role on the project instead:
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/storage.objectViewer"
+```
+
+### Remediation
+
+If the connector will move, tag, or delete objects, grant write-capable object permissions only where remediation is allowed:
+
+```bash
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/storage.objectAdmin"
+```
+
+Detect-only deployments do not need `roles/storage.objectAdmin`.
+
+### Pub/Sub Monitoring
+
+If bucket monitoring is enabled, grant the connector access to consume the Pub/Sub subscription:
+
+```bash
+export SUBSCRIPTION="gcs-events-dsx-connector"
+
+gcloud pubsub subscriptions add-iam-policy-binding "$SUBSCRIPTION" \
+  --project "$PROJECT_ID" \
+  --member "serviceAccount:${GSA_EMAIL}" \
+  --role "roles/pubsub.subscriber"
+```
+
+Bucket notifications and the Pub/Sub topic/subscription are covered in [Google Cloud Storage Bucket Notifications with Pub/Sub](google-cloud-pubsub.md).
+
+## Bind the Kubernetes Service Account to the Google Service Account
+
+The GCS connector Helm chart can create the Kubernetes service account.
+Before deploying, allow that Kubernetes service account to impersonate the Google service account:
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding "$GSA_EMAIL" \
+  --project "$PROJECT_ID" \
+  --role "roles/iam.workloadIdentityUser" \
+  --member "serviceAccount:${PROJECT_ID}.svc.id.goog[${NAMESPACE}/${KSA_NAME}]"
+```
+
+The Helm values must create or use the same Kubernetes service account and add the GKE annotation:
+
+```yaml
+serviceAccount:
+  create: true
+  name: gcs-connector
+  annotations:
+    iam.gke.io/gcp-service-account: dsx-gcs-connector@example-gcs-project.iam.gserviceaccount.com
+  automountServiceAccountToken: true
+
+gcp:
+  credentialsSecretName: ""
+```
+
+`gcp.credentialsSecretName: ""` is important.
+It keeps `GOOGLE_APPLICATION_CREDENTIALS` unset so the connector uses ADC/WIF instead of a mounted JSON key.
+
+## Deploy the Connector
+
+Start from the chart example:
+
+```bash
+helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
+  --version "$GCS_VERSION" \
+  --untar
+
+cp google-cloud-storage-connector-chart/examples/values-gke-wif.example.yaml \
+  gcs-wif-values.yaml
+```
+
+Edit:
+
+```yaml
+env:
+  DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
+  DSXCONNECTOR_NG_PLATFORM: "gcs"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
+  DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+```
+
+Install:
+
+```bash
+helm upgrade --install gcs \
+  oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
+  --version "$GCS_VERSION" \
+  --namespace "$NAMESPACE" \
+  --create-namespace \
+  -f gcs-wif-values.yaml
+```
+
+## Verify
+
+Check that the rendered pod uses the intended Kubernetes service account:
+
+```bash
+kubectl get deploy gcs-google-cloud-storage-connector \
+  -n "$NAMESPACE" \
+  -o jsonpath='{.spec.template.spec.serviceAccountName}{"\n"}'
+```
+
+Confirm that no JSON credential env var is mounted:
+
+```bash
+kubectl get deploy gcs-google-cloud-storage-connector \
+  -n "$NAMESPACE" \
+  -o yaml | grep -E "GOOGLE_APPLICATION_CREDENTIALS|gcp-creds" || true
+```
+
+Expected result: no output.
+
+Check connector logs:
+
+```bash
+kubectl logs -n "$NAMESPACE" deploy/gcs-google-cloud-storage-connector
+```
+
+Verify discovery from DSX-Connect or by calling the connector service in-cluster.
+When `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` is set, the connector should use Cloud Asset Inventory for bucket discovery.
+
+## Troubleshooting
+
+`403 cloudasset.assets.listResource permission denied`:
+The Google service account needs Cloud Asset Inventory permission at the configured project, folder, or organization scope.
+
+`403 storage.objects.get` or `403 storage.objects.list`:
+The Google service account needs object viewer permissions on the bucket or broader scope.
+
+`403 pubsub.subscriptions.consume`:
+The Google service account needs `roles/pubsub.subscriber` on the subscription.
+
+The pod still expects `/app/creds/service-account.json`:
+Set `gcp.credentialsSecretName: ""` and confirm no `GOOGLE_APPLICATION_CREDENTIALS` env var is rendered.
+
+The connector uses the wrong Kubernetes service account:
+Check `serviceAccount.name`, `serviceAccount.create`, and `spec.template.spec.serviceAccountName` in the rendered deployment.
+
+## Official Google References
+
+* [Authenticate to Google Cloud APIs from GKE workloads](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity)
+* [Configure Workload Identity Federation with Kubernetes](https://cloud.google.com/iam/docs/workload-identity-federation-with-kubernetes)
+* [Cloud Asset Inventory roles and permissions](https://cloud.google.com/asset-inventory/docs/access-control)
+* [Cloud Storage IAM roles](https://cloud.google.com/storage/docs/access-control/iam-roles)
+* [Pub/Sub access control](https://cloud.google.com/pubsub/docs/access-control)

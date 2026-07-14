@@ -22,6 +22,8 @@ spec:
         app.kubernetes.io/name: {{ include "google-cloud-storage-connector.name" . }}
         app.kubernetes.io/instance: {{ .Release.Name }}
     spec:
+      serviceAccountName: {{ include "google-cloud-storage-connector.serviceAccountName" . | quote }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automountServiceAccountToken }}
       {{- if or .Values.tls.enabled .Values.gcp.credentialsSecretName .Values.dataVolume.enabled }}
       volumes:
         {{- if .Values.tls.enabled }}

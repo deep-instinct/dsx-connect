@@ -174,17 +174,19 @@ nav:
       - Deployment:
           - Overview: dsx-connect-2/deployment/index.md
           - Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
-          - Kubernetes Helm: dsx-connect-2/deployment/kubernetes.md
-          - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
+          - DSX-Connect: dsx-connect-2/deployment/kubernetes.md
           - Connectors:
               - Overview: dsx-connect-2/deployment/connectors/index.md
               - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
               - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
-          - Development: dsx-connect-2/deployment/development.md
+          - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
+      - Development:
+          - Local Build and Tests: dsx-connect-2/deployment/development.md
+          - Packaging Releases: dsx-connect-2/packaging-releases.md
       - Operations:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
-      - Packaging Releases: dsx-connect-2/packaging-releases.md
+
 
   - Connectors:
       - connectors/index.md
@@ -215,6 +217,7 @@ nav:
       - Repository Credentials:
         - Azure Credentials: reference/azure-credentials.md
         - Google Cloud Credentials: reference/google-cloud-credentials.md
+        - Google Cloud WIF for GKE: reference/google-cloud-wif-gke.md
         - Salesforce Credentials: reference/salesforce-credentials.md
       - Kubernetes:
           - Storage: reference/kubernetes-storage.md

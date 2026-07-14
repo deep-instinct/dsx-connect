@@ -9,6 +9,7 @@ from dsx_connect_ng.app import create_app
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.models import ConnectorInstanceRegister, IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, StageUpdateRequest
+from dsx_connect_ng.version import DSX_CONNECT_VERSION
 
 
 @pytest.fixture(autouse=True)
@@ -83,8 +84,8 @@ def test_ui_meta_returns_display_version() -> None:
     assert response.status_code == 200
     assert response.json() == {
         "product": "DSX-Connect",
-        "version": "2.0.6",
-        "display_name": "DSX-Connect v2.0.6",
+        "version": DSX_CONNECT_VERSION,
+        "display_name": f"DSX-Connect v{DSX_CONNECT_VERSION}",
     }
 
 

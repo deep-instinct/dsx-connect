@@ -1229,13 +1229,6 @@
                     <option value="unknown">unknown</option>
                   </select>
                 </label>
-                <label>Asset Type
-                  <select id="protected-filter-type">
-                    <option value="bucket">bucket</option>
-                    <option value="folder">folder</option>
-                    <option value="path">path</option>
-                  </select>
-                </label>
                 <label>Source
                   <select id="protected-filter-source">
                     <option value="configured_asset">configured_asset</option>
@@ -2628,7 +2621,6 @@
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
       const integrationId = document.getElementById("protected-filter-integration").value;
-      const assetType = document.getElementById("protected-filter-type").value;
       const source = document.getElementById("protected-filter-source").value;
       const coverage = document.getElementById("protected-filter-coverage").value;
       const assetFilterMode = document.getElementById("protected-filter-asset-mode").value;
@@ -2643,7 +2635,6 @@
         return;
       }
       if (integrationId) params.set("integration_id", integrationId);
-      if (assetType) params.set("type", assetType);
       if (source) params.set("source", source);
       if (coverage) params.set("coverage_state", coverage);
       params.set("limit", String(state.protectedPageLimit));
@@ -2937,7 +2928,6 @@
     [
       "protected-filter-integration",
       "protected-filter-coverage",
-      "protected-filter-type",
       "protected-filter-source",
       "protected-filter-asset-mode",
     ].forEach((id) => {

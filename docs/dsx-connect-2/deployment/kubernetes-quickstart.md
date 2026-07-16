@@ -38,7 +38,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
 export DSX_CONNECT_VERSION=2.0.8
-export FILESYSTEM_CONNECTOR_VERSION=2.0.3
+export FILESYSTEM_CONNECTOR_VERSION=2.0.4
 export CLUSTER_HOST_IP=10.2.4.103
 export DSX_CONNECT_HOST="dsx-connect.${CLUSTER_HOST_IP}.nip.io"
 ```
@@ -298,6 +298,13 @@ dataVolume:
   mountPath: "/app/data"
 EOF
 ```
+
+This mounts the k3s node path `$HOST_SCAN_PATH` into the connector pod at `/app/scan_folder`.
+Keep `DSXCONNECTOR_ASSET` set to `/app/scan_folder`; do not set it to the host path or PVC name.
+
+In **Assets > Protected**, `configured_asset` shows the mounted root.
+`inventory_enumeration` shows first-level folders under that root, which are the usual protection candidates.
+Files directly under the root are scan objects, not assets.
 
 Install the connector:
 

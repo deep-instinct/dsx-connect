@@ -1146,6 +1146,20 @@ def _selector_key(value: str | None) -> str:
     return str(value or "").strip().strip("/")
 
 
+def _default_asset_type_for_platform(platform: str | None) -> str:
+    normalized = str(platform or "").strip().lower().replace("-", "_")
+    if normalized == "filesystem":
+        return "folder"
+    return "bucket"
+
+
+def _effective_asset_type(requested_type: str | None, integration: IntegrationRecord) -> str:
+    normalized = str(requested_type or "").strip().lower()
+    if not normalized or normalized == "auto":
+        return _default_asset_type_for_platform(integration.platform)
+    return normalized
+
+
 def _coverage_for_selector(selector: str, scopes: list[ProtectedScopeRecord]) -> tuple[str, str | None]:
     key = _selector_key(selector)
     for scope in scopes:
@@ -1269,6 +1283,41 @@ def _summarize_protected_assets_for_integration(
                 last_scan=last_scan,
                 findings=findings,
                 metadata=asset.metadata,
+            )
+        )
+    return assets
+
+
+def _summarize_scope_backed_protected_assets_for_integration(
+    *,
+    integration: IntegrationRecord,
+    scopes: list[ProtectedScopeRecord],
+    asset_type: str,
+    scopes_by_id: dict[str, ProtectedScopeRecord],
+    job_service: JobService,
+    latest_jobs_by_scope: dict[str, JobRecord],
+) -> list[UIProtectedAssetSummary]:
+    assets: list[UIProtectedAssetSummary] = []
+    for scope in scopes:
+        last_scan, findings = _protected_asset_last_scan(
+            job_service,
+            latest_jobs_by_scope.get(scope.scope_id),
+        )
+        assets.append(
+            UIProtectedAssetSummary(
+                integration_id=integration.integration_id,
+                integration_display_name=integration.display_name,
+                platform=integration.platform,
+                asset_type=asset_type,
+                id=scope.normalized_selector or scope.resource_selector,
+                display_name=scope.display_name,
+                selector=scope.resource_selector,
+                coverage_state="protected" if scope.enabled else "disabled",
+                matching_scope_id=scope.scope_id,
+                policy=_scope_policy(scopes_by_id, scope.scope_id),
+                last_scan=last_scan,
+                findings=findings,
+                metadata={"source": "protected_scope"},
             )
         )
     return assets
@@ -1521,7 +1570,7 @@ async def list_policies(
 @router.get("/integrations/{integration_id}/assets", response_model=UIAssetDiscoveryResponse)
 async def discover_integration_assets(
     integration_id: str,
-    asset_type: str = Query(default="bucket", alias="type"),
+    asset_type: str = Query(default="auto", alias="type"),
     source: str = Query(default="configured_asset"),
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),
@@ -1531,6 +1580,7 @@ async def discover_integration_assets(
 ) -> UIAssetDiscoveryResponse:
     normalized_filter_mode = _normalize_asset_filter_mode(asset_filter_mode)
     integration = control_plane.get_integration_or_404(integration_id)
+    effective_asset_type = _effective_asset_type(asset_type, integration)
     base_url, connector_name = _connector_asset_endpoint(
         integration,
         control_plane.list_connector_instances(integration_id=integration_id),
@@ -1538,7 +1588,7 @@ async def discover_integration_assets(
     asset_payload = _fetch_connector_assets(
         base_url,
         connector_name,
-        asset_type=asset_type,
+        asset_type=effective_asset_type,
         source=source,
         limit=limit,
         cursor=cursor,
@@ -1550,7 +1600,7 @@ async def discover_integration_assets(
         integration_id=integration_id,
         asset_payload=asset_payload,
         scopes=scopes,
-        requested_type=asset_type,
+        requested_type=effective_asset_type,
         requested_source=source,
     )
 
@@ -1559,7 +1609,7 @@ async def discover_integration_assets(
 async def list_protected_assets(
     connector_type: str | None = Query(default=None),
     integration_id: str | None = Query(default=None),
-    asset_type: str = Query(default="bucket", alias="type"),
+    asset_type: str = Query(default="auto", alias="type"),
     source: str = Query(default="configured_asset"),
     coverage_state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
@@ -1586,8 +1636,12 @@ async def list_protected_assets(
     unsupported_integrations: list[str] = []
     failed_integrations: list[dict[str, Any]] = []
     next_cursors: dict[str, str | None] = {}
+    normalized_coverage_state = str(coverage_state or "").strip().lower() or None
+    if normalized_coverage_state == "all":
+        normalized_coverage_state = None
 
     for integration in integrations:
+        effective_asset_type = _effective_asset_type(asset_type, integration)
         base_url, connector_name = _connector_asset_endpoint(
             integration,
             control_plane.list_connector_instances(integration_id=integration.integration_id),
@@ -1596,7 +1650,7 @@ async def list_protected_assets(
             asset_payload = _fetch_connector_assets(
                 base_url,
                 connector_name,
-                asset_type=asset_type,
+                asset_type=effective_asset_type,
                 source=source,
                 limit=limit,
                 cursor=cursor,
@@ -1611,21 +1665,34 @@ async def list_protected_assets(
             integration_id=integration.integration_id,
             asset_payload=asset_payload,
             scopes=control_plane.list_scopes(integration_id=integration.integration_id),
-            requested_type=asset_type,
+            requested_type=effective_asset_type,
             requested_source=source,
         )
         next_cursors[integration.integration_id] = asset_response.next_cursor
+        integration_scopes = control_plane.list_scopes(integration_id=integration.integration_id)
         if asset_response.unsupported:
             unsupported_integrations.append(integration.integration_id)
-        integration_assets = _summarize_protected_assets_for_integration(
-            integration=integration,
-            asset_response=asset_response,
-            scopes_by_id=scopes_by_id,
-            job_service=job_service,
-            latest_jobs_by_scope=latest_jobs,
-        )
-        if coverage_state is not None:
-            integration_assets = [asset for asset in integration_assets if asset.coverage_state == coverage_state]
+        if asset_response.unsupported and not asset_response.assets:
+            integration_assets = _summarize_scope_backed_protected_assets_for_integration(
+                integration=integration,
+                scopes=integration_scopes,
+                asset_type=asset_response.asset_type,
+                scopes_by_id=scopes_by_id,
+                job_service=job_service,
+                latest_jobs_by_scope=latest_jobs,
+            )
+        else:
+            integration_assets = _summarize_protected_assets_for_integration(
+                integration=integration,
+                asset_response=asset_response,
+                scopes_by_id=scopes_by_id,
+                job_service=job_service,
+                latest_jobs_by_scope=latest_jobs,
+            )
+        if normalized_coverage_state is not None:
+            integration_assets = [
+                asset for asset in integration_assets if asset.coverage_state == normalized_coverage_state
+            ]
         if normalized_filter_mode and asset_filter_value:
             integration_assets = [
                 asset

@@ -12,8 +12,8 @@ from starlette.responses import StreamingResponse
 
 from shared.file_ops import get_filepaths_async
 from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
-from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, \
-    ConnectorStatusEnum
+from shared.models.connector_models import AssetDiscoveryItem, AssetDiscoveryResponse, ScanRequestModel, ItemActionEnum, \
+    ConnectorInstanceModel, ConnectorStatusEnum
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 # Optional dependency: filesystem monitor (dev/local convenience). Fallback to no-op stubs if unavailable.
@@ -137,6 +137,50 @@ def _quarantine_destination_path(
             dest_dir = destination_root
     dest_dir.mkdir(parents=True, exist_ok=True)
     return dest_dir / resolved_filename
+
+
+def _asset_display_name(path: pathlib.Path) -> str:
+    name = path.name
+    return name or str(path)
+
+
+def _asset_metadata(path: pathlib.Path, *, root: pathlib.Path) -> dict[str, str | bool]:
+    metadata: dict[str, str | bool] = {"kind": "directory"}
+    try:
+        metadata["relative_path"] = "." if path == root else path.relative_to(root).as_posix()
+    except Exception:
+        metadata["relative_path"] = path.as_posix()
+    if path == root:
+        metadata["configured_root"] = True
+    return metadata
+
+
+def _asset_matches(path: pathlib.Path, *, mode: str | None, value: str | None) -> bool:
+    if not mode or not value:
+        return True
+    needle = value.strip().lower()
+    if not needle:
+        return True
+    haystacks = [path.name, path.as_posix()]
+    for candidate in haystacks:
+        normalized = candidate.lower()
+        if mode == "begins_with" and normalized.startswith(needle):
+            return True
+        if mode == "ends_with" and normalized.endswith(needle):
+            return True
+        if mode == "contains" and needle in normalized:
+            return True
+    return False
+
+
+def _asset_discovery_item(path: pathlib.Path, *, root: pathlib.Path) -> AssetDiscoveryItem:
+    selector = path.as_posix()
+    return AssetDiscoveryItem(
+        id=selector,
+        display_name=_asset_display_name(path),
+        selector=selector,
+        metadata=_asset_metadata(path, root=root),
+    )
 
 
 # given that this could potentially be a lengthy file iteration, make the iteration asynchronous...
@@ -391,6 +435,88 @@ async def preview_provider(limit: int) -> list[str]:
     except Exception:
         pass
     return items
+
+
+@connector.asset_discovery
+async def asset_discovery_handler(
+    asset_type: str = "folder",
+    source: str = "configured_asset",
+    limit: int = 100,
+    cursor: str | None = None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
+) -> AssetDiscoveryResponse:
+    requested_type = str(asset_type or "folder").strip().lower()
+    if requested_type not in {"folder", "path", "directory", "asset"}:
+        return AssetDiscoveryResponse(
+            asset_type=requested_type or "folder",
+            source=source,
+            status="unsupported",
+            assets=[],
+            unsupported=True,
+            message="filesystem_asset_type_unsupported",
+        )
+
+    response_type = "folder" if requested_type in {"directory", "asset"} else requested_type
+    normalized_source = str(source or "configured_asset").strip().lower()
+    root = _normalize_path(config.asset)
+    if not root.exists() or not root.is_dir():
+        return AssetDiscoveryResponse(
+            asset_type=response_type,
+            source=normalized_source,
+            status="error",
+            assets=[],
+            message=f"filesystem_asset_root_unavailable:{root}",
+        )
+
+    max_items = max(1, int(limit or 100))
+    if normalized_source == "configured_asset":
+        assets = [_asset_discovery_item(root, root=root)]
+        return AssetDiscoveryResponse(
+            asset_type=response_type,
+            source=normalized_source,
+            status="success",
+            assets=assets,
+        )
+
+    if normalized_source != "inventory_enumeration":
+        return AssetDiscoveryResponse(
+            asset_type=response_type,
+            source=normalized_source,
+            status="unsupported",
+            assets=[],
+            unsupported=True,
+            message="filesystem_asset_source_unsupported",
+        )
+
+    try:
+        offset = max(0, int(cursor or 0))
+    except Exception:
+        offset = 0
+    quarantine_paths = _quarantine_paths()
+    children: list[pathlib.Path] = []
+    for child in root.iterdir():
+        try:
+            path = _normalize_path(child)
+            if not path.is_dir():
+                continue
+            if any(_is_under(path, qp) for qp in quarantine_paths):
+                continue
+            if not _asset_matches(path, mode=asset_filter_mode, value=asset_filter_value):
+                continue
+            children.append(path)
+        except Exception as exc:
+            dsx_logging.debug(f"Skipping filesystem asset candidate {child}: {exc}")
+    children.sort(key=lambda item: item.as_posix())
+    page = children[offset:offset + max_items]
+    next_cursor = str(offset + max_items) if offset + max_items < len(children) else None
+    return AssetDiscoveryResponse(
+        asset_type=response_type,
+        source=normalized_source,
+        status="success",
+        assets=[_asset_discovery_item(path, root=root) for path in page],
+        next_cursor=next_cursor,
+    )
 
 
 @connector.webhook_event

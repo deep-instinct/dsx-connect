@@ -328,7 +328,7 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
 
     ```bash
     export NAMESPACE=dsx-connect
-    export FILESYSTEM_VERSION=2.0.3
+    export FILESYSTEM_VERSION=2.0.4
 
     helm upgrade --install filesystem \
       oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
@@ -446,6 +446,43 @@ Required pattern:
 
 * Configure source storage with `scanVolume.existingClaim` or `scanVolume.hostPath`.
 * Keep `env.DSXCONNECTOR_ASSET` aligned to the mounted path, default `/app/scan_folder`.
+
+## How the Mounted Root Appears in the UI
+
+For Kubernetes deployments, `scanVolume.*` selects the real storage and `DSXCONNECTOR_ASSET` selects the in-container path where that storage is visible.
+
+Example:
+
+```yaml
+scanVolume:
+  enabled: true
+  hostPath: /var/dsx-connect-2-test
+  mountPath: /app/scan_folder
+
+env:
+  DSXCONNECTOR_ASSET: /app/scan_folder
+```
+
+In this example, files from the k3s node path `/var/dsx-connect-2-test` appear inside the connector pod at `/app/scan_folder`.
+The connector reads and scans the in-container path.
+
+In the Operator Console under **Assets > Protected**:
+
+* **Source: configured_asset** shows the configured root itself, `/app/scan_folder`.
+* **Source: inventory_enumeration** shows first-level child directories under that root.
+
+If the mounted root contains:
+
+```text
+/app/scan_folder/
+  finance/
+  legal/
+  engineering/
+  readme.txt
+```
+
+inventory enumeration returns `finance`, `legal`, and `engineering` as candidate protection folders.
+Files directly under the root are scan objects, not protection assets, so `readme.txt` is not listed as an asset.
 
 ### `DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO`
 

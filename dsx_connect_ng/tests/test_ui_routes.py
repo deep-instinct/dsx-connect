@@ -37,6 +37,7 @@ def test_operator_console_page_renders() -> None:
     assert 'id="connector-drawer"' in response.text
     assert "Protection Profile Editor" in response.text
     assert "Default Protection Profile" in response.text
+    assert 'id="protected-filter-type"' not in response.text
     assert 'id="create-policy"' in response.text
     assert 'id="policy-editor-drawer"' in response.text
     assert 'id="policy-editor-save"' in response.text
@@ -695,6 +696,10 @@ def test_ui_assets_protected_aggregates_discovered_assets_with_policy(monkeypatc
     assert protected_only.status_code == 200
     assert [asset["selector"] for asset in protected_only.json()["assets"]] == ["bucket-a"]
 
+    all_coverage = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket&coverage_state=all")
+    assert all_coverage.status_code == 200
+    assert [asset["selector"] for asset in all_coverage.json()["assets"]] == ["bucket-a", "bucket-b"]
+
 
 def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeypatch) -> None:
     app = create_app()
@@ -746,6 +751,72 @@ def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeyp
     payload = response.json()
     assert payload["assets"][0]["selector"] == "bucket-a"
     assert payload["assets"][0]["coverage_state"] == "unprotected"
+
+
+def test_ui_assets_protected_includes_scopes_when_asset_discovery_is_unsupported(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    integration = service.create_integration(
+        IntegrationCreate(
+            integration_id="fs-local",
+            platform="filesystem",
+            platform_key="local-filesystem",
+            display_name="Filesystem Local",
+            capability_read=True,
+            capability_remediate=True,
+        )
+    )
+    service.create_scope(
+        ProtectedScopeCreate(
+            scope_id="fs-scope",
+            integration_id=integration.integration_id,
+            scope_type="path",
+            resource_selector="/tmp/dsx-connect-scan",
+            display_name="Local Scan Folder",
+            mode="full_scan",
+            enabled=True,
+            post_scan_policy={"malicious_verdict": {"action": "detect_only"}},
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fake_fetch(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
+        return {
+            "asset_type": asset_type,
+            "source": source,
+            "status": "unsupported",
+            "unsupported": True,
+            "assets": [],
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch)
+
+    client = TestClient(app)
+    response = client.get(
+        "/api/v1/ui/assets/protected?connector_type=filesystem&type=auto&source=inventory_enumeration"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["unsupported_integrations"] == ["fs-local"]
+    assert [asset["selector"] for asset in payload["assets"]] == ["/tmp/dsx-connect-scan"]
+    assert payload["assets"][0]["asset_type"] == "folder"
+    assert payload["assets"][0]["display_name"] == "Local Scan Folder"
+    assert payload["assets"][0]["coverage_state"] == "protected"
+    assert payload["assets"][0]["matching_scope_id"] == "fs-scope"
+    assert payload["assets"][0]["policy"] == {"malicious_verdict": {"action": "detect_only"}}
+    assert payload["assets"][0]["metadata"] == {"source": "protected_scope"}
 
 
 def test_ui_assets_protected_forwards_paging_and_asset_filter(monkeypatch) -> None:

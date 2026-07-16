@@ -249,6 +249,25 @@ async def test_asset_discovery_lists_gcs_buckets_for_inventory_enumeration(monke
 
 
 @pytest.mark.asyncio
+async def test_asset_discovery_all_combines_configured_bucket_and_inventory(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    gc.config.asset = "bucket-gcs/sub1"
+    gc.config.asset_bucket = "bucket-gcs"
+    gc.config.asset_prefix_root = "sub1"
+    monkeypatch.setattr(gc.config, "asset_inventory_scope", "")
+    monkeypatch.setattr(gc.gcs_client, "buckets", lambda: ["bucket-a", "bucket-gcs/sub1", "bucket-b"])
+
+    resp = await gc.asset_discovery_handler(asset_type="bucket", source="all", limit=10)
+
+    assert resp.asset_type == "bucket"
+    assert resp.source == "all"
+    assert resp.status == "success"
+    assert [asset.selector for asset in resp.assets] == ["bucket-gcs/sub1", "bucket-a", "bucket-b"]
+    assert resp.assets[0].metadata["kind"] == "configured_bucket_prefix"
+
+
+@pytest.mark.asyncio
 async def test_asset_discovery_uses_cloud_asset_inventory_when_scope_configured(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 

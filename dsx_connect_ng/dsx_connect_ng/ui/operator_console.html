@@ -1229,12 +1229,6 @@
                     <option value="unknown">unknown</option>
                   </select>
                 </label>
-                <label>Source
-                  <select id="protected-filter-source">
-                    <option value="configured_asset">configured_asset</option>
-                    <option value="inventory_enumeration">inventory_enumeration</option>
-                  </select>
-                </label>
                 <label>Asset Match
                   <select id="protected-filter-asset-mode">
                     <option value="contains">contains</option>
@@ -1243,7 +1237,7 @@
                   </select>
                 </label>
                 <label>Asset
-                  <input id="protected-filter-asset-value" placeholder="bucket or prefix">
+                  <input id="protected-filter-asset-value" placeholder="path or folder">
                 </label>
                 <button class="primary" id="refresh-protected-assets" type="button">Load Assets</button>
               </div>
@@ -2578,8 +2572,21 @@
       if (selectedProtectedConnector && registeredConnectorRows.some((row) => row.integration.integration_id === selectedProtectedConnector)) {
         document.getElementById("protected-filter-integration").value = selectedProtectedConnector;
       }
+      updateProtectedAssetControls();
       document.getElementById("scan-results-filter-integration").innerHTML = integrationOptions;
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
+    }
+
+    function selectedProtectedIntegration() {
+      const integrationId = document.getElementById("protected-filter-integration").value;
+      return state.connectorRows.find((row) => row.integration.integration_id === integrationId)?.integration || null;
+    }
+
+    function updateProtectedAssetControls() {
+      const integration = selectedProtectedIntegration();
+      const assetInput = document.getElementById("protected-filter-asset-value");
+      const isFilesystem = integration?.platform === "filesystem";
+      assetInput.placeholder = isFilesystem ? "path or folder" : "bucket or prefix";
     }
 
     async function loadOverview() {
@@ -2621,7 +2628,6 @@
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
       const integrationId = document.getElementById("protected-filter-integration").value;
-      const source = document.getElementById("protected-filter-source").value;
       const coverage = document.getElementById("protected-filter-coverage").value;
       const assetFilterMode = document.getElementById("protected-filter-asset-mode").value;
       const assetFilterValue = document.getElementById("protected-filter-asset-value").value.trim();
@@ -2635,7 +2641,6 @@
         return;
       }
       if (integrationId) params.set("integration_id", integrationId);
-      if (source) params.set("source", source);
       if (coverage) params.set("coverage_state", coverage);
       params.set("limit", String(state.protectedPageLimit));
       if (cursor) params.set("cursor", cursor);
@@ -2928,11 +2933,11 @@
     [
       "protected-filter-integration",
       "protected-filter-coverage",
-      "protected-filter-source",
       "protected-filter-asset-mode",
     ].forEach((id) => {
       document.getElementById(id).addEventListener("change", resetProtectedPagination);
     });
+    document.getElementById("protected-filter-integration").addEventListener("change", updateProtectedAssetControls);
     document.getElementById("protected-filter-asset-value").addEventListener("input", resetProtectedPagination);
     document.getElementById("protected-page-prev").addEventListener("click", () => {
       loadPreviousProtectedAssetsPage().catch(showProtectedAssetsError);

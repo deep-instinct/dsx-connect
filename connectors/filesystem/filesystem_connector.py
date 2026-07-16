@@ -470,16 +470,9 @@ async def asset_discovery_handler(
         )
 
     max_items = max(1, int(limit or 100))
-    if normalized_source == "configured_asset":
-        assets = [_asset_discovery_item(root, root=root)]
-        return AssetDiscoveryResponse(
-            asset_type=response_type,
-            source=normalized_source,
-            status="success",
-            assets=assets,
-        )
-
-    if normalized_source != "inventory_enumeration":
+    include_root = normalized_source in {"configured_asset", "all", "root_and_inventory"}
+    include_children = normalized_source in {"inventory_enumeration", "all", "root_and_inventory"}
+    if not include_root and not include_children:
         return AssetDiscoveryResponse(
             asset_type=response_type,
             source=normalized_source,
@@ -494,22 +487,27 @@ async def asset_discovery_handler(
     except Exception:
         offset = 0
     quarantine_paths = _quarantine_paths()
-    children: list[pathlib.Path] = []
-    for child in root.iterdir():
-        try:
-            path = _normalize_path(child)
-            if not path.is_dir():
-                continue
-            if any(_is_under(path, qp) for qp in quarantine_paths):
-                continue
-            if not _asset_matches(path, mode=asset_filter_mode, value=asset_filter_value):
-                continue
-            children.append(path)
-        except Exception as exc:
-            dsx_logging.debug(f"Skipping filesystem asset candidate {child}: {exc}")
-    children.sort(key=lambda item: item.as_posix())
-    page = children[offset:offset + max_items]
-    next_cursor = str(offset + max_items) if offset + max_items < len(children) else None
+    discovered: list[pathlib.Path] = []
+    if include_root and _asset_matches(root, mode=asset_filter_mode, value=asset_filter_value):
+        discovered.append(root)
+    if include_children:
+        children: list[pathlib.Path] = []
+        for child in root.iterdir():
+            try:
+                path = _normalize_path(child)
+                if not path.is_dir():
+                    continue
+                if any(_is_under(path, qp) for qp in quarantine_paths):
+                    continue
+                if not _asset_matches(path, mode=asset_filter_mode, value=asset_filter_value):
+                    continue
+                children.append(path)
+            except Exception as exc:
+                dsx_logging.debug(f"Skipping filesystem asset candidate {child}: {exc}")
+        children.sort(key=lambda item: item.as_posix())
+        discovered.extend(children)
+    page = discovered[offset:offset + max_items]
+    next_cursor = str(offset + max_items) if offset + max_items < len(discovered) else None
     return AssetDiscoveryResponse(
         asset_type=response_type,
         source=normalized_source,

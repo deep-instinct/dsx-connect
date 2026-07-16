@@ -328,7 +328,7 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
 
     ```bash
     export NAMESPACE=dsx-connect
-    export FILESYSTEM_VERSION=2.0.5
+    export FILESYSTEM_VERSION=2.0.6
 
     helm upgrade --install filesystem \
       oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \

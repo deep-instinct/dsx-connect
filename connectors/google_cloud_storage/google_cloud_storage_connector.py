@@ -749,15 +749,10 @@ async def asset_discovery_handler(
             message=f"unsupported_asset_type:{normalized_type}",
         )
     configured_selector = _normalize_configured_asset(config.asset or config.asset_bucket)
-    if requested_source == "configured_asset":
+
+    def configured_asset_item() -> AssetDiscoveryItem | None:
         if not configured_selector:
-            return AssetDiscoveryResponse(
-                asset_type="bucket",
-                source="configured_asset",
-                status="not_configured",
-                assets=[],
-                message="configured_asset_not_set",
-            )
+            return None
         bucket = config.asset_bucket or configured_selector.split("/", 1)[0]
         metadata = {
             "provider": "gcs",
@@ -768,28 +763,43 @@ async def asset_discovery_handler(
             metadata["prefix"] = config.asset_prefix_root
             metadata["kind"] = "configured_bucket_prefix"
         if not _matches_asset_filter(configured_selector, mode=asset_filter_mode, needle=asset_filter_value):
+            return None
+        return AssetDiscoveryItem(
+            id=configured_selector,
+            display_name=configured_selector,
+            selector=configured_selector,
+            metadata=metadata,
+        )
+
+    if requested_source == "configured_asset":
+        item = configured_asset_item()
+        if configured_selector and item is None:
             return AssetDiscoveryResponse(
                 asset_type="bucket",
                 source="configured_asset",
                 status="success",
                 assets=[],
             )
+        if item is None:
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="configured_asset",
+                status="not_configured",
+                assets=[],
+                message="configured_asset_not_set",
+            )
         return AssetDiscoveryResponse(
             asset_type="bucket",
             source="configured_asset",
             status="success",
-            assets=[
-                AssetDiscoveryItem(
-                    id=configured_selector,
-                    display_name=configured_selector,
-                    selector=configured_selector,
-                    metadata=metadata,
-                )
-            ],
+            assets=[item],
         )
     asset_inventory_scope = _normalize_asset_inventory_scope(getattr(config, "asset_inventory_scope", ""))
+    combined_source = requested_source in {"all", "configured_and_inventory", "configured_plus_inventory"}
     use_cloud_asset_inventory = requested_source in {"cloud_asset_inventory", "asset_inventory"} or (
         requested_source == "inventory_enumeration" and bool(asset_inventory_scope)
+    ) or (
+        combined_source and bool(asset_inventory_scope)
     )
     if use_cloud_asset_inventory:
         try:
@@ -813,9 +823,13 @@ async def asset_discovery_handler(
                 message=f"asset_discovery_failed:{exc}",
                 required_permission="cloudasset.assets.listResource",
             )
+        if combined_source:
+            configured_item = configured_asset_item()
+            if configured_item is not None and all(asset.selector != configured_item.selector for asset in assets):
+                assets = [configured_item, *assets]
         return AssetDiscoveryResponse(
             asset_type="bucket",
-            source="cloud_asset_inventory",
+            source=requested_source if combined_source else "cloud_asset_inventory",
             status="success",
             assets=assets,
             next_cursor=next_cursor,
@@ -845,21 +859,27 @@ async def asset_discovery_handler(
         for bucket in buckets
         if _matches_asset_filter(bucket, mode=asset_filter_mode, needle=asset_filter_value)
     ]
+    configured_item = configured_asset_item() if combined_source else None
+    if configured_item is not None:
+        buckets = [bucket for bucket in buckets if bucket != configured_item.selector]
+        buckets = [configured_item.selector, *buckets]
     effective_limit = max(1, min(int(limit or 100), 1000))
     selected = buckets[start:start + effective_limit]
     next_index = start + len(selected)
     next_cursor = str(next_index) if next_index < len(buckets) else None
     return AssetDiscoveryResponse(
         asset_type="bucket",
-        source="inventory_enumeration",
+        source=requested_source if combined_source else "inventory_enumeration",
         status="success",
         assets=[
-            AssetDiscoveryItem(
-                id=bucket,
-                display_name=bucket,
-                selector=bucket,
-                metadata={"provider": "gcs"},
-            )
+            configured_item
+            if configured_item is not None and bucket == configured_item.selector
+            else AssetDiscoveryItem(
+                    id=bucket,
+                    display_name=bucket,
+                    selector=bucket,
+                    metadata={"provider": "gcs"},
+                )
             for bucket in selected
         ],
         next_cursor=next_cursor,

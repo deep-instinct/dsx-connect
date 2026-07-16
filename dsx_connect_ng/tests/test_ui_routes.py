@@ -35,6 +35,8 @@ def test_operator_console_page_renders() -> None:
     assert 'href="/api/v1/ui-static/manifest.webmanifest"' in response.text
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
     assert 'id="connector-drawer"' in response.text
+    assert 'id="protected-filter-source"' not in response.text
+    assert 'placeholder="path or folder"' in response.text
     assert "Protection Profile Editor" in response.text
     assert "Default Protection Profile" in response.text
     assert 'id="protected-filter-type"' not in response.text
@@ -732,6 +734,7 @@ def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeyp
     ):
         assert base_url == "http://gcs/google-cloud-storage-connector"
         assert connector_name is None
+        assert source == "all"
         assert limit == 250
         return {
             "asset_type": asset_type,
@@ -744,7 +747,7 @@ def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeyp
 
     client = TestClient(app)
     response = client.get(
-        f"/api/v1/ui/assets/protected?integration_id={connector.integration_id}&type=bucket&source=inventory_enumeration&limit=250"
+        f"/api/v1/ui/assets/protected?integration_id={connector.integration_id}&type=bucket&limit=250"
     )
 
     assert response.status_code == 200

@@ -88,7 +88,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
     ```bash
     export NAMESPACE=dsx-connect
-    export GCS_VERSION=2.0.6
+    export GCS_VERSION=2.0.7
 
     helm upgrade --install gcs \
       oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -189,7 +189,7 @@ Complete the GCP setup in [Google Cloud WIF for GCS Connector on GKE](../../../r
 
 ```bash
 export NAMESPACE=dsx-connect
-export GCS_VERSION=2.0.6
+export GCS_VERSION=2.0.7
 
 helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
   --version "$GCS_VERSION" \

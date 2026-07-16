@@ -1571,7 +1571,7 @@ async def list_policies(
 async def discover_integration_assets(
     integration_id: str,
     asset_type: str = Query(default="auto", alias="type"),
-    source: str = Query(default="configured_asset"),
+    source: str = Query(default="all"),
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),
     asset_filter_mode: str | None = Query(default=None),
@@ -1610,7 +1610,7 @@ async def list_protected_assets(
     connector_type: str | None = Query(default=None),
     integration_id: str | None = Query(default=None),
     asset_type: str = Query(default="auto", alias="type"),
-    source: str = Query(default="configured_asset"),
+    source: str = Query(default="all"),
     coverage_state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),

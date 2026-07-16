@@ -50,6 +50,31 @@ async def test_inventory_enumeration_returns_immediate_child_directories_only(tm
 
 
 @pytest.mark.asyncio
+async def test_all_asset_discovery_returns_root_then_immediate_child_directories(tmp_path, monkeypatch, fsconn):
+    (tmp_path / "finance").mkdir()
+    (tmp_path / "legal").mkdir()
+    (tmp_path / "root-file.txt").write_text("not an asset")
+    quarantine = tmp_path / "quarantine"
+    quarantine.mkdir()
+    monkeypatch.setattr(fsconn.config, "asset", str(tmp_path))
+    monkeypatch.setattr(fsconn.config, "item_action_move_metainfo", str(quarantine))
+    monkeypatch.setattr(fsconn.config, "quarantine_host", None)
+
+    response = await fsconn.asset_discovery_handler(asset_type="folder", source="all")
+
+    assert response.status == "success"
+    assert response.source == "all"
+    assert [asset.selector for asset in response.assets] == [
+        tmp_path.as_posix(),
+        (tmp_path / "finance").as_posix(),
+        (tmp_path / "legal").as_posix(),
+    ]
+    assert response.assets[0].metadata["configured_root"] is True
+    assert response.assets[0].metadata["relative_path"] == "."
+    assert [asset.metadata["relative_path"] for asset in response.assets[1:]] == ["finance", "legal"]
+
+
+@pytest.mark.asyncio
 async def test_inventory_enumeration_supports_limit_cursor_and_filter(tmp_path, monkeypatch, fsconn):
     for name in ["alpha", "beta", "gamma"]:
         (tmp_path / name).mkdir()

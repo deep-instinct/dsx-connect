@@ -1,28 +1,71 @@
+# Local DSX-Connect 2/k3s lab values.
+# This file is intended for scripts/connectors/deploy-k3s.sh and local chart installs.
+# For released OCI chart installs, prefer examples/values-lab.example.yaml from the chart.
+
 env:
   LOG_LEVEL: "debug"
   DSXCONNECTOR_APP_ENV: "dev"
+
+  # Register with DSX-Connect 2, not the legacy/core registration path.
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
   DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+
+  # In-cluster DSX-Connect 2 API service.
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+
+  # Stable identity for this local connector instance.
   DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
+
+  # Connector type and operator-visible boundary label.
   DSXCONNECTOR_NG_PLATFORM: "filesystem"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "local-colima"
+  DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
+
+  # The connector scans this in-container path.
+  # Keep this aligned with scanVolume.mountPath.
   DSXCONNECTOR_ASSET: "/app/scan_folder"
   DSXCONNECTOR_FILTER: ""
+
+  # DSX-Connect 2 protection profiles normally choose remediation at runtime.
+  # This is only the connector-side fallback.
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+
   DSXCONNECTOR_DATA_DIR: "/app/data"
+
+  # Disabled for local smoke tests. Enable when you want file change monitoring.
   DSXCONNECTOR_MONITOR: "false"
   DSXCONNECTOR_MONITOR_FORCE_POLLING: "false"
   DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+
+  # Kubernetes deployments read mounted container paths.
   DSXCONNECTOR_SCAN_BY_PATH: "False"
 
 auth_dsxconnect:
   enabled: false
-  enrollmentSecretName: "dsx-dsx-connect-api-auth-enrollment"
+  enrollmentSecretName: ""
   enrollmentKey: ENROLLMENT_TOKEN
+
+scanVolume:
+  enabled: true
+  mountPath: "/app/scan_folder"
+  existingClaim: ""
+  # Node-local lab path. For Colima, create this path inside the Colima VM.
+  hostPath: "/var/dsx-connect-2-test"
+  readOnly: false
+  subPath: ""
+
+quarantineVolume:
+  enabled: false
+  mountPath: "/app/quarantine"
+  existingClaim: ""
+  hostPath: ""
+  readOnly: false
+  subPath: ""
 
 dataVolume:
   enabled: true
   mountPath: "/app/data"
+
+workers: 1
+replicaCount: 1

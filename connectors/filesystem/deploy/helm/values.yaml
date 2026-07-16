@@ -34,23 +34,65 @@ env:
   DSXCONNECTOR_APP_ENV: "dev"
   # Optional friendly display name shown in the dsx-connect UI card
   # DSXCONNECTOR_DISPLAY_NAME: "Filesystem Connector"
+
+  # DSX-Connect registration.
+  # DSX-Connect 2 deployments should set REGISTER_WITH_NG_CONTROL_PLANE=true.
+  # DSX-Connect 1.x/core deployments should set REGISTER_WITH_CORE=true.
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"
+
+  # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
+  # DSXCONNECTOR_DSX_CONNECT_NG_URL is used for DSX-Connect 2 registration and heartbeats.
+  # For in-cluster DSX-Connect 2 installs, both usually point at http://dsx-connect-api:8091.
+  # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
+  # DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+
+  # Stable identity for this running connector instance.
+  # Changing this value creates a new connector identity in DSX-Connect 2.
+  DSXCONNECTOR_INSTANCE_ID: ""
+
+  # DSX-Connect 2 platform metadata.
+  # PLATFORM is the connector adapter type; for this connector it should remain "filesystem".
+  DSXCONNECTOR_NG_PLATFORM: "filesystem"
+  # PLATFORM_KEY is a stable, operator-chosen key for the filesystem boundary this connector
+  # represents in the DSX-Connect 2 console/API. It can be a cluster, site, share, or lab label.
+  # Access is controlled by the Kubernetes volume mounted into the pod, not by this value.
+  DSXCONNECTOR_NG_PLATFORM_KEY: ""
+
+  # Filesystem monitoring watches the mounted scan path for changes.
+  # Leave disabled for connector-only smoke tests and enable after the volume path is stable.
   DSXCONNECTOR_MONITOR: "false"
+  # Force polling when native filesystem notifications are unreliable, which is common on
+  # some network filesystems and CSI drivers.
   DSXCONNECTOR_MONITOR_FORCE_POLLING: "false"
   DSXCONNECTOR_MONITOR_POLL_INTERVAL_MS: "1000"
+
   DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
   DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"
   # Outbound TLS verification to dsx-connect
   # DSXCONNECTOR_VERIFY_TLS: "true"
   # DSXCONNECTOR_CA_BUNDLE: "/app/certs/ca.pem"
-  # DSXCONNECTOR_DSX_CONNECT_URL: "https://my-dsx-connect.example.com"
-  # Defaults to http/https://dsx-connect-api based on DSXCONNECTOR_USE_TLS.
-  DSXCONNECTOR_ITEM_ACTION: "nothing"         # nothing, delete, tag, move, move_tag
-  # Source/target semantics: set to your real scan source path and quarantine destination path.
-  # These should represent the paths users reason about (asset source and quarantine target).
-  # If you mount storage into the container, ensure the mounted path aligns with these values.
+
+  # Legacy/default connector remediation behavior.
+  # DSX-Connect 2 protection profiles send requested remediation actions at runtime;
+  # these values are fallback defaults when no requested action is provided, and are
+  # the primary remediation controls for DSX-Connect 1.x/core.
+  # Supported values: nothing, delete, tag, move, move_tag.
+  DSXCONNECTOR_ITEM_ACTION: "nothing"
+  # Quarantine destination path used when the effective action is move or move_tag.
+  # If you use move-based remediation, enable quarantineVolume and keep this value
+  # aligned with quarantineVolume.mountPath.
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
+
+  # Root directory that the connector scans inside the container.
+  # Keep this aligned with scanVolume.mountPath unless you intentionally scan a
+  # subdirectory under the mounted volume.
   DSXCONNECTOR_ASSET: "/app/scan_folder"
+  # Optional include/exclude filter relative to DSXCONNECTOR_ASSET.
   DSXCONNECTOR_FILTER: ""
+  # Keep false for containerized Kubernetes deployments where the connector reads
+  # mounted container paths. Set true only when integrating with an external scanner
+  # that can read the same host paths directly.
   DSXCONNECTOR_SCAN_BY_PATH: "False"
   DSXCONNECTOR_DATA_DIR: "/app/data"
 
@@ -60,19 +102,30 @@ envSecretRefs: []
 
 scanVolume:
   enabled: false
+  # In-container path for the filesystem root to scan.
+  # For normal deployments, keep env.DSXCONNECTOR_ASSET equal to this value.
   mountPath: "/app/scan_folder"
-  existingClaim: ""  # If set, chart mounts this PVC and ignores hostPath.
-  hostPath: ""       # Used only when existingClaim is empty.
+  # Preferred for production: mount an existing PVC backed by NFS, EFS, Filestore,
+  # SMB CSI, or another storage provider that exposes the target filesystem.
+  existingClaim: ""
+  # Lab-only fallback: mount a node-local path. The path must exist on the
+  # Kubernetes node where the pod lands. Avoid hostPath for production.
+  hostPath: ""
   readOnly: false
-  subPath: ""        # Optional subdirectory inside the mounted volume (PVC or hostPath).
+  # Optional subdirectory inside the mounted volume (PVC or hostPath).
+  subPath: ""
 
 quarantineVolume:
   enabled: false
+  # In-container quarantine path. Keep env.DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO
+  # equal to this value when using move or move_tag remediation.
   mountPath: "/app/quarantine"
-  existingClaim: ""  # If set, chart mounts this PVC and ignores hostPath.
-  hostPath: ""       # Used only when existingClaim is empty.
+  existingClaim: ""
+  # Lab-only fallback. The path must exist on the Kubernetes node where the pod runs.
+  hostPath: ""
   readOnly: false
-  subPath: ""        # Optional subdirectory inside the mounted volume (PVC or hostPath).
+  # Optional subdirectory inside the mounted volume (PVC or hostPath).
+  subPath: ""
 
 auth_dsxconnect:
   enabled: false

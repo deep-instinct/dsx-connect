@@ -328,7 +328,7 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
 
     ```bash
     export NAMESPACE=dsx-connect
-    export FILESYSTEM_VERSION=2.0.4
+    export FILESYSTEM_VERSION=2.0.5
 
     helm upgrade --install filesystem \
       oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \
@@ -365,10 +365,10 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
       --untar
     ```
 
-    Copy the DSX-Connect 2 example values file and edit it for the target storage:
+    Copy the DSX-Connect 2 lab example values file from the pulled chart and edit it for the target storage:
 
     ```bash
-    cp docs/dsx-connect-2/deployment/examples/filesystem-connector-values.yaml \
+    cp filesystem-connector-chart/examples/values-lab.example.yaml \
       filesystem-connector-values.yaml
     ```
 

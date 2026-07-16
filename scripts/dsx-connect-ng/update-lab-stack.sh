@@ -32,7 +32,7 @@ Examples:
   scripts/dsx-connect-ng/update-lab-stack.sh \
     --connect-version 2.0.3 \
     --gcs-version 2.0.3 \
-    --filesystem-version 2.0.4 \
+    --filesystem-version 2.0.5 \
     --skip-filesystem
 
 Options:

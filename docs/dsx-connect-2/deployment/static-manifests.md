@@ -6,7 +6,7 @@ For those environments, keep Helm as the source of truth and ship rendered stati
 The customer applies the rendered YAML:
 
 ```bash
-kubectl apply -f dsx-connect-2.0.8.yaml
+kubectl apply -f dsx-connect-2.0.9.yaml
 ```
 
 They do not need Helm on the target cluster.
@@ -32,7 +32,7 @@ Render the DSX-Connect 2 control-plane chart:
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.8
+export DSX_CONNECT_VERSION=2.0.9
 
 helm template "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \

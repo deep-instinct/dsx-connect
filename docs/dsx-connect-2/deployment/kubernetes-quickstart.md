@@ -37,7 +37,7 @@ For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../refer
 ```bash
 export NAMESPACE=dsx-connect
 export RELEASE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.10
+export DSX_CONNECT_VERSION=2.0.11
 export FILESYSTEM_CONNECTOR_VERSION=2.0.6
 export CLUSTER_HOST_IP=10.2.4.103
 export DSX_CONNECT_HOST="dsx-connect.${CLUSTER_HOST_IP}.nip.io"

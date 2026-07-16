@@ -36,6 +36,9 @@ def test_operator_console_page_renders() -> None:
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
     assert 'id="connector-drawer"' in response.text
     assert 'id="protected-filter-source"' not in response.text
+    assert 'id="refresh-protected-assets"' not in response.text
+    assert "Load Assets" not in response.text
+    assert "function reloadProtectedAssetsFromFilters" in response.text
     assert 'placeholder="path or folder"' in response.text
     assert "Protection Profile Editor" in response.text
     assert "Default Protection Profile" in response.text

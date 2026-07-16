@@ -624,7 +624,7 @@
     }
 
     .toolbar.protected {
-      grid-template-columns: minmax(200px, 1.5fr) repeat(4, minmax(110px, 0.8fr)) minmax(130px, 0.8fr) minmax(190px, 1.2fr) auto;
+      grid-template-columns: minmax(220px, 320px);
     }
 
     .table-wrap {
@@ -640,6 +640,36 @@
 
     .table-wrap.protected-assets table {
       min-width: max(100%, var(--table-min-width-protected));
+    }
+
+    thead .filter-row th {
+      padding-top: var(--space-3);
+      padding-bottom: var(--space-4);
+      background: var(--toolbar-bg);
+      vertical-align: top;
+    }
+
+    .column-filter {
+      display: flex;
+      gap: var(--space-4);
+      align-items: center;
+      min-width: 0;
+    }
+
+    .column-filter select,
+    .column-filter input {
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: var(--font-size-sm);
+    }
+
+    .column-filter.asset-filter select {
+      flex: 0 0 116px;
+    }
+
+    .column-filter.asset-filter input {
+      flex: 1 1 auto;
+      min-width: 120px;
     }
 
     .cards {
@@ -1220,26 +1250,6 @@
                 <label>Connector
                   <select id="protected-filter-integration"></select>
                 </label>
-                <label>Coverage
-                  <select id="protected-filter-coverage">
-                    <option value="">all</option>
-                    <option value="unprotected">unprotected</option>
-                    <option value="protected">protected</option>
-                    <option value="disabled">disabled</option>
-                    <option value="unknown">unknown</option>
-                  </select>
-                </label>
-                <label>Asset Match
-                  <select id="protected-filter-asset-mode">
-                    <option value="contains">contains</option>
-                    <option value="begins_with">begins with</option>
-                    <option value="ends_with">ends with</option>
-                  </select>
-                </label>
-                <label>Asset
-                  <input id="protected-filter-asset-value" placeholder="path or folder">
-                </label>
-                <button class="primary" id="refresh-protected-assets" type="button">Load Assets</button>
               </div>
               <div class="metric-row">
                 <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
@@ -1532,6 +1542,7 @@
       activeAssetsTab: "connectors",
       selectedScanResult: null,
     };
+    let protectedFilterReloadTimer = null;
 
     const endpoints = {
       meta: "/api/v1/ui/meta",
@@ -1687,10 +1698,15 @@
       const table = document.getElementById(tableId);
       const body = document.getElementById(bodyId);
       const header = table.querySelector("thead");
-      header.innerHTML = `<tr>${columns.map((column) => {
+      const labelRow = `<tr>${columns.map((column) => {
         const headerContent = column.headerHtml || escapeHtml(column.label || "");
         return `<th${htmlAttributes(column.headerAttributes || {})}>${headerContent}</th>`;
       }).join("")}</tr>`;
+      const hasFilters = columns.some((column) => column.filterHtml);
+      const filterRow = hasFilters
+        ? `<tr class="filter-row">${columns.map((column) => `<th>${column.filterHtml || ""}</th>`).join("")}</tr>`
+        : "";
+      header.innerHTML = labelRow + filterRow;
       body.innerHTML = "";
       if (!rows.length) {
         renderEmptyRow(body, columns.length, emptyMessage);
@@ -1882,6 +1898,7 @@
     }
 
     function renderProtectedAssets(payload = null) {
+      const previousFilters = protectedFilterValues();
       const assets = state.protectedAssets;
       const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
       const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
@@ -1898,6 +1915,16 @@
         {
           key: "asset",
           label: "Asset",
+          filterHtml: `
+            <div class="column-filter asset-filter">
+              <select id="protected-filter-asset-mode" aria-label="Asset match">
+                <option value="contains">contains</option>
+                <option value="begins_with">begins with</option>
+                <option value="ends_with">ends with</option>
+              </select>
+              <input id="protected-filter-asset-value" placeholder="path or folder" aria-label="Asset filter">
+            </div>
+          `,
           render: (asset) => {
             const assetName = asset.display_name || asset.selector;
             const selectorDetail = asset.selector && asset.selector !== assetName
@@ -1923,6 +1950,17 @@
         {
           key: "coverage",
           label: "Coverage",
+          filterHtml: `
+            <div class="column-filter">
+              <select id="protected-filter-coverage" aria-label="Coverage filter">
+                <option value="">all</option>
+                <option value="unprotected">unprotected</option>
+                <option value="protected">protected</option>
+                <option value="disabled">disabled</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+          `,
           render: (asset) => {
             return `
               <div class="coverage-cell">
@@ -1971,6 +2009,26 @@
         rows: assets,
         emptyMessage: "No assets returned for this filter.",
       });
+      bindProtectedTableFilters(previousFilters);
+    }
+
+    function bindProtectedTableFilters(values = {}) {
+      const coverage = document.getElementById("protected-filter-coverage");
+      const assetMode = document.getElementById("protected-filter-asset-mode");
+      const assetValue = document.getElementById("protected-filter-asset-value");
+      if (coverage) {
+        coverage.value = values.coverage || "";
+        coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
+      }
+      if (assetMode) {
+        assetMode.value = values.assetMode || "contains";
+        assetMode.addEventListener("change", () => reloadProtectedAssetsFromFilters());
+      }
+      if (assetValue) {
+        assetValue.value = values.assetValue || "";
+        updateProtectedAssetControls();
+        assetValue.addEventListener("input", () => reloadProtectedAssetsFromFilters({ debounce: true }));
+      }
     }
 
     function renderScanResults() {
@@ -2586,6 +2644,7 @@
       const integration = selectedProtectedIntegration();
       const assetInput = document.getElementById("protected-filter-asset-value");
       const isFilesystem = integration?.platform === "filesystem";
+      if (!assetInput) return;
       assetInput.placeholder = isFilesystem ? "path or folder" : "bucket or prefix";
     }
 
@@ -2612,6 +2671,28 @@
       state.protectedNextCursor = null;
     }
 
+    function protectedFilterValues() {
+      return {
+        coverage: document.getElementById("protected-filter-coverage")?.value || "",
+        assetMode: document.getElementById("protected-filter-asset-mode")?.value || "contains",
+        assetValue: document.getElementById("protected-filter-asset-value")?.value || "",
+      };
+    }
+
+    function reloadProtectedAssetsFromFilters({ debounce = false } = {}) {
+      resetProtectedPagination();
+      if (protectedFilterReloadTimer) {
+        clearTimeout(protectedFilterReloadTimer);
+        protectedFilterReloadTimer = null;
+      }
+      const run = () => loadProtectedAssets().catch(showProtectedAssetsError);
+      if (debounce) {
+        protectedFilterReloadTimer = setTimeout(run, 250);
+      } else {
+        run();
+      }
+    }
+
     async function loadNextProtectedAssetsPage() {
       if (!state.protectedNextCursor) return;
       state.protectedPageIndex += 1;
@@ -2628,9 +2709,10 @@
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
       const integrationId = document.getElementById("protected-filter-integration").value;
-      const coverage = document.getElementById("protected-filter-coverage").value;
-      const assetFilterMode = document.getElementById("protected-filter-asset-mode").value;
-      const assetFilterValue = document.getElementById("protected-filter-asset-value").value.trim();
+      const filters = protectedFilterValues();
+      const coverage = filters.coverage;
+      const assetFilterMode = filters.assetMode;
+      const assetFilterValue = filters.assetValue.trim();
       const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
       if (!integrationId) {
         state.protectedAssets = [];
@@ -2926,19 +3008,10 @@
         }, 1200);
       }
     });
-    document.getElementById("refresh-protected-assets").addEventListener("click", () => {
-      resetProtectedPagination();
-      loadProtectedAssets().catch(showProtectedAssetsError);
+    document.getElementById("protected-filter-integration").addEventListener("change", () => {
+      updateProtectedAssetControls();
+      reloadProtectedAssetsFromFilters();
     });
-    [
-      "protected-filter-integration",
-      "protected-filter-coverage",
-      "protected-filter-asset-mode",
-    ].forEach((id) => {
-      document.getElementById(id).addEventListener("change", resetProtectedPagination);
-    });
-    document.getElementById("protected-filter-integration").addEventListener("change", updateProtectedAssetControls);
-    document.getElementById("protected-filter-asset-value").addEventListener("input", resetProtectedPagination);
     document.getElementById("protected-page-prev").addEventListener("click", () => {
       loadPreviousProtectedAssetsPage().catch(showProtectedAssetsError);
     });

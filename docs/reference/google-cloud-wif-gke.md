@@ -26,7 +26,6 @@ export CLUSTER_NAME="example-gke"
 export CLUSTER_LOCATION="us-central1"
 export NAMESPACE="dsx-connect"
 export KSA_NAME="gcs-connector"
-export GCS_VERSION="2.0.8"
 export GSA_NAME="dsx-gcs-connector"
 export GSA_EMAIL="${GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -46,7 +45,6 @@ Where the values come from:
 | `CLUSTER_LOCATION` | GKE only. The region or zone of the GKE cluster, such as `us-central1` or `us-central1-a`. Use the location shown by `gcloud container clusters list`. If deploying on OpenShift or another Kubernetes distribution, this value is not used by the GKE commands below. |
 | `NAMESPACE` | The Kubernetes namespace where DSX-Connect and the connector are deployed. Use the namespace from your Helm install; these examples use `dsx-connect`. |
 | `KSA_NAME` | The Kubernetes service account used by the GCS connector pod. This must match the service account configured in the connector Helm values. |
-| `GCS_VERSION` | The Google Cloud Storage connector chart/image version to deploy. Use the current released connector version unless you are intentionally pinning an older release. |
 | `GSA_NAME` | The Google service account name to create or reuse for the connector. This is user-defined, but should be unique enough to identify the DSX GCS connector. |
 | `GSA_EMAIL` | The service account email derived from `GSA_NAME` and `PROJECT_ID`. Google Cloud uses this identity for IAM grants and WIF impersonation. |
 | `ASSET_INVENTORY_SCOPE` | The Cloud Asset Inventory parent to enumerate for bucket discovery. Use `projects/PROJECT_ID` for one project, `folders/FOLDER_ID` for all projects under a folder, or `organizations/ORG_ID` for organization-wide discovery. For folder or organization discovery, `PROJECT_ID` still identifies the connector's Google service account and GKE setup project; the inventory scope controls how broadly buckets are discovered. |
@@ -63,32 +61,60 @@ gcloud services enable \
   --project "$PROJECT_ID"
 ```
 
-## Enable WIF on GKE
+## Enable WIF on Cluster
 
-This section applies only when the connector runs on GKE.
-If the connector runs on OpenShift or another Kubernetes distribution, skip the `gcloud container clusters ...` commands and use that platform's supported Google Cloud authentication path instead, such as a mounted service account JSON key or a separate non-GKE Workload Identity Federation setup.
+Choose the tab for the Kubernetes platform that will run the connector.
 
-Autopilot clusters have Workload Identity Federation for GKE enabled.
-For Standard clusters, enable it on the cluster and ensure the node pool uses the GKE metadata server:
+=== "GKE"
 
-```bash
-gcloud container clusters update "$CLUSTER_NAME" \
-  --location "$CLUSTER_LOCATION" \
-  --workload-pool="${PROJECT_ID}.svc.id.goog"
+    Autopilot clusters have Workload Identity Federation for GKE enabled.
+    For Standard clusters, enable it on the cluster and ensure the node pool uses the GKE metadata server:
 
-gcloud container node-pools update NODEPOOL_NAME \
-  --cluster "$CLUSTER_NAME" \
-  --location "$CLUSTER_LOCATION" \
-  --workload-metadata=GKE_METADATA
-```
+    ```bash
+    gcloud container clusters update "$CLUSTER_NAME" \
+      --location "$CLUSTER_LOCATION" \
+      --workload-pool="${PROJECT_ID}.svc.id.goog"
 
-Then get cluster credentials:
+    gcloud container node-pools update NODEPOOL_NAME \
+      --cluster "$CLUSTER_NAME" \
+      --location "$CLUSTER_LOCATION" \
+      --workload-metadata=GKE_METADATA
+    ```
 
-```bash
-gcloud container clusters get-credentials "$CLUSTER_NAME" \
-  --location "$CLUSTER_LOCATION" \
-  --project "$PROJECT_ID"
-```
+    Then get cluster credentials:
+
+    ```bash
+    gcloud container clusters get-credentials "$CLUSTER_NAME" \
+      --location "$CLUSTER_LOCATION" \
+      --project "$PROJECT_ID"
+    ```
+
+    The GKE flow uses the GKE metadata server and the `iam.gke.io/gcp-service-account` Kubernetes service account annotation.
+
+=== "OpenShift"
+
+    OpenShift does not use GKE-managed Workload Identity Federation or the GKE metadata server.
+    Do not run the `gcloud container clusters ...` commands and do not use the GKE `iam.gke.io/gcp-service-account` annotation.
+
+    For OpenShift, use one of these authentication paths:
+
+    * Mount a Google service account JSON key as a Kubernetes Secret and set `gcp.credentialsSecretName` when deploying the connector.
+    * For keyless authentication, configure Google IAM Workload Identity Federation for generic Kubernetes. That setup trusts the cluster's Kubernetes ServiceAccount token issuer, grants the federated principal access to impersonate the Google service account, mounts an external account credential configuration into the pod, and sets `GOOGLE_APPLICATION_CREDENTIALS` to that credential configuration file.
+
+    The mounted service account key path is covered in [Google Cloud Credentials](google-cloud-credentials.md) and in the GCS connector deployment guide.
+
+=== "k3s and Other Non-GKE"
+
+    There is no direct k3s equivalent to the GKE commands above.
+    Those commands enable GKE-managed Workload Identity Federation and the GKE metadata server.
+
+    For a k3s lab, the supported DSX-Connect chart path is usually a mounted Google service account JSON key.
+    Create a Kubernetes Secret that contains the key and set `gcp.credentialsSecretName` when deploying the connector.
+    That path is covered in [Google Cloud Credentials](google-cloud-credentials.md) and in the GCS connector deployment guide.
+
+    For keyless k3s or other self-managed Kubernetes deployments, use Google IAM Workload Identity Federation for generic Kubernetes instead of GKE WIF.
+    That is a separate setup: configure a workload identity pool/provider that trusts the cluster's Kubernetes ServiceAccount token issuer, grant the federated principal access to impersonate the Google service account, mount the external account credential configuration into the pod, and set `GOOGLE_APPLICATION_CREDENTIALS` to that credential configuration file.
+    Do not use the GKE `iam.gke.io/gcp-service-account` annotation for that flow.
 
 ## Create the Google Service Account
 
@@ -198,6 +224,15 @@ gcp:
 It keeps `GOOGLE_APPLICATION_CREDENTIALS` unset so the connector uses ADC/WIF instead of a mounted JSON key.
 
 ## Deploy the Connector
+
+Set the chart version to deploy:
+
+```bash
+export GCS_VERSION="2.0.8"
+```
+
+`GCS_VERSION` is used by the Helm commands below to select the Google Cloud Storage connector chart version from OCI.
+For released charts, the chart `appVersion` and default connector image tag should match this version unless you intentionally override the image tag.
 
 Start from the chart example:
 

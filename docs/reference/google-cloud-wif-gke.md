@@ -26,6 +26,7 @@ export CLUSTER_NAME="example-gke"
 export CLUSTER_LOCATION="us-central1"
 export NAMESPACE="dsx-connect"
 export KSA_NAME="gcs-connector"
+export GCS_VERSION="2.0.8"
 export GSA_NAME="dsx-gcs-connector"
 export GSA_EMAIL="${GSA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
 
@@ -45,6 +46,7 @@ Where the values come from:
 | `CLUSTER_LOCATION` | GKE only. The region or zone of the GKE cluster, such as `us-central1` or `us-central1-a`. Use the location shown by `gcloud container clusters list`. If deploying on OpenShift or another Kubernetes distribution, this value is not used by the GKE commands below. |
 | `NAMESPACE` | The Kubernetes namespace where DSX-Connect and the connector are deployed. Use the namespace from your Helm install; these examples use `dsx-connect`. |
 | `KSA_NAME` | The Kubernetes service account used by the GCS connector pod. This must match the service account configured in the connector Helm values. |
+| `GCS_VERSION` | The Google Cloud Storage connector chart/image version to deploy. Use the current released connector version unless you are intentionally pinning an older release. |
 | `GSA_NAME` | The Google service account name to create or reuse for the connector. This is user-defined, but should be unique enough to identify the DSX GCS connector. |
 | `GSA_EMAIL` | The service account email derived from `GSA_NAME` and `PROJECT_ID`. Google Cloud uses this identity for IAM grants and WIF impersonation. |
 | `ASSET_INVENTORY_SCOPE` | The Cloud Asset Inventory parent to enumerate for bucket discovery. Use `projects/PROJECT_ID` for one project, `folders/FOLDER_ID` for all projects under a folder, or `organizations/ORG_ID` for organization-wide discovery. For folder or organization discovery, `PROJECT_ID` still identifies the connector's Google service account and GKE setup project; the inventory scope controls how broadly buckets are discovered. |

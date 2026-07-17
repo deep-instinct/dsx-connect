@@ -65,7 +65,7 @@ For example, Google Cloud Storage:
 
 ```bash
 export NAMESPACE=dsx-connect
-export GCS_VERSION=2.0.7
+export GCS_VERSION=2.0.8
 
 helm template gcs \
   oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \

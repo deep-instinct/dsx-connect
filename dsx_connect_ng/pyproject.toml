@@ -1,6 +1,6 @@
 [project]
 name = "dsx-connect-ng"
-version = "2.0.11"
+version = "2.0.12"
 description = "Standalone next-generation control-plane and worker architecture for DSX-Connect"
 readme = "README.md"
 requires-python = ">=3.10"

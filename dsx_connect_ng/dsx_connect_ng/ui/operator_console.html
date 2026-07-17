@@ -15,6 +15,7 @@
       --bg: #f2f5f4;
       --surface: #ffffff;
       --surface-2: #eef3f2;
+      --surface-3: #e3ebe8;
       --field-bg: #fbfdfd;
       --toolbar-bg: #fbfcfc;
       --ink: #17211f;
@@ -83,6 +84,7 @@
       --bg: #111918;
       --surface: #172321;
       --surface-2: #20302d;
+      --surface-3: #273a36;
       --field-bg: #101817;
       --toolbar-bg: #141f1d;
       --ink: #e8efed;
@@ -107,6 +109,7 @@
       --bg: #080d14;
       --surface: #0f1724;
       --surface-2: #162338;
+      --surface-3: #1c2d47;
       --field-bg: #080f18;
       --toolbar-bg: #0b121d;
       --ink: #e8f1ff;
@@ -627,6 +630,18 @@
       grid-template-columns: minmax(220px, 320px);
     }
 
+    .toolbar.protected label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      white-space: nowrap;
+    }
+
+    .toolbar.protected select {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
     .table-wrap {
       display: block;
       width: 100%;
@@ -643,10 +658,14 @@
     }
 
     thead .filter-row th {
-      padding-top: var(--space-3);
+      top: 29px;
+      padding-top: 0;
       padding-bottom: var(--space-4);
-      background: var(--toolbar-bg);
+      border-bottom: 0;
+      background: var(--surface-2);
       vertical-align: top;
+      letter-spacing: 0;
+      text-transform: none;
     }
 
     .column-filter {
@@ -661,6 +680,9 @@
       min-height: 28px;
       padding: 4px 7px;
       font-size: var(--font-size-sm);
+      border: 0;
+      background: var(--surface-3);
+      box-shadow: none;
     }
 
     .column-filter.asset-filter select {
@@ -803,6 +825,23 @@
       gap: var(--space-4) var(--space-9);
       padding: 0 var(--space-8) var(--space-6);
       color: var(--muted);
+    }
+
+    .protected-summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      padding: 0 var(--space-8) var(--space-6);
+    }
+
+    .protected-summary .metric-row,
+    .protected-summary .pager {
+      padding: 0;
+    }
+
+    .protected-summary .pager {
+      margin-left: auto;
     }
 
     .metric {
@@ -1251,16 +1290,18 @@
                   <select id="protected-filter-integration"></select>
                 </label>
               </div>
-              <div class="metric-row">
-                <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
-                <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
-                <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
-                <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
-              </div>
-              <div class="pager" id="protected-assets-pager">
-                <button type="button" id="protected-page-prev">Previous</button>
-                <span id="protected-page-range"><strong>0-0</strong></span>
-                <button type="button" id="protected-page-next">Next</button>
+              <div class="protected-summary">
+                <div class="metric-row">
+                  <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
+                  <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
+                  <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
+                  <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
+                </div>
+                <div class="pager" id="protected-assets-pager">
+                  <button type="button" id="protected-page-prev">Previous</button>
+                  <span id="protected-page-range"><strong>0-0</strong></span>
+                  <button type="button" id="protected-page-next">Next</button>
+                </div>
               </div>
               <div class="table-wrap protected-assets">
                 <table id="protected-assets-table">
@@ -1899,6 +1940,7 @@
 
     function renderProtectedAssets(payload = null) {
       const previousFilters = protectedFilterValues();
+      const activeFilter = protectedActiveFilterState();
       const assets = state.protectedAssets;
       const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
       const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
@@ -2009,10 +2051,25 @@
         rows: assets,
         emptyMessage: "No assets returned for this filter.",
       });
-      bindProtectedTableFilters(previousFilters);
+      bindProtectedTableFilters(previousFilters, activeFilter);
     }
 
-    function bindProtectedTableFilters(values = {}) {
+    function protectedActiveFilterState() {
+      const active = document.activeElement;
+      const filterIds = new Set([
+        "protected-filter-coverage",
+        "protected-filter-asset-mode",
+        "protected-filter-asset-value",
+      ]);
+      if (!active || !filterIds.has(active.id)) return null;
+      return {
+        id: active.id,
+        selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+        selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+      };
+    }
+
+    function bindProtectedTableFilters(values = {}, activeFilter = null) {
       const coverage = document.getElementById("protected-filter-coverage");
       const assetMode = document.getElementById("protected-filter-asset-mode");
       const assetValue = document.getElementById("protected-filter-asset-value");
@@ -2028,6 +2085,15 @@
         assetValue.value = values.assetValue || "";
         updateProtectedAssetControls();
         assetValue.addEventListener("input", () => reloadProtectedAssetsFromFilters({ debounce: true }));
+      }
+      if (activeFilter?.id) {
+        const restored = document.getElementById(activeFilter.id);
+        if (restored) {
+          restored.focus();
+          if (typeof restored.setSelectionRange === "function" && activeFilter.selectionStart !== null) {
+            restored.setSelectionRange(activeFilter.selectionStart, activeFilter.selectionEnd ?? activeFilter.selectionStart);
+          }
+        }
       }
     }
 

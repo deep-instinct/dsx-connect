@@ -35,6 +35,20 @@ export ASSET_INVENTORY_SCOPE="projects/${PROJECT_ID}"
 # export ASSET_INVENTORY_SCOPE="organizations/ORG_ID"
 ```
 
+Where the values come from:
+
+| Variable | Source |
+| --- | --- |
+| `PROJECT_ID` | The Google Cloud project used for the connector setup in these examples: API enablement, quota context, and the Google service account. For GKE deployments, this is also commonly the cluster project. It does not have to limit discovery to one project when `ASSET_INVENTORY_SCOPE` is set to a folder or organization. Find project IDs in the Google Cloud console project selector or with `gcloud projects list`. |
+| `PROJECT_NUMBER` | The numeric project identifier for `PROJECT_ID`. The example derives it with `gcloud projects describe`; you normally do not choose this value. |
+| `CLUSTER_NAME` | GKE only. The name of the existing GKE cluster where the connector pod will run. This is user-defined when the cluster is created. List clusters with `gcloud container clusters list --project "$PROJECT_ID"`. If deploying on OpenShift or another Kubernetes distribution, this value is not used by the GKE commands below. |
+| `CLUSTER_LOCATION` | GKE only. The region or zone of the GKE cluster, such as `us-central1` or `us-central1-a`. Use the location shown by `gcloud container clusters list`. If deploying on OpenShift or another Kubernetes distribution, this value is not used by the GKE commands below. |
+| `NAMESPACE` | The Kubernetes namespace where DSX-Connect and the connector are deployed. Use the namespace from your Helm install; these examples use `dsx-connect`. |
+| `KSA_NAME` | The Kubernetes service account used by the GCS connector pod. This must match the service account configured in the connector Helm values. |
+| `GSA_NAME` | The Google service account name to create or reuse for the connector. This is user-defined, but should be unique enough to identify the DSX GCS connector. |
+| `GSA_EMAIL` | The service account email derived from `GSA_NAME` and `PROJECT_ID`. Google Cloud uses this identity for IAM grants and WIF impersonation. |
+| `ASSET_INVENTORY_SCOPE` | The Cloud Asset Inventory parent to enumerate for bucket discovery. Use `projects/PROJECT_ID` for one project, `folders/FOLDER_ID` for all projects under a folder, or `organizations/ORG_ID` for organization-wide discovery. For folder or organization discovery, `PROJECT_ID` still identifies the connector's Google service account and GKE setup project; the inventory scope controls how broadly buckets are discovered. |
+
 ## Enable APIs
 
 ```bash
@@ -48,6 +62,9 @@ gcloud services enable \
 ```
 
 ## Enable WIF on GKE
+
+This section applies only when the connector runs on GKE.
+If the connector runs on OpenShift or another Kubernetes distribution, skip the `gcloud container clusters ...` commands and use that platform's supported Google Cloud authentication path instead, such as a mounted service account JSON key or a separate non-GKE Workload Identity Federation setup.
 
 Autopilot clusters have Workload Identity Federation for GKE enabled.
 For Standard clusters, enable it on the cluster and ensure the node pool uses the GKE metadata server:

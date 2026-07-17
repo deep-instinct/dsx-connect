@@ -1,6 +1,7 @@
 # DSX-Connect 2 Kubernetes Helm Quickstart
 
-This quickstart deploys:
+This quickstart includes a minimal API/UI smoke-test profile and a scan-capable lab profile.
+The scan-capable profile deploys:
 
 * DSX-Connect 2 control plane
 * PostgreSQL and RabbitMQ for local state and job dispatch
@@ -50,6 +51,85 @@ Create the namespace:
 ```bash
 kubectl create namespace $NAMESPACE
 ```
+
+## Minimal Viable API-Only Deployment
+
+For the smallest possible Kubernetes deployment, install only the DSX-Connect API/UI.
+This uses the chart defaults: in-memory control-plane state, in-memory job bus, stub scanner, no PostgreSQL, no RabbitMQ, and no workers.
+
+Use this profile for a quick smoke test of the Operator Console or ingress.
+Do not use it for durable connector registration, protection configuration, or scan execution.
+
+```bash
+cat > /tmp/dsx-connect-2-minimal-values.yaml <<EOF
+image:
+  pullPolicy: "Always"
+
+env:
+  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "memory"
+  DSX_CONNECT_NG__JOB_BUS_BACKEND: "memory"
+  DSX_CONNECT_NG_SCANNER__MODE: "stub"
+
+postgresql:
+  enabled: false
+
+rabbitmq:
+  enabled: false
+
+workers:
+  relay:
+    enabled: false
+  scan:
+    enabled: false
+  policy:
+    enabled: false
+  remediation:
+    enabled: false
+  resultSink:
+    enabled: false
+  dianna:
+    enabled: false
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: "${DSX_CONNECT_HOST}"
+      paths:
+        - path: /
+          pathType: Prefix
+EOF
+```
+
+Install the minimal profile:
+
+```bash
+helm upgrade --install $RELEASE \
+  oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
+  --version $DSX_CONNECT_VERSION \
+  --namespace $NAMESPACE \
+  -f /tmp/dsx-connect-2-minimal-values.yaml
+```
+
+Expected pods:
+
+* `dsx-connect-api`
+
+For this profile, access the UI using the ingress or port-forward steps below.
+Stop here if you only need an API/UI smoke test.
+Continue with the full-stack values in the next section if you want connector registration, asset protection, and scans.
+
+PostgreSQL and RabbitMQ are optional only for this API-only smoke-test profile:
+
+| Deployment goal | PostgreSQL | RabbitMQ | Workers |
+| --- | --- | --- | --- |
+| API/UI smoke test | Not required | Not required | Disabled |
+| Durable connector registration and protection state | Required | Not required by itself | Disabled unless scanning |
+| Scan-capable lab deployment | Required | Required | Enabled |
+
+RabbitMQ without PostgreSQL is not a useful production or lab profile for DSX-Connect 2, because the worker pipeline expects durable job/control-plane state.
+For scan-capable deployments, use PostgreSQL and RabbitMQ together.
 
 ## 2) Deploy a DSXA Scanner (Optional)
 

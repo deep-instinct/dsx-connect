@@ -6,7 +6,7 @@ For those environments, keep Helm as the source of truth and ship rendered stati
 The customer applies the rendered YAML:
 
 ```bash
-kubectl apply -f dsx-connect-2.0.12.yaml
+kubectl apply -f dsx-connect-2.0.13.yaml
 ```
 
 They do not need Helm on the target cluster.
@@ -32,7 +32,7 @@ Render the DSX-Connect 2 control-plane chart:
 ```bash
 export RELEASE=dsx-connect
 export NAMESPACE=dsx-connect
-export DSX_CONNECT_VERSION=2.0.12
+export DSX_CONNECT_VERSION=2.0.13
 
 helm template "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
@@ -112,7 +112,7 @@ Static-manifest upgrades are still versioned.
 Render a new manifest for the new chart version and values file:
 
 ```bash
-export DSX_CONNECT_VERSION=2.0.12
+export DSX_CONNECT_VERSION=2.0.13
 
 helm template "$RELEASE" \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
@@ -131,7 +131,7 @@ Kubernetes updates changed resources in place and rolls Deployments when pod tem
 Delete using the same manifest that was applied:
 
 ```bash
-kubectl delete -f dsx-connect-2.0.12.yaml
+kubectl delete -f dsx-connect-2.0.13.yaml
 ```
 
 Use care with PersistentVolumeClaims.

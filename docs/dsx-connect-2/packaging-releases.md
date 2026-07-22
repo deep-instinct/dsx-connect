@@ -191,9 +191,9 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
 3. Commit, tag, push, and watch the DSX-Connect release.
 
    ```bash
-   git commit -m "Bump DSX-Connect v2 to 2.0.12"
-   git tag dsx-connect-v2.0.12
-   git push origin main dsx-connect-v2.0.12
+   git commit -m "Bump DSX-Connect v2 to 2.0.13"
+   git tag dsx-connect-v2.0.13
+   git push origin main dsx-connect-v2.0.13
    gh run list --workflow release-dsx-connect-v2.yml --limit 5
    gh run watch <run_id> --exit-status
    ```
@@ -232,7 +232,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
 
    ```bash
    scripts/dsx-connect-ng/update-lab-stack.sh \
-     --connect-version 2.0.12 \
+     --connect-version 2.0.13 \
      --gcs-version 2.0.9 \
      --filesystem-version 2.0.7 \
      --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
@@ -245,7 +245,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
    ```bash
    helm --kube-context k3s-uslab upgrade --install dsx-connect \
      oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
-     --version 2.0.12 -n dsx-connect --reuse-values --wait --timeout 5m
+     --version 2.0.13 -n dsx-connect --reuse-values --wait --timeout 5m
 
    helm --kube-context k3s-uslab upgrade --install filesystem \
      oci://registry-1.docker.io/dsxconnect/filesystem-connector-chart \

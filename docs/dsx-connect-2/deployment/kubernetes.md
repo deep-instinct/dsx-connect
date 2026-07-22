@@ -546,6 +546,19 @@ helm uninstall "$RELEASE" -n "$NAMESPACE"
 
 If you used the local example values with non-persistent PostgreSQL and RabbitMQ, runtime state is removed with the pods.
 
+## Troubleshooting
+
+If pods are running but DSX-Connect components cannot reach each other through Kubernetes services, first verify cluster networking before changing DSX-Connect values.
+
+Common signs include:
+
+* API or worker logs show connection timeouts to `dsx-connect-postgres:5432`.
+* Connectors cannot register with `http://dsx-connect-api:8091`.
+* Services and endpoints exist, but traffic to those endpoints times out.
+* `kubectl logs` or `kubectl exec` fails with kubelet `:10250` timeouts.
+
+For a GKE-focused diagnostic walkthrough, see [Case Study: GKE Cluster Networking Troubleshooting](../../case-studies/gke-cluster-networking-troubleshooting.md).
+
 ## Next Steps
 
 * Deploy a repository connector: [Deploy connectors](connectors/index.md)

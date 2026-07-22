@@ -161,8 +161,10 @@ def _list_cloud_asset_inventory_buckets(
     else:
         page = response
 
+    page_items = getattr(page, "assets", page)
+
     assets: list[AssetDiscoveryItem] = []
-    for asset in page:
+    for asset in page_items:
         bucket = _bucket_name_from_cloud_asset(asset)
         if not bucket:
             continue

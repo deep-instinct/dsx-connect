@@ -63,6 +63,52 @@ def test_cloud_asset_inventory_helper_reads_first_page(monkeypatch):
     assert next_cursor == "token-2"
 
 
+def test_cloud_asset_inventory_helper_reads_response_page_assets(monkeypatch):
+    import google.cloud
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    page = types.SimpleNamespace(
+        assets=[
+            types.SimpleNamespace(
+                name="//storage.googleapis.com/projects/_/buckets/bucket-a",
+                asset_type="storage.googleapis.com/Bucket",
+                resource=types.SimpleNamespace(
+                    data={
+                        "name": "bucket-a",
+                        "location": "US",
+                        "storageClass": "STANDARD",
+                    }
+                ),
+            )
+        ],
+        next_page_token="token-2",
+    )
+
+    class FakePager:
+        @property
+        def pages(self):
+            return iter([page])
+
+    class FakeAssetServiceClient:
+        def list_assets(self, request):
+            assert request["parent"] == "projects/example"
+            return FakePager()
+
+    fake_asset_v1 = types.SimpleNamespace(
+        AssetServiceClient=FakeAssetServiceClient,
+        ContentType=types.SimpleNamespace(RESOURCE="RESOURCE"),
+    )
+    monkeypatch.setitem(sys.modules, "google.cloud.asset_v1", fake_asset_v1)
+    monkeypatch.setattr(google.cloud, "asset_v1", fake_asset_v1, raising=False)
+
+    assets, next_cursor = gc._list_cloud_asset_inventory_buckets(scope="projects/example", limit=10)
+
+    assert [asset.selector for asset in assets] == ["bucket-a"]
+    assert assets[0].metadata["discovery_source"] == "cloud_asset_inventory"
+    assert assets[0].metadata["location"] == "US"
+    assert next_cursor == "token-2"
+
+
 def test_filtered_cloud_asset_inventory_walks_until_page_is_filled(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 

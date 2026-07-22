@@ -65,7 +65,7 @@ For example, Google Cloud Storage:
 
 ```bash
 export NAMESPACE=dsx-connect
-export GCS_VERSION=2.0.8
+export GCS_VERSION=2.0.9
 
 helm template gcs \
   oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -131,7 +131,7 @@ Kubernetes updates changed resources in place and rolls Deployments when pod tem
 Delete using the same manifest that was applied:
 
 ```bash
-kubectl delete -f dsx-connect-2.0.8.yaml
+kubectl delete -f dsx-connect-2.0.12.yaml
 ```
 
 Use care with PersistentVolumeClaims.

@@ -228,7 +228,7 @@ It keeps `GOOGLE_APPLICATION_CREDENTIALS` unset so the connector uses ADC/WIF in
 Set the chart version to deploy:
 
 ```bash
-export GCS_VERSION="2.0.8"
+export GCS_VERSION="2.0.9"
 ```
 
 `GCS_VERSION` is used by the Helm commands below to select the Google Cloud Storage connector chart version from OCI.
@@ -296,6 +296,10 @@ kubectl logs -n "$NAMESPACE" deploy/gcs-google-cloud-storage-connector
 
 Verify discovery from DSX-Connect or by calling the connector service in-cluster.
 When `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` is set, the connector should use Cloud Asset Inventory for bucket discovery.
+Cloud Asset Inventory returns bucket assets from the configured project, folder, or organization scope across bucket locations; the GKE cluster region does not need to match each bucket's location.
+
+In the Operator Console, use **Assets > Protected** with coverage set to **All** or **Unprotected** to confirm newly discovered buckets.
+The **Protected** coverage filter shows only buckets or prefixes that already have protection enabled.
 
 ## Troubleshooting
 

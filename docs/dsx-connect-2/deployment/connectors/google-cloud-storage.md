@@ -88,7 +88,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
     ```bash
     export NAMESPACE=dsx-connect
-    export GCS_VERSION=2.0.8
+    export GCS_VERSION=2.0.9
 
     helm upgrade --install gcs \
       oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -189,7 +189,7 @@ Complete the GCP setup in [Google Cloud WIF for GCS Connector on GKE](../../../r
 
 ```bash
 export NAMESPACE=dsx-connect
-export GCS_VERSION=2.0.8
+export GCS_VERSION=2.0.9
 
 helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
   --version "$GCS_VERSION" \
@@ -236,6 +236,25 @@ helm upgrade --install gcs \
 
 With `gcp.credentialsSecretName: ""`, the chart does not mount `/app/creds` and does not set `GOOGLE_APPLICATION_CREDENTIALS`.
 The Google SDK resolves credentials through GKE Workload Identity Federation.
+
+## Asset Discovery Notes
+
+`DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` controls broad bucket discovery through Cloud Asset Inventory.
+It works with either authentication model:
+
+* GKE Workload Identity Federation / Application Default Credentials
+* a mounted Google service-account JSON key
+
+The authentication method decides how the connector obtains Google credentials.
+It does not change how Cloud Asset Inventory discovery works.
+
+Cloud Asset Inventory scope is global to the configured project, folder, or organization.
+The connector pod's Kubernetes cluster region does not need to match the bucket locations.
+For example, a connector running in a `us-east4` GKE cluster can discover buckets in `US`, `US-CENTRAL1`, `US-EAST1`, and other bucket locations when the Google service account has IAM on the configured inventory scope.
+
+In the Operator Console, newly discovered buckets appear as unprotected until you create protected scopes for them.
+Use the coverage filter set to **All** or **Unprotected** to confirm discovery.
+The **Protected** coverage filter shows only buckets or prefixes that already have protection enabled.
 
 ---
 

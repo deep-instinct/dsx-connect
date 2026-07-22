@@ -210,7 +210,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
 
    scripts/connectors/test.sh google_cloud_storage
    scripts/connectors/lint-chart.sh google_cloud_storage
-   scripts/connectors/package-chart.sh google_cloud_storage --version 2.0.8 --app-version 2.0.8 --destination /tmp/dsx-connect-connector-charts
+   scripts/connectors/package-chart.sh google_cloud_storage --version 2.0.9 --app-version 2.0.9 --destination /tmp/dsx-connect-connector-charts
    ```
 
 6. Commit, tag, push, and watch connector releases.
@@ -219,8 +219,8 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
    ```bash
    git commit -m "Bump connector releases"
    git tag connector-filesystem-v2.0.7
-   git tag connector-google_cloud_storage-v2.0.8
-   git push origin main connector-filesystem-v2.0.7 connector-google_cloud_storage-v2.0.8
+   git tag connector-google_cloud_storage-v2.0.9
+   git push origin main connector-filesystem-v2.0.7 connector-google_cloud_storage-v2.0.9
 
    gh run list --workflow release-connector.yml --limit 10
    gh run watch <filesystem_run_id> --exit-status
@@ -233,7 +233,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
    ```bash
    scripts/dsx-connect-ng/update-lab-stack.sh \
      --connect-version 2.0.12 \
-     --gcs-version 2.0.8 \
+     --gcs-version 2.0.9 \
      --filesystem-version 2.0.7 \
      --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
      --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
@@ -253,7 +253,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
 
    helm --kube-context k3s-uslab upgrade --install gcs \
      oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
-     --version 2.0.8 -n dsx-connect --reuse-values --wait --timeout 5m
+     --version 2.0.9 -n dsx-connect --reuse-values --wait --timeout 5m
    ```
 
 8. Verify the lab.

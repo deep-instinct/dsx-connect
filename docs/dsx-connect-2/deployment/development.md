@@ -278,7 +278,7 @@ Update to explicit released versions:
 
 ```bash
 scripts/dsx-connect-ng/update-lab-stack.sh \
-  --connect-version 2.0.13 \
+  --connect-version 2.0.14 \
   --gcs-version 2.0.9 \
   --filesystem-version 2.0.7 \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \

@@ -976,6 +976,36 @@
       background: var(--surface);
     }
 
+    .inline-result-detail details {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      overflow: hidden;
+    }
+
+    .inline-result-detail summary {
+      min-height: 34px;
+      padding: var(--space-4) var(--space-5);
+      background: var(--toolbar-bg);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: var(--font-weight-strong);
+    }
+
+    .inline-result-detail summary::marker {
+      color: var(--muted);
+    }
+
+    .inline-result-detail details .table-wrap,
+    .inline-result-detail details .detail {
+      border: 0;
+      border-radius: 0;
+    }
+
+    .inline-result-detail details .detail {
+      background: var(--toolbar-bg);
+    }
+
     pre {
       margin: 0;
       white-space: pre-wrap;
@@ -2632,13 +2662,19 @@
       `).join("");
       return `
         <div class="inline-result-detail" id="inline-scan-result-detail">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Protection Profile</th><th>Remediation</th><th>Failure</th></tr></thead>
-              <tbody>${latest || '<tr><td colspan="6"><div class="empty">No sampled items.</div></td></tr>'}</tbody>
-            </table>
-          </div>
-          <div class="detail"><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></div>
+          <details open>
+            <summary>Item Details</summary>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Protection Profile</th><th>Remediation</th><th>Failure</th></tr></thead>
+                <tbody>${latest || '<tr><td colspan="6"><div class="empty">No sampled items.</div></td></tr>'}</tbody>
+              </table>
+            </div>
+          </details>
+          <details>
+            <summary>Raw JSON</summary>
+            <div class="detail"><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></div>
+          </details>
         </div>
       `;
     }

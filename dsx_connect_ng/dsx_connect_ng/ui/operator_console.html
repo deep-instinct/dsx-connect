@@ -956,31 +956,24 @@
       overflow: auto;
     }
 
-    .summary-grid {
+    tr.detail-row {
+      background: var(--accent-soft);
+    }
+
+    tr.detail-row td {
+      padding: 0 var(--space-6) var(--space-6) calc(var(--space-6) + 20px);
+      border-top: 0;
+    }
+
+    .inline-result-detail {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--space-4);
+      gap: var(--space-5);
+      padding-top: var(--space-3);
     }
 
-    .summary-item {
-      border: 1px solid var(--line);
-      border-radius: var(--radius-md);
-      padding: 9px;
+    .inline-result-detail .table-wrap {
+      border-color: var(--line);
       background: var(--surface);
-    }
-
-    .summary-item span {
-      display: block;
-      color: var(--muted);
-      font-size: var(--font-size-xs);
-      font-weight: var(--font-weight-normal);
-    }
-
-    .summary-item strong {
-      display: block;
-      margin-top: 3px;
-      font-size: var(--font-size-md);
-      font-weight: var(--font-weight-strong);
     }
 
     pre {
@@ -1341,17 +1334,6 @@
                 <thead></thead>
                 <tbody id="scan-results-body"></tbody>
               </table>
-            </div>
-          </div>
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Result Detail</h2>
-                <p>Latest sampled items and raw job context.</p>
-              </div>
-            </div>
-            <div class="panel-body" id="scan-result-detail">
-              <div class="empty">Select a scan result.</div>
             </div>
           </div>
         </section>
@@ -1735,7 +1717,7 @@
         .join("");
     }
 
-    function renderDataTable({ tableId, bodyId, columns, rows, emptyMessage, rowAttributes = null }) {
+    function renderDataTable({ tableId, bodyId, columns, rows, emptyMessage, rowAttributes = null, rowDetailHtml = null }) {
       const table = document.getElementById(tableId);
       const body = document.getElementById(bodyId);
       const header = table.querySelector("thead");
@@ -1759,7 +1741,11 @@
           const className = column.className ? ` class="${escapeHtml(column.className)}"` : "";
           return `<td${className}>${column.render(row, index)}</td>`;
         }).join("");
-        return `<tr${htmlAttributes(attributes)}>${cells}</tr>`;
+        const detail = rowDetailHtml ? rowDetailHtml(row, index) : "";
+        const detailRow = detail
+          ? `<tr class="detail-row"><td colspan="${columns.length}">${detail}</td></tr>`
+          : "";
+        return `<tr${htmlAttributes(attributes)}>${cells}</tr>${detailRow}`;
       }).join("");
     }
 
@@ -2105,6 +2091,14 @@
           render: (result) => `<strong>${escapeHtml(result.job.job_type)}</strong><br><span class="muted">${escapeHtml(scanSourceLabel(result))}</span><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
         },
         {
+          key: "cancel",
+          label: "Cancel",
+          className: "actions",
+          render: (result) => isTerminalJobState(result.job.state)
+            ? '<span class="muted">-</span>'
+            : `<button class="danger" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}">Cancel</button>`,
+        },
+        {
           key: "target",
           label: "Target",
           render: (result) => `${escapeHtml(result.target?.label || "unknown")}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.target?.integration_id || "")}</span>${copyButton(result.target?.integration_id || "")}</span>`,
@@ -2139,15 +2133,13 @@
           },
         },
         {
-          key: "cancel",
-          label: "Cancel",
-          render: (result) => `${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}<br><span class="muted">in-flight files may finish</span>`,
-        },
-        {
           key: "actions",
           label: "",
           className: "actions",
-          render: (result) => `<button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(result.job.job_id)}">Inspect</button>`,
+          render: (result) => {
+            const isOpen = state.selectedScanResult === result.job.job_id;
+            return `<button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(result.job.job_id)}">${isOpen ? "Hide" : "Inspect"}</button>`;
+          },
         },
       ];
       renderDataTable({
@@ -2160,6 +2152,7 @@
           "data-job-id": result.job.job_id,
           class: state.selectedScanResult === result.job.job_id ? "selected" : null,
         }),
+        rowDetailHtml: (result) => state.selectedScanResult === result.job.job_id ? scanResultDetailHtml(result) : "",
       });
       renderTopStats();
     }
@@ -2314,10 +2307,14 @@
     function formatProgress(progress = {}, state = "") {
       const done = progress.terminal_items || 0;
       const total = progress.total_items || 0;
-      const terminal = ["completed", "failed", "cancelled"].includes(String(state || "").toLowerCase());
+      const terminal = isTerminalJobState(state);
       const totalText = total ? `${terminal ? "" : "~"}${total} queued` : `${terminal ? "0 queued" : "~? queued"}`;
       const percent = total ? ` (${progress.percent_complete ?? 0}%)` : "";
       return `${done}/${totalText}${percent}`;
+    }
+
+    function isTerminalJobState(state) {
+      return ["completed", "failed", "cancelled"].includes(String(state || "").toLowerCase());
     }
 
     function normalizePolicyCatalogEntry(policyEntry) {
@@ -2622,25 +2619,7 @@
       setStatus("default-policy-status", label);
     }
 
-    function renderScanResultDetail(jobId) {
-      const result = state.scanResults.find((item) => item.job.job_id === jobId);
-      const target = document.getElementById("scan-result-detail");
-      if (!result) {
-        target.innerHTML = '<div class="empty">Result not found.</div>';
-        return;
-      }
-      state.selectedScanResult = jobId;
-      document.querySelectorAll("#scan-results-body tr").forEach((row) => {
-        row.classList.toggle("selected", row.dataset.jobId === jobId);
-      });
-      const progress = result.progress || {};
-      const findings = result.findings || {};
-      const remediation = result.remediation || {};
-      const targetLabel = result.target?.label || "unknown";
-      const sourceText = scanSourceLabel(result);
-      const progressText = formatProgress(progress, result.job.state);
-      const findingText = `clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`;
-      const remediationText = `done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`;
+    function scanResultDetailHtml(result) {
       const latest = (result.latest_items || []).map((item) => `
         <tr>
           <td>${escapeHtml(item.object_identity)}</td>
@@ -2651,25 +2630,8 @@
           <td>${escapeHtml(item.failure_reason || "")}</td>
         </tr>
       `).join("");
-      target.innerHTML = `
-        <div class="cards">
-          <div class="card">
-            <div class="card-top">
-              <div>
-                <h3>${escapeHtml(targetLabel)}</h3>
-                <p><span class="mono">${escapeHtml(result.job.job_id)}</span></p>
-              </div>
-              <span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>
-            </div>
-            <div class="summary-grid">
-              <div class="summary-item"><span>Progress</span><strong>${escapeHtml(progressText)}</strong></div>
-              <div class="summary-item"><span>Source</span><strong>${escapeHtml(sourceText)}</strong></div>
-              <div class="summary-item"><span>Findings</span><strong>${escapeHtml(findingText)}</strong></div>
-              <div class="summary-item"><span>Remediation</span><strong>${escapeHtml(remediationText)}</strong></div>
-              <div class="summary-item"><span>Cancel</span><strong>${result.cancel?.immediate_file_level_cancel ? "immediate" : "cooperative"}</strong></div>
-            </div>
-            ${result.cancel?.message ? `<p>${escapeHtml(result.cancel.message)}</p>` : ""}
-          </div>
+      return `
+        <div class="inline-result-detail" id="inline-scan-result-detail">
           <div class="table-wrap">
             <table>
               <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Protection Profile</th><th>Remediation</th><th>Failure</th></tr></thead>
@@ -2679,6 +2641,17 @@
           <div class="detail"><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></div>
         </div>
       `;
+    }
+
+    function renderScanResultDetail(jobId) {
+      const result = state.scanResults.find((item) => item.job.job_id === jobId);
+      if (!result) {
+        state.selectedScanResult = null;
+        renderScanResults();
+        return;
+      }
+      state.selectedScanResult = jobId;
+      renderScanResults();
     }
 
     function populateSelects() {
@@ -2817,6 +2790,24 @@
       const payload = await fetchJson(`${endpoints.scanResults}?${params.toString()}`);
       state.scanResults = payload.results || [];
       renderScanResults();
+    }
+
+    async function cancelScanResult(jobId, button) {
+      button.disabled = true;
+      button.textContent = "Cancelling";
+      try {
+        await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/cancel`, {
+          method: "POST",
+        });
+        await loadScanResults();
+        if (state.selectedScanResult === jobId) {
+          renderScanResultDetail(jobId);
+        }
+      } catch (error) {
+        alert(`Cancel failed: ${error.message}`);
+        button.disabled = false;
+        button.textContent = "Cancel";
+      }
     }
 
     async function loadPolicies() {
@@ -3220,10 +3211,17 @@
     });
 
     document.getElementById("scan-results-body").addEventListener("click", (event) => {
+      const cancelButton = event.target.closest("[data-action='cancel-scan-result']");
+      if (cancelButton) {
+        cancelScanResult(cancelButton.dataset.id, cancelButton);
+        return;
+      }
       const button = event.target.closest("[data-action='inspect-scan-result']");
       if (!button) return;
-      renderScanResultDetail(button.dataset.id);
-      document.getElementById("scan-result-detail").scrollIntoView({ behavior: "smooth", block: "start" });
+      const jobId = button.dataset.id;
+      state.selectedScanResult = state.selectedScanResult === jobId ? null : jobId;
+      renderScanResults();
+      document.getElementById("inline-scan-result-detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
 
     document.getElementById("policies-body").addEventListener("click", (event) => {

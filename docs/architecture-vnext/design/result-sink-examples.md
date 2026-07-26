@@ -80,6 +80,49 @@ without changing the core event model inside DSX-Connect.
 
 ---
 
+## Future RabbitMQ Subscriber Pattern
+
+For multi-destination result publishing, prefer a pub/sub topology over a single destination-aware worker.
+
+The core pattern is:
+
+1. DSX-Connect persists stage state and records a result event in the durable outbox
+2. the relay publishes that event to a result topic exchange
+3. each destination has its own durable queue bound to the exchange
+4. each destination worker consumes only its own queue
+
+Example queue layout:
+
+| Destination | Queue | Example binding |
+| --- | --- | --- |
+| Audit JSONL archive | `dsx.ng.results.audit-jsonl` | `result.#` |
+| Webhook exporter | `dsx.ng.results.webhook.customer-a` | `result.workflow_summary.*` |
+| SIEM exporter | `dsx.ng.results.siem` | `result.scan.*`, `result.remediation.*` |
+| Management sync | `dsx.ng.results.management-sync` | `result.#` |
+
+Each queue gets its own copy of matching events.
+Do not put multiple destination workers on one queue unless those workers are intentionally competing replicas of the same subscriber.
+
+Destination workers should be narrow:
+
+- an audit worker writes JSONL or object-storage archives
+- a webhook worker posts to configured HTTP endpoints
+- a SIEM worker applies SIEM-specific formatting and delivery
+- a management-sync worker syncs only the fields needed by that system
+- a customer-specific exporter owns its customer's schema and credentials
+
+Each subscriber should own:
+
+- retry and DLQ behavior
+- downstream idempotency
+- authentication material
+- payload transformation
+- destination-specific observability
+
+This keeps DSX-Connect from becoming a central result-routing application.
+
+---
+
 ## Example: Vector to Splunk HEC
 
 ### When to Use

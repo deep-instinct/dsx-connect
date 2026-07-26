@@ -94,7 +94,8 @@ envSecretRefs: []
 
 serviceAccount:
   # Create a Kubernetes ServiceAccount for this connector.
-  # For GKE Workload Identity Federation, set create=true and add:
+  # For GKE Workload Identity Federation, use the cluster project's managed
+  # workload pool (PROJECT_ID.svc.id.goog), set create=true, and add:
   # annotations:
   #   iam.gke.io/gcp-service-account: dsx-gcs-connector@PROJECT_ID.iam.gserviceaccount.com
   create: false
@@ -113,6 +114,9 @@ gcp:
   # Existing Secret containing a GCP service account JSON key.
   # The Secret is mounted and GOOGLE_APPLICATION_CREDENTIALS is set automatically.
   # See examples/gcp-sa-secret.yaml for the expected Secret shape.
+  # Leave empty for GKE WIF/ADC. For generic external WIF on non-GKE clusters,
+  # mount an external account credential configuration and set
+  # GOOGLE_APPLICATION_CREDENTIALS through env/envSecretRefs.
   credentialsSecretName: ""
   # Optional overrides if the Secret key or mount location differs from the defaults.
   # mountPath: "/app/creds"

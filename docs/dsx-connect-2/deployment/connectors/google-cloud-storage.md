@@ -88,7 +88,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
 
     ```bash
     export NAMESPACE=dsx-connect
-    export GCS_VERSION=2.0.9
+    export GCS_VERSION=2.0.10
 
     helm upgrade --install gcs \
       oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
@@ -189,7 +189,7 @@ Complete the GCP setup in [Google Cloud WIF for GCS Connector on GKE](../../../r
 
 ```bash
 export NAMESPACE=dsx-connect
-export GCS_VERSION=2.0.9
+export GCS_VERSION=2.0.10
 
 helm pull oci://registry-1.docker.io/dsxconnect/google-cloud-storage-connector-chart \
   --version "$GCS_VERSION" \
@@ -237,12 +237,21 @@ helm upgrade --install gcs \
 With `gcp.credentialsSecretName: ""`, the chart does not mount `/app/creds` and does not set `GOOGLE_APPLICATION_CREDENTIALS`.
 The Google SDK resolves credentials through GKE Workload Identity Federation.
 
+GKE deployments normally use the cluster project's existing managed workload pool, `PROJECT_ID.svc.id.goog`.
+You do not create or select a separate WIF pool for each GCS connector.
+Reuse the cluster's managed pool by granting the connector Kubernetes service account permission to impersonate the connector Google service account, then annotate the Kubernetes service account with `iam.gke.io/gcp-service-account`.
+
+For OpenShift, k3s, or other non-GKE Kubernetes clusters, an existing Google IAM Workload Identity Pool and Provider can also be used, but it is configured as generic external Workload Identity Federation.
+That flow mounts an external account credential configuration JSON into the pod and sets `GOOGLE_APPLICATION_CREDENTIALS` to that file.
+The connector runtime uses Google Application Default Credentials either way; the Kubernetes deployment decides how credentials are presented to the pod.
+
 ## Asset Discovery Notes
 
 `DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` controls broad bucket discovery through Cloud Asset Inventory.
 It works with either authentication model:
 
 * GKE Workload Identity Federation / Application Default Credentials
+* generic external Workload Identity Federation / Application Default Credentials
 * a mounted Google service-account JSON key
 
 The authentication method decides how the connector obtains Google credentials.

@@ -10,30 +10,29 @@
   <link rel="apple-touch-icon" sizes="128x128" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-128.png">
   <link rel="manifest" href="/api/v1/ui-static/manifest.webmanifest">
   <style>
-    :root,
-    :root[data-theme="light"] {
-      --bg: #f2f5f4;
-      --surface: #ffffff;
-      --surface-2: #eef3f2;
-      --surface-3: #e3ebe8;
-      --field-bg: #fbfdfd;
-      --toolbar-bg: #fbfcfc;
-      --ink: #17211f;
-      --muted: #64736f;
-      --heading-muted: #41545d;
-      --line: #d7dfdd;
-      --line-strong: #b9c6cb;
-      --accent: #146f68;
-      --accent-contrast: #ffffff;
-      --accent-soft: #dcefeb;
-      --accent-soft-ink: #075646;
-      --warn: #9a6b10;
-      --warn-soft: #f5ecd4;
-      --danger: #a33a34;
-      --danger-soft: #f3dddd;
-      --good: #176b51;
-      --good-soft: #dceee7;
-      --shadow: 0 12px 28px rgba(25, 36, 42, 0.08);
+    :root {
+      --bg: #080d14;
+      --surface: #0f1724;
+      --surface-2: #162338;
+      --surface-3: #1c2d47;
+      --field-bg: #080f18;
+      --toolbar-bg: #0b121d;
+      --ink: #e8f1ff;
+      --muted: #91a4be;
+      --heading-muted: #bdd0ea;
+      --line: #263851;
+      --line-strong: #365273;
+      --accent: #35c7ff;
+      --accent-contrast: #06111a;
+      --accent-soft: #102f45;
+      --accent-soft-ink: #b7edff;
+      --warn: #ffd166;
+      --warn-soft: #463b1e;
+      --danger: #ff5f73;
+      --danger-soft: #49202b;
+      --good: #4ee08d;
+      --good-soft: #173c2a;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
 
       --font-family-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
       --font-family-mono: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
@@ -74,64 +73,18 @@
       --rail-width-collapsed: 54px;
       --table-min-width: 900px;
       --table-min-width-protected: 1320px;
-      --table-max-height: clamp(280px, 52vh, 640px);
       --table-cell-padding: 6px 7px;
       --table-cell-padding-compact: var(--space-3);
       --content-max-width: 1680px;
     }
 
-    :root[data-theme="operations"] {
-      --bg: #111918;
-      --surface: #172321;
-      --surface-2: #20302d;
-      --surface-3: #273a36;
-      --field-bg: #101817;
-      --toolbar-bg: #141f1d;
-      --ink: #e8efed;
-      --muted: #93a8a3;
-      --heading-muted: #bfd0cc;
-      --line: #2d403c;
-      --line-strong: #3d5752;
-      --accent: #32b7a9;
-      --accent-contrast: #07110f;
-      --accent-soft: #173d38;
-      --accent-soft-ink: #a9eee7;
-      --warn: #d7a64a;
-      --warn-soft: #3d321c;
-      --danger: #ef7569;
-      --danger-soft: #442521;
-      --good: #58c987;
-      --good-soft: #1f3d2c;
-      --shadow: 0 12px 28px rgba(0, 0, 0, 0.26);
-    }
-
-    :root[data-theme="security"] {
-      --bg: #080d14;
-      --surface: #0f1724;
-      --surface-2: #162338;
-      --surface-3: #1c2d47;
-      --field-bg: #080f18;
-      --toolbar-bg: #0b121d;
-      --ink: #e8f1ff;
-      --muted: #91a4be;
-      --heading-muted: #bdd0ea;
-      --line: #263851;
-      --line-strong: #365273;
-      --accent: #35c7ff;
-      --accent-contrast: #06111a;
-      --accent-soft: #102f45;
-      --accent-soft-ink: #b7edff;
-      --warn: #ffd166;
-      --warn-soft: #463b1e;
-      --danger: #ff5f73;
-      --danger-soft: #49202b;
-      --good: #4ee08d;
-      --good-soft: #173c2a;
-      --shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
-    }
-
     * {
       box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
     }
 
     body {
@@ -140,6 +93,7 @@
       color: var(--ink);
       font-family: var(--font-family-ui);
       font-size: var(--font-size-md);
+      overflow: hidden;
     }
 
     button, input, select, textarea {
@@ -172,6 +126,16 @@
     button:disabled {
       cursor: not-allowed;
       opacity: 0.55;
+    }
+
+    button.is-loading svg {
+      animation: refresh-spin 0.8s linear infinite;
+    }
+
+    @keyframes refresh-spin {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
     button.copy-button {
@@ -279,14 +243,23 @@
       white-space: nowrap;
     }
 
+    thead .header-label-row.has-filter-row th {
+      border-bottom: 0;
+    }
+
     td {
       line-height: 1.28;
     }
 
-    th {
+    thead {
       position: sticky;
       top: 0;
-      z-index: 1;
+      z-index: 2;
+      background: var(--surface-2);
+    }
+
+    th {
+      position: static;
       background: var(--surface-2);
       color: var(--heading-muted);
       font-size: var(--font-size-xs);
@@ -353,10 +326,6 @@
       stroke-width: 2.2;
     }
 
-    tr.selected {
-      background: var(--accent-soft);
-    }
-
     tr[data-action] {
       cursor: pointer;
     }
@@ -400,10 +369,17 @@
       padding-bottom: var(--space-3);
     }
 
+    .scan-action {
+      border-color: var(--good);
+      background: var(--good);
+      color: var(--accent-contrast);
+    }
+
     .app {
-      min-height: 100vh;
+      height: 100vh;
       display: grid;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
     }
 
     .topbar {
@@ -450,15 +426,11 @@
       justify-content: flex-end;
     }
 
-    .theme-control {
-      width: auto;
-      min-width: 150px;
-    }
-
     .workspace {
       display: grid;
       grid-template-columns: var(--rail-width) minmax(0, 1fr);
       min-height: 0;
+      overflow: hidden;
       transition: grid-template-columns 0.16s ease;
     }
 
@@ -546,23 +518,47 @@
     .shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr);
-      gap: var(--space-8);
       padding: var(--space-8) var(--space-10) var(--space-14);
       max-width: var(--content-max-width);
       width: 100%;
       margin: 0 auto;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .main {
       min-width: 0;
       display: grid;
-      gap: var(--space-7);
-      align-content: start;
+      min-height: 0;
+      overflow: hidden;
     }
 
     .view,
     .asset-pane {
       min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #view-assets:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    #view-scan-results:not(.hidden),
+    #view-policy:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+
+    #asset-pane-connectors:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+    }
+
+    #asset-pane-protected:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
     }
 
     .subtabs {
@@ -573,7 +569,62 @@
     }
 
     .asset-tabs {
-      margin-top: 9px;
+      margin: var(--space-5) 0 var(--space-4);
+    }
+
+    .asset-pane .table-actions {
+      margin: 0 0 var(--space-4);
+    }
+
+    .view-heading {
+      padding: 0 var(--space-2);
+    }
+
+    .view-heading p {
+      margin-top: var(--space-2);
+    }
+
+    .table-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      margin: var(--space-5) 0 var(--space-4);
+    }
+
+    .table-actions label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      white-space: nowrap;
+    }
+
+    .table-actions .spacer {
+      flex: 1 1 auto;
+    }
+
+    .table-actions .poll-control {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .icon-button {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .icon-button svg {
+      width: 16px;
+      height: 16px;
     }
 
     .subtab {
@@ -647,7 +698,7 @@
       width: 100%;
       min-width: 0;
       max-width: 100%;
-      max-height: var(--table-max-height);
+      min-height: 0;
       overflow-x: auto;
       overflow-y: auto;
       overscroll-behavior: contain;
@@ -658,7 +709,6 @@
     }
 
     thead .filter-row th {
-      top: 29px;
       padding-top: 0;
       padding-bottom: var(--space-4);
       border-bottom: 0;
@@ -680,13 +730,78 @@
       min-height: 28px;
       padding: 4px 7px;
       font-size: var(--font-size-sm);
-      border: 0;
+      font-weight: 400;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
       background: var(--surface-3);
       box-shadow: none;
     }
 
-    .column-filter.asset-filter select {
-      flex: 0 0 116px;
+    .column-filter select:focus,
+    .column-filter input:focus {
+      border-color: var(--line-strong);
+      outline: 0;
+    }
+
+    .filter-input-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 120px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+    }
+
+    .filter-input-wrap input {
+      width: 100%;
+      padding-left: 28px;
+      padding-right: 28px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+    }
+
+    .filter-input-wrap:focus-within {
+      border-color: var(--line-strong);
+    }
+
+    .filter-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      color: var(--muted);
+      pointer-events: none;
+      transform: translateY(-50%);
+    }
+
+    button.filter-clear {
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      width: 18px;
+      min-width: 18px;
+      height: 18px;
+      min-height: 18px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      transform: translateY(-50%);
+      display: inline-grid;
+      place-items: center;
+    }
+
+    button.filter-clear:hover {
+      color: var(--ink);
+      background: transparent;
+    }
+
+    button.filter-clear svg {
+      width: 14px;
+      height: 14px;
     }
 
     .column-filter.asset-filter input {
@@ -828,20 +943,11 @@
     }
 
     .protected-summary {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-6);
       padding: 0 var(--space-8) var(--space-6);
     }
 
-    .protected-summary .metric-row,
-    .protected-summary .pager {
+    .protected-summary .metric-row {
       padding: 0;
-    }
-
-    .protected-summary .pager {
-      margin-left: auto;
     }
 
     .metric {
@@ -866,11 +972,22 @@
     .pager {
       display: flex;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: center;
       gap: var(--space-4);
-      padding: 0 var(--space-8) var(--space-6);
       color: var(--muted);
       font-size: var(--font-size-sm);
+    }
+
+    .table-footer {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4) var(--space-2) 0;
+    }
+
+    .table-footer:empty {
+      visibility: hidden;
     }
 
     .pager strong {
@@ -911,6 +1028,23 @@
       padding: 7px 0;
       color: var(--ink);
       font-weight: var(--font-weight-strong);
+    }
+
+    .inline-number-input {
+      width: 92px;
+      min-width: 92px;
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: var(--font-size-sm);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+      color: var(--ink);
+    }
+
+    .inline-number-input:focus {
+      border-color: var(--line-strong);
+      outline: 0;
     }
 
     .pill.bad {
@@ -956,19 +1090,15 @@
       overflow: auto;
     }
 
-    tr.detail-row {
-      background: var(--accent-soft);
-    }
-
     tr.detail-row td {
-      padding: 0 var(--space-6) var(--space-6) calc(var(--space-6) + 20px);
+      padding: 0 var(--space-6) var(--space-5) calc(var(--space-6) + 20px);
       border-top: 0;
     }
 
     .inline-result-detail {
+      position: relative;
       display: grid;
-      gap: var(--space-5);
-      padding-top: var(--space-3);
+      gap: var(--space-4);
     }
 
     .inline-result-detail .table-wrap {
@@ -976,33 +1106,123 @@
       background: var(--surface);
     }
 
-    .inline-result-detail details {
-      border: 1px solid var(--line);
+    .scan-sample-list {
+      display: grid;
+      gap: 1px;
+      padding: 0 0 var(--space-2);
+    }
+
+    .scan-sample-note {
+      padding: 0 var(--space-4) var(--space-2);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .scan-sample-item {
+      display: grid;
+      grid-template-columns: 28px 28px minmax(180px, 1fr) minmax(180px, 0.9fr);
+      align-items: center;
+      gap: var(--space-3);
+      min-height: 32px;
+      padding: 3px var(--space-4);
       border-radius: var(--radius-sm);
-      background: var(--surface);
-      overflow: hidden;
-    }
-
-    .inline-result-detail summary {
-      min-height: 34px;
-      padding: var(--space-4) var(--space-5);
-      background: var(--toolbar-bg);
       color: var(--ink);
-      cursor: pointer;
-      font-weight: var(--font-weight-strong);
     }
 
-    .inline-result-detail summary::marker {
+    .scan-sample-name,
+    .scan-sample-hash {
+      min-width: 0;
+    }
+
+    .scan-sample-name .copy-value {
+      font-weight: var(--font-weight-normal);
+    }
+
+    .scan-sample-hash {
       color: var(--muted);
     }
 
-    .inline-result-detail details .table-wrap,
-    .inline-result-detail details .detail {
-      border: 0;
-      border-radius: 0;
+    .scan-sample-status {
+      grid-column: 3 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      padding-bottom: var(--space-1);
     }
 
-    .inline-result-detail details .detail {
+    .stage-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 1px var(--space-3);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      text-transform: none;
+    }
+
+    .stage-chip.good {
+      border-color: var(--good-soft);
+      color: var(--good);
+    }
+
+    .stage-chip.warn {
+      border-color: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .stage-chip.bad {
+      border-color: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .sample-icon,
+    .verdict-icon {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .sample-icon svg,
+    .verdict-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 1.9;
+    }
+
+    .verdict-icon.benign {
+      color: var(--good);
+    }
+
+    .verdict-icon.malicious {
+      color: var(--danger);
+    }
+
+    .verdict-icon.not-scanned {
+      color: var(--warn);
+    }
+
+    .sample-item-row {
+      cursor: pointer;
+    }
+
+    .sample-item-row:hover {
+      background: var(--toolbar-bg);
+    }
+
+    .scan-sample-raw {
+      padding: 0 var(--space-4) var(--space-2) 52px;
+    }
+
+    .scan-result-row {
+      cursor: pointer;
+    }
+
+    .scan-result-row:hover {
       background: var(--toolbar-bg);
     }
 
@@ -1169,10 +1389,6 @@
         justify-content: flex-start;
       }
 
-      .theme-control {
-        width: 100%;
-      }
-
       .shell {
         padding: var(--space-6);
       }
@@ -1229,14 +1445,14 @@
         <span class="pill" id="stat-scopes">0 scopes</span>
         <span class="pill" id="stat-jobs">0 jobs</span>
         <span class="pill good" id="stat-healthy">0 healthy</span>
-        <select class="theme-control" id="theme-mode" aria-label="Theme">
-          <option value="auto">Auto</option>
-          <option value="light">Light</option>
-          <option value="operations">Operations</option>
-          <option value="security">Security Console</option>
-        </select>
-        <button class="primary" id="open-add-connector" type="button">Add Repository Connector</button>
-        <button id="refresh-all" type="button">Refresh</button>
+        <button class="icon-button" id="refresh-all" type="button" aria-label="Refresh" title="Refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+            <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+            <path d="M18 3v4h-4"></path>
+            <path d="M6 21v-4h4"></path>
+          </svg>
+        </button>
       </div>
     </header>
 
@@ -1281,118 +1497,127 @@
         <main class="main">
 
         <section class="view" id="view-assets">
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Assets</h2>
-                <nav class="subtabs asset-tabs" aria-label="Assets views">
-                  <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
-                  <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
-                </nav>
-              </div>
-            </div>
+          <div class="view-heading">
+            <h2>Assets</h2>
+          </div>
 
-            <div class="asset-pane" id="asset-pane-connectors">
-              <div class="metric-row">
-                <div class="metric"><span>Connectors</span><strong id="metric-connectors">0</strong></div>
-                <div class="metric"><span>Healthy</span><strong id="metric-healthy">0</strong></div>
-                <div class="metric"><span>Enabled</span><strong id="metric-enabled">0</strong></div>
-                <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
-              </div>
-              <div class="table-wrap">
-                <table id="connectors-table">
-                  <thead></thead>
-                  <tbody id="connectors-body"></tbody>
-                </table>
-              </div>
+          <div class="asset-pane" id="asset-pane-connectors">
+            <div class="metric-row">
+              <div class="metric"><span>Connectors</span><strong id="metric-connectors">0</strong></div>
+              <div class="metric"><span>Healthy</span><strong id="metric-healthy">0</strong></div>
+              <div class="metric"><span>Enabled</span><strong id="metric-enabled">0</strong></div>
+              <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
             </div>
-
-            <div class="asset-pane hidden" id="asset-pane-protected">
-              <div class="toolbar protected">
-                <label>Connector
-                  <select id="protected-filter-integration"></select>
-                </label>
+            <nav class="subtabs asset-tabs" aria-label="Assets views">
+              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+            </nav>
+            <div class="table-actions">
+              <div class="poll-control">Poll for connector changes
+                <label class="switch"><input type="checkbox" id="connectors-poll"><span></span></label>
               </div>
-              <div class="protected-summary">
-                <div class="metric-row">
-                  <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
-                  <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
-                  <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
-                  <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
-                </div>
-                <div class="pager" id="protected-assets-pager">
-                  <button type="button" id="protected-page-prev">Previous</button>
-                  <span id="protected-page-range"><strong>0-0</strong></span>
-                  <button type="button" id="protected-page-next">Next</button>
-                </div>
-              </div>
-              <div class="table-wrap protected-assets">
-                <table id="protected-assets-table">
-                  <thead></thead>
-                  <tbody id="protected-assets-body"></tbody>
-                </table>
-              </div>
+              <span class="spacer" aria-hidden="true"></span>
+              <button class="icon-button" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                  <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                  <path d="M18 3v4h-4"></path>
+                  <path d="M6 21v-4h4"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table id="connectors-table">
+                <thead></thead>
+                <tbody id="connectors-body"></tbody>
+              </table>
             </div>
           </div>
+
+          <div class="asset-pane hidden" id="asset-pane-protected">
+            <div class="protected-summary">
+              <div class="metric-row">
+                <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
+                <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
+                <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
+                <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
+              </div>
+            </div>
+            <nav class="subtabs asset-tabs" aria-label="Assets views">
+              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+            </nav>
+            <div class="table-wrap protected-assets">
+              <table id="protected-assets-table">
+                <thead></thead>
+                <tbody id="protected-assets-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <footer class="table-footer" id="assets-footer">
+            <div class="pager hidden" id="protected-assets-pager">
+              <button type="button" id="protected-page-prev">Previous</button>
+              <span id="protected-page-range"><strong>0-0</strong></span>
+              <button type="button" id="protected-page-next">Next</button>
+            </div>
+          </footer>
         </section>
 
         <section class="view hidden" id="view-scan-results">
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Scan Results</h2>
-                <p>Job progress, findings, remediation, and cooperative cancel behavior.</p>
-              </div>
-              <button id="refresh-scan-results" type="button">Refresh</button>
-            </div>
-            <div class="toolbar scan">
-              <label>Connector
-                <select id="scan-results-filter-integration"></select>
-              </label>
-              <label>Item Detail Limit
-                <select id="scan-results-filter-item-limit">
-                  <option value="25">25</option>
-                  <option value="100" selected>100</option>
-                  <option value="500">500</option>
-                  <option value="1000">1000</option>
-                </select>
-              </label>
-              <button class="primary" id="apply-scan-results" type="button">Apply</button>
-            </div>
-            <div class="table-wrap">
-              <table id="scan-results-table">
-                <thead></thead>
-                <tbody id="scan-results-body"></tbody>
-              </table>
-            </div>
+          <div class="view-heading">
+            <h2>Scan Results</h2>
+            <p>Job progress, findings, remediation, and cooperative cancel behavior.</p>
           </div>
+          <div class="table-actions">
+            <div class="poll-control">Poll for new results
+              <label class="switch"><input type="checkbox" id="scan-results-poll" checked><span></span></label>
+            </div>
+            <button class="icon-button" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="table-wrap">
+            <table id="scan-results-table">
+              <thead></thead>
+              <tbody id="scan-results-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="scan-results-footer"></footer>
         </section>
 
         <section class="view hidden" id="view-policy">
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2>Protection Profiles</h2>
-                <p>Reusable file-flow behavior applied when protecting connector assets.</p>
-              </div>
-              <div class="cluster">
-                <button id="refresh-policies" type="button">Refresh</button>
-                <button class="primary" id="create-policy" type="button">Create Profile</button>
-              </div>
-            </div>
-            <div class="toolbar policy">
-              <label>Connector
-                <select id="policy-filter-integration"></select>
-              </label>
-              <button class="primary" id="apply-policy-filter" type="button">Apply</button>
-            </div>
-            <div class="table-wrap">
-              <table id="policies-table">
-                <thead></thead>
-                <tbody id="policies-body"></tbody>
-              </table>
-            </div>
+          <div class="view-heading">
+            <h2>Protection Profiles</h2>
+            <p>Reusable file-flow behavior applied when protecting connector assets.</p>
           </div>
+          <div class="table-actions">
+            <label>Connector
+              <select id="policy-filter-integration"></select>
+            </label>
+            <button class="primary" id="apply-policy-filter" type="button">Apply</button>
+            <span class="spacer" aria-hidden="true"></span>
+            <button class="icon-button" id="refresh-policies" type="button" aria-label="Refresh protection profiles" title="Refresh protection profiles">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+            <button class="primary" id="create-policy" type="button">Create Profile</button>
+          </div>
+          <div class="table-wrap">
+            <table id="policies-table">
+              <thead></thead>
+              <tbody id="policies-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="policies-footer"></footer>
         </section>
         </main>
       </div>
@@ -1581,6 +1806,7 @@
       protectedPageLimit: 15,
       protectedPageCursors: [""],
       protectedNextCursor: null,
+      protectedIntegrationFilter: "",
       scanResults: [],
       policies: [],
       policyCatalog: [],
@@ -1594,8 +1820,24 @@
       activeTab: "assets",
       activeAssetsTab: "connectors",
       selectedScanResult: null,
+      selectedScanResultItemKey: null,
+      scanTargetFilter: "",
+      scanTargetFilterFocused: false,
+      scanTargetFilterSelectionStart: null,
+      scanTargetFilterSelectionEnd: null,
+      scanJobTypeFilter: "",
+      scanJobIdFilter: "",
+      scanJobIdFilterFocused: false,
+      scanJobIdFilterSelectionStart: null,
+      scanJobIdFilterSelectionEnd: null,
+      scanResultsPolling: true,
+      scanResultsPollingInFlight: false,
+      connectorsPolling: false,
+      connectorsPollingInFlight: false,
     };
     let protectedFilterReloadTimer = null;
+    let scanResultsPollTimer = null;
+    let connectorsPollTimer = null;
 
     const endpoints = {
       meta: "/api/v1/ui/meta",
@@ -1609,47 +1851,9 @@
       createScope: "/api/v1/ui/assets/protected",
     };
 
-    const themeModes = ["auto", "light", "operations", "security"];
-    const themeStorageKey = "dsx-connect-ng-theme-mode";
     const navStorageKey = "dsx-connect-ng-nav-collapsed";
     const policyStorageKey = "dsx-connect-v2-policy-catalog";
     const defaultProfileStorageKey = "dsx-connect-v2-default-protection-profiles";
-    let currentThemeMode = "auto";
-
-    function systemPrefersDark() {
-      return window.matchMedia?.("(prefers-color-scheme: dark)")?.matches ?? false;
-    }
-
-    function effectiveTheme() {
-      if (currentThemeMode === "operations" || currentThemeMode === "security" || currentThemeMode === "light") {
-        return currentThemeMode;
-      }
-      return systemPrefersDark() ? "operations" : "light";
-    }
-
-    function applyTheme() {
-      document.documentElement.setAttribute("data-theme", effectiveTheme());
-      const select = document.getElementById("theme-mode");
-      if (select) {
-        select.value = currentThemeMode;
-      }
-    }
-
-    function setThemeMode(themeMode) {
-      currentThemeMode = themeModes.includes(themeMode) ? themeMode : "auto";
-      localStorage.setItem(themeStorageKey, currentThemeMode);
-      applyTheme();
-    }
-
-    function initTheme() {
-      currentThemeMode = themeModes.includes(localStorage.getItem(themeStorageKey)) ? localStorage.getItem(themeStorageKey) : "auto";
-      applyTheme();
-      window.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener("change", () => {
-        if (currentThemeMode === "auto") {
-          applyTheme();
-        }
-      });
-    }
 
     async function fetchJson(url, options = {}) {
       const response = await fetch(url, {
@@ -1689,6 +1893,118 @@
       `;
     }
 
+    function containsFilterIcon(label = "Contains filter") {
+      return `
+        <svg class="filter-icon" viewBox="0 0 24 24" aria-label="${escapeHtml(label)}" role="img" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h16"></path>
+          <path d="M7 12h10"></path>
+          <path d="M10 17h4"></path>
+        </svg>
+      `;
+    }
+
+    function filenameFromIdentity(identity) {
+      const text = String(identity || "unknown");
+      const parts = text.split(/[\\/]/).filter(Boolean);
+      return parts[parts.length - 1] || text;
+    }
+
+    function truncateText(value, maxLength = 50) {
+      const text = String(value ?? "");
+      return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+    }
+
+    function itemHash(item) {
+      return item.file_hash || item.fileHash || item.sha256 || item.hash || "";
+    }
+
+    function sampleStageChips(item) {
+      const stages = [
+        ["scan", item.scan, item.scan_reason],
+        ["policy", item.policy, item.policy_reason],
+        ["remediation", item.remediation, item.remediation_reason],
+        ["delivery", item.delivery, item.delivery_reason],
+        ["dianna", item.dianna, item.dianna_reason],
+      ];
+      return stages
+        .filter(([, state]) => state)
+        .map(([label, stageState, reason]) => {
+          const text = `${label}: ${stageState}${reason ? ` (${reason})` : ""}`;
+          return `<span class="stage-chip ${pillClass(stageState).replace("pill", "").trim()}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+        })
+        .join("");
+    }
+
+    function fileTypeIcon(item) {
+      const identity = String(item.object_identity || "").toLowerCase();
+      const fileType = String(item.file_type || "").toLowerCase();
+      const source = `${identity} ${fileType}`;
+      let paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>';
+      if (source.includes(".pdf") || source.includes("pdf")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 16h1.5a1.5 1.5 0 0 0 0-3H8v4"></path><path d="M13 17v-4h1a2 2 0 0 1 0 4h-1"></path>';
+      } else if (source.match(/\.(doc|docx|txt|rtf)\b/) || source.includes("office") || source.includes("document")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path>';
+      } else if (source.match(/\.(xls|xlsx|csv)\b/) || source.includes("spreadsheet")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path><path d="M12 11v8"></path>';
+      } else if (source.match(/\.(exe|dll|bin|msi)\b/) || source.includes("executable")) {
+        paths = '<rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 20v3"></path><path d="M15 20v3"></path>';
+      } else if (source.match(/\.(zip|tar|gz|7z|rar)\b/) || source.includes("archive")) {
+        paths = '<path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2z"></path><path d="M12 11v6"></path><path d="M10 13h4"></path><path d="M10 15h4"></path>';
+      }
+      return `<span class="sample-icon" title="${escapeHtml(item.file_type || "File")}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+    }
+
+    function normalizedVerdict(item) {
+      const value = String(item.verdict || item.failure_reason || item.scan || "").trim().toLowerCase();
+      if (["benign", "clean", "allowed", "allow"].includes(value)) return "benign";
+      if (["malicious", "malware", "infected", "suspicious"].includes(value)) return "malicious";
+      if (["not scanned", "not_scanned", "notscanned", "failed", "cancelled", "skipped"].includes(value)) return "not-scanned";
+      if (item.state === "failed" || item.state === "cancelled" || item.scan !== "completed") return "not-scanned";
+      return "not-scanned";
+    }
+
+    function verdictIcon(item) {
+      const verdict = normalizedVerdict(item);
+      const label = verdict === "benign" ? "Benign" : verdict === "malicious" ? "Malicious" : "Not scanned";
+      const paths = verdict === "benign"
+        ? '<path d="M20 6 9 17l-5-5"></path>'
+        : verdict === "malicious"
+          ? '<path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="m10.29 3.86-8.16 14A2 2 0 0 0 3.84 21h16.32a2 2 0 0 0 1.71-3.14l-8.16-14a2 2 0 0 0-3.42 0z"></path>'
+          : '<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path>';
+      return `<span class="verdict-icon ${verdict}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+    }
+
+    function clearFilterButton(targetId, value, label = "Clear filter") {
+      return `
+        <button class="filter-clear ${value ? "" : "hidden"}" type="button" data-clear-filter="${escapeHtml(targetId)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M9 9l6 6"></path>
+            <path d="M15 9l-6 6"></path>
+          </svg>
+        </button>
+      `;
+    }
+
+    function iconSvg(name) {
+      if (name === "play") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 8-14 8V4Z"></path></svg>';
+      }
+      if (name === "x") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
+      }
+      if (name === "refresh") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 3v4h-4"></path><path d="M6 21v-4h4"></path></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>';
+    }
+
+    function updateFilterClearButton(input) {
+      const button = input?.parentElement?.querySelector("[data-clear-filter]");
+      if (!button) return;
+      button.classList.toggle("hidden", !input.value);
+    }
+
     async function copyTextToClipboard(value) {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(value);
@@ -1703,6 +2019,20 @@
       textarea.select();
       document.execCommand("copy");
       textarea.remove();
+    }
+
+    async function withBusyButton(button, action) {
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      button.classList.add("is-loading");
+      button.setAttribute("aria-busy", "true");
+      try {
+        await action();
+      } finally {
+        button.disabled = false;
+        button.classList.remove("is-loading");
+        button.removeAttribute("aria-busy");
+      }
     }
 
     function parseOptionalJson(value) {
@@ -1751,11 +2081,12 @@
       const table = document.getElementById(tableId);
       const body = document.getElementById(bodyId);
       const header = table.querySelector("thead");
-      const labelRow = `<tr>${columns.map((column) => {
+      const hasFilters = columns.some((column) => column.filterHtml);
+      const labelRow = `<tr class="header-label-row${hasFilters ? " has-filter-row" : ""}">${columns.map((column) => {
         const headerContent = column.headerHtml || escapeHtml(column.label || "");
         return `<th${htmlAttributes(column.headerAttributes || {})}>${headerContent}</th>`;
       }).join("")}</tr>`;
-      const hasFilters = columns.some((column) => column.filterHtml);
+      // Table-specific filters live under their matching column header.
       const filterRow = hasFilters
         ? `<tr class="filter-row">${columns.map((column) => `<th>${column.filterHtml || ""}</th>`).join("")}</tr>`
         : "";
@@ -1787,6 +2118,8 @@
       document.querySelectorAll(".view").forEach((view) => {
         view.classList.toggle("hidden", view.id !== `view-${tabName}`);
       });
+      updateScanResultsPolling();
+      updateConnectorsPolling();
     }
 
     function selectAssetsTab(tabName) {
@@ -1797,9 +2130,11 @@
       document.querySelectorAll(".asset-pane").forEach((pane) => {
         pane.classList.toggle("hidden", pane.id !== `asset-pane-${tabName}`);
       });
+      document.getElementById("protected-assets-pager").classList.toggle("hidden", tabName !== "protected");
       if (tabName === "protected" && !state.protectedAssetsLoaded) {
         loadProtectedAssets().catch(showProtectedAssetsError);
       }
+      updateConnectorsPolling();
     }
 
     function setNavCollapsed(collapsed) {
@@ -1892,6 +2227,26 @@
         },
         { key: "scopes", label: "Protected Scopes", render: (row) => String(row.scope_count) },
         {
+          key: "protected_entity",
+          label: "Default Protected Entity",
+          render: (row) => {
+            const value = connectorProtectedEntity(row);
+            return `
+              <input
+                class="inline-number-input"
+                type="number"
+                min="1"
+                inputmode="numeric"
+                placeholder="unset"
+                value="${escapeHtml(value ?? "")}"
+                data-action="set-default-protected-entity"
+                data-integration="${escapeHtml(row.integration.integration_id)}"
+                aria-label="Protected entity for ${escapeHtml(row.integration.display_name)}"
+              >
+            `;
+          },
+        },
+        {
           key: "default_profile",
           label: "Default Protection Profile",
           headerHtml: `
@@ -1954,6 +2309,48 @@
       });
     }
 
+    function connectorProtectedEntity(row) {
+      const scanner = row.integration.config?.scanner || {};
+      return scanner.protected_entity ?? scanner.protectedEntity ?? null;
+    }
+
+    function parseProtectedEntityInput(input) {
+      const raw = input.value.trim();
+      const protectedEntity = raw ? Number.parseInt(raw, 10) : null;
+      if (raw && (!Number.isInteger(protectedEntity) || protectedEntity < 1)) {
+        throw new Error("Protected entity must be a positive integer or blank.");
+      }
+      return protectedEntity;
+    }
+
+    async function saveConnectorProtectedEntity(input) {
+      const protectedEntity = parseProtectedEntityInput(input);
+      input.disabled = true;
+      try {
+        await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(input.dataset.integration)}/scanner-binding`, {
+          method: "PATCH",
+          body: JSON.stringify({ protected_entity: protectedEntity }),
+        });
+        await loadConnectors();
+      } finally {
+        input.disabled = false;
+      }
+    }
+
+    async function saveScopeProtectedEntity(input) {
+      const protectedEntity = parseProtectedEntityInput(input);
+      input.disabled = true;
+      try {
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(input.dataset.scope)}/scanner-binding`, {
+          method: "PATCH",
+          body: JSON.stringify({ protected_entity: protectedEntity }),
+        });
+        await loadProtectedAssets();
+      } finally {
+        input.disabled = false;
+      }
+    }
+
     function renderProtectedAssets(payload = null) {
       const previousFilters = protectedFilterValues();
       const activeFilter = protectedActiveFilterState();
@@ -1975,12 +2372,11 @@
           label: "Asset",
           filterHtml: `
             <div class="column-filter asset-filter">
-              <select id="protected-filter-asset-mode" aria-label="Asset match">
-                <option value="contains">contains</option>
-                <option value="begins_with">begins with</option>
-                <option value="ends_with">ends with</option>
-              </select>
-              <input id="protected-filter-asset-value" placeholder="path or folder" aria-label="Asset filter">
+              <span class="filter-input-wrap">
+                ${containsFilterIcon()}
+                <input id="protected-filter-asset-value" aria-label="Asset contains filter" title="Contains filter">
+                ${clearFilterButton("protected-filter-asset-value", previousFilters.assetValue)}
+              </span>
             </div>
           `,
           render: (asset) => {
@@ -1996,12 +2392,19 @@
           label: "Actions",
           className: "actions",
           render: (asset) => asset.coverage_state === "protected"
-            ? `<button class="scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}">Scan</button>`
+            ? `<button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}" aria-label="Start Full Scan" title="Start Full Scan">${iconSvg("play")}</button>`
             : "",
         },
         {
           key: "connector",
           label: "Connector",
+          filterHtml: `
+            <div class="column-filter">
+              <select id="protected-filter-integration" aria-label="Connector filter">
+                ${protectedConnectorFilterOptions()}
+              </select>
+            </div>
+          `,
           render: (asset) => `${escapeHtml(asset.integration_display_name)}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
         },
         { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
@@ -2040,6 +2443,27 @@
           },
         },
         {
+          key: "protected_entity",
+          label: "Protected Entity",
+          render: (asset) => {
+            if (!asset.matching_scope_id) return '<span class="muted">protect first</span>';
+            const placeholder = asset.inherited_protected_entity ? `inherit ${asset.inherited_protected_entity}` : "inherit unset";
+            return `
+              <input
+                class="inline-number-input"
+                type="number"
+                min="1"
+                inputmode="numeric"
+                placeholder="${escapeHtml(placeholder)}"
+                value="${escapeHtml(asset.protected_entity ?? "")}"
+                data-action="set-scope-protected-entity"
+                data-scope="${escapeHtml(asset.matching_scope_id || "")}"
+                aria-label="Protected entity for ${escapeHtml(asset.display_name || asset.selector)}"
+              >
+            `;
+          },
+        },
+        {
           key: "last_scan",
           label: "Last Scan",
           render: (asset) => {
@@ -2073,8 +2497,8 @@
     function protectedActiveFilterState() {
       const active = document.activeElement;
       const filterIds = new Set([
+        "protected-filter-integration",
         "protected-filter-coverage",
-        "protected-filter-asset-mode",
         "protected-filter-asset-value",
       ]);
       if (!active || !filterIds.has(active.id)) return null;
@@ -2086,21 +2510,33 @@
     }
 
     function bindProtectedTableFilters(values = {}, activeFilter = null) {
+      const integration = document.getElementById("protected-filter-integration");
       const coverage = document.getElementById("protected-filter-coverage");
-      const assetMode = document.getElementById("protected-filter-asset-mode");
       const assetValue = document.getElementById("protected-filter-asset-value");
+      if (integration) {
+        integration.value = state.protectedIntegrationFilter;
+        integration.addEventListener("change", () => {
+          state.protectedIntegrationFilter = integration.value;
+          reloadProtectedAssetsFromFilters();
+        });
+      }
       if (coverage) {
         coverage.value = values.coverage || "";
         coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
       }
-      if (assetMode) {
-        assetMode.value = values.assetMode || "contains";
-        assetMode.addEventListener("change", () => reloadProtectedAssetsFromFilters());
-      }
       if (assetValue) {
         assetValue.value = values.assetValue || "";
-        updateProtectedAssetControls();
-        assetValue.addEventListener("input", () => reloadProtectedAssetsFromFilters({ debounce: true }));
+        updateFilterClearButton(assetValue);
+        assetValue.addEventListener("input", () => {
+          updateFilterClearButton(assetValue);
+          reloadProtectedAssetsFromFilters({ debounce: true });
+        });
+        assetValue.parentElement?.querySelector("[data-clear-filter]")?.addEventListener("click", () => {
+          assetValue.value = "";
+          updateFilterClearButton(assetValue);
+          assetValue.focus();
+          reloadProtectedAssetsFromFilters();
+        });
       }
       if (activeFilter?.id) {
         const restored = document.getElementById(activeFilter.id);
@@ -2114,23 +2550,48 @@
     }
 
     function renderScanResults() {
+      const rows = filteredScanResults();
       const columns = [
         {
           key: "job",
           label: "Job",
-          render: (result) => `<strong>${escapeHtml(result.job.job_type)}</strong><br><span class="muted">${escapeHtml(scanSourceLabel(result))}</span><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
+          filterHtml: `
+            <div class="column-filter">
+              <select id="scan-results-filter-job-type" aria-label="Job type filter">
+                ${scanJobTypeFilterOptions()}
+              </select>
+              <span class="filter-input-wrap">
+                ${containsFilterIcon("Job id contains filter")}
+                <input id="scan-results-filter-job-id" type="text" value="${escapeHtml(state.scanJobIdFilter)}" aria-label="Job id contains filter" title="Job id contains filter">
+                ${clearFilterButton("scan-results-filter-job-id", state.scanJobIdFilter)}
+              </span>
+            </div>
+          `,
+          render: (result) => `<strong>${escapeHtml(scanSourceLabel(result))}</strong><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
         },
         {
-          key: "cancel",
-          label: "Cancel",
+          key: "actions",
+          label: "Actions",
           className: "actions",
-          render: (result) => isTerminalJobState(result.job.state)
-            ? '<span class="muted">-</span>'
-            : `<button class="danger" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}">Cancel</button>`,
+          render: (result) => {
+            const cancel = isTerminalJobState(result.job.state)
+              ? ""
+              : `<button class="icon-button danger" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}" aria-label="Cancel Full Scan" title="Cancel Full Scan">${iconSvg("x")}</button>`;
+            return `<div class="actions-row">${cancel || '<span class="muted">-</span>'}</div>`;
+          },
         },
         {
           key: "target",
           label: "Target",
+          filterHtml: `
+            <div class="column-filter">
+              <span class="filter-input-wrap">
+                ${containsFilterIcon()}
+                <input id="scan-results-filter-target" type="text" value="${escapeHtml(state.scanTargetFilter)}" aria-label="Target contains filter" title="Contains filter">
+                ${clearFilterButton("scan-results-filter-target", state.scanTargetFilter)}
+              </span>
+            </div>
+          `,
           render: (result) => `${escapeHtml(result.target?.label || "unknown")}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.target?.integration_id || "")}</span>${copyButton(result.target?.integration_id || "")}</span>`,
         },
         {
@@ -2162,29 +2623,85 @@
             return escapeHtml(`done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`);
           },
         },
-        {
-          key: "actions",
-          label: "",
-          className: "actions",
-          render: (result) => {
-            const isOpen = state.selectedScanResult === result.job.job_id;
-            return `<button type="button" data-action="inspect-scan-result" data-id="${escapeHtml(result.job.job_id)}">${isOpen ? "Hide" : "Inspect"}</button>`;
-          },
-        },
       ];
       renderDataTable({
         tableId: "scan-results-table",
         bodyId: "scan-results-body",
         columns,
-        rows: state.scanResults,
+        rows,
         emptyMessage: "No scan results match this filter.",
         rowAttributes: (result) => ({
           "data-job-id": result.job.job_id,
-          class: state.selectedScanResult === result.job.job_id ? "selected" : null,
+          "data-action": "toggle-scan-result-detail",
+          class: "scan-result-row",
         }),
         rowDetailHtml: (result) => state.selectedScanResult === result.job.job_id ? scanResultDetailHtml(result) : "",
       });
+      bindScanResultsTableFilters();
       renderTopStats();
+    }
+
+    function bindScanResultsTableFilters() {
+      const jobType = document.getElementById("scan-results-filter-job-type");
+      const jobIdInput = document.getElementById("scan-results-filter-job-id");
+      const targetInput = document.getElementById("scan-results-filter-target");
+      if (jobType) {
+        jobType.value = state.scanJobTypeFilter;
+        jobType.addEventListener("change", () => {
+          state.scanJobTypeFilter = jobType.value;
+          state.scanJobIdFilterFocused = false;
+          state.scanTargetFilterFocused = false;
+          renderScanResults();
+        });
+      }
+      const bindTextFilter = (input, config) => {
+        if (!input) return;
+        updateFilterClearButton(input);
+        input.addEventListener("input", (event) => {
+          state[config.value] = event.target.value;
+          state[config.focused] = true;
+          state[config.selectionStart] = event.target.selectionStart;
+          state[config.selectionEnd] = event.target.selectionEnd;
+          for (const other of config.otherFocused) {
+            state[other] = false;
+          }
+          updateFilterClearButton(input);
+          renderScanResults();
+        });
+        input.parentElement?.querySelector("[data-clear-filter]")?.addEventListener("click", () => {
+          state[config.value] = "";
+          state[config.focused] = true;
+          state[config.selectionStart] = 0;
+          state[config.selectionEnd] = 0;
+          for (const other of config.otherFocused) {
+            state[other] = false;
+          }
+          renderScanResults();
+        });
+        if (state[config.focused]) {
+          input.focus();
+          if (typeof input.setSelectionRange === "function" && state[config.selectionStart] !== null) {
+            input.setSelectionRange(
+              state[config.selectionStart],
+              state[config.selectionEnd] ?? state[config.selectionStart],
+            );
+          }
+        }
+      };
+      bindTextFilter(jobIdInput, {
+        value: "scanJobIdFilter",
+        focused: "scanJobIdFilterFocused",
+        selectionStart: "scanJobIdFilterSelectionStart",
+        selectionEnd: "scanJobIdFilterSelectionEnd",
+        otherFocused: ["scanTargetFilterFocused"],
+      });
+      bindTextFilter(targetInput, {
+        value: "scanTargetFilter",
+        focused: "scanTargetFilterFocused",
+        selectionStart: "scanTargetFilterSelectionStart",
+        selectionEnd: "scanTargetFilterSelectionEnd",
+        otherFocused: ["scanJobIdFilterFocused"],
+      });
     }
 
     function cloneValue(value) {
@@ -2332,6 +2849,45 @@
       if (source === "connector") return "Connector request";
       if (source === "ui_scope_scan") return "Manual scan";
       return source.replaceAll("_", " ");
+    }
+
+    function scanTargetFilterText(result) {
+      const target = result.target || {};
+      return [
+        target.label,
+        target.integration_id,
+        target.scope_id,
+        target.source,
+        target.source_label,
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function scanJobTypeFilterOptions() {
+      const labels = Array.from(new Set(state.scanResults.map((result) => scanSourceLabel(result)).filter(Boolean))).sort();
+      return ['<option value="">all</option>'].concat(labels.map((label) => {
+        const selected = label === state.scanJobTypeFilter ? " selected" : "";
+        return `<option value="${escapeHtml(label)}"${selected}>${escapeHtml(label)}</option>`;
+      })).join("");
+    }
+
+    function scanResultMatchesFilters(result) {
+      const targetFilter = state.scanTargetFilter.trim().toLowerCase();
+      const jobIdFilter = state.scanJobIdFilter.trim().toLowerCase();
+      const jobTypeFilter = state.scanJobTypeFilter;
+      if (targetFilter && !scanTargetFilterText(result).includes(targetFilter)) return false;
+      if (jobIdFilter && !String(result.job?.job_id || "").toLowerCase().includes(jobIdFilter)) return false;
+      if (jobTypeFilter && scanSourceLabel(result) !== jobTypeFilter) return false;
+      return true;
+    }
+
+    function filteredScanResults() {
+      if (state.selectedScanResult) {
+        const selected = state.scanResults.find((result) => result.job.job_id === state.selectedScanResult);
+        if (selected && !scanResultMatchesFilters(selected)) {
+          state.selectedScanResult = null;
+        }
+      }
+      return state.scanResults.filter(scanResultMatchesFilters);
     }
 
     function formatProgress(progress = {}, state = "") {
@@ -2650,31 +3206,29 @@
     }
 
     function scanResultDetailHtml(result) {
-      const latest = (result.latest_items || []).map((item) => `
-        <tr>
-          <td>${escapeHtml(item.object_identity)}</td>
-          <td><span class="${pillClass(item.state)}">${escapeHtml(item.state)}</span></td>
-          <td>${escapeHtml(item.scan)}</td>
-          <td>${escapeHtml(item.policy)}</td>
-          <td>${escapeHtml(item.remediation)}</td>
-          <td>${escapeHtml(item.failure_reason || "")}</td>
-        </tr>
-      `).join("");
+      const latest = (result.latest_items || []).map((item, index) => {
+        const itemKey = `${result.job.job_id}:${index}`;
+        const filename = filenameFromIdentity(item.object_identity);
+        const hash = itemHash(item);
+        const rawPayload = item.scan_result && Object.keys(item.scan_result).length ? item.scan_result : item;
+        const raw = state.selectedScanResultItemKey === itemKey
+          ? `<div class="scan-sample-raw"><div class="detail"><pre>${escapeHtml(JSON.stringify(rawPayload, null, 2))}</pre></div></div>`
+          : "";
+        return `
+          <div class="scan-sample-item sample-item-row" data-action="toggle-scan-item-json" data-item-key="${escapeHtml(itemKey)}">
+            ${verdictIcon(item)}
+            ${fileTypeIcon(item)}
+            <div class="scan-sample-name"><span class="copy-line" title="${escapeHtml(filename)}"><span class="copy-value">${escapeHtml(truncateText(filename, 50))}</span>${copyButton(filename, "Copy filename")}</span></div>
+            <div class="scan-sample-hash">${hash ? `<span class="copy-line"><span class="mono copy-value">${escapeHtml(hash)}</span>${copyButton(hash, "Copy hash")}</span>` : '<span class="muted">hash unavailable</span>'}</div>
+            <div class="scan-sample-status">${sampleStageChips(item)}</div>
+          </div>
+          ${raw}
+        `;
+      }).join("");
       return `
         <div class="inline-result-detail" id="inline-scan-result-detail">
-          <details open>
-            <summary>Item Details</summary>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Item</th><th>State</th><th>Scan</th><th>Protection Profile</th><th>Remediation</th><th>Failure</th></tr></thead>
-                <tbody>${latest || '<tr><td colspan="6"><div class="empty">No sampled items.</div></td></tr>'}</tbody>
-              </table>
-            </div>
-          </details>
-          <details>
-            <summary>Raw JSON</summary>
-            <div class="detail"><pre>${escapeHtml(JSON.stringify(result, null, 2))}</pre></div>
-          </details>
+          <div class="scan-sample-note">Sample set of scanned files, not the complete item set.</div>
+          <div class="scan-sample-list">${latest || '<div class="empty">No sampled items.</div>'}</div>
         </div>
       `;
     }
@@ -2687,6 +3241,7 @@
         return;
       }
       state.selectedScanResult = jobId;
+      state.selectedScanResultItemKey = null;
       renderScanResults();
     }
 
@@ -2694,33 +3249,24 @@
       const integrationOptions = ['<option value="">all</option>'].concat(
         state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
       ).join("");
-      const selectedProtectedConnector = document.getElementById("protected-filter-integration").value;
       const registeredConnectorRows = state.connectorRows.filter((row) => (row.connector_instances || []).length > 0);
-      const protectedConnectorOptions = registeredConnectorRows.length
-        ? registeredConnectorRows
-            .map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`)
-            .join("")
-        : '<option value="">No registered connectors</option>';
-      document.getElementById("protected-filter-integration").innerHTML = protectedConnectorOptions;
-      if (selectedProtectedConnector && registeredConnectorRows.some((row) => row.integration.integration_id === selectedProtectedConnector)) {
-        document.getElementById("protected-filter-integration").value = selectedProtectedConnector;
+      if (
+        state.protectedIntegrationFilter
+        && !registeredConnectorRows.some((row) => row.integration.integration_id === state.protectedIntegrationFilter)
+      ) {
+        state.protectedIntegrationFilter = "";
       }
-      updateProtectedAssetControls();
-      document.getElementById("scan-results-filter-integration").innerHTML = integrationOptions;
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
     }
 
-    function selectedProtectedIntegration() {
-      const integrationId = document.getElementById("protected-filter-integration").value;
-      return state.connectorRows.find((row) => row.integration.integration_id === integrationId)?.integration || null;
-    }
-
-    function updateProtectedAssetControls() {
-      const integration = selectedProtectedIntegration();
-      const assetInput = document.getElementById("protected-filter-asset-value");
-      const isFilesystem = integration?.platform === "filesystem";
-      if (!assetInput) return;
-      assetInput.placeholder = isFilesystem ? "path or folder" : "bucket or prefix";
+    function protectedConnectorFilterOptions() {
+      const registeredConnectorRows = state.connectorRows.filter((row) => (row.connector_instances || []).length > 0);
+      return ['<option value="">all</option>'].concat(registeredConnectorRows
+        .map((row) => {
+          const selected = row.integration.integration_id === state.protectedIntegrationFilter ? " selected" : "";
+          return `<option value="${escapeHtml(row.integration.integration_id)}"${selected}>${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`;
+        }))
+        .join("");
     }
 
     async function loadOverview() {
@@ -2740,6 +3286,37 @@
       renderTopStats();
     }
 
+    async function pollConnectors() {
+      if (
+        !state.connectorsPolling
+        || state.activeTab !== "assets"
+        || state.activeAssetsTab !== "connectors"
+        || state.connectorsPollingInFlight
+      ) {
+        return;
+      }
+      state.connectorsPollingInFlight = true;
+      try {
+        await loadConnectors();
+      } catch (error) {
+        console.warn("Connector polling failed", error);
+      } finally {
+        state.connectorsPollingInFlight = false;
+      }
+    }
+
+    function updateConnectorsPolling() {
+      const shouldPoll = state.connectorsPolling && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
+      if (shouldPoll && !connectorsPollTimer) {
+        connectorsPollTimer = window.setInterval(() => {
+          pollConnectors();
+        }, 5000);
+      } else if (!shouldPoll && connectorsPollTimer) {
+        window.clearInterval(connectorsPollTimer);
+        connectorsPollTimer = null;
+      }
+    }
+
     function resetProtectedPagination() {
       state.protectedPageIndex = 0;
       state.protectedPageCursors = [""];
@@ -2749,7 +3326,7 @@
     function protectedFilterValues() {
       return {
         coverage: document.getElementById("protected-filter-coverage")?.value || "",
-        assetMode: document.getElementById("protected-filter-asset-mode")?.value || "contains",
+        assetMode: "contains",
         assetValue: document.getElementById("protected-filter-asset-value")?.value || "",
       };
     }
@@ -2783,20 +3360,12 @@
 
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
-      const integrationId = document.getElementById("protected-filter-integration").value;
+      const integrationId = state.protectedIntegrationFilter;
       const filters = protectedFilterValues();
       const coverage = filters.coverage;
       const assetFilterMode = filters.assetMode;
       const assetFilterValue = filters.assetValue.trim();
       const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
-      if (!integrationId) {
-        state.protectedAssets = [];
-        state.protectedAssetsLoaded = true;
-        state.protectedNextCursor = null;
-        renderProtectedAssets({ unsupported_integrations: [] });
-        document.getElementById("protected-assets-body").innerHTML = '<tr><td colspan="8"><div class="empty">Select a registered connector.</div></td></tr>';
-        return;
-      }
       if (integrationId) params.set("integration_id", integrationId);
       if (coverage) params.set("coverage_state", coverage);
       params.set("limit", String(state.protectedPageLimit));
@@ -2807,7 +3376,7 @@
       }
       const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
       state.protectedAssets = payload.assets || [];
-      state.protectedNextCursor = (payload.next_cursors || {})[integrationId] || null;
+      state.protectedNextCursor = integrationId ? ((payload.next_cursors || {})[integrationId] || null) : null;
       state.protectedAssetsLoaded = true;
       renderProtectedAssets(payload);
     }
@@ -2817,15 +3386,58 @@
       document.getElementById("protected-assets-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div></td></tr>`;
     }
 
-    async function loadScanResults() {
+    async function fetchScanResultsPayload() {
       const params = new URLSearchParams();
-      const integrationId = document.getElementById("scan-results-filter-integration").value;
-      const itemLimit = document.getElementById("scan-results-filter-item-limit").value;
-      if (integrationId) params.set("integration_id", integrationId);
-      params.set("item_limit", itemLimit);
-      const payload = await fetchJson(`${endpoints.scanResults}?${params.toString()}`);
+      params.set("item_limit", "100");
+      return fetchJson(`${endpoints.scanResults}?${params.toString()}`);
+    }
+
+    async function loadScanResults({ resetSelection = true } = {}) {
+      const payload = await fetchScanResultsPayload();
       state.scanResults = payload.results || [];
+      if (resetSelection) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      } else if (state.selectedScanResult && !state.scanResults.some((result) => result.job.job_id === state.selectedScanResult)) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      }
       renderScanResults();
+    }
+
+    async function pollScanResults() {
+      if (!state.scanResultsPolling || state.activeTab !== "scan-results" || state.scanResultsPollingInFlight) return;
+      state.scanResultsPollingInFlight = true;
+      try {
+        const openJobId = state.selectedScanResult;
+        const payload = await fetchScanResultsPayload();
+        const nextResults = payload.results || [];
+        const nextOpen = openJobId
+          ? nextResults.find((result) => result.job.job_id === openJobId)
+          : null;
+        state.scanResults = nextResults;
+        if (openJobId && !nextOpen) {
+          state.selectedScanResult = null;
+          state.selectedScanResultItemKey = null;
+        }
+        renderScanResults();
+      } catch (error) {
+        console.warn("Scan result polling failed", error);
+      } finally {
+        state.scanResultsPollingInFlight = false;
+      }
+    }
+
+    function updateScanResultsPolling() {
+      const shouldPoll = state.scanResultsPolling && state.activeTab === "scan-results";
+      if (shouldPoll && !scanResultsPollTimer) {
+        scanResultsPollTimer = window.setInterval(() => {
+          pollScanResults();
+        }, 5000);
+      } else if (!shouldPoll && scanResultsPollTimer) {
+        window.clearInterval(scanResultsPollTimer);
+        scanResultsPollTimer = null;
+      }
     }
 
     async function cancelScanResult(jobId, button) {
@@ -2836,9 +3448,6 @@
           method: "POST",
         });
         await loadScanResults();
-        if (state.selectedScanResult === jobId) {
-          renderScanResultDetail(jobId);
-        }
       } catch (error) {
         alert(`Cancel failed: ${error.message}`);
         button.disabled = false;
@@ -2969,6 +3578,10 @@
       const policy = cloneValue(policyEntry.definition || currentDefaultPolicy());
       const scopeType = asset.scopeType === "identity" ? "identity" : "path";
       if (asset.matchingScopeId) {
+        const existingAsset = state.protectedAssets.find((row) => row.matching_scope_id === asset.matchingScopeId);
+        if (existingAsset?.policy?.scanner) {
+          policy.scanner = cloneValue(existingAsset.policy.scanner);
+        }
         await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/policy`, {
           method: "PUT",
           body: JSON.stringify({ policy }),
@@ -3018,7 +3631,6 @@
       });
       await loadScanResults();
       selectTab("scan-results");
-      renderScanResultDetail(batch.job.job_id);
     }
 
     document.querySelectorAll(".rail-item").forEach((button) => {
@@ -3033,10 +3645,32 @@
       button.addEventListener("click", () => selectAssetsTab(button.dataset.assetsTab));
     });
 
-    document.getElementById("refresh-all").addEventListener("click", () => {
-      refreshAll().catch((error) => alert(`Refresh failed: ${error.message}`));
+    document.getElementById("refresh-all").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await refreshAll();
+        } catch (error) {
+          alert(`Refresh failed: ${error.message}`);
+        }
+      });
     });
-    document.getElementById("open-add-connector").addEventListener("click", () => setConnectorDrawerOpen(true));
+    document.getElementById("refresh-connectors").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadConnectors();
+        } catch (error) {
+          alert(`Connector refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("connectors-poll").addEventListener("change", (event) => {
+      state.connectorsPolling = event.target.checked;
+      updateConnectorsPolling();
+      if (state.connectorsPolling) {
+        pollConnectors();
+      }
+    });
+    document.getElementById("open-add-connector")?.addEventListener("click", () => setConnectorDrawerOpen(true));
     document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("create-policy").addEventListener("click", openPolicyCreate);
@@ -3072,9 +3706,6 @@
         setProtectionProfilePickerOpen(false);
       }
     });
-    document.getElementById("theme-mode").addEventListener("change", (event) => {
-      setThemeMode(event.currentTarget.value);
-    });
     document.addEventListener("click", async (event) => {
       const button = event.target.closest("[data-copy-value]");
       if (!button) return;
@@ -3101,24 +3732,36 @@
         }, 1200);
       }
     });
-    document.getElementById("protected-filter-integration").addEventListener("change", () => {
-      updateProtectedAssetControls();
-      reloadProtectedAssetsFromFilters();
-    });
     document.getElementById("protected-page-prev").addEventListener("click", () => {
       loadPreviousProtectedAssetsPage().catch(showProtectedAssetsError);
     });
     document.getElementById("protected-page-next").addEventListener("click", () => {
       loadNextProtectedAssetsPage().catch(showProtectedAssetsError);
     });
-    document.getElementById("refresh-scan-results").addEventListener("click", () => {
-      loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
+    document.getElementById("refresh-scan-results").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadScanResults();
+        } catch (error) {
+          alert(`Scan result refresh failed: ${error.message}`);
+        }
+      });
     });
-    document.getElementById("apply-scan-results").addEventListener("click", () => {
-      loadScanResults().catch((error) => alert(`Scan result refresh failed: ${error.message}`));
+    document.getElementById("scan-results-poll").addEventListener("change", (event) => {
+      state.scanResultsPolling = event.target.checked;
+      updateScanResultsPolling();
+      if (state.scanResultsPolling) {
+        pollScanResults();
+      }
     });
-    document.getElementById("refresh-policies").addEventListener("click", () => {
-      loadPolicies().catch((error) => alert(`Protection profile refresh failed: ${error.message}`));
+    document.getElementById("refresh-policies").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadPolicies();
+        } catch (error) {
+          alert(`Protection profile refresh failed: ${error.message}`);
+        }
+      });
     });
     document.getElementById("apply-policy-filter").addEventListener("click", () => {
       loadPolicies().catch((error) => alert(`Protection profile refresh failed: ${error.message}`));
@@ -3141,6 +3784,14 @@
     });
 
     document.getElementById("connectors-body").addEventListener("change", (event) => {
+      const protectedEntityInput = event.target.closest("[data-action='set-default-protected-entity']");
+      if (protectedEntityInput) {
+        saveConnectorProtectedEntity(protectedEntityInput).catch((error) => {
+          alert(`Protected entity update failed: ${error.message}`);
+          loadConnectors().catch(console.error);
+        });
+        return;
+      }
       const select = event.target.closest("[data-action='set-default-profile']");
       if (!select) return;
       state.defaultProfileByIntegration[select.dataset.integration] = select.value;
@@ -3191,6 +3842,14 @@
       }
     });
     document.getElementById("protected-assets-body").addEventListener("change", async (event) => {
+      const protectedEntityInput = event.target.closest("[data-action='set-scope-protected-entity']");
+      if (protectedEntityInput) {
+        saveScopeProtectedEntity(protectedEntityInput).catch((error) => {
+          alert(`Protected entity update failed: ${error.message}`);
+          loadProtectedAssets().catch(showProtectedAssetsError);
+        });
+        return;
+      }
       const select = event.target.closest("[data-action='protected-asset-action']");
       if (!select) return;
       const action = select.value;
@@ -3247,17 +3906,31 @@
     });
 
     document.getElementById("scan-results-body").addEventListener("click", (event) => {
+      if (event.target.closest("[data-copy-value]")) return;
       const cancelButton = event.target.closest("[data-action='cancel-scan-result']");
       if (cancelButton) {
         cancelScanResult(cancelButton.dataset.id, cancelButton);
         return;
       }
-      const button = event.target.closest("[data-action='inspect-scan-result']");
-      if (!button) return;
-      const jobId = button.dataset.id;
-      state.selectedScanResult = state.selectedScanResult === jobId ? null : jobId;
+      const sampleItem = event.target.closest("[data-action='toggle-scan-item-json']");
+      if (sampleItem) {
+        state.selectedScanResultItemKey = state.selectedScanResultItemKey === sampleItem.dataset.itemKey ? null : sampleItem.dataset.itemKey;
+        renderScanResults();
+        return;
+      }
+      if (event.target.closest("button, input, select, textarea, a")) return;
+      const row = event.target.closest("[data-action='toggle-scan-result-detail']");
+      if (!row) return;
+      const jobId = row.dataset.jobId;
+      state.scanTargetFilterFocused = false;
+      if (state.selectedScanResult === jobId) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      } else {
+        state.selectedScanResult = jobId;
+        state.selectedScanResultItemKey = null;
+      }
       renderScanResults();
-      document.getElementById("inline-scan-result-detail")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
 
     document.getElementById("policies-body").addEventListener("click", (event) => {
@@ -3311,7 +3984,6 @@
       }
     });
 
-    initTheme();
     initNav();
     loadPolicyCatalog();
     loadDefaultProfiles();

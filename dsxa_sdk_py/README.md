@@ -73,7 +73,7 @@ from dsxa_sdk_py import DSXAClient, ScanMode
 client = DSXAClient(
     base_url="https://scanner.example.com",
     auth_token="my-auth-token",  # optional if DSXA allows anonymous requests
-    default_protected_entity=3,
+    default_protected_entity=3,  # optional; omit when the scanner does not require it
     timeout=30,
 )
 #
@@ -110,7 +110,7 @@ async def main():
     async with AsyncDSXAClient(
         base_url="https://scanner.example.com",
         auth_token="my-auth-token",
-        default_protected_entity=3,
+        default_protected_entity=3,  # optional; omit when the scanner does not require it
     ) as client:
         resp = await client.scan_binary(b"data", custom_metadata="App123")
         print(resp.verdict, resp.file_info.file_type)
@@ -234,7 +234,7 @@ DSXA_PROTECTED_ENTITY=3  # defaults to 1 when omitted
 The CLI can store multiple contexts in `~/.dsxa/config.json` (keyed under `contexts`) and fall back to the current context when flags/envs are omitted:
 
 ```bash
-# Add a context (interactive prompts for base URL, token, protected entity)
+# Add a context (interactive prompts for base URL, token, and optional protected entity)
 dsxa context add --name default
 
 # List and switch

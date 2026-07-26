@@ -38,8 +38,26 @@ def test_operator_console_page_renders() -> None:
     assert 'id="protected-filter-source"' not in response.text
     assert 'id="refresh-protected-assets"' not in response.text
     assert "Load Assets" not in response.text
+    assert 'id="open-add-connector"' not in response.text
     assert "function reloadProtectedAssetsFromFilters" in response.text
-    assert 'placeholder="path or folder"' in response.text
+    assert 'id="protected-filter-asset-value"' in response.text
+    assert 'clearFilterButton("protected-filter-asset-value"' in response.text
+    assert 'id="protected-filter-asset-mode"' not in response.text
+    assert "function protectedConnectorFilterOptions" in response.text
+    assert """'<option value="">all</option>'""" in response.text
+    assert "Start Full Scan" in response.text
+    assert "Cancel Full Scan" in response.text
+    assert "Default Protected Entity" in response.text
+    assert "Protected Entity" in response.text
+    assert "set-default-protected-entity" in response.text
+    assert "set-scope-protected-entity" in response.text
+    assert "scanner-binding" in response.text
+    assert "expand-toggle" not in response.text
+    assert "View scan sample" not in response.text
+    assert "Hide scan sample" not in response.text
+    assert "toggle-scan-item-json" in response.text
+    assert "Item Details" not in response.text
+    assert "Raw JSON" not in response.text
     assert "Protection Profile Editor" in response.text
     assert "Default Protection Profile" in response.text
     assert 'id="protected-filter-type"' not in response.text
@@ -50,8 +68,9 @@ def test_operator_console_page_renders() -> None:
     assert "Malicious verdicts" in response.text
     assert "Detect Only" in response.text
     assert "Quarantine Folder Path" in response.text
-    assert '<option value="operations">Operations</option>' in response.text
-    assert '<option value="security">Security Console</option>' in response.text
+    assert 'id="theme-mode"' not in response.text
+    assert '<option value="operations">Operations</option>' not in response.text
+    assert '<option value="security">Security Console</option>' not in response.text
     assert 'id="stat-dsxa"' in response.text
     assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
 
@@ -639,7 +658,18 @@ def test_ui_assets_protected_aggregates_discovered_assets_with_policy(monkeypatc
     clean, malicious = job_service.list_job_items(job_id=batch.job.job_id, limit=10)
     job_service.complete_scan_only(
         clean.job_item_id,
-        StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-clean"}),
+        StageUpdateRequest(
+            state="completed",
+            result={
+                "verdict": "Benign",
+                "scanGuid": "scan-clean",
+                "fileInfo": {"file_hash": "sha256-clean", "file_type": "pdf"},
+            },
+        ),
+    )
+    job_service.update_remediation_stage(
+        clean.job_item_id,
+        StageUpdateRequest(state="skipped", result={"reason": "benign_verdict"}),
     )
     job_service.complete_scan_only(
         malicious.job_item_id,
@@ -927,7 +957,14 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     clean, malicious, not_scanned, _pending = items
     job_service.complete_scan_only(
         clean.job_item_id,
-        StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": "scan-clean"}),
+        StageUpdateRequest(
+            state="completed",
+            result={
+                "verdict": "Benign",
+                "scanGuid": "scan-clean",
+                "fileInfo": {"file_hash": "sha256-clean", "file_type": "pdf"},
+            },
+        ),
     )
     job_service.complete_scan_only(
         malicious.job_item_id,
@@ -962,10 +999,60 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     assert result["findings"]["not_scanned"] == 1
     assert result["findings"]["unknown"] == 1
     assert result["findings"]["sampled_items"] == 4
+    assert result["latest_items"][0]["verdict"] == "Benign"
+    assert result["latest_items"][0]["file_hash"] == "sha256-clean"
+    assert result["latest_items"][0]["file_type"] == "pdf"
+    assert result["latest_items"][0]["remediation"] == "skipped"
+    assert result["latest_items"][0]["remediation_reason"] == "scan_only"
+    assert result["latest_items"][0]["scan_result"] == {
+        "verdict": "Benign",
+        "scanGuid": "scan-clean",
+        "fileInfo": {"file_hash": "sha256-clean", "file_type": "pdf"},
+    }
     assert result["remediation"]["completed"] == 1
     assert result["cancel"]["mode"] == "cooperative"
     assert result["cancel"]["immediate_file_level_cancel"] is False
     assert "in-memory scan batch" in result["cancel"]["message"]
+
+
+def test_ui_scan_results_samples_completed_items_first_with_limit() -> None:
+    app = create_app()
+    control_plane = app.state.control_plane_service
+    control_plane.create_integration(
+        IntegrationCreate(
+            integration_id="gcs-a",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            config={},
+        )
+    )
+    job_service = app.state.job_service
+    batch = asyncio.run(
+        job_service.submit_batch_job(
+            BatchJobSubmitRequest(
+                job_id="job-ui-samples",
+                integration_id="gcs-a",
+                items=[{"object_identity": f"bucket-a/item-{index}.txt"} for index in range(12)],
+            )
+        )
+    )
+    items = job_service.list_job_items(job_id=batch.job.job_id, limit=20)
+    for item in items[6:12]:
+        job_service.complete_scan_only(
+            item.job_item_id,
+            StageUpdateRequest(state="completed", result={"verdict": "Benign", "scanGuid": f"scan-{item.item_index}"}),
+        )
+
+    client = TestClient(app)
+    response = client.get("/api/v1/ui/scan-results?integration_id=gcs-a&item_limit=12")
+
+    assert response.status_code == 200
+    latest = response.json()["results"][0]["latest_items"]
+    assert len(latest) == 10
+    assert [item["object_identity"] for item in latest[:6]] == [f"bucket-a/item-{index}.txt" for index in range(6, 12)]
+    assert [item["scan"] for item in latest[:6]] == ["completed"] * 6
+    assert [item["object_identity"] for item in latest[6:]] == [f"bucket-a/item-{index}.txt" for index in range(4)]
 
 
 def test_ui_scan_results_state_filter() -> None:
@@ -1198,6 +1285,10 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
     assert toggle_integration.status_code == 200
     assert toggle_integration.json()["enabled"] is True
 
+    scanner_binding = client.patch("/api/v1/ui/integrations/gcs-a/scanner-binding", json={"protected_entity": 77})
+    assert scanner_binding.status_code == 200
+    assert scanner_binding.json()["config"]["scanner"]["protected_entity"] == 77
+
     scope_response = client.post(
         "/api/v1/ui/assets/protected",
         json={
@@ -1211,6 +1302,30 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
     )
     assert scope_response.status_code == 200
     assert scope_response.json()["scope_type"] == "path"
+
+    after_scope = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket")
+    protected_asset = next(asset for asset in after_scope.json()["assets"] if asset["matching_scope_id"] == "scope-bucket-a")
+    assert protected_asset["protected_entity"] is None
+    assert protected_asset["inherited_protected_entity"] == 77
+    assert protected_asset["effective_protected_entity"] == 77
+    scope_binding = client.patch("/api/v1/ui/scopes/scope-bucket-a/scanner-binding", json={"protected_entity": 88})
+    assert scope_binding.status_code == 200
+    assert scope_binding.json()["post_scan_policy"]["scanner"]["protected_entity"] == 88
+    after_override = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket")
+    protected_asset = next(asset for asset in after_override.json()["assets"] if asset["matching_scope_id"] == "scope-bucket-a")
+    assert protected_asset["protected_entity"] == 88
+    assert protected_asset["inherited_protected_entity"] == 77
+    assert protected_asset["effective_protected_entity"] == 88
+    scope_binding = client.patch("/api/v1/ui/scopes/scope-bucket-a/scanner-binding", json={"protected_entity": None})
+    assert scope_binding.status_code == 200
+    assert "scanner" not in scope_binding.json()["post_scan_policy"]
+    after_clear = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket")
+    protected_asset = next(asset for asset in after_clear.json()["assets"] if asset["matching_scope_id"] == "scope-bucket-a")
+    assert protected_asset["protected_entity"] is None
+    assert protected_asset["effective_protected_entity"] == 77
+    scanner_binding = client.patch("/api/v1/ui/integrations/gcs-a/scanner-binding", json={"protected_entity": None})
+    assert scanner_binding.status_code == 200
+    assert "scanner" not in scanner_binding.json()["config"]
 
     toggle_scope = client.post("/api/v1/ui/scopes/scope-bucket-a/enabled", json={"enabled": False})
     assert toggle_scope.status_code == 200

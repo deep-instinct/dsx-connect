@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, AsyncIterable, Awaitable, Callable
 
 from dsx_connect_ng.config import settings
+from dsx_connect_ng.control_plane.config_models import parse_integration_runtime_config
 from dsx_connect_ng.jobs.contracts import MessageEnvelope, ScanItemRequested
 from dsx_connect_ng.jobs.models import ScanResult, ScanStageUpdateRequest, StageUpdateRequest
 from dsx_connect_ng.ops_logging import log_event, ops_logging
@@ -620,9 +621,15 @@ def build_scan_custom_metadata(request: ScanItemRequested, *, reader_name: str, 
     scan_options = getattr(request, "scan_options", {}) or {}
     explicit = scan_options.get("customMetadata") or scan_options.get("custom_metadata")
     parts: list[str] = []
+    source = scan_options.get("source")
+    if source:
+        parts.append(f"source:{_encode_custom_metadata_value(source)}")
     object_identity = _encode_custom_metadata_value(getattr(request, "object_identity", None))
     if object_identity:
         parts.append(f"object-identity:{object_identity}")
+    path = scan_options.get("path")
+    if path and path != getattr(request, "object_identity", None):
+        parts.append(f"path:{_encode_custom_metadata_value(path)}")
     content_source = getattr(request, "content_source", None)
     if content_source is not None and getattr(content_source, "mode", None):
         parts.append(f"content-source:{_encode_custom_metadata_value(content_source.mode)}")
@@ -631,9 +638,27 @@ def build_scan_custom_metadata(request: ScanItemRequested, *, reader_name: str, 
     integration_id = getattr(request, "integration_id", None)
     if integration_id:
         parts.append(f"integration-id:{_encode_custom_metadata_value(integration_id)}")
+    integration_metadata = scan_options.get("integrationMetadata") or scan_options.get("integration_metadata") or {}
+    if isinstance(integration_metadata, dict):
+        if integration_metadata.get("display_name"):
+            parts.append(f"integration-name:{_encode_custom_metadata_value(integration_metadata.get('display_name'))}")
+        if integration_metadata.get("platform"):
+            parts.append(f"platform:{_encode_custom_metadata_value(integration_metadata.get('platform'))}")
+        if integration_metadata.get("platform_key"):
+            parts.append(f"platform-key:{_encode_custom_metadata_value(integration_metadata.get('platform_key'))}")
     scope_id = getattr(request, "scope_id", None)
     if scope_id:
         parts.append(f"scope-id:{_encode_custom_metadata_value(scope_id)}")
+    scope_metadata = scan_options.get("scopeMetadata") or scan_options.get("scope_metadata") or {}
+    if isinstance(scope_metadata, dict):
+        if scope_metadata.get("display_name"):
+            parts.append(f"scope-name:{_encode_custom_metadata_value(scope_metadata.get('display_name'))}")
+        if scope_metadata.get("scope_type"):
+            parts.append(f"scope-type:{_encode_custom_metadata_value(scope_metadata.get('scope_type'))}")
+        if scope_metadata.get("scope_mode"):
+            parts.append(f"scope-mode:{_encode_custom_metadata_value(scope_metadata.get('scope_mode'))}")
+        if scope_metadata.get("resource_selector"):
+            parts.append(f"scope-selector:{_encode_custom_metadata_value(scope_metadata.get('resource_selector'))}")
     job_id = getattr(request, "job_id", None)
     if job_id:
         parts.append(f"job-id:{_encode_custom_metadata_value(job_id)}")
@@ -649,6 +674,26 @@ def build_scan_custom_metadata(request: ScanItemRequested, *, reader_name: str, 
     if explicit:
         parts.append(f"user-meta:{_encode_custom_metadata_value(explicit)}")
     return ",".join(parts)
+
+
+def resolve_scan_protected_entity(request: ScanItemRequested) -> int | None:
+    scan_options = getattr(request, "scan_options", {}) or {}
+    for key in ("protectedEntity", "protected_entity"):
+        if key in scan_options and scan_options[key] not in (None, ""):
+            return int(scan_options[key])
+    scope_policy = scan_options.get("scopePolicy") or scan_options.get("scope_policy") or {}
+    if isinstance(scope_policy, dict):
+        scanner = scope_policy.get("scanner") or {}
+        if isinstance(scanner, dict):
+            value = scanner.get("protected_entity") or scanner.get("protectedEntity")
+            if value not in (None, ""):
+                return int(value)
+    integration_config = scan_options.get("integrationConfig") or scan_options.get("integration_config") or {}
+    if isinstance(integration_config, dict):
+        runtime = parse_integration_runtime_config(integration_config)
+        if runtime.scanner is not None and runtime.scanner.protected_entity is not None:
+            return runtime.scanner.protected_entity
+    return settings.scanner.protected_entity
 
 
 def map_dsxa_scan_response(response) -> ScanResult:
@@ -854,7 +899,7 @@ async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> S
                     "enforcement": "read_result",
                 },
             )
-        protected_entity = request.scan_options.get("protectedEntity") or request.scan_options.get("protected_entity")
+        protected_entity = resolve_scan_protected_entity(request)
         custom_metadata = build_scan_custom_metadata(
             request,
             reader_name=read_result.details.get("reader") or reader.__class__.__name__,
@@ -881,14 +926,19 @@ async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> S
         except AuthenticationError as exc:
             raise TerminalScanError("scanner_auth_failed", str(exc), details={"baseUrl": base_url}) from exc
         except BadRequestError as exc:
-            raise TerminalScanError(
-                "scanner_request_invalid",
-                str(exc),
-                details={
-                    "baseUrl": base_url,
-                    "protectedEntity": protected_entity,
-                },
-            ) from exc
+            payload = getattr(exc, "payload", None)
+            if isinstance(payload, dict) and payload.get("verdict"):
+                response = _ScanResponse.model_validate(payload)
+                stream_timing = None
+            else:
+                raise TerminalScanError(
+                    "scanner_request_invalid",
+                    str(exc),
+                    details={
+                        "baseUrl": base_url,
+                        "protectedEntity": protected_entity,
+                    },
+                ) from exc
         except NotFoundError as exc:
             raise TerminalScanError("scanner_resource_not_found", str(exc), details={"baseUrl": base_url}) from exc
         except ServerError as exc:

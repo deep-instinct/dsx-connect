@@ -47,6 +47,7 @@ from dsx_connect_ng.workers.scan_worker import (
     mark_scan_message_failed_after_retries,
     map_dsxa_scan_response,
     process_scan_message,
+    resolve_scan_protected_entity,
     resolve_local_scan_path,
 )
 
@@ -1026,6 +1027,7 @@ def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane
             platform_key="local-fs",
             display_name="Filesystem",
             config={
+                "scanner": {"protected_entity": 77},
                 "policy": {
                     "policy_id": "integration-policy",
                     "auto_dianna_on_verdicts": ["malicious"],
@@ -1045,6 +1047,7 @@ def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane
             display_name="Finance",
             mode="monitor",
             post_scan_policy={
+                "scanner": {"protected_entity": 88},
                 "policy_id": "scope-policy",
                 "delivery": {
                     "scan_targets": [{"connector": "scope-scan"}],
@@ -1066,6 +1069,10 @@ def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane
     )
     first_message = bus.snapshot()[0]
     assert isinstance(first_message, MessageEnvelope)
+    assert first_message.payload["scan_options"]["integrationConfig"]["scanner"]["protected_entity"] == 77
+    assert first_message.payload["scan_options"]["scopePolicy"]["scanner"]["protected_entity"] == 88
+    assert first_message.payload["scan_options"]["integrationMetadata"]["display_name"] == "Filesystem"
+    assert first_message.payload["scan_options"]["scopeMetadata"]["resource_selector"] == "/finance"
     asyncio.run(process_scan_message(service, first_message, execute_scan=_fake_scan))
     policy_message = next(
         message for message in reversed(bus.snapshot()) if isinstance(message, MessageEnvelope) and message.message_type == "policy_evaluation_requested"
@@ -1785,7 +1792,22 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
         integration_id="filesystem-local",
         scope_id="scope-1",
         object_identity="/finance/sample.txt",
-        scan_options={"customMetadata": "tenant=acme"},
+        scan_options={
+            "source": "ui_scope_scan",
+            "customMetadata": "tenant=acme",
+            "integrationConfig": {"scanner": {"protected_entity": 77}},
+            "integrationMetadata": {
+                "display_name": "Filesystem Lab",
+                "platform": "filesystem",
+                "platform_key": "host-a",
+            },
+            "scopeMetadata": {
+                "display_name": "Finance",
+                "scope_type": "path",
+                "scope_mode": "full_scan",
+                "resource_selector": "/finance",
+            },
+        },
         content_source=ContentSource(mode="original"),
     )
 
@@ -1800,15 +1822,24 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
     result = asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
 
     assert result.verdict == "Benign"
+    assert captured["kwargs"]["protected_entity"] == 77
     assert request.scan_options["_dsx_scanner_metadata"]["source"] == "dsxa"
     assert request.scan_options["_dsx_scanner_metadata"]["reader"] == "connector_proxy"
     assert request.scan_options["_dsx_scanner_metadata"]["contentSourceMode"] == "original"
     assert request.scan_options["_dsx_scanner_metadata"]["readerElapsedMs"] >= 0
     assert request.scan_options["_dsx_scanner_metadata"]["scannerEngineElapsedMs"] == 1.234
     custom_metadata = captured["kwargs"]["custom_metadata"]
+    assert "source:ui_scope_scan" in custom_metadata
     assert "object-identity:/finance/sample.txt" in custom_metadata
     assert "integration-id:filesystem-local" in custom_metadata
+    assert "integration-name:Filesystem Lab" in custom_metadata
+    assert "platform:filesystem" in custom_metadata
+    assert "platform-key:host-a" in custom_metadata
     assert "scope-id:scope-1" in custom_metadata
+    assert "scope-name:Finance" in custom_metadata
+    assert "scope-type:path" in custom_metadata
+    assert "scope-mode:full_scan" in custom_metadata
+    assert "scope-selector:/finance" in custom_metadata
     assert "job-id:job-1" in custom_metadata
     assert "job-item-id:item-1" in custom_metadata
     assert "reader:connector_proxy" in custom_metadata
@@ -1886,6 +1917,109 @@ def test_execute_scan_via_dsxa_can_use_per_task_client_scope(monkeypatch, tmp_pa
 
     assert FakeClient.instances == 2
     assert FakeClient.closes == 2
+
+
+def test_execute_scan_via_dsxa_does_not_default_protected_entity(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", None)
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def scan_binary_stream(self, data, **kwargs):
+            _ = b"".join([chunk async for chunk in data])
+            captured["scan_kwargs"] = kwargs
+            return _fake_benign_dsxa_response(protected_entity=kwargs.get("protected_entity"))
+
+    monkeypatch.setattr(
+        "dsx_connect_ng.workers.scan_worker._import_dsxa_client",
+        lambda: (FakeClient, object, RuntimeError, RuntimeError, RuntimeError, RuntimeError, RuntimeError),
+    )
+    sample = tmp_path / "sample.txt"
+    sample.write_bytes(b"stream me")
+
+    class FakeReader:
+        async def acquire(self, _request):
+            return SimpleNamespace(local_path=sample, content_length=128, details={"reader": "connector_proxy"})
+
+    request = SimpleNamespace(scan_options={}, content_source=ContentSource(mode="original"))
+    result = asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
+
+    assert captured["client_kwargs"]["default_protected_entity"] is None
+    assert captured["scan_kwargs"]["protected_entity"] is None
+    assert result.protected_entity is None
+
+
+def test_resolve_scan_protected_entity_prefers_scope_override(monkeypatch) -> None:
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", 11)
+    request = SimpleNamespace(
+        scan_options={
+            "integrationConfig": {"scanner": {"protected_entity": 77}},
+            "scopePolicy": {"scanner": {"protected_entity": 88}},
+        }
+    )
+
+    assert resolve_scan_protected_entity(request) == 88
+
+    request.scan_options.pop("scopePolicy")
+    assert resolve_scan_protected_entity(request) == 77
+
+    request.scan_options = {"protectedEntity": 99, "integrationConfig": {"scanner": {"protected_entity": 77}}}
+    assert resolve_scan_protected_entity(request) == 99
+
+    request.scan_options = {}
+    assert resolve_scan_protected_entity(request) == 11
+
+
+def test_execute_scan_via_dsxa_preserves_structured_not_scanned_bad_request(monkeypatch, tmp_path) -> None:
+    from dsxa_sdk_py.exceptions import BadRequestError
+    from dsxa_sdk_py.models import ScanResponse
+
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.base_url", "http://scanner.local")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.dsxa_auth_token", "token")
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.timeout_seconds", 30.0)
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.verify_tls", True)
+    monkeypatch.setattr("dsx_connect_ng.workers.scan_worker.settings.scanner.protected_entity", None)
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            pass
+
+        async def scan_binary_stream(self, data, **kwargs):
+            _ = b"".join([chunk async for chunk in data])
+            raise BadRequestError(
+                "HTTP 400 BAD REQUEST",
+                payload={
+                    "scan_guid": "scan-not-scanned",
+                    "verdict": "Not Scanned",
+                    "verdict_details": {"reason": "scanner_declined"},
+                    "file_info": {"file_hash": "hash-1", "file_type": "pdf"},
+                },
+            )
+
+    monkeypatch.setattr(
+        "dsx_connect_ng.workers.scan_worker._import_dsxa_client",
+        lambda: (FakeClient, ScanResponse, RuntimeError, RuntimeError, BadRequestError, RuntimeError, RuntimeError),
+    )
+    sample = tmp_path / "sample.pdf"
+    sample.write_bytes(b"stream me")
+
+    class FakeReader:
+        async def acquire(self, _request):
+            return SimpleNamespace(local_path=sample, content_length=128, details={"reader": "connector_proxy"})
+
+    request = SimpleNamespace(scan_options={}, content_source=ContentSource(mode="original"))
+    result = asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
+
+    assert result.verdict == "Not Scanned"
+    assert result.scan_guid == "scan-not-scanned"
+    assert result.file_info["file_hash"] == "hash-1"
+    assert result.file_info["file_type"] == "pdf"
 
 
 def test_execute_scan_via_dsxa_reuses_client_and_streams_each_artifact(monkeypatch, tmp_path) -> None:

@@ -491,6 +491,37 @@ class JobService:
             self.repo.update_job_state(job_id, state="accepted", error=None)
 
     def _build_scan_item_requested(self, *, job: JobRecord, job_item: JobItemRecord) -> MessageEnvelope:
+        scan_options = {
+            **job.payload,
+            **job_item.payload,
+        }
+        if self.control_plane is not None:
+            integration = self.control_plane.get_integration_or_404(job.integration_id) if job.integration_id else None
+            scope = self.control_plane.get_scope_or_404(job.scope_id) if job.scope_id else None
+            if integration is not None:
+                scan_options.setdefault("integrationConfig", integration.config)
+                scan_options.setdefault(
+                    "integrationMetadata",
+                    {
+                        "integration_id": integration.integration_id,
+                        "display_name": integration.display_name,
+                        "platform": integration.platform,
+                        "platform_key": integration.platform_key,
+                    },
+                )
+            if scope is not None:
+                scan_options.setdefault("scopePolicy", scope.post_scan_policy)
+                scan_options.setdefault(
+                    "scopeMetadata",
+                    {
+                        "scope_id": scope.scope_id,
+                        "display_name": scope.display_name,
+                        "scope_type": scope.scope_type,
+                        "scope_mode": scope.mode,
+                        "resource_selector": scope.resource_selector,
+                        "normalized_selector": scope.normalized_selector,
+                    },
+                )
         message = ScanItemRequested(
             job_id=job.job_id,
             job_item_id=job_item.job_item_id,
@@ -502,10 +533,7 @@ class JobService:
             read_hint={
                 "objectIdentity": job_item.object_identity,
             },
-            scan_options={
-                **job.payload,
-                **job_item.payload,
-            },
+            scan_options=scan_options,
         )
         return message.as_envelope()
 

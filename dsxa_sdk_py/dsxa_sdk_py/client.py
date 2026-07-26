@@ -29,6 +29,14 @@ def _format_http_error(response: httpx.Response) -> str:
     return f"HTTP {response.status_code} {reason}"
 
 
+def _json_error_payload(response: httpx.Response) -> Dict[str, Any] | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
 class ScanMode(str, Enum):
     BINARY = "binary"
     BASE64 = "base64"
@@ -40,7 +48,7 @@ class _BaseDSXAClient:
         base_url: str,
         auth_token: Optional[str] = None,
         *,
-        default_protected_entity: Optional[int] = 1,
+        default_protected_entity: Optional[int] = None,
         default_metadata: Optional[str] = None,
         **_legacy_kwargs: Any,
     ):
@@ -120,7 +128,7 @@ class DSXAClient(_BaseDSXAClient):
         timeout: Optional[float] = 30.0,
         verify_tls: Union[bool, str] = True,
         http_proxy: Optional[str] = None,
-        default_protected_entity: Optional[int] = 1,
+        default_protected_entity: Optional[int] = None,
         default_metadata: Optional[str] = None,
         **_legacy_kwargs: Any,
     ):
@@ -349,7 +357,7 @@ class DSXAClient(_BaseDSXAClient):
             raise DSXAError(str(exc)) from exc
 
         if response.status_code >= 400:
-            raise map_http_status(response.status_code, _format_http_error(response))
+            raise map_http_status(response.status_code, _format_http_error(response), payload=_json_error_payload(response))
         if not response.content:
             return {}
         return response.json()
@@ -368,7 +376,7 @@ class AsyncDSXAClient(_BaseDSXAClient):
         timeout: Optional[float] = 30.0,
         verify_tls: Union[bool, str] = True,
         http_proxy: Optional[str] = None,
-        default_protected_entity: Optional[int] = 1,
+        default_protected_entity: Optional[int] = None,
         default_metadata: Optional[str] = None,
         **_legacy_kwargs: Any,
     ):
@@ -591,7 +599,7 @@ class AsyncDSXAClient(_BaseDSXAClient):
             raise DSXAError(str(exc)) from exc
 
         if response.status_code >= 400:
-            raise map_http_status(response.status_code, _format_http_error(response))
+            raise map_http_status(response.status_code, _format_http_error(response), payload=_json_error_payload(response))
         if not response.content:
             return {}
         return response.json()

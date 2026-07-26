@@ -25,6 +25,8 @@ env:
   # DSXA scanner mode.
   # Use "dsxa" when the cluster can reach a real DSXA scanner.
   # Use "stub" only for control-plane smoke tests where no real scanning is required.
+  # Optional: set DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY only to a valid DI protected entity id.
+  # Do not set it to the DSXA scanner SCANNER_ID.
   DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
   DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 

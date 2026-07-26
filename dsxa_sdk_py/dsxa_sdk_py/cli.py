@@ -114,7 +114,7 @@ def main(
         ctx.obj = CLIConfig(
             base_url="",
             auth_token=auth_token if auth_token is not None else (profile or {}).get("auth_token"),
-            protected_entity=protected_entity if protected_entity is not None else (profile or {}).get("protected_entity", 1),
+            protected_entity=protected_entity if protected_entity is not None else (profile or {}).get("protected_entity"),
             verify_tls=verify_tls if verify_tls is not None else (profile or {}).get("verify_tls", True),
             context_name=selected_context,
         )
@@ -131,13 +131,13 @@ def main(
     resolved_auth_token = auth_token if auth_token is not None else (profile or {}).get("auth_token")
     resolved_protected_entity = protected_entity
     if resolved_protected_entity is None:
-        resolved_protected_entity = (profile or {}).get("protected_entity", 1)
+        resolved_protected_entity = (profile or {}).get("protected_entity")
     resolved_verify_tls = verify_tls if verify_tls is not None else (profile or {}).get("verify_tls", True)
 
     ctx.obj = CLIConfig(
         base_url=resolved_base_url.rstrip("/"),
         auth_token=resolved_auth_token,
-        protected_entity=int(resolved_protected_entity) if resolved_protected_entity is not None else 1,
+        protected_entity=int(resolved_protected_entity) if resolved_protected_entity is not None else None,
         verify_tls=bool(resolved_verify_tls),
         context_name=selected_context,
     )
@@ -526,13 +526,13 @@ def context_add(
 
     base_url = typer.prompt("Base URL (e.g., https://scanner:443)")
     auth_token = typer.prompt("Auth token (leave blank if not required)", default="", hide_input=True)
-    protected_entity = typer.prompt("Protected entity (integer, blank for 1)", default="")
+    protected_entity = typer.prompt("Protected entity (integer, blank to omit)", default="")
     verify_tls = typer.confirm("Verify TLS certificates?", default=True)
 
     profile = {
         "base_url": base_url.rstrip("/"),
         "auth_token": auth_token if auth_token else None,
-        "protected_entity": int(protected_entity) if str(protected_entity).strip() else 1,
+        "protected_entity": int(protected_entity) if str(protected_entity).strip() else None,
         "verify_tls": verify_tls,
     }
     config_store.set_context(cfg, ctx_name, profile)
@@ -569,15 +569,15 @@ def context_edit(
         hide_input=True,
     )
     protected_entity = typer.prompt(
-        "Protected entity (integer, blank for 1)",
-        default=str(profile.get("protected_entity", 1)),
+        "Protected entity (integer, blank to omit)",
+        default=str(profile.get("protected_entity") or ""),
     )
     verify_tls = typer.confirm("Verify TLS certificates?", default=profile.get("verify_tls", True))
 
     profile = {
         "base_url": base_url.rstrip("/"),
         "auth_token": auth_token if auth_token else None,
-        "protected_entity": int(protected_entity) if str(protected_entity).strip() else 1,
+        "protected_entity": int(protected_entity) if str(protected_entity).strip() else None,
         "verify_tls": verify_tls,
     }
     config_store.set_context(cfg, ctx_name, profile)

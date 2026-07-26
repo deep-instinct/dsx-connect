@@ -4,6 +4,7 @@ import httpx
 import pytest
 
 from dsxa_sdk_py import DSXAClient, ScanMode
+from dsxa_sdk_py.exceptions import BadRequestError
 
 
 class MockTransport(httpx.BaseTransport):
@@ -118,14 +119,52 @@ def test_scan_response_preserves_nested_not_scanned_reason(monkeypatch):
     client.close()
 
 
-def test_default_protected_entity(monkeypatch, transport):
+def test_default_omits_protected_entity(monkeypatch, transport):
     httpx_client = httpx.Client(transport=transport)
     monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
     client = DSXAClient(base_url="https://scanner.example.com")
     client.scan_binary(b"data")
     call = transport.calls[-1]
     headers = {k.lower(): v for k, v in call["headers"].items()}
+    assert "protected_entity" not in headers
+    client.close()
+
+
+def test_configured_default_protected_entity(monkeypatch, transport):
+    httpx_client = httpx.Client(transport=transport)
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
+    client = DSXAClient(base_url="https://scanner.example.com", default_protected_entity=1)
+    client.scan_binary(b"data")
+    call = transport.calls[-1]
+    headers = {k.lower(): v for k, v in call["headers"].items()}
     assert headers["protected_entity"] == "1"
+    client.close()
+
+
+def test_bad_request_error_exposes_json_payload(monkeypatch):
+    class BadRequestTransport(httpx.BaseTransport):
+        def handle_request(self, request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                400,
+                json={
+                    "scan_guid": "guid-400",
+                    "verdict": "Not Scanned",
+                    "verdict_details": {"reason": "Invalid protected entity"},
+                },
+            )
+
+    httpx_client = httpx.Client(transport=BadRequestTransport())
+    monkeypatch.setattr("dsxa_sdk_py.client.httpx.Client", lambda **kwargs: httpx_client)
+    client = DSXAClient(base_url="https://scanner.example.com")
+
+    with pytest.raises(BadRequestError) as excinfo:
+        client.scan_binary(b"data")
+
+    assert excinfo.value.payload == {
+        "scan_guid": "guid-400",
+        "verdict": "Not Scanned",
+        "verdict_details": {"reason": "Invalid protected entity"},
+    }
     client.close()
 
 

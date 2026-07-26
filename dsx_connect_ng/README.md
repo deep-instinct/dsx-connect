@@ -184,6 +184,7 @@ The scan, policy, remediation, delivery, and DIANNA workers currently run as que
   - it consumes `result_sink.emit.requested`
   - emits structured result events to the configured ResultSink
   - only `workflow_summary` deliveries advance `delivery_stage`
+  - future multi-destination delivery should be modeled as pub/sub fan-out: core publishes normalized result events once, and each destination owns a separate subscriber queue, retry policy, DLQ, credentials, and formatting
 - `dsx-connect-ng-delivery-worker` remains as a compatibility alias during the rename
 - in the local runtime manager, the service name is now `result-sink-worker`
 - `delivery-worker` remains accepted as a legacy service selector alias
@@ -212,9 +213,14 @@ Scan worker modes:
 - `dsxa` uses the real DSXA SDK path and requires:
   - `DSX_CONNECT_NG_SCANNER__BASE_URL`
   - optional `DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN`
-  - optional `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY`
+  - optional `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY`; set this only to a valid Deep Instinct protected entity id when your scanner deployment requires one. This is not the DSXA scanner `SCANNER_ID`.
   - optional `DSX_CONNECT_NG_SCANNER__VERIFY_TLS`
 - the current real scan path now goes through a worker-hosted reader abstraction
+- Per-connector default protected entity binding can be set on an integration with `config.scanner.protected_entity`.
+  Individual protected assets can override that default with `post_scan_policy.scanner.protected_entity`.
+  This is useful when DI protected entities are created ahead of time for repository boundaries such as a GCS project or a specific bucket/path.
+  A per-request `scan_options.protectedEntity` still takes precedence, then protected asset scope override, then connector default, then the global scanner setting.
+- DSX-Connect sends `X-Custom-Metadata` with scan context including source, object identity, content source, integration id/name/platform/platform key, scope id/name/type/mode/selector, job id, job item id, reader, connector endpoint, and any caller-provided custom metadata.
 - reader strategy is resolved in this order:
   - per-request override from `scan_options.readerStrategy` / `reader_strategy`
   - per-request override from `read_hint.readerStrategy` / `reader_strategy`

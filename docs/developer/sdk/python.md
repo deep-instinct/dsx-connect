@@ -17,7 +17,7 @@ DSXAClient(
     timeout: float | None = 30.0,
     verify_tls: bool | str = True,
     http_proxy: str | None = None,
-    default_protected_entity: int | None = 1,
+    default_protected_entity: int | None = None,
     default_metadata: str | None = None,
 )
 ```

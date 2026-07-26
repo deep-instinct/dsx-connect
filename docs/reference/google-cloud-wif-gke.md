@@ -15,6 +15,26 @@ The Google client libraries then resolve credentials through Application Default
 WIF is only authentication.
 The Google service account still needs IAM roles for the specific GCS, Pub/Sub, and Cloud Asset Inventory operations that DSX-Connect should perform.
 
+## Existing WIF Pools
+
+For GKE Workload Identity Federation for GKE, the connector normally uses the cluster project's managed workload pool:
+
+```text
+PROJECT_ID.svc.id.goog
+```
+
+That value is not a custom pool selected per connector.
+If the GKE cluster already has Workload Identity Federation enabled, reuse that existing managed pool by binding the connector Kubernetes service account to the connector Google service account.
+The binding member uses this shape:
+
+```text
+serviceAccount:PROJECT_ID.svc.id.goog[NAMESPACE/KSA_NAME]
+```
+
+For OpenShift, k3s, or other non-GKE Kubernetes clusters, you can use an existing Google IAM Workload Identity Pool and Provider, but that is the generic external Workload Identity Federation flow, not the GKE-managed metadata-server flow.
+In that model, mount the external account credential configuration JSON into the connector pod and set `GOOGLE_APPLICATION_CREDENTIALS` to that file.
+The GCS connector itself uses Google Application Default Credentials, so the runtime can work with GKE WIF, generic external WIF, or a mounted service account JSON key.
+
 ## Variables
 
 Set these values for the examples below:
@@ -228,7 +248,7 @@ It keeps `GOOGLE_APPLICATION_CREDENTIALS` unset so the connector uses ADC/WIF in
 Set the chart version to deploy:
 
 ```bash
-export GCS_VERSION="2.0.9"
+export GCS_VERSION="2.0.10"
 ```
 
 `GCS_VERSION` is used by the Helm commands below to select the Google Cloud Storage connector chart version from OCI.

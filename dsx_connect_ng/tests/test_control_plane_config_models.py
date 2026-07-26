@@ -28,6 +28,13 @@ def test_parse_integration_runtime_config_with_proxy_reader() -> None:
     assert config.reader.proxy.timeout_seconds == 15
 
 
+def test_parse_integration_runtime_config_with_scanner_binding() -> None:
+    config = parse_integration_runtime_config({"scanner": {"protected_entity": 77}})
+
+    assert config.scanner is not None
+    assert config.scanner.protected_entity == 77
+
+
 def test_resolve_policy_runtime_config_merges_scope_overrides() -> None:
     config = resolve_policy_runtime_config(
         {

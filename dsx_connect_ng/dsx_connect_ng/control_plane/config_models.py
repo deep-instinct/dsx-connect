@@ -32,6 +32,10 @@ class ReaderConfig(BaseModel):
     proxy: ProxyReaderConfig | None = None
 
 
+class ScannerRuntimeConfig(BaseModel):
+    protected_entity: int | None = Field(default=None, ge=1)
+
+
 class RemediationCapabilitiesConfig(BaseModel):
     supports_delete: bool = False
     supports_move: bool = False
@@ -99,6 +103,7 @@ class PolicyRuntimeConfig(BaseModel):
 class IntegrationRuntimeConfig(BaseModel):
     reader: ReaderConfig | None = None
     reader_strategy: ReaderStrategy | None = None
+    scanner: ScannerRuntimeConfig | None = None
     remediation: RemediationCapabilitiesConfig | None = None
     policy: PolicyRuntimeConfig | None = None
 

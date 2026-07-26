@@ -71,7 +71,7 @@ class ScannerSettings(BaseSettings):
     mode: ScannerMode = "stub"
     base_url: str = ""
     dsxa_auth_token: str | None = None
-    protected_entity: int | None = 1
+    protected_entity: int | None = None
     max_file_size_bytes: int = 2 * 1024 * 1024 * 1024
     verify_tls: bool = True
     timeout_seconds: float = 30.0

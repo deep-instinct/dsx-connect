@@ -7,6 +7,8 @@
 #   and remediation actions as needed.
 # - The Kubernetes service account is bound to the Google service account per
 #   Google Cloud's GKE Workload Identity Federation guidance.
+# - GKE uses the cluster project's managed workload pool, PROJECT_ID.svc.id.goog.
+#   Reuse that existing pool when the cluster already has WIF enabled.
 
 env:
   LOG_LEVEL: "debug"
@@ -43,7 +45,7 @@ serviceAccount:
 
 gcp:
   # Empty credentialsSecretName keeps GOOGLE_APPLICATION_CREDENTIALS unset.
-  # The Google client libraries resolve credentials through ADC/WIF.
+  # The Google client libraries resolve credentials through ADC and GKE WIF.
   credentialsSecretName: ""
 
 dataVolume:

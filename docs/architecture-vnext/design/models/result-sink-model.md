@@ -48,6 +48,69 @@ A ResultSink is not inherently responsible for:
 
 ---
 
+## Future Pub/Sub Result Event Model
+
+The RabbitMQ-backed implementation should treat result emission as event publication, not centralized result routing.
+
+Core should publish normalized result events once.
+Destination-specific workers should subscribe through their own queues.
+
+```mermaid
+flowchart LR
+    stages[Scan / policy / remediation / DIANNA stages]
+    outbox[Durable outbox]
+    exchange[RabbitMQ topic exchange<br/>dsx.ng.results]
+    audit[Queue: audit-jsonl]
+    webhook[Queue: webhook]
+    siem[Queue: siem]
+    mgmt[Queue: management-sync]
+
+    stages --> outbox
+    outbox --> exchange
+    exchange --> audit
+    exchange --> webhook
+    exchange --> siem
+    exchange --> mgmt
+```
+
+This is important because RabbitMQ does not fan out to multiple workers that share one queue.
+Workers sharing one queue compete for messages.
+For pub/sub fan-out, each destination that needs the event must have its own durable queue bound to the result exchange.
+
+Destination workers should own:
+
+- their queue binding
+- destination credentials
+- payload formatting and transforms
+- destination retry policy
+- destination DLQ handling
+- idempotency against the downstream system
+
+Core should not own:
+
+- per-destination branching logic
+- destination-specific credentials
+- destination-specific transport semantics
+- one global decision tree for where every result should go
+
+Candidate routing keys:
+
+- `result.scan.completed`
+- `result.scan.failed`
+- `result.policy.completed`
+- `result.remediation.completed`
+- `result.remediation.skipped`
+- `result.dianna.completed`
+- `result.workflow_summary.completed`
+
+Exact routing keys may evolve, but the design principle should remain stable:
+
+- one normalized event publication path
+- one subscriber-owned queue per destination
+- per-destination retry and DLQ behavior outside the core workflow engine
+
+---
+
 ## Event Families
 
 The ResultSink should support at least:
@@ -229,6 +292,44 @@ For example:
 - `workflow_summary` emission may align with later completion semantics
 - authoritative workflow state remains in Postgres-backed job/item/stage records
 
+## Relationship to Scanner Result Truth
+
+DSX-Connect is the source of truth for orchestration state, not for scanner-result history.
+
+For the current DSXA path:
+
+- DSXA produces the scan result
+- DSXA reports scanner-side outcomes to the Deep Instinct Management Console where applicable
+- the Deep Instinct Management Console remains the authoritative scanner-result console
+- DSX-Connect keeps job, connector, asset, policy, remediation, and troubleshooting context
+
+The Operator Console may show sample scan results and operational stage state, but those views are meant to answer operational questions about DSX-Connect execution.
+They should not be treated as a replacement for the Deep Instinct Management Console result history.
+
+If additional result destinations are needed later, add destination-specific subscriber workers rather than expanding core into a destination router.
+
+---
+
+## Per-Subscriber Delivery State
+
+Today, DSX-Connect has a `delivery_stage` / result-sink concept for outward result emission.
+That is useful while result emission is a single transitional path.
+
+In a pub/sub model, there may be many downstream destinations.
+A single global delivery state becomes ambiguous because one subscriber may succeed while another is retrying or dead-lettered.
+
+If operator visibility needs downstream status later, model it as per-subscriber state, for example:
+
+- subscriber id
+- destination type
+- last event id
+- last delivery state
+- retry count
+- DLQ state
+- last error
+
+This keeps the workflow item state separate from optional destination delivery outcomes.
+
 ---
 
 ## Open Questions
@@ -236,3 +337,5 @@ For example:
 - Should `workflow_summary` remain optional or become a standard event family?
 - Which default ResultSink should local development use?
 - Should DIANNA use a separate stronger-guarantee sink by default, or only when configured?
+- What exact result-event exchange and routing-key taxonomy should the RabbitMQ topology expose?
+- Which subscriber delivery states, if any, should be visible in the Operator Console?

@@ -57,6 +57,8 @@ env:
   # DSXA scanner mode.
   # "stub" is useful for control-plane smoke tests.
   # Use "dsxa" and set DSX_CONNECT_NG_SCANNER__BASE_URL when Kubernetes can reach a real DSXA scanner.
+  # Optional: set DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY only to a valid DI protected entity id.
+  # Do not set it to the DSXA scanner SCANNER_ID.
   DSX_CONNECT_NG_SCANNER__MODE: "stub"
   # DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 

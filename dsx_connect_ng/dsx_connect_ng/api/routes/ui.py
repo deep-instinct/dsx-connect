@@ -86,6 +86,15 @@ class UIJobItemStageSummary(BaseModel):
     remediation: str
     delivery: str
     dianna: str
+    scan_reason: str | None = None
+    policy_reason: str | None = None
+    remediation_reason: str | None = None
+    delivery_reason: str | None = None
+    dianna_reason: str | None = None
+    verdict: str | None = None
+    file_hash: str | None = None
+    file_type: str | None = None
+    scan_result: dict[str, Any] = Field(default_factory=dict)
     failure_reason: str | None = None
 
 
@@ -236,6 +245,9 @@ class UIProtectedAssetSummary(BaseModel):
     coverage_state: str = "unknown"
     matching_scope_id: str | None = None
     policy: dict[str, Any] = Field(default_factory=dict)
+    protected_entity: int | None = None
+    inherited_protected_entity: int | None = None
+    effective_protected_entity: int | None = None
     last_scan: dict[str, Any] | None = None
     findings: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -281,6 +293,10 @@ class UIToggleEnabledRequest(BaseModel):
     enabled: bool
 
 
+class UIScannerBindingUpdate(BaseModel):
+    protected_entity: int | None = Field(default=None, ge=1)
+
+
 class UIDemoSeedResponse(BaseModel):
     integrations: list[IntegrationRecord] = Field(default_factory=list)
     scopes: list[ProtectedScopeRecord] = Field(default_factory=list)
@@ -295,7 +311,17 @@ def _failure_reason_from_item(item: JobItemRecord) -> str | None:
     return str(error.get("reason") or error.get("code") or error.get("message") or "failed")
 
 
+def _stage_reason(stage: Any) -> str | None:
+    details = stage.error or stage.result or {}
+    if not isinstance(details, dict):
+        return None
+    reason = details.get("reason") or details.get("code") or details.get("message")
+    return str(reason) if reason else None
+
+
 def _summarize_job_item(item: JobItemRecord) -> UIJobItemStageSummary:
+    scan_result = item.scan_stage.result or {}
+    file_info = scan_result.get("file_info") or scan_result.get("fileInfo") or {}
     return UIJobItemStageSummary(
         job_item_id=item.job_item_id,
         object_identity=item.object_identity,
@@ -305,6 +331,15 @@ def _summarize_job_item(item: JobItemRecord) -> UIJobItemStageSummary:
         remediation=item.remediation_stage.state,
         delivery=item.delivery_stage.state,
         dianna=item.dianna_stage.state,
+        scan_reason=_stage_reason(item.scan_stage),
+        policy_reason=_stage_reason(item.policy_stage),
+        remediation_reason=_stage_reason(item.remediation_stage),
+        delivery_reason=_stage_reason(item.delivery_stage),
+        dianna_reason=_stage_reason(item.dianna_stage),
+        verdict=scan_result.get("verdict"),
+        file_hash=file_info.get("file_hash") or file_info.get("fileHash") or file_info.get("sha256"),
+        file_type=file_info.get("file_type") or file_info.get("fileType"),
+        scan_result=scan_result,
         failure_reason=_failure_reason_from_item(item),
     )
 
@@ -387,6 +422,17 @@ def _summarize_remediation(items: list[JobItemRecord]) -> UIScanResultRemediatio
     return summary
 
 
+def _scan_sample_items(items: list[JobItemRecord], *, limit: int = 10) -> list[JobItemRecord]:
+    def priority(item: JobItemRecord) -> tuple[int, int]:
+        if item.scan_stage.state == "completed":
+            return (0, item.item_index)
+        if item.state in {"accepted", "publish_pending", "queued", "scanning"} or item.scan_stage.state in {"pending", "running"}:
+            return (1, item.item_index)
+        return (2, item.item_index)
+
+    return sorted(items, key=priority)[:limit]
+
+
 def _scan_source_label(source: Any) -> str | None:
     raw = str(source or "").strip()
     if not raw:
@@ -446,7 +492,7 @@ def _summarize_scan_result(job_service: JobService, job: JobRecord, *, item_limi
         remediation=_summarize_remediation(items),
         started_at=job.created_at.isoformat(),
         finished_at=job.completed_at.isoformat() if job.completed_at is not None else None,
-        latest_items=[_summarize_job_item(item) for item in items[:5]],
+        latest_items=[_summarize_job_item(item) for item in _scan_sample_items(items, limit=10)],
         failure_reason=failure_reason,
     )
 
@@ -1219,6 +1265,20 @@ def _scope_policy(scopes_by_id: dict[str, ProtectedScopeRecord], scope_id: str |
     return scope.post_scan_policy if scope is not None else {}
 
 
+def _integration_protected_entity(integration: IntegrationRecord) -> int | None:
+    runtime = parse_integration_runtime_config(integration.config)
+    return runtime.scanner.protected_entity if runtime.scanner is not None else None
+
+
+def _scope_protected_entity(scopes_by_id: dict[str, ProtectedScopeRecord], scope_id: str | None) -> int | None:
+    policy = _scope_policy(scopes_by_id, scope_id)
+    scanner = policy.get("scanner") if isinstance(policy, dict) else None
+    if not isinstance(scanner, dict):
+        return None
+    value = scanner.get("protected_entity") or scanner.get("protectedEntity")
+    return int(value) if value not in (None, "") else None
+
+
 def _latest_jobs_by_scope(job_service: JobService, *, integration_ids: set[str], limit_per_integration: int = 200) -> dict[str, JobRecord]:
     latest: dict[str, JobRecord] = {}
     for integration_id in integration_ids:
@@ -1263,11 +1323,13 @@ def _summarize_protected_assets_for_integration(
     latest_jobs_by_scope: dict[str, JobRecord],
 ) -> list[UIProtectedAssetSummary]:
     assets: list[UIProtectedAssetSummary] = []
+    inherited_protected_entity = _integration_protected_entity(integration)
     for asset in asset_response.assets:
         last_scan, findings = _protected_asset_last_scan(
             job_service,
             latest_jobs_by_scope.get(asset.matching_scope_id or ""),
         )
+        protected_entity = _scope_protected_entity(scopes_by_id, asset.matching_scope_id)
         assets.append(
             UIProtectedAssetSummary(
                 integration_id=integration.integration_id,
@@ -1280,6 +1342,9 @@ def _summarize_protected_assets_for_integration(
                 coverage_state=asset.coverage_state,
                 matching_scope_id=asset.matching_scope_id,
                 policy=_scope_policy(scopes_by_id, asset.matching_scope_id),
+                protected_entity=protected_entity,
+                inherited_protected_entity=inherited_protected_entity,
+                effective_protected_entity=protected_entity or inherited_protected_entity,
                 last_scan=last_scan,
                 findings=findings,
                 metadata=asset.metadata,
@@ -1298,11 +1363,13 @@ def _summarize_scope_backed_protected_assets_for_integration(
     latest_jobs_by_scope: dict[str, JobRecord],
 ) -> list[UIProtectedAssetSummary]:
     assets: list[UIProtectedAssetSummary] = []
+    inherited_protected_entity = _integration_protected_entity(integration)
     for scope in scopes:
         last_scan, findings = _protected_asset_last_scan(
             job_service,
             latest_jobs_by_scope.get(scope.scope_id),
         )
+        protected_entity = _scope_protected_entity(scopes_by_id, scope.scope_id)
         assets.append(
             UIProtectedAssetSummary(
                 integration_id=integration.integration_id,
@@ -1315,6 +1382,9 @@ def _summarize_scope_backed_protected_assets_for_integration(
                 coverage_state="protected" if scope.enabled else "disabled",
                 matching_scope_id=scope.scope_id,
                 policy=_scope_policy(scopes_by_id, scope.scope_id),
+                protected_entity=protected_entity,
+                inherited_protected_entity=inherited_protected_entity,
+                effective_protected_entity=protected_entity or inherited_protected_entity,
                 last_scan=last_scan,
                 findings=findings,
                 metadata={"source": "protected_scope"},
@@ -1511,6 +1581,26 @@ async def update_ui_integration(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> IntegrationRecord:
     return control_plane.update_integration(integration_id, payload)
+
+
+@router.patch("/integrations/{integration_id}/scanner-binding", response_model=IntegrationRecord)
+async def update_ui_integration_scanner_binding(
+    integration_id: str,
+    payload: UIScannerBindingUpdate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> IntegrationRecord:
+    integration = control_plane.get_integration_or_404(integration_id)
+    config = dict(integration.config or {})
+    scanner = dict(config.get("scanner") or {})
+    if payload.protected_entity is None:
+        scanner.pop("protected_entity", None)
+    else:
+        scanner["protected_entity"] = payload.protected_entity
+    if scanner:
+        config["scanner"] = scanner
+    else:
+        config.pop("scanner", None)
+    return control_plane.update_integration(integration_id, IntegrationUpdate(config=config))
 
 
 @router.post("/integrations/{integration_id}/enabled", response_model=IntegrationRecord)
@@ -1733,6 +1823,26 @@ async def set_ui_scope_enabled(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> ProtectedScopeRecord:
     return control_plane.update_scope(scope_id, ProtectedScopeUpdate(enabled=payload.enabled))
+
+
+@router.patch("/scopes/{scope_id}/scanner-binding", response_model=ProtectedScopeRecord)
+async def update_ui_scope_scanner_binding(
+    scope_id: str,
+    payload: UIScannerBindingUpdate,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> ProtectedScopeRecord:
+    scope = control_plane.get_scope_or_404(scope_id)
+    policy = dict(scope.post_scan_policy or {})
+    scanner = dict(policy.get("scanner") or {})
+    if payload.protected_entity is None:
+        scanner.pop("protected_entity", None)
+    else:
+        scanner["protected_entity"] = payload.protected_entity
+    if scanner:
+        policy["scanner"] = scanner
+    else:
+        policy.pop("scanner", None)
+    return control_plane.update_scope(scope_id, ProtectedScopeUpdate(post_scan_policy=policy))
 
 
 @router.put("/scopes/{scope_id}/policy", response_model=ProtectedScopeRecord)

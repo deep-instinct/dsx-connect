@@ -245,6 +245,12 @@ DSX_CONNECT_NG_SCANNER__MODE=dsxa
 DSX_CONNECT_NG_SCANNER__BASE_URL=http://127.0.0.1:15000
 ```
 
+Do not copy the DSXA container `SCANNER_ID` into `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY`. `SCANNER_ID` registers the scanner itself with Deep Instinct, while `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY` is an optional per-scan protected entity header. Leave it unset unless you have a specific protected entity id from the management console.
+
+When an operator creates a protected entity in the Deep Instinct console for a repository boundary, bind that id in DSX-Connect instead of setting a global scanner default. In the Operator Console, use **Assets > Connectors > Default Protected Entity** for the connector-level default, and **Assets > Protected > Protected Entity** to override it for an individual protected asset. At scan time, DSX-Connect resolves the value in this order: per-request scan option, protected asset `post_scan_policy.scanner.protected_entity`, connector `config.scanner.protected_entity`, then the global `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY` setting.
+
+DSX-Connect also sends `X-Custom-Metadata` to DSXA with connector and scan context: source, object identity, content source, integration id/name/platform/platform key, scope id/name/type/mode/selector, job id, job item id, reader, connector endpoint, and any caller-provided custom metadata.
+
 For Kubernetes deployments, deploy DSXA separately or use an existing DSXA endpoint and set:
 
 ```yaml
@@ -278,9 +284,9 @@ Update to explicit released versions:
 
 ```bash
 scripts/dsx-connect-ng/update-lab-stack.sh \
-  --connect-version 2.0.14 \
-  --gcs-version 2.0.9 \
-  --filesystem-version 2.0.7 \
+  --connect-version 2.0.15 \
+  --gcs-version 2.0.10 \
+  --filesystem-version 2.0.8 \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
   --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
   --filesystem-values ~/.dsx-connect-lab/filesystem-values.yaml

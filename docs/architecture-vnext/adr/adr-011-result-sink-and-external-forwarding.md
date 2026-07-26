@@ -143,6 +143,68 @@ This means the old idea of a "delivery worker" evolves into a narrower concern:
 - emitting a structured event to the configured sink
 - not acting as a general-purpose multi-destination forwarder
 
+## 2026 Addendum: Publish Result Events, Do Not Centralize Result Routing
+
+The future RabbitMQ-based implementation should preserve the same boundary.
+
+DSX-Connect should publish normalized result events once, then allow independent destination workers to subscribe to those events.
+It should not grow one central result worker with destination-specific decision logic such as:
+
+- send this result to SIEM
+- send this result to webhook
+- send this result to audit storage
+- send this result to a customer-specific exporter
+- send this result to a Deep Instinct management-plane sync path
+
+That shape recreates the destination-aware forwarding subsystem rejected by this ADR.
+
+The intended future pattern is:
+
+1. scan, policy, remediation, and DIANNA stages persist authoritative DSX-Connect workflow state
+2. result-worthy changes are recorded through the durable outbox
+3. the relay publishes normalized result events to a RabbitMQ topic exchange
+4. each destination owns its own durable queue bound to the relevant routing keys
+5. each destination-specific worker consumes only its queue and owns its own retries, DLQ, credentials, formatting, and downstream delivery semantics
+
+RabbitMQ queue ownership matters here.
+Multiple consumers on the same queue compete for messages.
+For pub/sub fan-out, every destination that needs a copy must have its own queue bound to the result-event exchange.
+
+Example:
+
+```text
+outbox
+  -> dsx.ng.results exchange
+       -> queue: dsx.ng.results.audit-jsonl
+       -> queue: dsx.ng.results.webhook.customer-a
+       -> queue: dsx.ng.results.siem
+       -> queue: dsx.ng.results.management-sync
+```
+
+This keeps core responsible for event production and keeps destination behavior independently deployable.
+
+## Source-of-Truth Boundary
+
+DSX-Connect is not intended to replace the scanner or the Deep Instinct Management Console as the authoritative scanner-result system.
+
+For now:
+
+- DSXA produces the scanner result
+- DSXA reports scanner-side outcomes to the Deep Instinct Management Console where applicable
+- the Deep Instinct Management Console remains the source of truth for scanner-result history
+- DSX-Connect stores operational workflow state, job progress, connector context, policy/remediation state, and sampled result visibility
+
+The DSX-Connect Operator Console should therefore be treated as an operational console, not the definitive scanner-result console.
+It is useful for answering questions such as:
+
+- what connector or asset produced this scan
+- what job submitted it
+- whether the item was read, scanned, skipped, remediated, or failed
+- what sample results are visible for troubleshooting
+- which worker stage is stuck or unhealthy
+
+If future subscriber workers sync results into additional systems, those workers should be modeled as subscribers to normalized result events, not as extra branches inside the central workflow engine.
+
 ## ResultSink Contract Direction
 
 The ResultSink should support emitting structured JSON events for:
@@ -203,6 +265,8 @@ As a result of this decision:
 - rsyslog becomes a documented reference pattern, not a hard dependency
 - result routing policy shifts from application delivery rules to sink/agent configuration
 - stronger guarantees for selected event families should be modeled as specialized ResultSink implementations
+- future RabbitMQ fan-out should use one destination-owned queue per subscriber, not a shared result queue with competing destination workers
+- destination delivery status, if surfaced later, should be tracked per subscriber rather than collapsed into one global delivery stage
 
 ## Follow-On Work
 
@@ -211,6 +275,8 @@ As a result of this decision:
 3. document rsyslog example ingestion and forwarding patterns
 4. decide whether the current delivery worker should become a ResultSink emitter component
 5. define when, if ever, a stronger-guarantee ResultSink is required for DIANNA
+6. define the RabbitMQ result-event exchange, routing keys, subscriber queue naming, and per-subscriber DLQ conventions
+7. decide how much per-subscriber delivery state belongs in DSX-Connect operator visibility
 
 ## Summary
 

@@ -171,6 +171,10 @@ nav:
 
   - DSX-Connect 2:
       - Overview: dsx-connect-2/index.md
+      - Architecture:
+          - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
+          - Result Sink Examples: architecture-vnext/design/result-sink-examples.md
+          - ADR 011 Result Sink and External Forwarding: architecture-vnext/adr/adr-011-result-sink-and-external-forwarding.md
       - Deployment:
           - Overview: dsx-connect-2/deployment/index.md
           - Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md

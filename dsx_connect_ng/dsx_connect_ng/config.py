@@ -114,6 +114,15 @@ class RecoverySettings(BaseSettings):
     prefer_item_mode_for_archives: bool = True
 
 
+class RuntimeSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DSX_CONNECT_NG_RUNTIME__",
+        extra="ignore",
+    )
+
+    scan_worker_replicas: int | None = Field(default=None, ge=0)
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="DSX_CONNECT_NG__",
@@ -138,6 +147,7 @@ class AppSettings(BaseSettings):
     readers: ReaderSettings = Field(default_factory=ReaderSettings)
     result_sink: ResultSinkSettings = Field(default_factory=ResultSinkSettings)
     recovery: RecoverySettings = Field(default_factory=RecoverySettings)
+    runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
 
 
 settings = AppSettings()

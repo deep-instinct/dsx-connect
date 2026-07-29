@@ -26,6 +26,8 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- define "dsx-connect.env" -}}
 - name: PYTHONUNBUFFERED
   value: "1"
+- name: DSX_CONNECT_NG_RUNTIME__SCAN_WORKER_REPLICAS
+  value: {{ .Values.workers.scan.replicaCount | quote }}
 {{- range $key, $val := .Values.env }}
 - name: {{ $key }}
   value: {{ $val | quote }}

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from copy import deepcopy
+
 from fastapi import HTTPException, status
 from pydantic import ValidationError
 
@@ -92,6 +94,34 @@ class ControlPlaneService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="integration_not_found")
         return row
 
+    def _default_reader_config_for_connector(self, payload: ConnectorInstanceRegister) -> dict:
+        normalized_base_url = payload.base_url.rstrip("/")
+        return {
+            "default_strategy": "proxy",
+            "proxy": {
+                "endpoint_url": f"{normalized_base_url}/read_file",
+                "base_url": normalized_base_url,
+                "connector_name": payload.connector_name,
+            },
+        }
+
+    def _ensure_reader_config_for_connector_registration(
+        self,
+        integration: IntegrationRecord,
+        payload: ConnectorInstanceRegister,
+    ) -> IntegrationRecord:
+        if not bool(payload.capabilities.get("read", False)):
+            return integration
+
+        runtime = parse_integration_runtime_config(integration.config)
+        if runtime.reader is not None or runtime.reader_strategy is not None:
+            return integration
+
+        config = deepcopy(integration.config)
+        config["reader"] = self._default_reader_config_for_connector(payload)
+        self._validate_integration_config(config)
+        return self.update_integration(integration.integration_id, IntegrationUpdate(config=config))
+
     def _integration_for_connector_registration(self, payload: ConnectorInstanceRegister) -> IntegrationRecord:
         if payload.integration_id:
             integration = self.get_integration_or_404(payload.integration_id)
@@ -105,11 +135,11 @@ class ControlPlaneService:
                         "integration_platform_key": integration.platform_key,
                     },
                 )
-            return integration
+            return self._ensure_reader_config_for_connector_registration(integration, payload)
 
         for existing in self.repo.list_integrations():
             if existing.platform == payload.platform and existing.platform_key == payload.platform_key:
-                return existing
+                return self._ensure_reader_config_for_connector_registration(existing, payload)
 
         return self.repo.create_integration(
             IntegrationCreate(
@@ -121,7 +151,11 @@ class ControlPlaneService:
                 capability_enumerate=bool(payload.capabilities.get("enumerate", payload.capabilities.get("discover", False))),
                 capability_read=bool(payload.capabilities.get("read", False)),
                 capability_remediate=bool(payload.capabilities.get("remediate", False)),
-                config={},
+                config={
+                    "reader": self._default_reader_config_for_connector(payload),
+                }
+                if bool(payload.capabilities.get("read", False))
+                else {},
             )
         )
 
@@ -148,6 +182,23 @@ class ControlPlaneService:
         row = self.repo.update_connector_instance_heartbeat(connector_instance_id, payload)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="connector_instance_not_found")
+        integration = self.get_integration_or_404(row.integration_id)
+        self._ensure_reader_config_for_connector_registration(
+            integration,
+            ConnectorInstanceRegister(
+                connector_instance_id=row.connector_instance_id,
+                integration_id=row.integration_id,
+                platform=row.platform,
+                platform_key=row.platform_key,
+                connector_name=row.connector_name,
+                connector_version=row.connector_version,
+                base_url=row.base_url,
+                capabilities=row.capabilities,
+                health=row.health,
+                labels=row.labels,
+                lease_seconds=row.lease_seconds,
+            ),
+        )
         return row
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:

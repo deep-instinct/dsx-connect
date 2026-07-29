@@ -69,6 +69,105 @@ def test_register_connector_instance_creates_logical_integration() -> None:
     assert integrations[0].capability_discover is True
     assert integrations[0].capability_read is True
     assert integrations[0].capability_remediate is True
+    assert integrations[0].config["reader"]["default_strategy"] == "proxy"
+    assert integrations[0].config["reader"]["proxy"]["endpoint_url"] == "http://gcs:80/read_file"
+    assert integrations[0].config["reader"]["proxy"]["base_url"] == "http://gcs:80"
+    assert integrations[0].config["reader"]["proxy"]["connector_name"] == "google-cloud-storage-connector"
+
+
+def test_register_connector_instance_backfills_reader_config_for_existing_empty_integration() -> None:
+    service = build_service()
+    integration = service.create_integration(
+        IntegrationCreate(
+            platform="filesystem",
+            platform_key="host-a",
+            display_name="Host A",
+            config={},
+        )
+    )
+
+    service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="fs-pod-1",
+            integration_id=integration.integration_id,
+            platform="filesystem",
+            platform_key="host-a",
+            connector_name="filesystem-connector",
+            base_url="http://filesystem-filesystem-connector/filesystem-connector",
+            capabilities={"discover": True, "read": True},
+        )
+    )
+
+    updated = service.get_integration_or_404(integration.integration_id)
+    assert updated.config["reader"]["default_strategy"] == "proxy"
+    assert (
+        updated.config["reader"]["proxy"]["endpoint_url"]
+        == "http://filesystem-filesystem-connector/filesystem-connector/read_file"
+    )
+    assert updated.config["reader"]["proxy"]["base_url"] == "http://filesystem-filesystem-connector/filesystem-connector"
+    assert updated.config["reader"]["proxy"]["connector_name"] == "filesystem-connector"
+
+
+def test_register_connector_instance_preserves_existing_reader_config() -> None:
+    service = build_service()
+    integration = service.create_integration(
+        IntegrationCreate(
+            platform="gcs",
+            platform_key="project-a",
+            display_name="Project A",
+            config={"reader": {"default_strategy": "native"}},
+        )
+    )
+
+    service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            integration_id=integration.integration_id,
+            platform="gcs",
+            platform_key="project-a",
+            connector_name="google-cloud-storage-connector",
+            base_url="http://gcs:80",
+            capabilities={"discover": True, "read": True},
+        )
+    )
+
+    updated = service.get_integration_or_404(integration.integration_id)
+    assert updated.config == {"reader": {"default_strategy": "native"}}
+
+
+def test_connector_heartbeat_backfills_reader_config_for_existing_empty_integration() -> None:
+    service = build_service()
+    integration = service.create_integration(
+        IntegrationCreate(
+            platform="gcs",
+            platform_key="project-a",
+            display_name="Project A",
+            config={},
+        )
+    )
+    service.register_connector_instance(
+        ConnectorInstanceRegister(
+            connector_instance_id="gcs-pod-1",
+            integration_id=integration.integration_id,
+            platform="gcs",
+            platform_key="project-a",
+            connector_name="google-cloud-storage-connector",
+            base_url="http://gcs-google-cloud-storage-connector/google-cloud-storage-connector",
+            capabilities={"discover": True},
+        )
+    )
+
+    service.heartbeat_connector_instance(
+        "gcs-pod-1",
+        ConnectorInstanceHeartbeat(capabilities={"discover": True, "read": True}),
+    )
+
+    updated = service.get_integration_or_404(integration.integration_id)
+    assert updated.config["reader"]["default_strategy"] == "proxy"
+    assert (
+        updated.config["reader"]["proxy"]["endpoint_url"]
+        == "http://gcs-google-cloud-storage-connector/google-cloud-storage-connector/read_file"
+    )
 
 
 def test_register_connector_instance_reuses_existing_integration_and_heartbeat_updates_status() -> None:

@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import HTTPException
 
-from dsx_connect_ng.config import RecoverySettings
+from dsx_connect_ng.config import RecoverySettings, RuntimeSettings
 from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneRepository
@@ -367,6 +367,23 @@ def test_submit_batch_job_can_defer_publish_to_outbox_relay() -> None:
     assert refreshed.job.error is None
     assert refreshed.item_summary.queued == 2
     assert len(bus.snapshot()) == 2
+
+
+def test_submit_batch_job_snapshots_runtime_scan_worker_replicas() -> None:
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus, runtime_settings=RuntimeSettings(scan_worker_replicas=4))
+
+    created = asyncio.run(
+        service.submit_batch_job(
+            BatchJobSubmitRequest(
+                payload={"source": "ui_scope_scan"},
+                items=[{"object_identity": "/finance/a.pdf"}],
+            )
+        )
+    )
+
+    assert created.job.payload["dsxConnectRuntimeSnapshot"]["scanWorkerReplicas"] == 4
 
 
 def test_flush_outbox_uses_bulk_state_updates_for_low_persistence_scan_only_batch() -> None:

@@ -3148,6 +3148,7 @@
       const findings = result.findings || {};
       const remediation = result.remediation || {};
       const stats = result.stats || {};
+      const runtime = result.job?.payload?.dsxConnectRuntimeSnapshot || {};
       const processed = Number(progress.terminal_items || 0);
       const total = Number(progress.total_items || 0);
       const succeeded = Number(progress.completed_items || 0);
@@ -3170,6 +3171,7 @@
         skipped,
         cancelled,
         successPct,
+        scanWorkerReplicas: runtime.scanWorkerReplicas,
         jobTime: stats.job_elapsed_seconds,
         totalBytes: stats.total_bytes,
         requestBps,
@@ -3208,6 +3210,7 @@
         "skipped",
         "cancelled",
         "success_pct",
+        "scan_worker_replicas",
         "job_time_seconds",
         "total_bytes",
         "job_bytes_per_second",
@@ -3242,6 +3245,7 @@
           row.skipped,
           row.cancelled,
           row.successPct === null ? "" : formatNumber(row.successPct, 3),
+          row.scanWorkerReplicas ?? "",
           row.jobTime ?? "",
           row.totalBytes ?? "",
           row.requestBps || "",
@@ -3333,6 +3337,7 @@
           { key: "state", label: "State", render: (row) => `<span class="${pillClass(row.job.state)}">${escapeHtml(row.job.state)}</span>` },
           { key: "processed", label: "Processed", render: (row) => `${row.processed}${row.total ? ` / ${row.total}` : ""}` },
           { key: "success", label: "Success %", render: (row) => row.successPct === null ? "" : `${formatNumber(row.successPct, 1)}%` },
+          { key: "scanWorkers", label: "Scan workers", render: (row) => row.scanWorkerReplicas ?? "" },
           { key: "jobTime", label: "Job Time", render: (row) => formatDurationSec(row.jobTime) },
           { key: "bytes", label: "Bytes", render: (row) => formatBytes(row.totalBytes) },
           { key: "jobBps", label: "Job bytes/sec", render: (row) => formatRateBps(row.requestBps) },
@@ -4362,6 +4367,7 @@
           await scanScope(scan.dataset.scope);
         } catch (error) {
           alert(`Scan failed: ${error.message}`);
+        } finally {
           scan.disabled = false;
         }
         return;

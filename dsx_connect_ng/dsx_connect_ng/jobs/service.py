@@ -7,7 +7,7 @@ import uuid
 
 from fastapi import HTTPException, status
 
-from dsx_connect_ng.config import RecoverySettings
+from dsx_connect_ng.config import RecoverySettings, RuntimeSettings
 from dsx_connect_ng.control_plane.config_models import resolve_policy_runtime_config
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.bus import JobBus
@@ -59,11 +59,13 @@ class JobService:
         bus: JobBus,
         control_plane: ControlPlaneService | None = None,
         recovery_settings: RecoverySettings | None = None,
+        runtime_settings: RuntimeSettings | None = None,
     ) -> None:
         self.repo = repo
         self.bus = bus
         self.control_plane = control_plane
         self.recovery_settings = recovery_settings or RecoverySettings()
+        self.runtime_settings = runtime_settings or RuntimeSettings()
 
     def _resolve_effective_recovery_mode(self, requested_mode: RecoveryMode | None) -> tuple[ResolvedRecoveryMode, dict]:
         configured_mode = self.recovery_settings.mode
@@ -87,6 +89,11 @@ class JobService:
             "checkpointEverySeconds": self.recovery_settings.checkpoint_every_seconds,
             "largeObjectThresholdBytes": self.recovery_settings.large_object_threshold_bytes,
             "preferItemModeForArchives": self.recovery_settings.prefer_item_mode_for_archives,
+        }
+
+    def _runtime_snapshot(self) -> dict:
+        return {
+            "scanWorkerReplicas": self.runtime_settings.scan_worker_replicas,
         }
 
     def _validate_control_plane_references(
@@ -1752,7 +1759,10 @@ class JobService:
                 scope_id=payload.scope_id,
                 object_identity=payload.object_identity,
                 idempotency_key=payload.idempotency_key,
-                payload=payload.payload,
+                payload={
+                    **payload.payload,
+                    "dsxConnectRuntimeSnapshot": self._runtime_snapshot(),
+                },
             )
         )
         queued_envelope = created.as_envelope(state_override="queued")
@@ -1795,6 +1805,7 @@ class JobService:
                     "recoveryModeRequested": payload.recovery_mode,
                     "effectiveRecoveryMode": effective_recovery_mode,
                     "recoveryPolicySnapshot": recovery_policy_snapshot,
+                    "dsxConnectRuntimeSnapshot": self._runtime_snapshot(),
                 },
             )
         )

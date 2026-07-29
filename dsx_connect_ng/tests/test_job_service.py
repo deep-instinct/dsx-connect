@@ -7,9 +7,9 @@ from dsx_connect_ng.control_plane.models import IntegrationCreate, ProtectedScop
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.control_plane.repository import InMemoryControlPlaneRepository
 from dsx_connect_ng.jobs.bus import InMemoryJobBus, JobBus
-from dsx_connect_ng.jobs.contracts import MessageEnvelope
+from dsx_connect_ng.jobs.contracts import MessageEnvelope, PolicyEvaluationRequested
 
-from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobCreate, JobSubmitRequest, PolicyDecision, RemediationRequest, ScanResult, StageUpdateRequest
+from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, DeliveryRequest, DiannaAnalysisRequest, JobCreate, JobItemCreate, JobSubmitRequest, PolicyDecision, RemediationRequest, ScanResult, StageRecord, StageUpdateRequest
 from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 
@@ -244,6 +244,64 @@ def test_publish_outbox_record_claim_prevents_duplicate_publish() -> None:
     assert second_published is True
     assert second_record.publish_state == "published"
     assert len(bus.snapshot()) == 1
+
+
+def test_policy_publish_success_does_not_overwrite_completed_policy_stage() -> None:
+    repo = InMemoryJobRepository()
+    service_holder = {}
+
+    async def complete_policy_during_publish(envelope: MessageEnvelope) -> None:
+        if envelope.message_type != "policy_evaluation_requested":
+            return
+        service = service_holder["service"]
+        await service.advance_policy_stage(
+            envelope.job_item_id,
+            StageUpdateRequest(
+                state="completed",
+                result={
+                    "policy_stage_result": {"policy_id": "policy-1"},
+                    "remediation": {"state": "skipped", "reason": "benign_verdict"},
+                    "dianna": {"state": "skipped", "reason": "not_auto_requested"},
+                    "delivery": {"request_now": False, "wait_for_dianna": False},
+                    "content_preservation": {"mode": "none", "reason": "not_needed"},
+                    "result_delivery_policy": {"scan": "never", "remediation": "never", "dianna": "never"},
+                },
+            ),
+        )
+
+    bus = CallbackJobBus(complete_policy_during_publish)
+    service = JobService(repo=repo, bus=bus)
+    service_holder["service"] = service
+    job = repo.create_job(JobCreate(job_type="scan.batch", state="queued"))
+    item = repo.create_job_item(
+        JobItemCreate(
+            job_id=job.job_id,
+            item_index=0,
+            object_identity="/finance/good.pdf",
+            state="scanned",
+            scan_stage=StageRecord(state="completed", result={"verdict": "Benign", "scanGuid": "scan-1"}),
+        )
+    )
+    message = PolicyEvaluationRequested(
+        job_id=job.job_id,
+        job_item_id=item.job_item_id,
+        object_identity=item.object_identity,
+        scan_result=ScanResult(verdict="Benign", scanGuid="scan-1"),
+    )
+    outbox = repo.create_outbox_record(
+        job=job,
+        topic="policy.requested",
+        payload=message.as_envelope().model_dump(mode="json"),
+    )
+
+    published, _ = asyncio.run(service._publish_outbox_record(outbox))
+
+    assert published is True
+    current = service.get_job_item_or_404(item.job_item_id)
+    assert current.state == "completed"
+    assert current.policy_stage.state == "completed"
+    assert current.remediation_stage.state == "skipped"
+    assert service.get_batch_job_or_404(job.job_id).job.state == "completed"
 
 
 def test_submit_batch_job_creates_parent_and_items() -> None:

@@ -1292,6 +1292,7 @@ class JobService:
         )
         if updated is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job_item_not_found")
+        self._refresh_parent_job_state(current.job_id)
         return updated
 
     @staticmethod
@@ -1640,36 +1641,20 @@ class JobService:
         if envelope.job_item_id and update_item_stage:
             current_item = None if low_persistence_scan_only else self.repo.get_job_item(envelope.job_item_id)
             refresh_parent = True
-            if isinstance(envelope, MessageEnvelope) and envelope.message_type == "policy_evaluation_requested" and current_item is not None:
-                stage = current_item.policy_stage.model_copy(update={"error": None})
-                self.repo.update_job_item_stage(
-                    envelope.job_item_id,
-                    stage_name="policy_stage",
-                    stage_record=stage,
-                    state=current_item.state,
-                    error=current_item.error,
-                    completed_at=current_item.completed_at,
-                )
-            elif isinstance(envelope, MessageEnvelope) and envelope.message_type == "dianna_analysis_requested" and current_item is not None:
-                stage = current_item.dianna_stage.model_copy(update={"error": None})
-                self.repo.update_job_item_stage(
-                    envelope.job_item_id,
-                    stage_name="dianna_stage",
-                    stage_record=stage,
-                    state=current_item.state,
-                    error=current_item.error,
-                    completed_at=current_item.completed_at,
-                )
-            elif isinstance(envelope, MessageEnvelope) and envelope.message_type in {"result_sink_emit_requested", "result_delivery_requested"} and current_item is not None:
-                stage = current_item.delivery_stage.model_copy(update={"error": None})
-                self.repo.update_job_item_stage(
-                    envelope.job_item_id,
-                    stage_name="delivery_stage",
-                    stage_record=stage,
-                    state=current_item.state,
-                    error=current_item.error,
-                    completed_at=current_item.completed_at,
-                )
+            if (
+                isinstance(envelope, MessageEnvelope)
+                and envelope.message_type
+                in {
+                    "policy_evaluation_requested",
+                    "dianna_analysis_requested",
+                    "result_sink_emit_requested",
+                    "result_delivery_requested",
+                }
+                and current_item is not None
+            ):
+                # The worker owns stage transitions after delivery; rewriting a
+                # pre-publish snapshot here can race and regress completed work.
+                pass
             elif isinstance(envelope, MessageEnvelope) and envelope.message_type == "scan_item_requested":
                 refresh_parent = False
             else:

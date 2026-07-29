@@ -54,7 +54,7 @@ def test_register_connector_instance_creates_logical_integration() -> None:
             display_name="Project A",
             connector_name="google-cloud-storage-connector",
             connector_version="0.5.55",
-            base_url="http://gcs:80",
+            base_url="http://0.0.0.0:8595/google-cloud-storage-connector",
             capabilities={"discover": True, "read": True, "write": True, "remediate": True},
             health="healthy",
             labels={"namespace": "dsx-connect"},
@@ -70,8 +70,11 @@ def test_register_connector_instance_creates_logical_integration() -> None:
     assert integrations[0].capability_read is True
     assert integrations[0].capability_remediate is True
     assert integrations[0].config["reader"]["default_strategy"] == "proxy"
-    assert integrations[0].config["reader"]["proxy"]["endpoint_url"] == "http://gcs:80/read_file"
-    assert integrations[0].config["reader"]["proxy"]["base_url"] == "http://gcs:80"
+    assert (
+        integrations[0].config["reader"]["proxy"]["endpoint_url"]
+        == "http://127.0.0.1:8595/google-cloud-storage-connector/read_file"
+    )
+    assert integrations[0].config["reader"]["proxy"]["base_url"] == "http://127.0.0.1:8595/google-cloud-storage-connector"
     assert integrations[0].config["reader"]["proxy"]["connector_name"] == "google-cloud-storage-connector"
 
 

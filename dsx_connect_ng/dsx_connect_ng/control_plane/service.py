@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import HTTPException, status
 from pydantic import ValidationError
@@ -36,6 +37,16 @@ def selectors_overlap(scope_type: str, left: str, right: str) -> bool:
     left_prefix = left.rstrip("/") + "/"
     right_prefix = right.rstrip("/") + "/"
     return left.startswith(right_prefix) or right.startswith(left_prefix)
+
+
+def normalize_registered_connector_base_url(base_url: str) -> str:
+    parsed = urlparse(base_url)
+    if parsed.hostname not in {"0.0.0.0", "::"}:
+        return base_url
+    netloc = "127.0.0.1"
+    if parsed.port is not None:
+        netloc = f"{netloc}:{parsed.port}"
+    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
 class ControlPlaneService:
@@ -95,7 +106,7 @@ class ControlPlaneService:
         return row
 
     def _default_reader_config_for_connector(self, payload: ConnectorInstanceRegister) -> dict:
-        normalized_base_url = payload.base_url.rstrip("/")
+        normalized_base_url = normalize_registered_connector_base_url(payload.base_url).rstrip("/")
         return {
             "default_strategy": "proxy",
             "proxy": {

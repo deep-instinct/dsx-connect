@@ -962,17 +962,42 @@ def test_ui_scan_results_returns_operator_summary() -> None:
             result={
                 "verdict": "Benign",
                 "scanGuid": "scan-clean",
+                "scanDurationUs": 1000,
                 "fileInfo": {"file_hash": "sha256-clean", "file_type": "pdf"},
+            },
+            metadata={
+                "contentLength": 1000,
+                "requestElapsedMs": 20,
+                "readElapsedMs": 5,
+                "dsxaElapsedMs": 10,
             },
         ),
     )
     job_service.complete_scan_only(
         malicious.job_item_id,
-        StageUpdateRequest(state="completed", result={"verdict": "Malicious", "scanGuid": "scan-malicious"}),
+        StageUpdateRequest(
+            state="completed",
+            result={"verdict": "Malicious", "scanGuid": "scan-malicious", "scanDurationUs": 3000},
+            metadata={
+                "contentLength": 3000,
+                "requestElapsedMs": 30,
+                "readElapsedMs": 6,
+                "dsxaElapsedMs": 15,
+            },
+        ),
     )
     job_service.complete_scan_only(
         not_scanned.job_item_id,
-        StageUpdateRequest(state="completed", result={"verdict": "Not Scanned", "scanGuid": "scan-not-scanned"}),
+        StageUpdateRequest(
+            state="completed",
+            result={"verdict": "Not Scanned", "scanGuid": "scan-not-scanned", "scanDurationUs": 2000},
+            metadata={
+                "contentLength": 2000,
+                "requestElapsedMs": 10,
+                "readElapsedMs": 4,
+                "dsxaElapsedMs": 8,
+            },
+        ),
     )
     job_service.update_remediation_stage(
         malicious.job_item_id,
@@ -999,6 +1024,16 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     assert result["findings"]["not_scanned"] == 1
     assert result["findings"]["unknown"] == 1
     assert result["findings"]["sampled_items"] == 4
+    assert result["stats"]["total_bytes"] == 6000
+    assert result["stats"]["measured_items"] == 3
+    assert result["stats"]["avg_bytes_per_file"] == 2000.0
+    assert result["stats"]["avg_request_ms"] == 20.0
+    assert result["stats"]["avg_read_ms"] == 5.0
+    assert result["stats"]["avg_dsxa_ms"] == 11.0
+    assert result["stats"]["avg_engine_ms"] == 2.0
+    assert result["stats"]["scan_bytes_per_second"] == 1000000.0
+    assert result["stats"]["request_bytes_per_second"] == 100000.0
+    assert result["stats"]["scan_ms_per_byte"] == 0.001
     assert result["latest_items"][0]["verdict"] == "Benign"
     assert result["latest_items"][0]["file_hash"] == "sha256-clean"
     assert result["latest_items"][0]["file_type"] == "pdf"
@@ -1007,9 +1042,14 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     assert result["latest_items"][0]["scan_result"] == {
         "verdict": "Benign",
         "scanGuid": "scan-clean",
+        "scanDurationUs": 1000,
         "fileInfo": {"file_hash": "sha256-clean", "file_type": "pdf"},
     }
     assert result["remediation"]["completed"] == 1
+    assert payload["stats"]["jobs"] == 1
+    assert payload["stats"]["total_bytes"] == 6000
+    assert payload["stats"]["avg_file_size_bytes"] == 2000.0
+    assert payload["stats"]["avg_request_ms"] == 20.0
     assert result["cancel"]["mode"] == "cooperative"
     assert result["cancel"]["immediate_file_level_cancel"] is False
     assert "in-memory scan batch" in result["cancel"]["message"]

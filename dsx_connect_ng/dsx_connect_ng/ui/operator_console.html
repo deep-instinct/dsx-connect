@@ -545,10 +545,14 @@
       grid-template-rows: auto minmax(0, 1fr) auto;
     }
 
-    #view-scan-results:not(.hidden),
     #view-policy:not(.hidden) {
       display: grid;
       grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+
+    #view-scan-results:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
     }
 
     #asset-pane-connectors:not(.hidden) {
@@ -610,6 +614,13 @@
       color: var(--muted);
       font-size: var(--font-size-sm);
       font-weight: var(--font-weight-normal);
+    }
+
+    .poll-countdown {
+      min-width: 76px;
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      font-variant-numeric: tabular-nums;
     }
 
     .icon-button {
@@ -948,6 +959,95 @@
 
     .protected-summary .metric-row {
       padding: 0;
+    }
+
+    .scan-stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-8);
+      padding: 0 var(--space-8) var(--space-5);
+      color: var(--muted);
+    }
+
+    .scan-compare-wrap {
+      display: grid;
+      gap: var(--space-3);
+      padding: 0 var(--space-8) var(--space-6);
+      min-height: 0;
+    }
+
+    .scan-compare-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .scan-compare-note {
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .compact-table-wrap {
+      max-height: 240px;
+    }
+
+    #scan-compare-table {
+      min-width: 1480px;
+    }
+
+    #scan-compare-table td,
+    #scan-compare-table th {
+      white-space: nowrap;
+    }
+
+    .scan-compare-empty {
+      justify-content: flex-start;
+      padding-left: 0;
+      text-align: left;
+    }
+
+    .select-cell {
+      width: 36px;
+      text-align: center;
+    }
+
+    .select-cell input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+
+    .compare-button {
+      position: relative;
+    }
+
+    .compare-button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--surface-strong);
+    }
+
+    .icon-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--surface);
+      border-radius: var(--radius-pill);
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 10px;
+      line-height: 1;
+      font-weight: var(--font-weight-strong);
+      text-align: center;
+      z-index: 1;
     }
 
     .metric {
@@ -1566,12 +1666,10 @@
         <section class="view hidden" id="view-scan-results">
           <div class="view-heading">
             <h2>Scan Results</h2>
-            <p>Job progress, findings, remediation, and cooperative cancel behavior.</p>
+            <p>Job progress, findings, remediation, and scan statistics and comparisons.</p>
           </div>
+          <div class="scan-stats-row" id="scan-stats-row"></div>
           <div class="table-actions">
-            <div class="poll-control">Poll for new results
-              <label class="switch"><input type="checkbox" id="scan-results-poll" checked><span></span></label>
-            </div>
             <button class="icon-button" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
@@ -1580,6 +1678,38 @@
                 <path d="M6 21v-4h4"></path>
               </svg>
             </button>
+            <div class="poll-control">Poll for new results
+              <label class="switch"><input type="checkbox" id="scan-results-poll" checked><span></span></label>
+              <span class="poll-countdown" id="scan-results-poll-countdown">Next in 5s</span>
+            </div>
+            <button class="icon-button compare-button" id="toggle-scan-compare" type="button" aria-label="Compare scan results" title="Compare scan results">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19V5"></path>
+                <path d="M4 19h16"></path>
+                <path d="M8 16V9"></path>
+                <path d="M13 16V7"></path>
+                <path d="M18 16v-4"></path>
+              </svg>
+              <span class="icon-badge hidden" id="scan-compare-count">0</span>
+            </button>
+          </div>
+          <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
+            <div class="scan-compare-header">
+              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.</div>
+              <button class="icon-button" id="export-scan-compare" type="button" aria-label="Export scan comparison CSV" title="Export scan comparison CSV" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v12"></path>
+                  <path d="m7 10 5 5 5-5"></path>
+                  <path d="M5 21h14"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="table-wrap compact-table-wrap">
+              <table id="scan-compare-table">
+                <thead></thead>
+                <tbody id="scan-compare-body"></tbody>
+              </table>
+            </div>
           </div>
           <div class="table-wrap">
             <table id="scan-results-table">
@@ -1821,6 +1951,7 @@
       activeAssetsTab: "connectors",
       selectedScanResult: null,
       selectedScanResultItemKey: null,
+      selectedScanCompareJobIds: [],
       scanTargetFilter: "",
       scanTargetFilterFocused: false,
       scanTargetFilterSelectionStart: null,
@@ -1830,13 +1961,16 @@
       scanJobIdFilterFocused: false,
       scanJobIdFilterSelectionStart: null,
       scanJobIdFilterSelectionEnd: null,
+      scanCompareVisible: false,
       scanResultsPolling: true,
       scanResultsPollingInFlight: false,
+      scanResultsNextPollAt: null,
       connectorsPolling: false,
       connectorsPollingInFlight: false,
     };
     let protectedFilterReloadTimer = null;
     let scanResultsPollTimer = null;
+    let scanResultsCountdownTimer = null;
     let connectorsPollTimer = null;
 
     const endpoints = {
@@ -1912,6 +2046,63 @@
     function truncateText(value, maxLength = 50) {
       const text = String(value ?? "");
       return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return "";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let scaled = bytes;
+      let unit = 0;
+      while (scaled >= 1024 && unit < units.length - 1) {
+        scaled /= 1024;
+        unit += 1;
+      }
+      const precision = scaled >= 100 || unit === 0 ? 0 : scaled >= 10 ? 1 : 2;
+      return `${scaled.toFixed(precision)} ${units[unit]}`;
+    }
+
+    function formatRateBps(value) {
+      const rate = Number(value || 0);
+      return Number.isFinite(rate) && rate > 0 ? `${formatBytes(rate)}/s` : "";
+    }
+
+    function formatDurationSec(value) {
+      const seconds = Number(value || 0);
+      if (!Number.isFinite(seconds) || seconds <= 0) return "";
+      if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+      const rounded = Math.round(seconds);
+      const days = Math.floor(rounded / 86400);
+      const hours = Math.floor((rounded % 86400) / 3600);
+      const minutes = Math.floor((rounded % 3600) / 60);
+      const secs = rounded % 60;
+      if (days) return `${days}d ${hours}h`;
+      if (hours) return `${hours}h ${minutes}m`;
+      if (minutes) return `${minutes}m ${secs}s`;
+      return `${secs}s`;
+    }
+
+    function formatNumber(value, digits = 2) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toFixed(digits) : "";
+    }
+
+    function csvCell(value) {
+      if (value === null || value === undefined) return "";
+      const text = String(value);
+      return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }
+
+    function downloadTextFile(filename, content, type = "text/plain") {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
     }
 
     function itemHash(item) {
@@ -2119,6 +2310,7 @@
         view.classList.toggle("hidden", view.id !== `view-${tabName}`);
       });
       updateScanResultsPolling();
+      updateScanResultsCountdownTimer();
       updateConnectorsPolling();
     }
 
@@ -2551,6 +2743,21 @@
 
     function renderScanResults() {
       const rows = filteredScanResults();
+      const compareColumn = {
+          key: "compare",
+          label: "",
+          className: "select-cell",
+          filterHtml: `<input id="scan-results-compare-all" type="checkbox" aria-label="Select visible scan results for comparison">`,
+          render: (result) => `
+            <input
+              type="checkbox"
+              data-action="select-scan-compare"
+              data-id="${escapeHtml(result.job.job_id)}"
+              aria-label="Select scan result for comparison"
+              ${state.selectedScanCompareJobIds.includes(result.job.job_id) ? "checked" : ""}
+            >
+          `,
+      };
       const columns = [
         {
           key: "job",
@@ -2624,6 +2831,9 @@
           },
         },
       ];
+      if (state.scanCompareVisible) {
+        columns.unshift(compareColumn);
+      }
       renderDataTable({
         tableId: "scan-results-table",
         bodyId: "scan-results-body",
@@ -2638,6 +2848,11 @@
         rowDetailHtml: (result) => state.selectedScanResult === result.job.job_id ? scanResultDetailHtml(result) : "",
       });
       bindScanResultsTableFilters();
+      if (state.scanCompareVisible) {
+        bindScanCompareSelection(rows);
+      }
+      renderScanStats(rows);
+      renderScanComparison(rows);
       renderTopStats();
     }
 
@@ -2701,6 +2916,39 @@
         selectionStart: "scanTargetFilterSelectionStart",
         selectionEnd: "scanTargetFilterSelectionEnd",
         otherFocused: ["scanJobIdFilterFocused"],
+      });
+    }
+
+    function bindScanCompareSelection(rows) {
+      const selectAll = document.getElementById("scan-results-compare-all");
+      const visibleIds = rows.map((result) => result.job.job_id);
+      const visibleSelected = visibleIds.filter((id) => state.selectedScanCompareJobIds.includes(id));
+      if (selectAll) {
+        selectAll.checked = visibleIds.length > 0 && visibleSelected.length === visibleIds.length;
+        selectAll.indeterminate = visibleSelected.length > 0 && visibleSelected.length < visibleIds.length;
+        selectAll.addEventListener("change", () => {
+          const next = new Set(state.selectedScanCompareJobIds);
+          if (selectAll.checked) {
+            visibleIds.forEach((id) => next.add(id));
+          } else {
+            visibleIds.forEach((id) => next.delete(id));
+          }
+          state.selectedScanCompareJobIds = Array.from(next);
+          renderScanResults();
+        });
+      }
+      document.querySelectorAll("[data-action='select-scan-compare']").forEach((input) => {
+        input.addEventListener("change", (event) => {
+          const id = event.currentTarget.dataset.id;
+          const next = new Set(state.selectedScanCompareJobIds);
+          if (event.currentTarget.checked) {
+            next.add(id);
+          } else {
+            next.delete(id);
+          }
+          state.selectedScanCompareJobIds = Array.from(next);
+          renderScanResults();
+        });
       });
     }
 
@@ -2888,6 +3136,221 @@
         }
       }
       return state.scanResults.filter(scanResultMatchesFilters);
+    }
+
+    function pruneScanCompareSelection() {
+      const available = new Set(state.scanResults.map((result) => result.job.job_id));
+      state.selectedScanCompareJobIds = state.selectedScanCompareJobIds.filter((id) => available.has(id));
+    }
+
+    function scanComparisonRow(result) {
+      const progress = result.progress || {};
+      const findings = result.findings || {};
+      const remediation = result.remediation || {};
+      const stats = result.stats || {};
+      const processed = Number(progress.terminal_items || 0);
+      const total = Number(progress.total_items || 0);
+      const succeeded = Number(progress.completed_items || 0);
+      const failed = Number(progress.failed_items || findings.failed || 0);
+      const cancelled = Number(progress.cancelled_items || findings.cancelled || 0);
+      const skipped = Number(remediation.skipped || 0);
+      const successPct = processed > 0 ? (succeeded / processed) * 100 : null;
+      const avgBytes = Number(stats.avg_bytes_per_file || stats.avg_file_size_bytes || 0);
+      const requestBps = Number(stats.request_bytes_per_second || stats.bytes_per_second || 0);
+      const scanBps = Number(stats.scan_bytes_per_second || stats.dsxa_bytes_per_second || 0);
+      const oneGb = 1024 * 1024 * 1024;
+      const oneTb = oneGb * 1024;
+      return {
+        job: result.job,
+        target: result.target || {},
+        processed,
+        total,
+        succeeded,
+        failed,
+        skipped,
+        cancelled,
+        successPct,
+        jobTime: stats.job_elapsed_seconds,
+        totalBytes: stats.total_bytes,
+        requestBps,
+        scanBps,
+        filesPerSecond: stats.files_per_second,
+        avgRequestMs: stats.avg_request_ms,
+        avgReadMs: stats.avg_read_ms,
+        scanMsPerByte: stats.scan_ms_per_byte,
+        estScan1GB: scanBps > 0 ? oneGb / scanBps : null,
+        estJob1GB: requestBps > 0 ? oneGb / requestBps : null,
+        estScan1TB: scanBps > 0 ? oneTb / scanBps : null,
+        estJob1TB: requestBps > 0 ? oneTb / requestBps : null,
+        estScan1M: scanBps > 0 && avgBytes > 0 ? (avgBytes * 1000000) / scanBps : null,
+        estJob1M: requestBps > 0 && avgBytes > 0 ? (avgBytes * 1000000) / requestBps : null,
+      };
+    }
+
+    function selectedScanComparisonRows(rows = filteredScanResults()) {
+      const selectedIds = new Set(state.selectedScanCompareJobIds);
+      return rows
+        .filter((result) => selectedIds.has(result.job.job_id))
+        .map(scanComparisonRow);
+    }
+
+    function exportScanComparisonCsv() {
+      const rows = selectedScanComparisonRows();
+      if (!rows.length) return;
+      const headers = [
+        "job_id",
+        "target",
+        "state",
+        "processed",
+        "total",
+        "succeeded",
+        "failed",
+        "skipped",
+        "cancelled",
+        "success_pct",
+        "job_time_seconds",
+        "total_bytes",
+        "job_bytes_per_second",
+        "scan_bytes_per_second",
+        "files_per_second",
+        "avg_request_ms",
+        "avg_read_ms",
+        "scan_ms_per_byte",
+        "scan_time_1gb_seconds",
+        "scan_time_1gb",
+        "job_time_1gb_seconds",
+        "job_time_1gb",
+        "scan_time_1tb_seconds",
+        "scan_time_1tb",
+        "job_time_1tb_seconds",
+        "job_time_1tb",
+        "scan_time_1m_files_seconds",
+        "scan_time_1m_files",
+        "job_time_1m_files_seconds",
+        "job_time_1m_files",
+      ];
+      const lines = [headers.join(",")];
+      for (const row of rows) {
+        lines.push([
+          row.job.job_id,
+          row.target.label || row.job.integration_id || "unknown",
+          row.job.state,
+          row.processed,
+          row.total,
+          row.succeeded,
+          row.failed,
+          row.skipped,
+          row.cancelled,
+          row.successPct === null ? "" : formatNumber(row.successPct, 3),
+          row.jobTime ?? "",
+          row.totalBytes ?? "",
+          row.requestBps || "",
+          row.scanBps || "",
+          row.filesPerSecond ?? "",
+          row.avgRequestMs ?? "",
+          row.avgReadMs ?? "",
+          row.scanMsPerByte ?? "",
+          row.estScan1GB ?? "",
+          formatDurationSec(row.estScan1GB),
+          row.estJob1GB ?? "",
+          formatDurationSec(row.estJob1GB),
+          row.estScan1TB ?? "",
+          formatDurationSec(row.estScan1TB),
+          row.estJob1TB ?? "",
+          formatDurationSec(row.estJob1TB),
+          row.estScan1M ?? "",
+          formatDurationSec(row.estScan1M),
+          row.estJob1M ?? "",
+          formatDurationSec(row.estJob1M),
+        ].map(csvCell).join(","));
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      downloadTextFile(`dsx-connect-scan-comparison-${stamp}.csv`, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
+    }
+
+    function renderScanStats(rows) {
+      const target = document.getElementById("scan-stats-row");
+      if (!target) return;
+      const totals = rows.reduce((acc, result) => {
+        const progress = result.progress || {};
+        const findings = result.findings || {};
+        const stats = result.stats || {};
+        acc.jobs += 1;
+        acc.running += isTerminalJobState(result.job?.state) ? 0 : 1;
+        acc.processed += Number(progress.terminal_items || 0);
+        acc.total += Number(progress.total_items || 0);
+        acc.malicious += Number(findings.malicious || 0);
+        acc.notScanned += Number(findings.not_scanned || 0);
+        acc.bytes += Number(stats.total_bytes || 0);
+        return acc;
+      }, { jobs: 0, running: 0, processed: 0, total: 0, malicious: 0, notScanned: 0, bytes: 0 });
+      target.innerHTML = `
+        <div class="metric"><span>Jobs</span><strong>${totals.jobs}</strong></div>
+        <div class="metric"><span>Running</span><strong>${totals.running}</strong></div>
+        <div class="metric"><span>Processed</span><strong>${totals.processed}/${totals.total || 0}</strong></div>
+        <div class="metric"><span>Malicious</span><strong>${totals.malicious}</strong></div>
+        <div class="metric"><span>Not scanned</span><strong>${totals.notScanned}</strong></div>
+        <div class="metric"><span>Measured bytes</span><strong>${formatBytes(totals.bytes) || "0 B"}</strong></div>
+      `;
+    }
+
+    function renderScanComparison(rows) {
+      const wrapper = document.getElementById("scan-compare-wrap");
+      const toggle = document.getElementById("toggle-scan-compare");
+      const countNode = document.getElementById("scan-compare-count");
+      const exportButton = document.getElementById("export-scan-compare");
+      if (!wrapper) return;
+      const comparisonRows = selectedScanComparisonRows(rows);
+      const selectedCount = state.selectedScanCompareJobIds.length;
+      wrapper.classList.toggle("hidden", !state.scanCompareVisible);
+      if (toggle) {
+        const label = state.scanCompareVisible ? "Exit scan comparison" : "Compare scan results";
+        toggle.setAttribute("aria-label", label);
+        toggle.setAttribute("title", label);
+        toggle.classList.toggle("active", state.scanCompareVisible);
+      }
+      if (countNode) {
+        countNode.textContent = String(selectedCount);
+        countNode.classList.toggle("hidden", selectedCount === 0);
+      }
+      if (exportButton) {
+        exportButton.disabled = comparisonRows.length === 0;
+      }
+      if (!state.scanCompareVisible) return;
+      if (!comparisonRows.length) {
+        const table = document.getElementById("scan-compare-table");
+        const body = document.getElementById("scan-compare-body");
+        if (table) table.querySelector("thead").innerHTML = "";
+        if (body) body.innerHTML = `<tr><td><div class="empty scan-compare-empty">Select one or more scan results to compare.</div></td></tr>`;
+        return;
+      }
+      renderDataTable({
+        tableId: "scan-compare-table",
+        bodyId: "scan-compare-body",
+        columns: [
+          { key: "job", label: "Job", render: (row) => `<strong>${escapeHtml(scanSourceLabel({ job: row.job, target: row.target }))}</strong><br><span class="mono">${escapeHtml(row.job.job_id)}</span>` },
+          { key: "target", label: "Target", render: (row) => escapeHtml(row.target.label || row.job.integration_id || "unknown") },
+          { key: "state", label: "State", render: (row) => `<span class="${pillClass(row.job.state)}">${escapeHtml(row.job.state)}</span>` },
+          { key: "processed", label: "Processed", render: (row) => `${row.processed}${row.total ? ` / ${row.total}` : ""}` },
+          { key: "success", label: "Success %", render: (row) => row.successPct === null ? "" : `${formatNumber(row.successPct, 1)}%` },
+          { key: "jobTime", label: "Job Time", render: (row) => formatDurationSec(row.jobTime) },
+          { key: "bytes", label: "Bytes", render: (row) => formatBytes(row.totalBytes) },
+          { key: "jobBps", label: "Job bytes/sec", render: (row) => formatRateBps(row.requestBps) },
+          { key: "scanBps", label: "Scan bytes/sec", render: (row) => formatRateBps(row.scanBps) },
+          { key: "filesSec", label: "Files/sec", render: (row) => formatNumber(row.filesPerSecond, 2) },
+          { key: "requestMs", label: "Avg Req ms", render: (row) => formatNumber(row.avgRequestMs, 1) },
+          { key: "readMs", label: "Avg Read ms", render: (row) => formatNumber(row.avgReadMs, 1) },
+          { key: "scanMsByte", label: "Scan ms/byte", render: (row) => formatNumber(row.scanMsPerByte, 6) },
+          { key: "scan1gb", label: "Scan time 1GB", render: (row) => formatDurationSec(row.estScan1GB) },
+          { key: "job1gb", label: "Job time 1GB", render: (row) => formatDurationSec(row.estJob1GB) },
+          { key: "scan1tb", label: "Scan time 1TB", render: (row) => formatDurationSec(row.estScan1TB) },
+          { key: "job1tb", label: "Job time 1TB", render: (row) => formatDurationSec(row.estJob1TB) },
+          { key: "scan1m", label: "Scan time 1M files", render: (row) => formatDurationSec(row.estScan1M) },
+          { key: "job1m", label: "Job time 1M files", render: (row) => formatDurationSec(row.estJob1M) },
+        ],
+        rows: comparisonRows,
+        emptyMessage: "Select one or more scan results to compare.",
+      });
     }
 
     function formatProgress(progress = {}, state = "") {
@@ -3402,12 +3865,69 @@
         state.selectedScanResult = null;
         state.selectedScanResultItemKey = null;
       }
+      pruneScanCompareSelection();
       renderScanResults();
+    }
+
+    function scheduleNextScanResultsPoll() {
+      state.scanResultsNextPollAt = Date.now() + 5000;
+      if (scanResultsPollTimer) {
+        window.clearTimeout(scanResultsPollTimer);
+      }
+      scanResultsPollTimer = window.setTimeout(() => {
+        scanResultsPollTimer = null;
+        pollScanResults();
+      }, 5000);
+      updateScanResultsCountdown();
+    }
+
+    function updateScanResultsCountdown() {
+      const node = document.getElementById("scan-results-poll-countdown");
+      if (!node) return;
+      const active = state.scanResultsPolling && state.activeTab === "scan-results";
+      if (!active) {
+        node.textContent = "Paused";
+        return;
+      }
+      if (state.scanResultsPollingInFlight) {
+        node.textContent = "Refreshing...";
+        return;
+      }
+      if (!state.scanResultsNextPollAt) {
+        scheduleNextScanResultsPoll();
+        return;
+      }
+      const seconds = Math.max(0, Math.ceil((state.scanResultsNextPollAt - Date.now()) / 1000));
+      node.textContent = seconds > 0 ? `Next in ${seconds}s` : "Due now";
+    }
+
+    function updateScanResultsCountdownTimer() {
+      const shouldShow = state.activeTab === "scan-results";
+      if (shouldShow && !scanResultsCountdownTimer) {
+        scanResultsCountdownTimer = window.setInterval(updateScanResultsCountdown, 1000);
+      } else if (!shouldShow && scanResultsCountdownTimer) {
+        window.clearInterval(scanResultsCountdownTimer);
+        scanResultsCountdownTimer = null;
+      }
+      updateScanResultsCountdown();
+    }
+
+    function setScanResultsRefreshIndicator(active) {
+      const button = document.getElementById("refresh-scan-results");
+      if (!button) return;
+      button.classList.toggle("is-loading", Boolean(active));
+      button.setAttribute("aria-busy", String(Boolean(active)));
+      if (!active) {
+        button.removeAttribute("aria-busy");
+      }
     }
 
     async function pollScanResults() {
       if (!state.scanResultsPolling || state.activeTab !== "scan-results" || state.scanResultsPollingInFlight) return;
       state.scanResultsPollingInFlight = true;
+      state.scanResultsNextPollAt = null;
+      setScanResultsRefreshIndicator(true);
+      updateScanResultsCountdown();
       try {
         const openJobId = state.selectedScanResult;
         const payload = await fetchScanResultsPayload();
@@ -3420,24 +3940,31 @@
           state.selectedScanResult = null;
           state.selectedScanResultItemKey = null;
         }
+        pruneScanCompareSelection();
         renderScanResults();
       } catch (error) {
         console.warn("Scan result polling failed", error);
       } finally {
         state.scanResultsPollingInFlight = false;
+        setScanResultsRefreshIndicator(false);
+        if (state.scanResultsPolling && state.activeTab === "scan-results") {
+          scheduleNextScanResultsPoll();
+        } else {
+          updateScanResultsCountdown();
+        }
       }
     }
 
     function updateScanResultsPolling() {
       const shouldPoll = state.scanResultsPolling && state.activeTab === "scan-results";
       if (shouldPoll && !scanResultsPollTimer) {
-        scanResultsPollTimer = window.setInterval(() => {
-          pollScanResults();
-        }, 5000);
+        scheduleNextScanResultsPoll();
       } else if (!shouldPoll && scanResultsPollTimer) {
-        window.clearInterval(scanResultsPollTimer);
+        window.clearTimeout(scanResultsPollTimer);
         scanResultsPollTimer = null;
+        state.scanResultsNextPollAt = null;
       }
+      updateScanResultsCountdownTimer();
     }
 
     async function cancelScanResult(jobId, button) {
@@ -3747,11 +4274,25 @@
         }
       });
     });
+    document.getElementById("toggle-scan-compare").addEventListener("click", () => {
+      if (state.scanCompareVisible) {
+        state.scanCompareVisible = false;
+        state.selectedScanCompareJobIds = [];
+      } else {
+        state.scanCompareVisible = true;
+      }
+      renderScanResults();
+    });
+    document.getElementById("export-scan-compare").addEventListener("click", exportScanComparisonCsv);
     document.getElementById("scan-results-poll").addEventListener("change", (event) => {
       state.scanResultsPolling = event.target.checked;
       updateScanResultsPolling();
       if (state.scanResultsPolling) {
+        scheduleNextScanResultsPoll();
         pollScanResults();
+      } else {
+        state.scanResultsNextPollAt = null;
+        updateScanResultsCountdown();
       }
     });
     document.getElementById("refresh-policies").addEventListener("click", (event) => {

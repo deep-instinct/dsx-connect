@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import statistics
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
@@ -135,6 +136,56 @@ class UIScanResultRemediationSummary(BaseModel):
     not_required: int = 0
 
 
+class UIScanResultStatsSummary(BaseModel):
+    total_bytes: int = 0
+    measured_items: int = 0
+    avg_bytes_per_file: float | None = None
+    request_ms_count: int = 0
+    read_ms_count: int = 0
+    dsxa_ms_count: int = 0
+    engine_ms_count: int = 0
+    avg_file_size_bytes: float | None = None
+    avg_request_ms: float | None = None
+    avg_read_ms: float | None = None
+    avg_dsxa_ms: float | None = None
+    avg_engine_ms: float | None = None
+    median_file_size_bytes: float | None = None
+    median_engine_ms: float | None = None
+    longest_scan_item: str | None = None
+    longest_scan_ms: float | None = None
+    job_elapsed_seconds: float | None = None
+    files_per_second: float | None = None
+    bytes_per_second: float | None = None
+    request_bytes_per_second: float | None = None
+    scan_bytes_per_second: float | None = None
+    dsxa_bytes_per_second: float | None = None
+    scan_ms_per_byte: float | None = None
+
+
+class UIScanResultsStatsSummary(BaseModel):
+    jobs: int = 0
+    running_jobs: int = 0
+    terminal_jobs: int = 0
+    total_items: int = 0
+    terminal_items: int = 0
+    clean: int = 0
+    malicious: int = 0
+    suspicious: int = 0
+    not_scanned: int = 0
+    unknown: int = 0
+    failed: int = 0
+    cancelled: int = 0
+    total_bytes: int = 0
+    measured_items: int = 0
+    avg_file_size_bytes: float | None = None
+    avg_request_ms: float | None = None
+    avg_read_ms: float | None = None
+    avg_dsxa_ms: float | None = None
+    avg_engine_ms: float | None = None
+    median_file_size_bytes: float | None = None
+    median_engine_ms: float | None = None
+
+
 class UIScanResultTargetSummary(BaseModel):
     integration_id: str | None = None
     scope_id: str | None = None
@@ -156,6 +207,7 @@ class UIScanResultSummary(BaseModel):
     progress: UIScanResultProgressSummary
     findings: UIScanResultFindingsSummary
     remediation: UIScanResultRemediationSummary
+    stats: UIScanResultStatsSummary = Field(default_factory=UIScanResultStatsSummary)
     started_at: str
     finished_at: str | None = None
     cancel: UICancelSemantics = Field(default_factory=UICancelSemantics)
@@ -165,6 +217,7 @@ class UIScanResultSummary(BaseModel):
 
 class UIScanResultsResponse(BaseModel):
     results: list[UIScanResultSummary] = Field(default_factory=list)
+    stats: UIScanResultsStatsSummary = Field(default_factory=UIScanResultsStatsSummary)
 
 
 class UIOverview(BaseModel):
@@ -422,6 +475,199 @@ def _summarize_remediation(items: list[JobItemRecord]) -> UIScanResultRemediatio
     return summary
 
 
+def _first_number(*values: Any) -> float | None:
+    for value in values:
+        if isinstance(value, bool):
+            continue
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            stripped = value.strip()
+            if not stripped:
+                continue
+            try:
+                return float(stripped)
+            except ValueError:
+                continue
+    return None
+
+
+def _nested_get(data: dict[str, Any], path: tuple[str, ...]) -> Any:
+    current: Any = data
+    for key in path:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current
+
+
+def _item_size_bytes(item: JobItemRecord) -> int | None:
+    metadata = item.scan_stage.metadata or {}
+    scan_result = item.scan_stage.result or {}
+    file_info = scan_result.get("file_info") or scan_result.get("fileInfo") or {}
+    value = _first_number(
+        metadata.get("contentLength"),
+        metadata.get("content_length"),
+        item.payload.get("sizeInBytes"),
+        item.payload.get("size_in_bytes"),
+        item.payload.get("contentLength"),
+        item.payload.get("content_length"),
+        file_info.get("file_size_in_bytes"),
+        file_info.get("fileSizeInBytes"),
+        file_info.get("sizeInBytes"),
+        file_info.get("size"),
+    )
+    return int(value) if value is not None and value >= 0 else None
+
+
+def _item_engine_ms(item: JobItemRecord) -> float | None:
+    metadata = item.scan_stage.metadata or {}
+    scan_result = item.scan_stage.result or {}
+    scan_duration_us = _first_number(
+        scan_result.get("scan_duration_in_microseconds"),
+        scan_result.get("scanDurationUs"),
+        _nested_get(scan_result, ("details", "scanDurationUs")),
+    )
+    if scan_duration_us is not None:
+        return round(scan_duration_us / 1000.0, 3)
+    return _first_number(metadata.get("scannerEngineElapsedMs"))
+
+
+def _item_request_ms(item: JobItemRecord) -> float | None:
+    metadata = item.scan_stage.metadata or {}
+    return _first_number(metadata.get("requestElapsedMs"))
+
+
+def _item_read_ms(item: JobItemRecord) -> float | None:
+    metadata = item.scan_stage.metadata or {}
+    return _first_number(metadata.get("readElapsedMs"), metadata.get("readerElapsedMs"), metadata.get("streamReadElapsedMs"))
+
+
+def _item_dsxa_ms(item: JobItemRecord) -> float | None:
+    metadata = item.scan_stage.metadata or {}
+    return _first_number(metadata.get("dsxaElapsedMs"))
+
+
+def _avg(values: list[float]) -> float | None:
+    return round(sum(values) / len(values), 3) if values else None
+
+
+def _median(values: list[float]) -> float | None:
+    return round(statistics.median(values), 3) if values else None
+
+
+def _duration_seconds(started: Any, finished: Any) -> float | None:
+    if started is None:
+        return None
+    end = finished or utcnow()
+    return round(max(0.0, (end - started).total_seconds()), 3)
+
+
+def _summarize_scan_stats(job: JobRecord, items: list[JobItemRecord], *, terminal_items: int) -> UIScanResultStatsSummary:
+    sizes: list[float] = []
+    request_ms: list[float] = []
+    read_ms: list[float] = []
+    dsxa_ms: list[float] = []
+    engine_ms: list[float] = []
+    longest_item: str | None = None
+    longest_ms: float | None = None
+    for item in items:
+        size = _item_size_bytes(item)
+        if size is not None:
+            sizes.append(float(size))
+        request = _item_request_ms(item)
+        if request is not None:
+            request_ms.append(request)
+        read = _item_read_ms(item)
+        if read is not None:
+            read_ms.append(read)
+        dsxa = _item_dsxa_ms(item)
+        if dsxa is not None:
+            dsxa_ms.append(dsxa)
+        engine = _item_engine_ms(item)
+        if engine is not None:
+            engine_ms.append(engine)
+            if longest_ms is None or engine > longest_ms:
+                longest_ms = engine
+                longest_item = item.object_identity
+
+    total_bytes = int(sum(sizes))
+    elapsed_seconds = _duration_seconds(job.created_at, job.completed_at)
+    bytes_per_second = round(total_bytes / elapsed_seconds, 3) if total_bytes and elapsed_seconds else None
+    request_total_seconds = sum(request_ms) / 1000.0
+    request_bytes_per_second = round(total_bytes / request_total_seconds, 3) if total_bytes and request_total_seconds else None
+    files_per_second = round(terminal_items / elapsed_seconds, 3) if terminal_items and elapsed_seconds else None
+    dsxa_total_seconds = sum(dsxa_ms) / 1000.0
+    dsxa_bytes_per_second = round(total_bytes / dsxa_total_seconds, 3) if total_bytes and dsxa_total_seconds else None
+    engine_total_seconds = sum(engine_ms) / 1000.0
+    scan_bytes_per_second = round(total_bytes / engine_total_seconds, 3) if total_bytes and engine_total_seconds else None
+    return UIScanResultStatsSummary(
+        total_bytes=total_bytes,
+        measured_items=len(sizes),
+        avg_bytes_per_file=_avg(sizes),
+        request_ms_count=len(request_ms),
+        read_ms_count=len(read_ms),
+        dsxa_ms_count=len(dsxa_ms),
+        engine_ms_count=len(engine_ms),
+        avg_file_size_bytes=_avg(sizes),
+        avg_request_ms=_avg(request_ms),
+        avg_read_ms=_avg(read_ms),
+        avg_dsxa_ms=_avg(dsxa_ms),
+        avg_engine_ms=_avg(engine_ms),
+        median_file_size_bytes=_median(sizes),
+        median_engine_ms=_median(engine_ms),
+        longest_scan_item=longest_item,
+        longest_scan_ms=round(longest_ms, 3) if longest_ms is not None else None,
+        job_elapsed_seconds=elapsed_seconds,
+        files_per_second=files_per_second,
+        bytes_per_second=bytes_per_second,
+        request_bytes_per_second=request_bytes_per_second,
+        scan_bytes_per_second=scan_bytes_per_second,
+        dsxa_bytes_per_second=dsxa_bytes_per_second,
+        scan_ms_per_byte=round((sum(engine_ms) / total_bytes), 6) if total_bytes and engine_ms else None,
+    )
+
+
+def _summarize_scan_results_stats(results: list[UIScanResultSummary]) -> UIScanResultsStatsSummary:
+    request_ms: list[float] = []
+    read_ms: list[float] = []
+    dsxa_ms: list[float] = []
+    engine_ms: list[float] = []
+    summary = UIScanResultsStatsSummary(jobs=len(results))
+    for result in results:
+        if result.job.state in {"completed", "failed", "cancelled"}:
+            summary.terminal_jobs += 1
+        else:
+            summary.running_jobs += 1
+        summary.total_items += result.progress.total_items
+        summary.terminal_items += result.progress.terminal_items
+        summary.clean += result.findings.clean
+        summary.malicious += result.findings.malicious
+        summary.suspicious += result.findings.suspicious
+        summary.not_scanned += result.findings.not_scanned
+        summary.unknown += result.findings.unknown
+        summary.failed += result.findings.failed
+        summary.cancelled += result.findings.cancelled
+        summary.total_bytes += result.stats.total_bytes
+        summary.measured_items += result.stats.measured_items
+        if result.stats.avg_request_ms is not None and result.stats.request_ms_count:
+            request_ms.extend([result.stats.avg_request_ms] * result.stats.request_ms_count)
+        if result.stats.avg_read_ms is not None and result.stats.read_ms_count:
+            read_ms.extend([result.stats.avg_read_ms] * result.stats.read_ms_count)
+        if result.stats.avg_dsxa_ms is not None and result.stats.dsxa_ms_count:
+            dsxa_ms.extend([result.stats.avg_dsxa_ms] * result.stats.dsxa_ms_count)
+        if result.stats.avg_engine_ms is not None and result.stats.engine_ms_count:
+            engine_ms.extend([result.stats.avg_engine_ms] * result.stats.engine_ms_count)
+    summary.avg_file_size_bytes = (
+        round(summary.total_bytes / summary.measured_items, 3) if summary.measured_items else None
+    )
+    summary.avg_request_ms = _avg(request_ms)
+    summary.avg_read_ms = _avg(read_ms)
+    summary.avg_dsxa_ms = _avg(dsxa_ms)
+    summary.avg_engine_ms = _avg(engine_ms)
+    return summary
+
+
 def _scan_sample_items(items: list[JobItemRecord], *, limit: int = 10) -> list[JobItemRecord]:
     def priority(item: JobItemRecord) -> tuple[int, int]:
         if item.scan_stage.state == "completed":
@@ -466,9 +712,15 @@ def _scan_result_target(job: JobRecord) -> UIScanResultTargetSummary:
     )
 
 
-def _summarize_scan_result(job_service: JobService, job: JobRecord, *, item_limit: int) -> UIScanResultSummary:
+def _summarize_scan_result(
+    job_service: JobService,
+    job: JobRecord,
+    *,
+    item_limit: int,
+    stats_item_limit: int = 1000,
+) -> UIScanResultSummary:
     progress = job_service.get_job_progress(job.job_id, item_limit=item_limit)
-    items = job_service.list_job_items(job_id=job.job_id, limit=item_limit)
+    items = job_service.list_job_items(job_id=job.job_id, limit=max(item_limit, stats_item_limit))
     failure_reason = None
     if job.error:
         failure_reason = str(job.error.get("reason") or job.error.get("code") or job.error.get("message") or "failed")
@@ -490,6 +742,7 @@ def _summarize_scan_result(job_service: JobService, job: JobRecord, *, item_limi
         ),
         findings=_summarize_findings(items, sample_limit=item_limit),
         remediation=_summarize_remediation(items),
+        stats=_summarize_scan_stats(job, items, terminal_items=progress.terminal_items),
         started_at=job.created_at.isoformat(),
         finished_at=job.completed_at.isoformat() if job.completed_at is not None else None,
         latest_items=[_summarize_job_item(item) for item in _scan_sample_items(items, limit=10)],
@@ -1641,11 +1894,17 @@ async def list_scan_results(
     state: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     item_limit: int = Query(default=100, ge=1, le=1000),
+    stats_item_limit: int = Query(default=1000, ge=1, le=5000),
     job_service: JobService = Depends(get_job_service),
 ) -> UIScanResultsResponse:
     jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
+    results = [
+        _summarize_scan_result(job_service, job, item_limit=item_limit, stats_item_limit=stats_item_limit)
+        for job in jobs
+    ]
     return UIScanResultsResponse(
-        results=[_summarize_scan_result(job_service, job, item_limit=item_limit) for job in jobs]
+        results=results,
+        stats=_summarize_scan_results_stats(results),
     )
 
 

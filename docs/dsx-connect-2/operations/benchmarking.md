@@ -159,6 +159,21 @@ Paste the row emitted by `benchmark_ng_job.py` under the 1G row.
 
 The stub-scanner row is not a DSXA or reader throughput measurement. The stub scanner does not open the object stream, so it is useful for isolating protected-scope enumeration, RabbitMQ dispatch, persistence, policy completion, and item finalization. In the July 14, 2026 local run, scan-stage latency averaged `77.865 ms` with `181.805 ms` p95, while queue wait averaged `57953.586 ms` with `95898.633 ms` p95. That points first at relay/queue/worker/policy workflow throughput rather than DSXA.
 
+## k3s Lab GCS Proxy-Reader Runs
+
+July 29, 2026 k3s lab runs used DSX-Connect `2.0.18`, GCS connector `2.0.10`, DSXA mode, protected scope `lg-test-01`, `4468` GCS objects, and the connector proxy reader.
+The GCS integration runtime config was `reader.default_strategy=proxy`, with reads routed through `http://gcs-google-cloud-storage-connector/google-cloud-storage-connector/read_file`.
+The DSXA `X-Custom-Metadata` field also recorded `reader:connector_proxy` and the connector read endpoint for scanned items.
+
+| Job | Scan workers | Items | Elapsed sec | Items/sec | Data | Avg request ms | Avg read ms | Avg DSXA ms | Avg engine ms | Findings |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `job_bbab1b4ffd4746c09ad24513fcc53b6f` | `1` | `4468` | `251.927` | `17.735` | `664.2 MB` | `372.320` | `0.136` | `372.184` | `26.135` | `4139` clean, `25` malicious, `304` not scanned |
+| `job_ad4b2fa555a64828b47bfbee3be24d7d` | `2` | `4468` | `177.632` | `25.153` | `664.2 MB` | `505.780` | `0.135` | `505.645` | `27.502` | `4139` clean, `25` malicious, `304` not scanned |
+| `job_917518f9f78c4404bbdcc579436bae67` | `4` | `4468` | `146.206` | `30.560` | `664.2 MB` | `814.018` | `0.144` | `813.874` | `31.918` | `4139` clean, `25` malicious, `304` not scanned |
+
+The throughput improved from one to four scan-worker replicas, but request/DSXA wait time increased as concurrency rose.
+For this corpus and lab scanner, the proxy reader itself was not the visible bottleneck: average read timing stayed around `0.14 ms`, while average DSXA request timing rose from about `372 ms` to `814 ms`.
+
 ## Tune After Baseline
 
 Take one baseline run before changing concurrency.

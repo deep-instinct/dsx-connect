@@ -174,6 +174,23 @@ The DSXA `X-Custom-Metadata` field also recorded `reader:connector_proxy` and th
 The throughput improved from one to four scan-worker replicas, but request/DSXA wait time increased as concurrency rose.
 For this corpus and lab scanner, the proxy reader itself was not the visible bottleneck: average read timing stayed around `0.14 ms`, while average DSXA request timing rose from about `372 ms` to `814 ms`.
 
+## k3s Lab GCS Proxy Versus Native Reader
+
+July 29, 2026 k3s lab comparison runs used DSX-Connect and the GCS connector colocated in the same k3s cluster, outside GCP. Both reader strategies still read object bytes from GCS over the network; the proxy strategy adds only a local cluster hop from scan worker to connector.
+
+| Reader | DSX-Connect | Connector | Scan workers | Items | Elapsed sec | Items/sec | Failures | Reader avg/p95 ms | Stream avg/p95 ms | DSXA avg/p95 ms | Engine avg/p95 ms | Notes |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| proxy | `2.0.18` | GCS `2.0.10` | `4` | `4468` | `146.206` | `30.560` | `0` | `0.144/-` | not captured | `813.874/-` | `31.918/-` | Connector and DSX-Connect colocated in k3s. |
+| native | `2.0.20` | GCS `2.0.10` | `4` | `4468` | `142.074` | `31.448` | `0` | `108.981/395.636` | `513.114/1124.941` | `1527.596/2786.545` | `28.233/82.766` | Scan workers read GCS directly with mounted Google credentials. |
+
+The full native run completed cleanly after the `2.0.20` policy-stage race fix: `4468/4468` completed, `0` failures, and no remaining `policy_pending` backlog.
+
+This topology did not show a decisive native-reader throughput advantage. Native reached about `31.45 files/s` versus proxy at about `30.56 files/s`, roughly a `2.9%` gain. That is within the range where deployment shape, queue timing, scanner latency, and run-to-run variance matter more than the reader abstraction itself.
+
+Use proxy as the default reader strategy unless a specific deployment proves native is materially better or operationally required. Proxy keeps cloud credentials with the connector and leaves scan workers generic. Native is an advanced opt-in mode for cloud-native deployments where scan workers can safely hold cloud credentials, where connector data-plane availability should not gate scans, or where benchmark evidence shows connector proxying is a bottleneck.
+
+The next meaningful comparison is not another colocated k3s run. Run the same proxy-versus-native benchmark in GKE with Workload Identity Federation and buckets in-region or near-region. That tests the topology where native GCS reads have the clearest chance to provide operational or throughput value.
+
 ## Tune After Baseline
 
 Take one baseline run before changing concurrency.

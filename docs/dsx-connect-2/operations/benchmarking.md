@@ -191,6 +191,25 @@ Use proxy as the default reader strategy unless a specific deployment proves nat
 
 The next meaningful comparison is not another colocated k3s run. Run the same proxy-versus-native benchmark in GKE with Workload Identity Federation and buckets in-region or near-region. That tests the topology where native GCS reads have the clearest chance to provide operational or throughput value.
 
+## GKE Lab GCS Proxy Versus Native Reader
+
+July 29-30, 2026 GKE lab comparison runs used DSX-Connect `2.0.20`, GCS connector `2.0.10`, DSXA mode, protected scope `lg-test-01`, and `4` scan-worker replicas.
+The cluster was `gke_se-project-388112_us-east4_gs-cluster`; the test bucket was in `US-EAST1`.
+The GCS connector Kubernetes service account used Workload Identity Federation for GKE.
+For native-reader testing, the scan-worker deployment also needed Google Cloud credentials, so the lab deployment was temporarily patched to run scan workers as the WIF-enabled `gcs-connector` Kubernetes service account.
+
+| Reader | Items | Elapsed sec | Items/sec | Failures | Reader avg/p95 ms | Stream avg/p95 ms | DSXA avg/p95 ms | Engine avg/p95 ms | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| proxy | `500` | `32.721` | `15.281` | `0` | `0.207/0.273` | `542.568/1056.316` | `1337.001/2544.288` | `30.946/90.378` | Scan workers stayed generic; content streamed through the GCS connector. |
+| native | `500` | `35.543` | `14.068` | `0` | `114.129/531.245` | `385.058/938.958` | `1289.447/2618.976` | `32.460/106.855` | Scan workers used WIF credentials and read GCS directly. |
+
+The GKE lab did not show a native-reader throughput advantage for this corpus.
+Native reduced stream time and DSXA wall time slightly, but added measurable reader acquisition time and finished about `7.9%` slower end to end.
+The larger cancelled proxy run on the same cluster also showed reader time near zero while queue wait and DSXA request latency dominated, so the first tuning focus for this topology is worker/scanner/persistence capacity, not replacing proxy reads with native reads.
+
+Use this result to keep proxy as the default operational recommendation.
+Use native only when the deployment intentionally gives scan workers cloud credentials and a benchmark in that topology shows a material improvement, or when the operator wants scans to avoid the connector data-plane hop for architectural reasons.
+
 ## Tune After Baseline
 
 Take one baseline run before changing concurrency.

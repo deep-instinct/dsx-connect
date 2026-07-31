@@ -191,6 +191,9 @@ nav:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
           - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
+      - Handoffs:
+          - WIF / CAI: dsx-connect-2/handoffs/2026-07-14-wif-cai.md
+          - Current State - 2026-07-31: dsx-connect-2/handoffs/2026-07-31-current-state.md
 
 
   - Connectors:

@@ -1,0 +1,160 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dsxa-config-shared
+  namespace: dsx-connect
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: local-path
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dsxa-config-env
+  namespace: dsx-connect
+data:
+  FLAVOR: config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dsxa-rest-env
+  namespace: dsx-connect
+data:
+  FLAVOR: rest
+  NO_SSL: "true"
+  REQUESTED_CPU: "2"
+  CORS: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsxa-config
+  namespace: dsx-connect
+  labels:
+    app.kubernetes.io/name: dsxa-config
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dsxa-config
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dsxa-config
+    spec:
+      containers:
+        - name: dsxa-config
+          image: dsxconnect/dpa-rocky9:4.2.0.2178
+          envFrom:
+            - secretRef:
+                name: dsxa-scanner-env
+            - configMapRef:
+                name: dsxa-config-env
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - /bin/perimeter/Utils/liveness_probe.sh
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - /bin/perimeter/Utils/liveness_probe.sh
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/lib/deepinstinct/Client/Config
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: dsxa-config-shared
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dsxa-rest
+  namespace: dsx-connect
+  labels:
+    app.kubernetes.io/name: dsxa-rest
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: dsxa-rest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: dsxa-rest
+    spec:
+      containers:
+        - name: dsxa-rest
+          image: dsxconnect/dpa-rocky9:4.2.0.2178
+          ports:
+            - name: http
+              containerPort: 5000
+          envFrom:
+            - secretRef:
+                name: dsxa-scanner-env
+            - configMapRef:
+                name: dsxa-rest-env
+          resources:
+            requests:
+              cpu: "2"
+              memory: 4Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          livenessProbe:
+            exec:
+              command:
+                - /bin/bash
+                - /bin/perimeter/Utils/liveness_probe.sh
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - cat
+                - /tmp/ready
+            initialDelaySeconds: 30
+            periodSeconds: 5
+            timeoutSeconds: 5
+          volumeMounts:
+            - name: config
+              mountPath: /usr/local/lib/deepinstinct/Client/Config
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: dsxa-config-shared
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dsxa-rest
+  namespace: dsx-connect
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: dsxa-rest
+  ports:
+    - name: http
+      port: 15000
+      targetPort: 5000

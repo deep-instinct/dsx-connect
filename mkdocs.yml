@@ -189,6 +189,7 @@ nav:
           - Packaging Releases: dsx-connect-2/packaging-releases.md
       - Operations:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
+          - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
           - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
 
 

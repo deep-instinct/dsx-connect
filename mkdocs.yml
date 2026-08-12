@@ -171,6 +171,8 @@ nav:
 
   - DSX-Connect 2:
       - Overview: dsx-connect-2/index.md
+      - Strategy:
+          - Normalized Enterprise File Gateway: dsx-connect-2/strategy/normalized-enterprise-file-gateway.md
       - Architecture:
           - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
           - Result Sink Examples: architecture-vnext/design/result-sink-examples.md

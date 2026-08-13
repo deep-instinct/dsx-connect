@@ -1,6 +1,6 @@
 # AWS S3 Connector — Docker Compose
 
-This guide shows how to deploy the AWS S3 connector with Docker Compose for quick testing/POV.
+This guide shows how to deploy the AWS S3 connector with Docker Compose for quick testing or evaluation.
 
 ## Prerequisites
 - Docker installed locally (or a container VM)

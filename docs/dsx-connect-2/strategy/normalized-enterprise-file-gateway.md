@@ -2,8 +2,8 @@
 
 ## Executive Summary
 
-The Ford Proof of Value has grown beyond validating malware scanning across a few repositories.
-The more important enterprise need is a common way to govern files as they enter, leave, or move through the business.
+Enterprise file-security programs often start by validating malware scanning across a few repositories.
+The broader need is a common way to govern files as they enter, leave, or move through the business.
 
 Application teams should not be responsible for implementing enterprise file security.
 
@@ -165,6 +165,10 @@ Applications should discover and use enterprise-approved destinations through a 
 
 Connectors become more than technical integrations.
 They represent approved enterprise file locations with capabilities and policy attached.
+
+See [Gateway Access Control Model](gateway-access-control.md) for the proposed dual-layer access model: repository permissions such as GCS WIF or service account access, plus DSX-Connect gateway authorization for applications and users.
+
+See [Developer File API Versus Managed File Transfer](developer-file-api-vs-mft.md) for the product boundary between DSX-Connect as a governed developer file API and MFT as a bulk managed movement platform.
 
 ### Central Governance Plane
 

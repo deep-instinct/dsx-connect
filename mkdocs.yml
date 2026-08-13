@@ -173,6 +173,8 @@ nav:
       - Overview: dsx-connect-2/index.md
       - Strategy:
           - Normalized Enterprise File Gateway: dsx-connect-2/strategy/normalized-enterprise-file-gateway.md
+          - Developer File API Versus MFT: dsx-connect-2/strategy/developer-file-api-vs-mft.md
+          - Gateway Access Control Model: dsx-connect-2/strategy/gateway-access-control.md
       - Architecture:
           - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
           - Result Sink Examples: architecture-vnext/design/result-sink-examples.md
@@ -193,9 +195,6 @@ nav:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
           - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
-      - Handoffs:
-          - WIF / CAI: dsx-connect-2/handoffs/2026-07-14-wif-cai.md
-          - Current State - 2026-07-31: dsx-connect-2/handoffs/2026-07-31-current-state.md
 
 
   - Connectors:

@@ -23,7 +23,7 @@ Within the asset, use `DSXCONNECTOR_FILTER` to further include/exclude items. Fi
 - Filesystem: split by subfolders: `/app/scan_folder/shard1`, `/app/scan_folder/shard2`
 - SharePoint: split by doc library/folder
 
-> Compose POV: scale out by starting multiple connector containers (each pointing at a distinct asset partition). In K8S (private), you’d deploy multiple releases or replicas with distinct values.
+> Docker Compose evaluation: scale out by starting multiple connector containers, each pointing at a distinct asset partition. In Kubernetes, deploy multiple releases or replicas with distinct values.
 
 ## Filters vs Assets — Pros & Cons
 - **Assets (partitioning at source):**

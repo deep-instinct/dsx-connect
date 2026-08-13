@@ -1,12 +1,12 @@
 # Azure Blob Storage Connector — Docker Compose
 
-This guide shows how to deploy the Azure Blob connector with Docker Compose for quick testing/POV.
+This guide shows how to deploy the Azure Blob connector with Docker Compose for quick testing or evaluation.
 
 ## Prerequisites
 - Docker installed locally (or a container VM)
 - The dsx-connect Docker Compose bundle (`dsx-connect-compose-bundle-<core_version>.tar.gz`) downloaded and extracted locally. Examples below assume the extracted folder is `dsx-connect-<core_version>/`. Bundles are published at [dsx-connect releases](https://github.com/deep-instinct/dsx-connect/releases).
 - Azure Storage credentials with permissions to list/read (and optionally write/move/delete) blobs:
-  - Connection string (recommended for POV) or SAS/Managed Identity as applicable
+  - Connection string, SAS, or Managed Identity as applicable
 - A Docker network shared with dsx‑connect (example: `dsx-connect-network`)
 
 ## Compose File
@@ -57,7 +57,7 @@ See [Deploying with SSL/TLS](./tls.md) for Docker Compose examples (core + conne
 If you expose connector endpoints (e.g., for HTTP callbacks) outside Docker, tunnel or publish the host port mapped to `8610` (compose default). Keep `DSXCONNECTOR_CONNECTOR_URL` pointing to the Docker-network address (e.g., `http://azure-blob-storage-connector:8610`) so dsx-connect can reach the service internally.
 
 ## Provider Notes (Azure Blob)
-- Auth: connection string works well for POV; SAS or managed identity might be used in production.
+- Auth: connection string works well for evaluation; SAS or managed identity might be used in production.
 - HNS (ADLS Gen2): hierarchical namespace affects path semantics; test your prefixes under HNS.
 - Listing costs: large containers can incur list costs; sharding by asset improves performance.
 - SAS Expiry: ensure long enough validity for ongoing scans.

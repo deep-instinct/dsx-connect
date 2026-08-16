@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DSX-Connect File Gateway Developer MVP</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="titlebar">
+      <div class="brand">
+        <strong>DSX-Connect File Gateway Developer MVP</strong>
+      </div>
+      <div class="title-actions">
+        <div id="connectionState" class="state-pill checking">Not connected</div>
+        <button id="settingsToggle" class="icon-button settings-gear" type="button" aria-label="Open settings" aria-expanded="false" title="Settings"></button>
+      </div>
+    </header>
+
+    <main class="content">
+      <section class="workspace">
+        <div class="panel file-panel">
+          <div class="panel-head">
+            <div>
+              <h2>Secure File Upload</h2>
+              <p id="fileSummary">Choose local files and submit them through DSX-Connect governance.</p>
+            </div>
+            <button id="pickFiles" type="button">Choose Files</button>
+          </div>
+          <div id="destinationPreview" class="preview-block">Choose a protected destination and file.</div>
+          <div id="fileList" class="file-list empty">No files selected.</div>
+        </div>
+      </section>
+
+      <section class="action-bar">
+        <button id="submitTransfer" class="primary" type="button">Upload</button>
+        <div id="statusText" class="status-text">Ready.</div>
+      </section>
+
+      <section class="panel results-panel">
+        <div class="panel-head">
+          <div>
+            <h2>Result</h2>
+            <p>DSX-Connect job status and governance outcome.</p>
+          </div>
+          <button id="refreshStatus" type="button" disabled>Refresh Status</button>
+        </div>
+        <div class="metrics">
+          <div><span>Job</span><strong id="jobId">-</strong></div>
+          <div><span>State</span><strong id="jobState">-</strong></div>
+          <div><span>Progress</span><strong id="jobProgress">-</strong></div>
+          <div><span>Terminal</span><strong id="jobTerminal">-</strong></div>
+        </div>
+        <div id="resultSummary" class="result-summary">No transfer submitted.</div>
+        <pre id="rawResult">{}</pre>
+      </section>
+    </main>
+
+    <div id="settingsBackdrop" class="settings-backdrop"></div>
+    <aside class="settings-drawer" id="settingsPanel" aria-hidden="true">
+      <div class="drawer-head">
+        <div>
+          <h2>Settings</h2>
+          <p id="settingsSummary">No destination selected.</p>
+        </div>
+        <button id="settingsClose" class="icon-button close-button" type="button" aria-label="Close settings" title="Close settings"></button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-grid">
+          <label>
+            DSX-Connect
+            <input id="dsxConnectUrl" type="text" spellcheck="false" />
+          </label>
+          <button id="refreshDestinations" type="button" title="Refresh destinations">Refresh</button>
+        </div>
+        <label>
+          Gateway token
+          <input id="gatewayToken" type="password" placeholder="optional bearer token" spellcheck="false" />
+        </label>
+        <label>
+          Protected destination
+          <select id="destinationId"></select>
+        </label>
+        <label>
+          Relative path
+          <input id="destinationPath" type="text" placeholder="optional/path/prefix" spellcheck="false" />
+        </label>
+        <div id="destinationDetail" class="detail-block compact">No destination selected.</div>
+      </div>
+    </aside>
+  </div>
+  <script src="./renderer.js"></script>
+</body>
+</html>

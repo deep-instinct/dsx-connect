@@ -617,6 +617,43 @@ def _encode_custom_metadata_value(value: object) -> str:
         return urllib.parse.quote(text, safe="")
 
 
+def _append_custom_metadata_part(parts: list[str], key: str, value: object) -> None:
+    encoded = _encode_custom_metadata_value(value)
+    if encoded:
+        parts.append(f"{key}:{encoded}")
+
+
+def _append_attribution_metadata(parts: list[str], attribution: dict[str, object]) -> None:
+    field_map = {
+        "principal_id": "principal-id",
+        "auth_method": "auth-method",
+        "tenant_id": "tenant-id",
+        "tenant_name": "tenant-name",
+        "customer_id": "customer-id",
+        "customer_name": "customer-name",
+        "business_unit": "business-unit",
+        "application_id": "application-id",
+        "application_name": "application-name",
+        "submitted_by": "submitted-by",
+        "cost_center": "cost-center",
+        "billing_code": "billing-code",
+        "destination_id": "destination-id",
+        "destination_name": "destination-name",
+        "destination_platform": "destination-platform",
+        "destination_platform_key": "destination-platform-key",
+        "protected_target": "protected-target",
+        "classification": "classification",
+        "transfer_id": "transfer-id",
+        "file_index": "file-index",
+        "file_name": "file-name",
+        "file_size_bytes": "file-size-bytes",
+        "file_sha256": "file-sha256",
+        "dsxa_protected_entity_id": "protected-entity-id",
+    }
+    for source_key, metadata_key in field_map.items():
+        _append_custom_metadata_part(parts, metadata_key, attribution.get(source_key))
+
+
 def build_scan_custom_metadata(request: ScanItemRequested, *, reader_name: str, reader_details: dict | None = None) -> str:
     scan_options = getattr(request, "scan_options", {}) or {}
     explicit = scan_options.get("customMetadata") or scan_options.get("custom_metadata")
@@ -671,6 +708,9 @@ def build_scan_custom_metadata(request: ScanItemRequested, *, reader_name: str, 
         endpoint_url = reader_details.get("endpointUrl")
         if endpoint_url:
             parts.append(f"connector-endpoint:{_encode_custom_metadata_value(endpoint_url)}")
+    attribution = scan_options.get("attribution") or scan_options.get("attributionContext") or {}
+    if isinstance(attribution, dict):
+        _append_attribution_metadata(parts, attribution)
     if explicit:
         parts.append(f"user-meta:{_encode_custom_metadata_value(explicit)}")
     return ",".join(parts)
@@ -681,6 +721,16 @@ def resolve_scan_protected_entity(request: ScanItemRequested) -> int | None:
     for key in ("protectedEntity", "protected_entity"):
         if key in scan_options and scan_options[key] not in (None, ""):
             return int(scan_options[key])
+    attribution = scan_options.get("attribution") or scan_options.get("attributionContext") or {}
+    if isinstance(attribution, dict):
+        value = (
+            attribution.get("dsxa_protected_entity_id")
+            or attribution.get("dsxaProtectedEntityId")
+            or attribution.get("protected_entity_id")
+            or attribution.get("protectedEntityId")
+        )
+        if value not in (None, ""):
+            return int(value)
     scope_policy = scan_options.get("scopePolicy") or scan_options.get("scope_policy") or {}
     if isinstance(scope_policy, dict):
         scanner = scope_policy.get("scanner") or {}

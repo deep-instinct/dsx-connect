@@ -328,5 +328,6 @@ Gateway authorization answers whether the caller is allowed to invoke that acces
 ## Relationship to Existing Documents
 
 - [Normalized Enterprise File Gateway](normalized-enterprise-file-gateway.md)
+- [Tenant Attribution, Metering, And Chargeback Architecture](../architecture/tenant-attribution-chargeback.md)
 - [ADR-006: Granted Permission Model for Connector Integrations](../../architecture-vnext/adr/adr-006-permission-model.md)
 - [Credential Strategy Mapping](../../architecture-vnext/design/credentialing/credential-mapping.md)

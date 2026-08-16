@@ -693,7 +693,13 @@ class DSXConnector:
         capabilities["enumerate"] = capabilities["discover"]
         capabilities["monitor"] = bool(getattr(self.connector_config, "monitor", False))
         capabilities["events"] = capabilities["monitor"]
-        capabilities["write"] = False
+        explicit = getattr(self.connector_config, "ng_capabilities", {}) or {}
+        if isinstance(explicit, dict):
+            for key, value in explicit.items():
+                capabilities[str(key)] = bool(value)
+        if self.connector_id == "google-cloud-storage-connector":
+            capabilities["write"] = True
+        capabilities.setdefault("write", False)
         return capabilities
 
     def _ng_health(self) -> str:

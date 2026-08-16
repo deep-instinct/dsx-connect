@@ -116,20 +116,37 @@ class ControlPlaneService:
             },
         }
 
+    def _default_delivery_config_for_connector(self, payload: ConnectorInstanceRegister) -> dict:
+        normalized_base_url = normalize_registered_connector_base_url(payload.base_url).rstrip("/")
+        return {
+            "proxy": {
+                "endpoint_url": f"{normalized_base_url}/write_file",
+                "base_url": normalized_base_url,
+                "connector_name": payload.connector_name,
+            },
+        }
+
     def _ensure_reader_config_for_connector_registration(
         self,
         integration: IntegrationRecord,
         payload: ConnectorInstanceRegister,
     ) -> IntegrationRecord:
-        if not bool(payload.capabilities.get("read", False)):
+        needs_reader = bool(payload.capabilities.get("read", False))
+        needs_delivery = bool(payload.capabilities.get("write", False))
+        if not needs_reader and not needs_delivery:
             return integration
 
         runtime = parse_integration_runtime_config(integration.config)
-        if runtime.reader is not None or runtime.reader_strategy is not None:
+        has_reader = runtime.reader is not None or runtime.reader_strategy is not None
+        has_delivery = runtime.delivery is not None
+        if (not needs_reader or has_reader) and (not needs_delivery or has_delivery):
             return integration
 
         config = deepcopy(integration.config)
-        config["reader"] = self._default_reader_config_for_connector(payload)
+        if needs_reader and not has_reader:
+            config["reader"] = self._default_reader_config_for_connector(payload)
+        if needs_delivery and not has_delivery:
+            config["delivery"] = self._default_delivery_config_for_connector(payload)
         self._validate_integration_config(config)
         return self.update_integration(integration.integration_id, IntegrationUpdate(config=config))
 
@@ -163,10 +180,17 @@ class ControlPlaneService:
                 capability_read=bool(payload.capabilities.get("read", False)),
                 capability_remediate=bool(payload.capabilities.get("remediate", False)),
                 config={
-                    "reader": self._default_reader_config_for_connector(payload),
-                }
-                if bool(payload.capabilities.get("read", False))
-                else {},
+                    **(
+                        {"reader": self._default_reader_config_for_connector(payload)}
+                        if bool(payload.capabilities.get("read", False))
+                        else {}
+                    ),
+                    **(
+                        {"delivery": self._default_delivery_config_for_connector(payload)}
+                        if bool(payload.capabilities.get("write", False))
+                        else {}
+                    ),
+                },
             )
         )
 

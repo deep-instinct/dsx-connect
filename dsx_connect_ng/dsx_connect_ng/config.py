@@ -123,6 +123,26 @@ class RuntimeSettings(BaseSettings):
     scan_worker_replicas: int | None = Field(default=None, ge=0)
 
 
+class GatewaySettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="DSX_CONNECT_NG_GATEWAY__",
+        extra="ignore",
+    )
+
+    upload_cache_dir: str = "/tmp/dsx-connect-ng-gateway/uploads"
+    max_upload_bytes: int = Field(default=2 * 1024 * 1024 * 1024, ge=1)
+    auth_enabled: bool = False
+    allow_anonymous: bool = True
+    static_clients_json: str = Field(
+        default="",
+        description="JSON object or array of static gateway clients for demo/dev token auth.",
+    )
+    anonymous_principal_json: str = Field(
+        default="",
+        description="Optional JSON object overriding the default anonymous gateway principal.",
+    )
+
+
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="DSX_CONNECT_NG__",
@@ -148,6 +168,7 @@ class AppSettings(BaseSettings):
     result_sink: ResultSinkSettings = Field(default_factory=ResultSinkSettings)
     recovery: RecoverySettings = Field(default_factory=RecoverySettings)
     runtime: RuntimeSettings = Field(default_factory=RuntimeSettings)
+    gateway: GatewaySettings = Field(default_factory=GatewaySettings)
 
 
 settings = AppSettings()

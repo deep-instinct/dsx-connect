@@ -6,6 +6,7 @@ import uvicorn
 
 from dsx_connect_ng.api.routes.control_plane import router as control_plane_router
 from dsx_connect_ng.api.routes.execution import router as execution_router
+from dsx_connect_ng.api.routes.file_gateway import router as file_gateway_router
 from dsx_connect_ng.api.routes.health import router as health_router
 from dsx_connect_ng.api.routes.ui import _load_operator_console_html, router as ui_router
 from dsx_connect_ng.config import settings
@@ -34,6 +35,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(control_plane_router, prefix=settings.api_prefix)
     app.include_router(execution_router, prefix=settings.api_prefix)
+    app.include_router(file_gateway_router, prefix=settings.api_prefix)
     app.mount(
         f"{settings.api_prefix}/ui-static",
         StaticFiles(directory=_UI_ASSETS_DIR),

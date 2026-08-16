@@ -1,0 +1,93 @@
+env:
+  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_NG__JOB_BUS_BACKEND: "rabbitmq"
+  DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
+  DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
+  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://dsxa-scanner:15000"
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+  DSX_CONNECT_NG_GATEWAY__AUTH_ENABLED: "true"
+  DSX_CONNECT_NG_GATEWAY__ALLOW_ANONYMOUS: "true"
+  DSX_CONNECT_NG_GATEWAY__ANONYMOUS_PRINCIPAL_JSON: '{"principal_id":"guest","auth_method":"none","tenant_id":"demo","tenant_name":"Demo Tenant","application_id":"guest-browser","application_name":"Guest Browser","submitted_by":"anonymous","grants":[{"actions":["discover"]}]}'
+  DSX_CONNECT_NG_GATEWAY__STATIC_CLIENTS_JSON: '{"clients":[{"token":"demo-gateway-token","principal_id":"demo-developer-mvp","tenant_id":"demo","tenant_name":"Demo Tenant","customer_id":"demo-customer","customer_name":"Demo Customer","business_unit":"Application Development","application_id":"file-gateway-mvp","application_name":"DSX-Connect File Gateway Developer MVP","submitted_by":"developer-demo","cost_center":"demo-cost-center","billing_code":"demo-chargeback","grants":[{"actions":["discover","submit","status"]}]}]}'
+
+containerSecurityContext:
+  privileged: true
+
+ingress:
+  enabled: true
+  className: traefik
+  hosts:
+    - host: dsx-connect.10.2.4.103.nip.io
+      paths:
+        - path: /
+          pathType: Prefix
+
+gateway:
+  uploadCache:
+    enabled: true
+    mountPath: /tmp/dsx-connect-ng-gateway
+    createClaim: true
+    size: 2Gi
+
+postgresql:
+  enabled: true
+  persistence:
+    enabled: false
+
+rabbitmq:
+  enabled: true
+  persistence:
+    enabled: false
+
+workers:
+  relay:
+    enabled: true
+    args:
+      - "--batch-size"
+      - "100"
+      - "--poll-interval-seconds"
+      - "0.25"
+      - "--max-active-scan-items"
+      - "1000"
+  scan:
+    enabled: true
+    replicaCount: 1
+    args:
+      - "--prefetch-count"
+      - "10"
+      - "--scan-only-completion-batch-size"
+      - "10"
+      - "--scan-only-completion-flush-interval-seconds"
+      - "1.0"
+      - "--scan-batch-window-size"
+      - "100"
+      - "--scan-batch-window-wait-seconds"
+      - "0.5"
+      - "--scan-batch-concurrency"
+      - "6"
+      - "--scan-batch-ack-mode"
+      - "scanned"
+      - "--scan-batch-trust-items"
+  policy:
+    enabled: true
+    args:
+      - "--prefetch-count"
+      - "100"
+  remediation:
+    enabled: true
+    args:
+      - "--prefetch-count"
+      - "5"
+  resultSink:
+    enabled: true
+    args:
+      - "--prefetch-count"
+      - "10"
+  dianna:
+    enabled: true
+    args:
+      - "--prefetch-count"
+      - "5"

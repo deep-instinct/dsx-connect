@@ -1,0 +1,18 @@
+{{- if and .Values.gateway.uploadCache.enabled .Values.gateway.uploadCache.createClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "dsx-connect.fullname" . }}-gateway-upload-cache
+  labels:
+    {{- include "dsx-connect.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway-upload-cache
+spec:
+  accessModes:
+    {{- toYaml .Values.gateway.uploadCache.accessModes | nindent 4 }}
+  {{- if .Values.gateway.uploadCache.storageClassName }}
+  storageClassName: {{ .Values.gateway.uploadCache.storageClassName | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.gateway.uploadCache.size | quote }}
+{{- end }}

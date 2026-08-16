@@ -1,9 +1,16 @@
 import json
 import os
+import tempfile
 import threading
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 from starlette.responses import StreamingResponse
 
+import connectors.framework.dsx_connector as connector_framework
 from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
+from connectors.framework.auth_hmac import require_dsx_hmac
 from connectors.google_cloud_storage.gcs_client import GCSClient
 from connectors.google_cloud_storage.gcs_discoverer import GCSDiscoverer
 from connectors.google_cloud_storage.gcs_reader import GCSReader
@@ -55,6 +62,11 @@ try:
 except Exception:
     config.asset_bucket = config.asset
     config.asset_prefix_root = ""
+
+try:
+    config.ng_capabilities = {**(getattr(config, "ng_capabilities", {}) or {}), "write": True}
+except Exception:
+    pass
 
 connector = DSXConnector(config)
 
@@ -259,6 +271,17 @@ def _resolve_bucket_and_key_for_request(scan_request: ScanRequestModel) -> tuple
         return bucket, key
 
     return configured_bucket, location
+
+
+def _split_gcs_destination_path(value: str | None) -> tuple[str, str]:
+    raw = str(value or "").strip()
+    if raw.startswith("gs://"):
+        raw = raw[5:]
+    raw = raw.strip("/")
+    if not raw or "/" not in raw:
+        return raw, ""
+    bucket, key = raw.split("/", 1)
+    return bucket.strip(), key.strip("/")
 
 
 async def _stream_with_first_chunk(first_chunk: bytes, chunks):
@@ -1198,6 +1221,53 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
         )
     except Exception as e:
         return StatusResponse(status=StatusResponseEnum.ERROR, message=str(e))
+
+
+@connector_framework.connector_api.post(
+    f"/{connector.connector_running_model.name}/write_file",
+    dependencies=[Depends(require_dsx_hmac)],
+)
+async def write_file_handler(
+    bucket: Annotated[str | None, Form()] = None,
+    key: Annotated[str | None, Form()] = None,
+    destination: Annotated[str | None, Form()] = None,
+    file: UploadFile = File(...),
+) -> dict:
+    resolved_bucket = str(bucket or "").strip()
+    resolved_key = str(key or "").strip().strip("/")
+    if destination and (not resolved_bucket or not resolved_key):
+        destination_bucket, destination_key = _split_gcs_destination_path(destination)
+        resolved_bucket = resolved_bucket or destination_bucket
+        resolved_key = resolved_key or destination_key
+    if not resolved_bucket or not resolved_key:
+        raise HTTPException(status_code=400, detail="bucket_and_key_required")
+
+    suffix = Path(file.filename or resolved_key).suffix
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="dsx-gcs-write-", suffix=suffix, delete=False) as handle:
+            tmp_path = Path(handle.name)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+        gcs_client.upload_file(tmp_path, key=resolved_key, bucket=resolved_bucket)
+        return {
+            "status": "success",
+            "bucket": resolved_bucket,
+            "key": resolved_key,
+            "uri": f"gs://{resolved_bucket}/{resolved_key}",
+        }
+    except Exception as exc:
+        dsx_logging.error(f"GCS write_file error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @connector.repo_check

@@ -170,6 +170,8 @@ See [Gateway Access Control Model](gateway-access-control.md) for the proposed d
 
 See [Developer File API Versus Managed File Transfer](developer-file-api-vs-mft.md) for the product boundary between DSX-Connect as a governed developer file API and MFT as a bulk managed movement platform.
 
+See [Tenant Attribution, Metering, And Chargeback Architecture](../architecture/tenant-attribution-chargeback.md) for the requirement that every request carries tenant, application, policy, repository, scanner, and billing context across the complete scan workflow.
+
 ### Central Governance Plane
 
 Security should centrally own:

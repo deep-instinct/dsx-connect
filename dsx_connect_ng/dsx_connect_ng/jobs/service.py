@@ -22,6 +22,7 @@ from dsx_connect_ng.jobs.contracts import (
 from dsx_connect_ng.jobs.models import (
     BatchJobRecord,
     BatchJobSubmitRequest,
+    ContentSource,
     ContentPreservationDecision,
     DeliveryRequest,
     DiannaAnalysisRequest,
@@ -543,6 +544,13 @@ class JobService:
             scan_options=scan_options,
         )
         return message.as_envelope()
+
+    @staticmethod
+    def _content_source_from_payload(item_payload: dict) -> ContentSource:
+        raw = item_payload.get("contentSource") or item_payload.get("content_source")
+        if not isinstance(raw, dict):
+            return ContentSource()
+        return ContentSource.model_validate(raw)
 
     def _is_scan_only_batch_job(self, job: JobRecord, items: list[JobItemRecord]) -> bool:
         if job.payload.get("scanOnly") is True or job.payload.get("scan_only") is True:
@@ -1817,6 +1825,7 @@ class JobService:
                     object_identity=item.object_identity,
                     state="publish_pending",
                     payload=item.payload,
+                    content_source=self._content_source_from_payload(item.payload),
                 )
                 job_items.append(job_item)
                 outbox_payloads.append(
@@ -1839,6 +1848,7 @@ class JobService:
                     object_identity=item.object_identity,
                     state="publish_pending" if defer_publish else "accepted",
                     payload=item.payload,
+                    content_source=self._content_source_from_payload(item.payload),
                 )
             )
             queued_envelope = self._build_scan_item_requested(job=created, job_item=job_item)

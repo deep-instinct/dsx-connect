@@ -32,6 +32,22 @@ class ReaderConfig(BaseModel):
     proxy: ProxyReaderConfig | None = None
 
 
+class DeliveryProxyConfig(BaseModel):
+    endpoint_url: str | None = None
+    base_url: str | None = None
+    connector_name: str | None = None
+    auth_mode: ProxyAuthMode = "none"
+    header_name: str | None = None
+    header_value: str | None = None
+    hmac_key_id: str | None = None
+    hmac_secret: str | None = None
+    timeout_seconds: float = 120.0
+
+
+class DeliveryRuntimeConfig(BaseModel):
+    proxy: DeliveryProxyConfig | None = None
+
+
 class ScannerRuntimeConfig(BaseModel):
     protected_entity: int | None = Field(default=None, ge=1)
 
@@ -103,6 +119,7 @@ class PolicyRuntimeConfig(BaseModel):
 class IntegrationRuntimeConfig(BaseModel):
     reader: ReaderConfig | None = None
     reader_strategy: ReaderStrategy | None = None
+    delivery: DeliveryRuntimeConfig | None = None
     scanner: ScannerRuntimeConfig | None = None
     remediation: RemediationCapabilitiesConfig | None = None
     policy: PolicyRuntimeConfig | None = None

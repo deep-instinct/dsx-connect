@@ -11,6 +11,8 @@ image:
 # Optional image pull secrets for private registries.
 imagePullSecrets: []
 
+containerSecurityContext: {}
+
 # Optional Helm naming overrides.
 nameOverride: ""
 fullnameOverride: ""
@@ -18,6 +20,22 @@ fullnameOverride: ""
 service:
   type: ClusterIP
   port: 8091
+
+gateway:
+  uploadCache:
+    # Shared cache for files uploaded through /api/v1/files/transfers.
+    # Use hostPath only for single-node lab deployments. Use a PVC for multi-node
+    # clusters so API and scan workers can read the same cached artifacts.
+    enabled: false
+    mountPath: /tmp/dsx-connect-ng-gateway
+    createClaim: false
+    existingClaim: ""
+    hostPath: ""
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 2Gi
+    sizeLimit: ""
 
 # Optional API/UI ingress. Cluster ingress controllers such as Traefik, nginx,
 # ALB, and cert-manager remain external to this chart.

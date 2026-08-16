@@ -1,0 +1,16 @@
+{
+  "name": "dsx-file-gateway-desktop",
+  "version": "0.1.0",
+  "description": "MVP desktop client for governed DSX-Connect file transfers.",
+  "main": "main.js",
+  "author": "Deep Instinct",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js"
+  },
+  "devDependencies": {
+    "electron": "^41.0.4"
+  }
+}

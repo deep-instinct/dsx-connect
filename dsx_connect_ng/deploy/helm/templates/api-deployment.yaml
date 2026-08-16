@@ -27,6 +27,10 @@ spec:
         - name: api
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           command: ["python", "-m", "uvicorn", "dsx_connect_ng.app:app"]
           args:
             - "--host"
@@ -41,12 +45,21 @@ spec:
               protocol: TCP
           env:
             {{- include "dsx-connect.env" . | nindent 12 }}
+            {{- if .Values.gateway.uploadCache.enabled }}
+            - name: DSX_CONNECT_NG_GATEWAY__UPLOAD_CACHE_DIR
+              value: {{ printf "%s/uploads" .Values.gateway.uploadCache.mountPath | quote }}
+            {{- end }}
           {{- if .Values.envSecretRefs }}
           envFrom:
             {{- range .Values.envSecretRefs }}
             - secretRef:
                 name: {{ . | quote }}
             {{- end }}
+          {{- end }}
+          {{- if .Values.gateway.uploadCache.enabled }}
+          volumeMounts:
+            - name: gateway-upload-cache
+              mountPath: {{ .Values.gateway.uploadCache.mountPath | quote }}
           {{- end }}
           readinessProbe:
             httpGet:
@@ -64,3 +77,23 @@ spec:
             periodSeconds: 20
             timeoutSeconds: 3
             failureThreshold: 3
+      {{- if .Values.gateway.uploadCache.enabled }}
+      volumes:
+        - name: gateway-upload-cache
+          {{- if .Values.gateway.uploadCache.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.gateway.uploadCache.existingClaim | quote }}
+          {{- else if .Values.gateway.uploadCache.createClaim }}
+          persistentVolumeClaim:
+            claimName: {{ include "dsx-connect.fullname" . }}-gateway-upload-cache
+          {{- else if .Values.gateway.uploadCache.hostPath }}
+          hostPath:
+            path: {{ .Values.gateway.uploadCache.hostPath | quote }}
+            type: DirectoryOrCreate
+          {{- else }}
+          emptyDir:
+            {{- if .Values.gateway.uploadCache.sizeLimit }}
+            sizeLimit: {{ .Values.gateway.uploadCache.sizeLimit | quote }}
+            {{- end }}
+          {{- end }}
+      {{- end }}

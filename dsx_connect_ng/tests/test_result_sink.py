@@ -87,7 +87,7 @@ def test_json_lines_result_sink_writes_structured_event(tmp_path) -> None:
 def test_result_sink_executor_emits_event_and_returns_delivery_result(tmp_path) -> None:
     sink_path = tmp_path / "results.jsonl"
     sink = JsonLinesResultSink(sink_path)
-    executor = build_result_sink_executor(sink)
+    executor = build_result_sink_executor(object(), sink)
     request = ResultSinkEmitRequested(
         job_id="job-1",
         job_item_id="item-1",

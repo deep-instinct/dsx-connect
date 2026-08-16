@@ -1807,6 +1807,23 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
                 "scope_mode": "full_scan",
                 "resource_selector": "/finance",
             },
+            "attribution": {
+                "principal_id": "app-desktop",
+                "auth_method": "static_bearer",
+                "tenant_id": "tenant-a",
+                "application_id": "desktop-mvp",
+                "application_name": "Desktop MVP",
+                "business_unit": "Security",
+                "cost_center": "CC-10",
+                "billing_code": "BU-APP",
+                "submitted_by": "svc-desktop",
+                "destination_id": "scope-1",
+                "protected_target": "/finance",
+                "file_name": "sample.txt",
+                "file_size_bytes": 128,
+                "file_sha256": "abc123",
+                "dsxa_protected_entity_id": 66,
+            },
         },
         content_source=ContentSource(mode="original"),
     )
@@ -1822,7 +1839,7 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
     result = asyncio.run(execute_scan_via_dsxa(request, FakeReader()))
 
     assert result.verdict == "Benign"
-    assert captured["kwargs"]["protected_entity"] == 77
+    assert captured["kwargs"]["protected_entity"] == 66
     assert request.scan_options["_dsx_scanner_metadata"]["source"] == "dsxa"
     assert request.scan_options["_dsx_scanner_metadata"]["reader"] == "connector_proxy"
     assert request.scan_options["_dsx_scanner_metadata"]["contentSourceMode"] == "original"
@@ -1844,6 +1861,21 @@ def test_execute_scan_via_dsxa_enriches_scanner_metadata(monkeypatch, tmp_path) 
     assert "job-item-id:item-1" in custom_metadata
     assert "reader:connector_proxy" in custom_metadata
     assert "connector-endpoint:http://127.0.0.1:8620/filesystem/read_file" in custom_metadata
+    assert "principal-id:app-desktop" in custom_metadata
+    assert "auth-method:static_bearer" in custom_metadata
+    assert "tenant-id:tenant-a" in custom_metadata
+    assert "application-id:desktop-mvp" in custom_metadata
+    assert "application-name:Desktop MVP" in custom_metadata
+    assert "business-unit:Security" in custom_metadata
+    assert "cost-center:CC-10" in custom_metadata
+    assert "billing-code:BU-APP" in custom_metadata
+    assert "submitted-by:svc-desktop" in custom_metadata
+    assert "destination-id:scope-1" in custom_metadata
+    assert "protected-target:/finance" in custom_metadata
+    assert "file-name:sample.txt" in custom_metadata
+    assert "file-size-bytes:128" in custom_metadata
+    assert "file-sha256:abc123" in custom_metadata
+    assert "protected-entity-id:66" in custom_metadata
     assert "user-meta:tenant=acme" in custom_metadata
     assert captured["data"] == b"stream me"
     assert FakeClient.instances == 1
@@ -1968,6 +2000,9 @@ def test_resolve_scan_protected_entity_prefers_scope_override(monkeypatch) -> No
 
     request.scan_options.pop("scopePolicy")
     assert resolve_scan_protected_entity(request) == 77
+
+    request.scan_options = {"attribution": {"dsxa_protected_entity_id": 66}, "integrationConfig": {"scanner": {"protected_entity": 77}}}
+    assert resolve_scan_protected_entity(request) == 66
 
     request.scan_options = {"protectedEntity": 99, "integrationConfig": {"scanner": {"protected_entity": 77}}}
     assert resolve_scan_protected_entity(request) == 99

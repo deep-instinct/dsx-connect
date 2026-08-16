@@ -176,6 +176,7 @@ nav:
           - Developer File API Versus MFT: dsx-connect-2/strategy/developer-file-api-vs-mft.md
           - Gateway Access Control Model: dsx-connect-2/strategy/gateway-access-control.md
       - Architecture:
+          - Tenant Attribution, Metering, And Chargeback: dsx-connect-2/architecture/tenant-attribution-chargeback.md
           - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
           - Result Sink Examples: architecture-vnext/design/result-sink-examples.md
           - ADR 011 Result Sink and External Forwarding: architecture-vnext/adr/adr-011-result-sink-and-external-forwarding.md

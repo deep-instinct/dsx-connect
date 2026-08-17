@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from dsx_connect_ng.app import create_app
+from dsx_connect_ng.api.routes.ui import _scan_source_label
 from dsx_connect_ng.config import settings
 from dsx_connect_ng.control_plane.models import ConnectorInstanceRegister, IntegrationCreate, ProtectedScopeCreate
 from dsx_connect_ng.jobs.models import BatchJobSubmitRequest, StageUpdateRequest
@@ -16,6 +17,11 @@ from dsx_connect_ng.version import DSX_CONNECT_VERSION
 def force_memory_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "control_plane_backend", "memory")
     monkeypatch.setattr(settings, "job_bus_backend", "memory")
+
+
+def test_scan_source_labels_gateway_submissions_as_application_submission() -> None:
+    assert _scan_source_label("desktop_transfer") == "Application submission"
+    assert _scan_source_label("file_gateway_api") == "Application submission"
 
 
 def test_operator_console_page_renders() -> None:
@@ -1015,6 +1021,7 @@ def test_ui_scan_results_returns_operator_summary() -> None:
     assert result["target"]["integration_id"] == "gcs-a"
     assert result["target"]["scope_id"] == "scope-a"
     assert result["target"]["source"] == "ui_scope_scan"
+    assert result["target"]["source_label"] == "Manual scan"
     assert result["target"]["label"] == "bucket-a"
     assert result["progress"]["total_items"] == 4
     assert result["progress"]["terminal_items"] == 3

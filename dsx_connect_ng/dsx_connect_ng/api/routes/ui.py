@@ -686,6 +686,8 @@ def _scan_source_label(source: Any) -> str | None:
     labels = {
         "connector": "Connector request",
         "connector_monitor": "Monitor event",
+        "desktop_transfer": "Application submission",
+        "file_gateway_api": "Application submission",
         "ui_scope_scan": "Manual scan",
     }
     return labels.get(raw, raw.replace("_", " ").title())

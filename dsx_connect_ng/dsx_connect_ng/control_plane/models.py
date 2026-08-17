@@ -93,6 +93,69 @@ class ConnectorInstanceRecord(ConnectorInstanceBase):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class GatewayApplicationGrant(BaseModel):
+    destination_ids: list[str] = Field(default_factory=list)
+    scope_ids: list[str] = Field(default_factory=list)
+    actions: list[str] = Field(default_factory=lambda: ["discover", "submit", "status"])
+    path_prefixes: list[str] = Field(default_factory=list)
+
+
+class GatewayApplicationIdentityBinding(BaseModel):
+    provider: Literal["static_bearer", "oidc"] = "static_bearer"
+    issuer: str | None = None
+    audience: str | None = None
+    client_id: str | None = None
+    subject: str | None = None
+    token: str | None = None
+    claims: dict = Field(default_factory=dict)
+
+
+class GatewayApplicationBase(BaseModel):
+    application_id: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    enabled: bool = True
+    identity_bindings: list[GatewayApplicationIdentityBinding] = Field(default_factory=list)
+    tenant_id: str | None = None
+    tenant_name: str | None = None
+    customer_id: str | None = None
+    customer_name: str | None = None
+    business_unit: str | None = None
+    submitted_by: str | None = None
+    cost_center: str | None = None
+    billing_code: str | None = None
+    default_protected_entity_id: int | None = None
+    default_protected_entity_name: str | None = None
+    grants: list[GatewayApplicationGrant] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+
+
+class GatewayApplicationCreate(GatewayApplicationBase):
+    pass
+
+
+class GatewayApplicationUpdate(BaseModel):
+    display_name: str | None = None
+    enabled: bool | None = None
+    identity_bindings: list[GatewayApplicationIdentityBinding] | None = None
+    tenant_id: str | None = None
+    tenant_name: str | None = None
+    customer_id: str | None = None
+    customer_name: str | None = None
+    business_unit: str | None = None
+    submitted_by: str | None = None
+    cost_center: str | None = None
+    billing_code: str | None = None
+    default_protected_entity_id: int | None = None
+    default_protected_entity_name: str | None = None
+    grants: list[GatewayApplicationGrant] | None = None
+    metadata: dict | None = None
+
+
+class GatewayApplicationRecord(GatewayApplicationBase):
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class ProtectedScopeBase(BaseModel):
     integration_id: str = Field(min_length=1)
     scope_type: ScopeType

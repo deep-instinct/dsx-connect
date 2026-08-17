@@ -216,6 +216,32 @@ body {
   align-items: end;
 }
 
+.settings-status {
+  min-height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: rgba(5, 12, 20, 0.64);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.settings-status[data-tone="ok"] {
+  border-color: color-mix(in srgb, var(--ok) 44%, var(--border));
+  color: var(--ok);
+}
+
+.settings-status[data-tone="error"] {
+  border-color: color-mix(in srgb, var(--error) 48%, var(--border));
+  color: var(--error);
+}
+
+.settings-status[data-tone="busy"] {
+  border-color: color-mix(in srgb, var(--busy) 44%, var(--border));
+  color: var(--busy);
+}
+
 h2 {
   margin: 0;
   color: var(--accent);

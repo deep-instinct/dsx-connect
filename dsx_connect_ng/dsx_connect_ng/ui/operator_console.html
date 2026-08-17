@@ -1581,6 +1581,17 @@
             </span>
             <span class="rail-label">Scan Results</span>
           </button>
+          <button class="rail-item" type="button" data-tab="applications" aria-selected="false" title="Applications">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Applications</span>
+          </button>
           <button class="rail-item" type="button" data-tab="policy" aria-selected="false" title="Protection Profiles">
             <span class="rail-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -1720,6 +1731,38 @@
           <footer class="table-footer" id="scan-results-footer"></footer>
         </section>
 
+        <section class="view hidden" id="view-applications">
+          <div class="view-heading">
+            <h2>Applications</h2>
+            <p>Onboarded callers, attribution defaults, protected entity bindings, and gateway grants.</p>
+          </div>
+          <div class="metric-row">
+            <div class="metric"><span>Applications</span><strong id="metric-applications">0</strong></div>
+            <div class="metric"><span>Enabled</span><strong id="metric-applications-enabled">0</strong></div>
+            <div class="metric"><span>With Token</span><strong id="metric-applications-token">0</strong></div>
+            <div class="metric"><span>PE Bound</span><strong id="metric-applications-pe">0</strong></div>
+          </div>
+          <div class="table-actions">
+            <button class="icon-button" id="refresh-applications" type="button" aria-label="Refresh applications" title="Refresh applications">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+            <span class="spacer" aria-hidden="true"></span>
+            <button class="primary" id="create-application" type="button">Onboard Application</button>
+          </div>
+          <div class="table-wrap">
+            <table id="applications-table">
+              <thead></thead>
+              <tbody id="applications-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="applications-footer"></footer>
+        </section>
+
         <section class="view hidden" id="view-policy">
           <div class="view-heading">
             <h2>Protection Profiles</h2>
@@ -1801,6 +1844,85 @@
           </label>
           <button class="primary" type="submit">Add Connector</button>
           <div class="status-line" id="integration-form-status"></div>
+        </form>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" id="application-drawer-backdrop"></div>
+    <aside class="drawer wide" id="application-drawer" aria-label="Application Onboarding" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2 id="application-drawer-title">Onboard Application</h2>
+          <p>Map a caller identity to destinations, attribution, and DSXA protected entity defaults.</p>
+        </div>
+        <button id="close-application" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form id="application-form">
+          <input name="mode" type="hidden" value="create">
+          <div class="grid-2">
+            <label>Application ID
+              <input name="application_id" placeholder="claims-upload-service" required>
+            </label>
+            <label>Display Name
+              <input name="display_name" placeholder="Claims Upload Service" required>
+            </label>
+          </div>
+          <div class="setting-row">
+            <span>Enabled</span>
+            <label class="switch" aria-label="Application enabled">
+              <input type="checkbox" name="enabled" checked>
+              <span></span>
+            </label>
+          </div>
+          <div class="grid-2">
+            <label>Static Bearer Token
+              <input name="static_token" placeholder="demo-token-or-generated-secret">
+            </label>
+            <label>Default Protected Entity ID
+              <input name="default_protected_entity_id" inputmode="numeric" placeholder="65">
+            </label>
+          </div>
+          <div class="grid-3">
+            <label>Tenant ID
+              <input name="tenant_id" placeholder="claims-business-unit">
+            </label>
+            <label>Customer ID
+              <input name="customer_id" placeholder="enterprise-internal">
+            </label>
+            <label>Business Unit
+              <input name="business_unit" placeholder="Claims">
+            </label>
+          </div>
+          <div class="grid-3">
+            <label>Submitted By
+              <input name="submitted_by" placeholder="svc-claims-upload">
+            </label>
+            <label>Cost Center
+              <input name="cost_center" placeholder="CC-1042">
+            </label>
+            <label>Billing Code
+              <input name="billing_code" placeholder="CLAIMS-UPLOAD-PROD">
+            </label>
+          </div>
+          <label>Allowed Destinations
+            <select name="destination_ids" id="application-destinations" multiple size="6"></select>
+          </label>
+          <div class="grid-2">
+            <label>Allowed Actions
+              <input name="actions" value="discover,submit,status">
+            </label>
+            <label>Path Prefixes
+              <input name="path_prefixes" placeholder="inbound, uploads/team-a">
+            </label>
+          </div>
+          <label>Metadata JSON
+            <textarea name="metadata_json" placeholder='{"owner":"platform"}'></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="button" id="cancel-application">Cancel</button>
+            <button class="primary" type="submit">Save Application</button>
+          </div>
+          <div class="status-line" id="application-form-status">Create an application identity binding.</div>
         </form>
       </div>
     </aside>
@@ -1938,6 +2060,7 @@
       protectedNextCursor: null,
       protectedIntegrationFilter: "",
       scanResults: [],
+      applications: [],
       policies: [],
       policyCatalog: [],
       defaultProfileByIntegration: {},
@@ -1949,6 +2072,8 @@
       policyEditorBaseId: "policy-1",
       activeTab: "assets",
       activeAssetsTab: "connectors",
+      applicationEditorMode: "create",
+      editingApplicationId: "",
       selectedScanResult: null,
       selectedScanResultItemKey: null,
       selectedScanCompareJobIds: [],
@@ -1980,6 +2105,7 @@
       connectors: "/api/v1/ui/assets/connectors",
       protectedAssets: "/api/v1/ui/assets/protected",
       scanResults: "/api/v1/ui/scan-results",
+      applications: "/api/v1/control-plane/gateway-applications",
       policies: "/api/v1/ui/policies",
       createIntegration: "/api/v1/ui/integrations",
       createScope: "/api/v1/ui/assets/protected",
@@ -2352,6 +2478,10 @@
       document.getElementById("metric-healthy").textContent = String(healthy);
       document.getElementById("metric-enabled").textContent = String(state.connectorRows.filter((row) => row.integration.enabled).length);
       document.getElementById("metric-scopes").textContent = String(state.scopes.length);
+      document.getElementById("metric-applications").textContent = String(state.applications.length);
+      document.getElementById("metric-applications-enabled").textContent = String(state.applications.filter((app) => app.enabled).length);
+      document.getElementById("metric-applications-token").textContent = String(state.applications.filter((app) => (app.identity_bindings || []).some((binding) => binding.provider === "static_bearer" && binding.token)).length);
+      document.getElementById("metric-applications-pe").textContent = String(state.applications.filter((app) => app.default_protected_entity_id !== null && app.default_protected_entity_id !== undefined).length);
     }
 
     function renderDsxaStatus(payload) {
@@ -2501,6 +2631,109 @@
       });
     }
 
+    function destinationLabel(scope) {
+      const connector = state.integrations.find((row) => row.integration?.integration_id === scope.integration_id)?.integration;
+      const connectorName = connector?.display_name || scope.integration_id || "connector";
+      return `${connectorName} / ${scope.display_name || scope.resource_selector || scope.scope_id}`;
+    }
+
+    function populateApplicationDestinations(selectedIds = []) {
+      const select = document.getElementById("application-destinations");
+      if (!select) return;
+      const selected = new Set(selectedIds);
+      select.innerHTML = state.scopes
+        .filter((scope) => scope.enabled)
+        .map((scope) => `
+          <option value="${escapeHtml(scope.scope_id)}"${selected.has(scope.scope_id) ? " selected" : ""}>
+            ${escapeHtml(destinationLabel(scope))}
+          </option>
+        `)
+        .join("");
+    }
+
+    function applicationStaticToken(app) {
+      return (app.identity_bindings || []).find((binding) => binding.provider === "static_bearer" && binding.token)?.token || "";
+    }
+
+    function applicationGrantSummary(app) {
+      const grants = app.grants || [];
+      if (!grants.length) return '<span class="muted">none</span>';
+      const destinationIds = new Set();
+      const actions = new Set();
+      grants.forEach((grant) => {
+        (grant.destination_ids || grant.scope_ids || []).forEach((id) => destinationIds.add(id));
+        (grant.actions || []).forEach((action) => actions.add(action));
+      });
+      const destinations = Array.from(destinationIds).map((id) => {
+        const scope = state.scopes.find((item) => item.scope_id === id);
+        return scope ? destinationLabel(scope) : id;
+      });
+      return `
+        <div>${destinations.length ? escapeHtml(destinations.join(", ")) : '<span class="muted">all destinations</span>'}</div>
+        <div class="muted">${escapeHtml(Array.from(actions).join(", ") || "discover, submit, status")}</div>
+      `;
+    }
+
+    function renderApplications() {
+      const columns = [
+        {
+          key: "application",
+          label: "Application",
+          render: (app) => `
+            <strong>${escapeHtml(app.display_name || app.application_id)}</strong><br>
+            <span class="copy-line"><span class="mono copy-value">${escapeHtml(app.application_id)}</span>${copyButton(app.application_id)}</span>
+          `,
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (app) => `<span class="${pillClass(app.enabled ? "protected" : "disabled")}">${app.enabled ? "enabled" : "disabled"}</span>`,
+        },
+        {
+          key: "identity",
+          label: "Identity",
+          render: (app) => applicationStaticToken(app)
+            ? '<span class="pill">static bearer</span>'
+            : '<span class="muted">no token</span>',
+        },
+        {
+          key: "attribution",
+          label: "Attribution",
+          render: (app) => `
+            <div>${escapeHtml(app.tenant_id || "tenant unset")} / ${escapeHtml(app.customer_id || "customer unset")}</div>
+            <div class="muted">${escapeHtml(app.business_unit || "business unit unset")} · ${escapeHtml(app.cost_center || "cost center unset")}</div>
+          `,
+        },
+        {
+          key: "protected_entity",
+          label: "Protected Entity",
+          render: (app) => app.default_protected_entity_id !== null && app.default_protected_entity_id !== undefined
+            ? `<span class="mono">${escapeHtml(String(app.default_protected_entity_id))}</span>${app.default_protected_entity_name ? `<br><span class="muted">${escapeHtml(app.default_protected_entity_name)}</span>` : ""}`
+            : '<span class="muted">inherit</span>',
+        },
+        {
+          key: "grants",
+          label: "Grants",
+          render: applicationGrantSummary,
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          className: "actions",
+          render: (app) => `<button type="button" data-action="edit-application" data-id="${escapeHtml(app.application_id)}">Edit</button>`,
+        },
+      ];
+      renderDataTable({
+        tableId: "applications-table",
+        bodyId: "applications-body",
+        columns,
+        rows: state.applications,
+        emptyMessage: "No applications onboarded yet.",
+      });
+      document.getElementById("applications-footer").textContent = `${state.applications.length} applications`;
+      renderTopStats();
+    }
+
     function connectorProtectedEntity(row) {
       const scanner = row.integration.config?.scanner || {};
       return scanner.protected_entity ?? scanner.protectedEntity ?? null;
@@ -2513,6 +2746,39 @@
         throw new Error("Protected entity must be a positive integer or blank.");
       }
       return protectedEntity;
+    }
+
+    function parsePositiveIntegerValue(rawValue, label) {
+      const raw = String(rawValue || "").trim();
+      const value = raw ? Number.parseInt(raw, 10) : null;
+      if (raw && (!Number.isInteger(value) || value < 1)) {
+        throw new Error(`${label} must be a positive integer or blank.`);
+      }
+      return value;
+    }
+
+    function splitCsv(value) {
+      return String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function emptyToNull(value) {
+      const trimmed = String(value || "").trim();
+      return trimmed ? trimmed : null;
+    }
+
+    function selectedApplicationDestinationIds(app) {
+      const ids = new Set();
+      (app.grants || []).forEach((grant) => {
+        (grant.destination_ids || grant.scope_ids || []).forEach((id) => ids.add(id));
+      });
+      return Array.from(ids);
+    }
+
+    function firstApplicationGrant(app) {
+      return (app.grants || [])[0] || {};
     }
 
     async function saveConnectorProtectedEntity(input) {
@@ -3096,6 +3362,7 @@
       if (source === "connector_monitor") return "Monitor event";
       if (source === "connector") return "Connector request";
       if (source === "ui_scope_scan") return "Manual scan";
+      if (source === "desktop_transfer" || source === "file_gateway_api") return "Application submission";
       return source.replaceAll("_", " ");
     }
 
@@ -3725,6 +3992,7 @@
         state.protectedIntegrationFilter = "";
       }
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
+      populateApplicationDestinations(selectedApplicationDestinationIds(state.applications.find((app) => app.application_id === state.editingApplicationId) || {}));
     }
 
     function protectedConnectorFilterOptions() {
@@ -3874,6 +4142,11 @@
       renderScanResults();
     }
 
+    async function loadApplications() {
+      state.applications = await fetchJson(endpoints.applications);
+      renderApplications();
+    }
+
     function scheduleNextScanResultsPoll() {
       state.scanResultsNextPollAt = Date.now() + 5000;
       if (scanResultsPollTimer) {
@@ -4000,6 +4273,7 @@
       await loadDsxaStatus();
       await loadOverview();
       await loadConnectors();
+      await loadApplications();
       await loadScanResults();
       await loadPolicies();
       if (state.activeAssetsTab === "protected") {
@@ -4011,6 +4285,104 @@
       document.getElementById("connector-drawer").classList.toggle("open", open);
       document.getElementById("connector-drawer").setAttribute("aria-hidden", String(!open));
       document.getElementById("connector-drawer-backdrop").classList.toggle("open", open);
+    }
+
+    function setApplicationDrawerOpen(open) {
+      document.getElementById("application-drawer").classList.toggle("open", open);
+      document.getElementById("application-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("application-drawer-backdrop").classList.toggle("open", open);
+    }
+
+    function openApplicationCreate() {
+      state.applicationEditorMode = "create";
+      state.editingApplicationId = "";
+      const form = document.getElementById("application-form");
+      form.reset();
+      form.mode.value = "create";
+      form.application_id.readOnly = false;
+      form.enabled.checked = true;
+      form.actions.value = "discover,submit,status";
+      form.metadata_json.value = "{}";
+      populateApplicationDestinations([]);
+      document.getElementById("application-drawer-title").textContent = "Onboard Application";
+      setStatus("application-form-status", "");
+      setApplicationDrawerOpen(true);
+      form.application_id.focus();
+    }
+
+    function openApplicationEdit(applicationId) {
+      const app = state.applications.find((item) => item.application_id === applicationId);
+      if (!app) return;
+      state.applicationEditorMode = "edit";
+      state.editingApplicationId = applicationId;
+      const form = document.getElementById("application-form");
+      const grant = firstApplicationGrant(app);
+      form.reset();
+      form.mode.value = "edit";
+      form.application_id.value = app.application_id;
+      form.application_id.readOnly = true;
+      form.display_name.value = app.display_name || "";
+      form.enabled.checked = Boolean(app.enabled);
+      form.static_token.value = applicationStaticToken(app);
+      form.default_protected_entity_id.value = app.default_protected_entity_id ?? "";
+      form.tenant_id.value = app.tenant_id || "";
+      form.customer_id.value = app.customer_id || "";
+      form.business_unit.value = app.business_unit || "";
+      form.submitted_by.value = app.submitted_by || "";
+      form.cost_center.value = app.cost_center || "";
+      form.billing_code.value = app.billing_code || "";
+      form.actions.value = (grant.actions || ["discover", "submit", "status"]).join(",");
+      form.path_prefixes.value = (grant.path_prefixes || []).join(",");
+      form.metadata_json.value = JSON.stringify(app.metadata || {}, null, 2);
+      populateApplicationDestinations(selectedApplicationDestinationIds(app));
+      document.getElementById("application-drawer-title").textContent = "Edit Application";
+      setStatus("application-form-status", "");
+      setApplicationDrawerOpen(true);
+      form.display_name.focus();
+    }
+
+    function applicationPayloadFromForm(form) {
+      const destinationIds = Array.from(form.destination_ids.selectedOptions).map((option) => option.value);
+      const staticToken = form.static_token.value.trim();
+      const metadata = parseOptionalJson(form.metadata_json.value || "{}");
+      const payload = {
+        display_name: form.display_name.value.trim(),
+        enabled: form.enabled.checked,
+        identity_bindings: staticToken ? [{ provider: "static_bearer", token: staticToken }] : [],
+        tenant_id: emptyToNull(form.tenant_id.value),
+        customer_id: emptyToNull(form.customer_id.value),
+        business_unit: emptyToNull(form.business_unit.value),
+        submitted_by: emptyToNull(form.submitted_by.value),
+        cost_center: emptyToNull(form.cost_center.value),
+        billing_code: emptyToNull(form.billing_code.value),
+        default_protected_entity_id: parsePositiveIntegerValue(form.default_protected_entity_id.value, "Protected entity"),
+        grants: [{
+          destination_ids: destinationIds,
+          actions: splitCsv(form.actions.value || "discover,submit,status"),
+          path_prefixes: splitCsv(form.path_prefixes.value),
+        }],
+        metadata,
+      };
+      if (state.applicationEditorMode === "create") {
+        payload.application_id = form.application_id.value.trim();
+      }
+      return payload;
+    }
+
+    async function saveApplicationForm(form) {
+      const payload = applicationPayloadFromForm(form);
+      const applicationId = state.applicationEditorMode === "edit" ? state.editingApplicationId : payload.application_id;
+      const url = state.applicationEditorMode === "edit"
+        ? `${endpoints.applications}/${encodeURIComponent(applicationId)}`
+        : endpoints.applications;
+      setStatus("application-form-status", state.applicationEditorMode === "edit" ? "Saving application..." : "Creating application...");
+      await fetchJson(url, {
+        method: state.applicationEditorMode === "edit" ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      setStatus("application-form-status", "Saved.");
+      setApplicationDrawerOpen(false);
+      await loadApplications();
     }
 
     function setPolicyEditorOpen(open) {
@@ -4205,6 +4577,19 @@
     document.getElementById("open-add-connector")?.addEventListener("click", () => setConnectorDrawerOpen(true));
     document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.getElementById("refresh-applications").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadApplications();
+        } catch (error) {
+          alert(`Application refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("create-application").addEventListener("click", openApplicationCreate);
+    document.getElementById("close-application").addEventListener("click", () => setApplicationDrawerOpen(false));
+    document.getElementById("cancel-application").addEventListener("click", () => setApplicationDrawerOpen(false));
+    document.getElementById("application-drawer-backdrop").addEventListener("click", () => setApplicationDrawerOpen(false));
     document.getElementById("create-policy").addEventListener("click", openPolicyCreate);
     document.getElementById("close-policy-editor").addEventListener("click", cancelPolicyEditor);
     document.getElementById("policy-editor-cancel").addEventListener("click", cancelPolicyEditor);
@@ -4234,6 +4619,7 @@
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
         setConnectorDrawerOpen(false);
+        setApplicationDrawerOpen(false);
         cancelPolicyEditor();
         setProtectionProfilePickerOpen(false);
       }
@@ -4342,6 +4728,12 @@
       if (!select) return;
       state.defaultProfileByIntegration[select.dataset.integration] = select.value;
       saveDefaultProfiles();
+    });
+
+    document.getElementById("applications-body").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='edit-application']");
+      if (!button) return;
+      openApplicationEdit(button.dataset.id);
     });
 
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
@@ -4528,6 +4920,16 @@
         await refreshAll();
       } catch (error) {
         setStatus("integration-form-status", `Create failed: ${error.message}`, true);
+      }
+    });
+
+    document.getElementById("application-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      try {
+        await saveApplicationForm(form);
+      } catch (error) {
+        setStatus("application-form-status", `Save failed: ${error.message}`, true);
       }
     });
 

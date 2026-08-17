@@ -6,6 +6,10 @@ import pytest
 from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationGrant,
+    GatewayApplicationIdentityBinding,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationUpdate,
     ProtectedScopeCreate,
@@ -110,3 +114,36 @@ def test_postgres_repository_connector_instance_crud(postgres_repo: PostgresCont
     assert heartbeat.health == "degraded"
     assert heartbeat.labels == {"pod": "gcs-postgres"}
     assert len(postgres_repo.list_connector_instances(integration_id=integration.integration_id)) == 1
+
+
+def test_postgres_repository_gateway_application_crud(postgres_repo: PostgresControlPlaneRepository) -> None:
+    suffix = uuid.uuid4().hex
+    application_id = f"claims-upload-{suffix}"
+    created = postgres_repo.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id=application_id,
+            display_name="Claims Upload",
+            tenant_id="claims",
+            cost_center="CC-1042",
+            default_protected_entity_id=65,
+            identity_bindings=[GatewayApplicationIdentityBinding(provider="static_bearer", token=f"token-{suffix}")],
+            grants=[GatewayApplicationGrant(destination_ids=["scope-claims"], actions=["discover", "submit"])],
+            metadata={"owner": "platform"},
+        )
+    )
+    assert created.application_id == application_id
+    assert created.identity_bindings[0].token == f"token-{suffix}"
+    assert created.grants[0].destination_ids == ["scope-claims"]
+
+    fetched = postgres_repo.get_gateway_application(application_id)
+    assert fetched is not None
+    assert fetched.cost_center == "CC-1042"
+    assert fetched.default_protected_entity_id == 65
+
+    updated = postgres_repo.update_gateway_application(
+        application_id,
+        GatewayApplicationUpdate(display_name="Claims Upload Updated", enabled=False),
+    )
+    assert updated is not None
+    assert updated.display_name == "Claims Upload Updated"
+    assert updated.enabled is False

@@ -3,6 +3,10 @@ from fastapi import HTTPException
 from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationGrant,
+    GatewayApplicationIdentityBinding,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationUpdate,
     ProtectedScopeCreate,
@@ -204,6 +208,77 @@ def test_register_connector_instance_reuses_existing_integration_and_heartbeat_u
     assert heartbeat.connector_version == "0.5.56"
     assert heartbeat.capabilities["write"] is False
     assert len(service.list_connector_instances(integration_id=integration.integration_id)) == 1
+
+
+def test_gateway_application_onboarding_round_trip_and_static_token_lookup() -> None:
+    service = build_service()
+    app = service.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="claims-upload-service",
+            display_name="Claims Upload Service",
+            tenant_id="claims",
+            cost_center="CC-1042",
+            billing_code="CLAIMS-PROD",
+            default_protected_entity_id=65,
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="claims-token",
+                )
+            ],
+            grants=[
+                GatewayApplicationGrant(
+                    destination_ids=["scope-claims"],
+                    actions=["discover", "submit", "status"],
+                    path_prefixes=["inbound"],
+                )
+            ],
+        )
+    )
+
+    assert app.application_id == "claims-upload-service"
+    assert service.get_gateway_application_or_404("claims-upload-service").cost_center == "CC-1042"
+    assert service.find_gateway_application_by_static_token("claims-token") == app
+
+    updated = service.update_gateway_application(
+        "claims-upload-service",
+        GatewayApplicationUpdate(enabled=False),
+    )
+    assert updated.enabled is False
+    assert service.find_gateway_application_by_static_token("claims-token") is None
+
+
+def test_create_gateway_application_rejects_duplicate_application_id() -> None:
+    service = build_service()
+    payload = GatewayApplicationCreate(
+        application_id="claims-upload-service",
+        display_name="Claims Upload Service",
+    )
+    service.create_gateway_application(payload)
+    try:
+        service.create_gateway_application(payload)
+    except HTTPException as exc:
+        assert exc.status_code == 409
+        assert exc.detail == "gateway_application_conflict"
+    else:
+        raise AssertionError("expected gateway application conflict")
+
+
+def test_create_gateway_application_rejects_unknown_grant_action() -> None:
+    service = build_service()
+    try:
+        service.create_gateway_application(
+            GatewayApplicationCreate(
+                application_id="claims-upload-service",
+                display_name="Claims Upload Service",
+                grants=[GatewayApplicationGrant(actions=["discover", "delete_everything"])],
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 422
+        assert exc.detail["code"] == "invalid_gateway_application_grant_actions"
+    else:
+        raise AssertionError("expected invalid grant action")
 
 
 def test_register_connector_instance_rejects_explicit_integration_mismatch() -> None:

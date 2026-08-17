@@ -12,6 +12,13 @@ function setStatus(message, tone = "neutral") {
   node.dataset.tone = tone;
 }
 
+function setSettingsStatus(message, tone = "neutral") {
+  const node = $("settingsStatus");
+  if (!node) return;
+  node.textContent = message;
+  node.dataset.tone = tone;
+}
+
 function setConnection(message, tone = "checking") {
   const node = $("connectionState");
   node.textContent = message;
@@ -228,19 +235,29 @@ function renderFiles() {
 
 async function refreshDestinations() {
   setConnection("Connecting", "checking");
-  setStatus("Refreshing destinations", "busy");
+  setSettingsStatus("Refreshing protected destinations...", "busy");
+  if (!$("settingsPanel").classList.contains("open")) {
+    setStatus("Refreshing destinations", "busy");
+  }
   try {
     await persistForm();
     const response = await window.dsxGateway.listDestinations(readForm());
     destinations = response.destinations || [];
     renderDestinations();
     setConnection("Connected", "ok");
+    setSettingsStatus(`${destinations.length} protected destination${destinations.length === 1 ? "" : "s"} available.`, "ok");
     setStatus(`${destinations.length} destinations available`, "ok");
   } catch (error) {
     destinations = [];
     renderDestinations();
     setConnection("Unavailable", "error");
-    setStatus(error?.message || "Could not load destinations", "error");
+    const message = error?.message || "Could not load destinations";
+    setSettingsStatus(message, "error");
+    if (!$("settingsPanel").classList.contains("open")) {
+      setStatus(message, "error");
+    } else {
+      setStatus("Destination refresh failed in Settings.", "error");
+    }
   }
 }
 
@@ -361,5 +378,6 @@ async function init() {
 
 init().catch((error) => {
   setConnection("Unavailable", "error");
+  setSettingsStatus(error?.message || "Initialization failed", "error");
   setStatus(error?.message || "Initialization failed", "error");
 });

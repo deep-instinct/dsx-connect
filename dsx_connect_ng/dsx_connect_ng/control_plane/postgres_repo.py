@@ -11,6 +11,9 @@ from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRecord,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationRecord,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -294,6 +297,155 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
             row = cur.fetchone()
             conn.commit()
             return ConnectorInstanceRecord.model_validate(row) if row else None
+
+    def list_gateway_applications(self) -> list[GatewayApplicationRecord]:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT application_id, display_name, enabled,
+                       identity_bindings_json AS identity_bindings,
+                       tenant_id, tenant_name, customer_id, customer_name,
+                       business_unit, submitted_by, cost_center, billing_code,
+                       default_protected_entity_id, default_protected_entity_name,
+                       grants_json AS grants, metadata_json AS metadata,
+                       created_at, updated_at
+                FROM cp_gateway_applications
+                ORDER BY created_at
+                """
+            )
+            return [GatewayApplicationRecord.model_validate(row) for row in cur.fetchall()]
+
+    def get_gateway_application(self, application_id: str) -> GatewayApplicationRecord | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT application_id, display_name, enabled,
+                       identity_bindings_json AS identity_bindings,
+                       tenant_id, tenant_name, customer_id, customer_name,
+                       business_unit, submitted_by, cost_center, billing_code,
+                       default_protected_entity_id, default_protected_entity_name,
+                       grants_json AS grants, metadata_json AS metadata,
+                       created_at, updated_at
+                FROM cp_gateway_applications
+                WHERE application_id = %s
+                """,
+                (application_id,),
+            )
+            row = cur.fetchone()
+            return GatewayApplicationRecord.model_validate(row) if row else None
+
+    def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
+        data = payload.model_dump()
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO cp_gateway_applications (
+                    application_id, display_name, enabled, identity_bindings_json,
+                    tenant_id, tenant_name, customer_id, customer_name, business_unit,
+                    submitted_by, cost_center, billing_code,
+                    default_protected_entity_id, default_protected_entity_name,
+                    grants_json, metadata_json
+                ) VALUES (
+                    %s, %s, %s, %s::jsonb,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s,
+                    %s::jsonb, %s::jsonb
+                )
+                RETURNING application_id, display_name, enabled,
+                          identity_bindings_json AS identity_bindings,
+                          tenant_id, tenant_name, customer_id, customer_name,
+                          business_unit, submitted_by, cost_center, billing_code,
+                          default_protected_entity_id, default_protected_entity_name,
+                          grants_json AS grants, metadata_json AS metadata,
+                          created_at, updated_at
+                """,
+                (
+                    data["application_id"],
+                    data["display_name"],
+                    data["enabled"],
+                    psycopg.types.json.Json(data["identity_bindings"]),
+                    data["tenant_id"],
+                    data["tenant_name"],
+                    data["customer_id"],
+                    data["customer_name"],
+                    data["business_unit"],
+                    data["submitted_by"],
+                    data["cost_center"],
+                    data["billing_code"],
+                    data["default_protected_entity_id"],
+                    data["default_protected_entity_name"],
+                    psycopg.types.json.Json(data["grants"]),
+                    psycopg.types.json.Json(data["metadata"]),
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return GatewayApplicationRecord.model_validate(row)
+
+    def update_gateway_application(
+        self,
+        application_id: str,
+        payload: GatewayApplicationUpdate,
+    ) -> GatewayApplicationRecord | None:
+        current = self.get_gateway_application(application_id)
+        if current is None:
+            return None
+        merged = GatewayApplicationRecord.model_validate(
+            {**current.model_dump(), **payload.model_dump(exclude_unset=True)}
+        )
+        data = merged.model_dump()
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE cp_gateway_applications
+                SET display_name = %s,
+                    enabled = %s,
+                    identity_bindings_json = %s::jsonb,
+                    tenant_id = %s,
+                    tenant_name = %s,
+                    customer_id = %s,
+                    customer_name = %s,
+                    business_unit = %s,
+                    submitted_by = %s,
+                    cost_center = %s,
+                    billing_code = %s,
+                    default_protected_entity_id = %s,
+                    default_protected_entity_name = %s,
+                    grants_json = %s::jsonb,
+                    metadata_json = %s::jsonb,
+                    updated_at = NOW()
+                WHERE application_id = %s
+                RETURNING application_id, display_name, enabled,
+                          identity_bindings_json AS identity_bindings,
+                          tenant_id, tenant_name, customer_id, customer_name,
+                          business_unit, submitted_by, cost_center, billing_code,
+                          default_protected_entity_id, default_protected_entity_name,
+                          grants_json AS grants, metadata_json AS metadata,
+                          created_at, updated_at
+                """,
+                (
+                    data["display_name"],
+                    data["enabled"],
+                    psycopg.types.json.Json(data["identity_bindings"]),
+                    data["tenant_id"],
+                    data["tenant_name"],
+                    data["customer_id"],
+                    data["customer_name"],
+                    data["business_unit"],
+                    data["submitted_by"],
+                    data["cost_center"],
+                    data["billing_code"],
+                    data["default_protected_entity_id"],
+                    data["default_protected_entity_name"],
+                    psycopg.types.json.Json(data["grants"]),
+                    psycopg.types.json.Json(data["metadata"]),
+                    application_id,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return GatewayApplicationRecord.model_validate(row) if row else None
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:
         query = """

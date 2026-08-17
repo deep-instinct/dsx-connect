@@ -15,6 +15,7 @@ from starlette.concurrency import run_in_threadpool
 from dsx_connect_ng.api.dependencies import get_control_plane_service
 from dsx_connect_ng.api.job_service_dependencies import get_job_service
 from dsx_connect_ng.config import settings
+from dsx_connect_ng.control_plane.models import GatewayApplicationRecord
 from dsx_connect_ng.control_plane.models import IntegrationRecord, ProtectedScopeRecord
 from dsx_connect_ng.control_plane.service import ControlPlaneService
 from dsx_connect_ng.jobs.models import BatchJobRecord, BatchJobSubmitRequest, ContentSource
@@ -209,6 +210,25 @@ def _anonymous_principal() -> GatewayPrincipal:
     return _principal_from_json(parsed, default_auth_method="none")
 
 
+def _principal_from_application(application: GatewayApplicationRecord) -> GatewayPrincipal:
+    return GatewayPrincipal(
+        principal_id=application.application_id,
+        auth_method="static_bearer",
+        tenant_id=application.tenant_id,
+        tenant_name=application.tenant_name,
+        customer_id=application.customer_id,
+        customer_name=application.customer_name,
+        business_unit=application.business_unit,
+        application_id=application.application_id,
+        application_name=application.display_name,
+        submitted_by=application.submitted_by or application.application_id,
+        cost_center=application.cost_center,
+        billing_code=application.billing_code,
+        dsxa_protected_entity_id=application.default_protected_entity_id,
+        grants=[GatewayGrant.model_validate(grant.model_dump()) for grant in application.grants],
+    )
+
+
 def _bearer_token(authorization: str | None) -> str | None:
     if not authorization:
         return None
@@ -218,9 +238,15 @@ def _bearer_token(authorization: str | None) -> str | None:
     return value.strip()
 
 
-def resolve_gateway_principal(authorization: str | None = Header(default=None)) -> GatewayPrincipal:
+def resolve_gateway_principal(
+    authorization: str | None = Header(default=None),
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> GatewayPrincipal:
     token = _bearer_token(authorization)
     if token:
+        application = control_plane.find_gateway_application_by_static_token(token)
+        if application is not None:
+            return _principal_from_application(application)
         for record in _static_client_records():
             if str(record.get("token") or "") == token:
                 principal_payload = dict(record)

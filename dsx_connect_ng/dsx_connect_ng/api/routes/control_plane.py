@@ -8,6 +8,9 @@ from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRecord,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationRecord,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -132,6 +135,38 @@ async def heartbeat_connector_instance(
     service: ControlPlaneService = Depends(get_control_plane_service),
 ) -> ConnectorInstanceRecord:
     return service.heartbeat_connector_instance(connector_instance_id, payload)
+
+
+@router.get("/gateway-applications", response_model=list[GatewayApplicationRecord])
+async def list_gateway_applications(
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> list[GatewayApplicationRecord]:
+    return service.list_gateway_applications()
+
+
+@router.post("/gateway-applications", response_model=GatewayApplicationRecord)
+async def create_gateway_application(
+    payload: GatewayApplicationCreate,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> GatewayApplicationRecord:
+    return service.create_gateway_application(payload)
+
+
+@router.get("/gateway-applications/{application_id}", response_model=GatewayApplicationRecord)
+async def get_gateway_application(
+    application_id: str,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> GatewayApplicationRecord:
+    return service.get_gateway_application_or_404(application_id)
+
+
+@router.patch("/gateway-applications/{application_id}", response_model=GatewayApplicationRecord)
+async def update_gateway_application(
+    application_id: str,
+    payload: GatewayApplicationUpdate,
+    service: ControlPlaneService = Depends(get_control_plane_service),
+) -> GatewayApplicationRecord:
+    return service.update_gateway_application(application_id, payload)
 
 
 @router.get("/scopes", response_model=list[ProtectedScopeRecord])

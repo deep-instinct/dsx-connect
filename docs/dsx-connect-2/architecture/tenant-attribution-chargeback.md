@@ -66,23 +66,14 @@ Onboarding should establish:
 
 Conceptual onboarding flow:
 
-```text
-Onboard tenant or application
-    |
-    v
-Issue identity and credentials
-    |
-    v
-Assign repositories and policies
-    |
-    v
-Process attributed scans
-    |
-    v
-Write audit and usage records
-    |
-    v
-Report usage and chargeback
+```mermaid
+flowchart TD
+    A["Onboard tenant or application"] --> B["Issue identity and credentials"]
+    B --> C["Assign repositories and policies"]
+    C --> D["Bind DSXA protected entity defaults"]
+    D --> E["Process attributed scans"]
+    E --> F["Write audit and usage records"]
+    F --> G["Report usage and chargeback"]
 ```
 
 ## Attribution Context
@@ -114,6 +105,30 @@ Minimum fields:
 - correlation id
 - job id
 - job item id
+
+Recommended ownership fields:
+
+| Field | Purpose |
+| --- | --- |
+| `tenant_id` or `customer_id` | Identifies the organization or customer that owns the request. |
+| `application_id` | Identifies the application or service that generated the request. |
+| `submitted_by` | Identifies the user, service account, or automation principal that initiated the request. |
+| `cost_center` | Identifies the internal accounting owner that should absorb or report usage cost. |
+| `billing_code` | Identifies the project, contract, budget line, product, or usage bucket used for allocation. |
+
+`cost_center` and `billing_code` are intentionally separate.
+A cost center usually maps to finance or organizational ownership.
+A billing code is often more specific: a product, project, customer contract, campaign, or internal work order.
+
+Example:
+
+```text
+tenant_id: manufacturing-enterprise
+application_id: claims-upload-service
+submitted_by: svc-claims-upload
+cost_center: claims-platform-engineering
+billing_code: claims-upload-prod
+```
 
 Example:
 
@@ -162,6 +177,17 @@ DSX-Connect should support:
 
 The protected entity should represent the tenant, application, or business owner that should receive scan attribution.
 
+Application identity is a natural place to bind a default protected entity id, but it should not be the only binding point.
+The relationship should be configurable rather than strictly one-to-one.
+
+Common models:
+
+- one application maps to one DSXA protected entity
+- one tenant maps to one default DSXA protected entity
+- multiple applications share one DSXA protected entity
+- one application uses different protected entities by environment, destination, region, or data classification
+- one protected destination overrides the application default
+
 Conceptual DSX-Connect application binding:
 
 ```json
@@ -173,6 +199,19 @@ Conceptual DSX-Connect application binding:
     "protected_entity_name": "Claims Portal"
   }
 }
+```
+
+Conceptual binding model:
+
+```mermaid
+flowchart LR
+    Tenant["Tenant / Customer"] --> App["Application Identity"]
+    App --> Credentials["Gateway Credentials"]
+    App --> Grants["Allowed Destinations"]
+    App --> Policy["Default Policy"]
+    App --> PE["Default DSXA Protected Entity"]
+    Scope["Protected Destination / Scope"] --> ScopePE["Optional Protected Entity Override"]
+    Scope --> ScopePolicy["Optional Policy Override"]
 ```
 
 ### Custom Metadata Header
@@ -209,18 +248,14 @@ DSX-Connect should resolve attribution consistently at scan time.
 
 Recommended precedence:
 
-```text
-job item override
-    >
-protected asset override
-    >
-protected destination or scope default
-    >
-application default
-    >
-tenant default
-    >
-connector default
+```mermaid
+flowchart TD
+    A["Request or job item override<br/>if permitted"] --> B["Protected asset override"]
+    B --> C["Protected destination / scope default"]
+    C --> D["Application default"]
+    D --> E["Tenant default"]
+    E --> F["Connector default"]
+    F --> G["System default"]
 ```
 
 This lets operators start simple and become more granular over time.
@@ -232,6 +267,22 @@ Examples:
 - one protected entity per protected destination
 - one protected entity per high-value asset
 - one billing code per cost center
+
+Protected entity id should follow the same resolution approach:
+
+```mermaid
+flowchart TD
+    A["Explicit request override<br/>only if policy allows"] --> B["Protected asset protected_entity_id"]
+    B --> C["Protected destination / scope protected_entity_id"]
+    C --> D["Application default protected_entity_id"]
+    D --> E["Tenant default protected_entity_id"]
+    E --> F["Connector default protected_entity_id"]
+    F --> G["System default protected_entity_id"]
+    G --> H["DSXA scan request"]
+```
+
+The resolved protected entity id gives DSXA-native reporting.
+The resolved attribution context gives DSX-Connect audit, chargeback, and troubleshooting detail.
 
 ## Scan Worker Requirements
 
@@ -258,6 +309,27 @@ For DSXA, that means:
 - correlation identifiers that let scan results be tied back to DSX-Connect jobs
 
 The scan result persisted by DSX-Connect should include the same attribution context, not only the scanner verdict.
+
+End-to-end attribution path:
+
+```mermaid
+sequenceDiagram
+    participant App as Application or Gateway Client
+    participant API as DSX-Connect API
+    participant CP as Control Plane
+    participant Q as Job Queue
+    participant Worker as Scan Worker
+    participant DSXA as DSXA Scanner
+    participant Results as Results / Usage Records
+
+    App->>API: Submit file with gateway credentials
+    API->>CP: Resolve principal, grants, destination, defaults
+    API->>Q: Enqueue job item with attribution context
+    Worker->>CP: Resolve effective policy and protected entity
+    Worker->>DSXA: Scan file with protected entity and X-Custom-Metadata
+    DSXA-->>Worker: Verdict and scan details
+    Worker->>Results: Persist verdict, stages, metadata, usage dimensions
+```
 
 ## Usage Records
 
@@ -399,6 +471,6 @@ Scan results should show attribution fields:
 
 ## Relationship To Existing Documents
 
-- [Normalized Enterprise File Gateway](normalized-enterprise-file-gateway.md)
-- [Gateway Access Control Model](gateway-access-control.md)
-- [Developer File API Versus Managed File Transfer](developer-file-api-vs-mft.md)
+- [Normalized Enterprise File Gateway](../strategy/normalized-enterprise-file-gateway.md)
+- [Gateway Access Control Model](../strategy/gateway-access-control.md)
+- [Developer File API Versus Managed File Transfer](../strategy/developer-file-api-vs-mft.md)

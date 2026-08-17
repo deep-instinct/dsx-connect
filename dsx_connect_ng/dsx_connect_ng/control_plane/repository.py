@@ -8,6 +8,9 @@ from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRecord,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationRecord,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -64,6 +67,26 @@ class ControlPlaneRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def list_gateway_applications(self) -> list[GatewayApplicationRecord]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_gateway_application(self, application_id: str) -> GatewayApplicationRecord | None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
+        raise NotImplementedError
+
+    @abstractmethod
+    def update_gateway_application(
+        self,
+        application_id: str,
+        payload: GatewayApplicationUpdate,
+    ) -> GatewayApplicationRecord | None:
+        raise NotImplementedError
+
+    @abstractmethod
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:
         raise NotImplementedError
 
@@ -89,6 +112,7 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
     def __init__(self) -> None:
         self._integrations: dict[str, IntegrationRecord] = {}
         self._connector_instances: dict[str, ConnectorInstanceRecord] = {}
+        self._gateway_applications: dict[str, GatewayApplicationRecord] = {}
         self._scopes: dict[str, ProtectedScopeRecord] = {}
 
     def list_integrations(self) -> list[IntegrationRecord]:
@@ -185,6 +209,33 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
             update["labels"] = payload.labels
         merged = current.model_copy(update=update)
         self._connector_instances[connector_instance_id] = merged
+        return merged
+
+    def list_gateway_applications(self) -> list[GatewayApplicationRecord]:
+        return sorted(self._gateway_applications.values(), key=lambda row: row.created_at)
+
+    def get_gateway_application(self, application_id: str) -> GatewayApplicationRecord | None:
+        return self._gateway_applications.get(application_id)
+
+    def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
+        row = GatewayApplicationRecord(**payload.model_dump())
+        self._gateway_applications[payload.application_id] = row
+        return row
+
+    def update_gateway_application(
+        self,
+        application_id: str,
+        payload: GatewayApplicationUpdate,
+    ) -> GatewayApplicationRecord | None:
+        current = self._gateway_applications.get(application_id)
+        if current is None:
+            return None
+        update = {
+            **payload.model_dump(exclude_unset=True),
+            "updated_at": utcnow(),
+        }
+        merged = GatewayApplicationRecord.model_validate({**current.model_dump(), **update})
+        self._gateway_applications[application_id] = merged
         return merged
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:

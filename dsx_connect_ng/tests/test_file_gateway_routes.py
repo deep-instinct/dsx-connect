@@ -245,3 +245,99 @@ def test_file_gateway_static_token_filters_destinations_and_applies_attribution(
     assert attribution["billing_code"] == "BILL-TOKEN"
     assert attribution["dsxa_protected_entity_id"] == 91
     assert items[0]["payload"]["protectedEntity"] == 91
+
+
+def test_file_gateway_static_token_resolves_onboarded_application_before_static_json(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
+    monkeypatch.setattr(settings.gateway, "auth_enabled", True)
+    monkeypatch.setattr(settings.gateway, "allow_anonymous", False)
+    monkeypatch.setattr(
+        settings.gateway,
+        "static_clients_json",
+        json.dumps(
+            [
+                {
+                    "token": "shared-token",
+                    "principal_id": "legacy-static-json",
+                    "tenant_id": "legacy-tenant",
+                    "grants": [{"actions": ["discover", "submit", "status"]}],
+                }
+            ]
+        ),
+    )
+    client = TestClient(create_app())
+    integration = client.post(
+        "/api/v1/control-plane/integrations",
+        json={
+            "platform": "gcs",
+            "platform_key": "project-a",
+            "display_name": "Project A",
+            "capability_read": True,
+            "config": {"capabilities": {"write": True}},
+        },
+    ).json()
+    scope = client.post(
+        "/api/v1/control-plane/scopes",
+        json={
+            "integration_id": integration["integration_id"],
+            "scope_type": "path",
+            "resource_selector": "claims-bucket",
+            "display_name": "Claims Bucket",
+            "mode": "full_scan",
+            "enabled": True,
+        },
+    ).json()
+    app_response = client.post(
+        "/api/v1/control-plane/gateway-applications",
+        json={
+            "application_id": "claims-upload-service",
+            "display_name": "Claims Upload Service",
+            "tenant_id": "claims-tenant",
+            "customer_id": "internal",
+            "business_unit": "Claims",
+            "cost_center": "CC-1042",
+            "billing_code": "CLAIMS-PROD",
+            "default_protected_entity_id": 65,
+            "identity_bindings": [
+                {
+                    "provider": "static_bearer",
+                    "token": "shared-token",
+                }
+            ],
+            "grants": [
+                {
+                    "destination_ids": [scope["scope_id"]],
+                    "actions": ["discover", "submit", "status"],
+                }
+            ],
+        },
+    )
+    assert app_response.status_code == 200
+
+    listed = client.get("/api/v1/files/destinations", headers={"Authorization": "Bearer shared-token"})
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()["destinations"]] == [scope["scope_id"]]
+
+    accepted = client.post(
+        "/api/v1/files/transfers",
+        headers={"Authorization": "Bearer shared-token"},
+        data={
+            "destination_id": scope["scope_id"],
+            "destination_path": "inbound",
+        },
+        files=[("files", ("report.txt", b"hello", "text/plain"))],
+    )
+    assert accepted.status_code == 200
+    job_id = accepted.json()["job_id"]
+    items = client.get(f"/api/v1/execution/jobs/{job_id}/items").json()
+    attribution = items[0]["payload"]["attribution"]
+    assert attribution["principal_id"] == "claims-upload-service"
+    assert attribution["application_id"] == "claims-upload-service"
+    assert attribution["application_name"] == "Claims Upload Service"
+    assert attribution["tenant_id"] == "claims-tenant"
+    assert attribution["customer_id"] == "internal"
+    assert attribution["business_unit"] == "Claims"
+    assert attribution["cost_center"] == "CC-1042"
+    assert attribution["billing_code"] == "CLAIMS-PROD"
+    assert attribution["dsxa_protected_entity_id"] == 65
+    assert items[0]["payload"]["protectedEntity"] == 65

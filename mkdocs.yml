@@ -171,6 +171,8 @@ nav:
 
   - DSX-Connect 2:
       - Overview: dsx-connect-2/index.md
+      - Concepts:
+          - Application Identity And Attribution: dsx-connect-2/concepts/application-identity-and-attribution.md
       - Strategy:
           - Normalized Enterprise File Gateway: dsx-connect-2/strategy/normalized-enterprise-file-gateway.md
           - Developer File API Versus MFT: dsx-connect-2/strategy/developer-file-api-vs-mft.md

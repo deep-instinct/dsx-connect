@@ -11,6 +11,9 @@ from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceHeartbeat,
     ConnectorInstanceRecord,
     ConnectorInstanceRegister,
+    GatewayApplicationCreate,
+    GatewayApplicationRecord,
+    GatewayApplicationUpdate,
     IntegrationCreate,
     IntegrationRecord,
     IntegrationUpdate,
@@ -235,6 +238,58 @@ class ControlPlaneService:
             ),
         )
         return row
+
+    def list_gateway_applications(self) -> list[GatewayApplicationRecord]:
+        return self.repo.list_gateway_applications()
+
+    def get_gateway_application_or_404(self, application_id: str) -> GatewayApplicationRecord:
+        row = self.repo.get_gateway_application(application_id)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gateway_application_not_found")
+        return row
+
+    def _validate_gateway_application(self, payload: GatewayApplicationCreate | GatewayApplicationUpdate) -> None:
+        grants = payload.grants
+        if grants is None:
+            return
+        valid_actions = {"discover", "submit", "status"}
+        for grant in grants:
+            unknown = set(grant.actions) - valid_actions
+            if unknown:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail={
+                        "code": "invalid_gateway_application_grant_actions",
+                        "actions": sorted(unknown),
+                    },
+                )
+
+    def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
+        self._validate_gateway_application(payload)
+        if self.repo.get_gateway_application(payload.application_id) is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="gateway_application_conflict")
+        return self.repo.create_gateway_application(payload)
+
+    def update_gateway_application(
+        self,
+        application_id: str,
+        payload: GatewayApplicationUpdate,
+    ) -> GatewayApplicationRecord:
+        self.get_gateway_application_or_404(application_id)
+        self._validate_gateway_application(payload)
+        row = self.repo.update_gateway_application(application_id, payload)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gateway_application_not_found")
+        return row
+
+    def find_gateway_application_by_static_token(self, token: str) -> GatewayApplicationRecord | None:
+        for application in self.repo.list_gateway_applications():
+            if not application.enabled:
+                continue
+            for binding in application.identity_bindings:
+                if binding.provider == "static_bearer" and binding.token == token:
+                    return application
+        return None
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:
         if integration_id:

@@ -130,6 +130,49 @@ def test_file_gateway_transfer_upload_creates_cached_scan_job(tmp_path: Path, mo
     assert items[0]["payload"]["protectedEntity"] == 65
 
 
+def test_file_gateway_scan_only_upload_does_not_require_destination(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
+    client = TestClient(create_app())
+
+    response = client.post(
+        "/api/v1/files/transfers",
+        data={
+            "metadata": '{"tenant_id":"tenant-a","application":"verdict-only","dsxa_protected_entity_id":65}',
+        },
+        files=[
+            ("files", ("sample.txt", b"scan me", "text/plain")),
+        ],
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["mode"] == "scan_only"
+    assert body["destination_id"] is None
+    assert body["submitted_files"] == 1
+    assert body["job"]["job"]["job_type"] == "file.scan"
+    assert body["job"]["job"]["integration_id"] is None
+    assert body["job"]["job"]["scope_id"] is None
+
+    items = client.get(f"/api/v1/execution/jobs/{body['job_id']}/items").json()
+    assert len(items) == 1
+    assert items[0]["content_source"]["mode"] == "cached"
+    cached_path = Path(items[0]["content_source"]["locator"])
+    assert cached_path.exists()
+    assert cached_path.read_bytes() == b"scan me"
+    assert items[0]["payload"]["readerStrategy"] == "cached"
+    assert items[0]["payload"]["scanOnly"] is True
+    assert "deliveryTarget" not in items[0]["payload"]
+    assert "destinationId" not in items[0]["payload"]
+    assert items[0]["payload"]["protectedEntity"] == 65
+    attribution = items[0]["payload"]["attribution"]
+    assert attribution["tenant_id"] == "tenant-a"
+    assert attribution["application_id"] == "verdict-only"
+    assert attribution["file_name"] == "sample.txt"
+    assert attribution["file_size_bytes"] == 7
+    assert attribution["object_identity"].startswith(f"gateway-upload/{body['transfer_id']}/")
+    assert "destination_id" not in attribution
+
+
 def test_file_gateway_static_token_filters_destinations_and_applies_attribution(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
     monkeypatch.setattr(settings.gateway, "auth_enabled", True)

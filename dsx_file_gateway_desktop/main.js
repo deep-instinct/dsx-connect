@@ -11,6 +11,7 @@ function defaultSettings() {
   return {
     dsxConnectUrl: "http://dsx-connect.10.2.4.103.nip.io/api/v1",
     gatewayToken: "",
+    uploadMode: "destination",
     destinationId: "",
     destinationPath: "",
     selectedFiles: [],
@@ -102,9 +103,10 @@ async function getTransferStatus(request) {
 
 async function submitTransfer(request) {
   const baseUrl = normalizeApiBaseUrl(request?.dsxConnectUrl);
+  const uploadMode = request?.uploadMode === "scan_only" ? "scan_only" : "destination";
   const destinationId = String(request?.destinationId || "").trim();
   const selectedFiles = Array.isArray(request?.selectedFiles) ? request.selectedFiles : [];
-  if (!destinationId) {
+  if (uploadMode === "destination" && !destinationId) {
     throw new Error("Choose a destination.");
   }
   if (!selectedFiles.length) {
@@ -112,8 +114,10 @@ async function submitTransfer(request) {
   }
 
   const form = new FormData();
-  form.set("destination_id", destinationId);
-  form.set("destination_path", String(request?.destinationPath || ""));
+  if (uploadMode === "destination") {
+    form.set("destination_id", destinationId);
+    form.set("destination_path", String(request?.destinationPath || ""));
+  }
   form.set("metadata", JSON.stringify(request?.metadata || {}));
   for (const filePath of selectedFiles) {
     const data = await fs.readFile(filePath);

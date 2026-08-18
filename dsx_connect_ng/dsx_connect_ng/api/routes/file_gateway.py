@@ -47,7 +47,8 @@ class GatewayTransferResponse(BaseModel):
     transfer_id: str
     job_id: str
     state: str
-    destination_id: str
+    mode: str = "transfer"
+    destination_id: str | None = None
     submitted_files: int
     status_url: str
     job: BatchJobRecord
@@ -341,7 +342,7 @@ def _policy_scanner_protected_entity(policy: dict[str, Any]) -> int | None:
 def _build_gateway_attribution(
     *,
     metadata: dict[str, Any],
-    destination: GatewayDestination,
+    destination: GatewayDestination | None,
     transfer_id: str,
     principal: GatewayPrincipal,
 ) -> dict[str, Any]:
@@ -354,7 +355,7 @@ def _build_gateway_attribution(
         submitted.get("protectedEntityId"),
         submitted.get("dsxa_protected_entity_id"),
         submitted.get("dsxaProtectedEntityId"),
-        _policy_scanner_protected_entity(destination.policy),
+        _policy_scanner_protected_entity(destination.policy) if destination else None,
     )
     attribution = {
         "source": "file_gateway_api",
@@ -394,15 +395,20 @@ def _build_gateway_attribution(
             submitted.get("billingCode"),
             submitted.get("chargeback_code"),
         ),
-        "destination_id": destination.id,
-        "destination_name": destination.display_name,
-        "destination_platform": destination.platform,
-        "destination_platform_key": destination.platform_key,
-        "integration_id": destination.integration_id,
-        "scope_id": destination.scope_id,
-        "protected_target": destination.selector,
-        "classification": destination.classification,
     }
+    if destination is not None:
+        attribution.update(
+            {
+                "destination_id": destination.id,
+                "destination_name": destination.display_name,
+                "destination_platform": destination.platform,
+                "destination_platform_key": destination.platform_key,
+                "integration_id": destination.integration_id,
+                "scope_id": destination.scope_id,
+                "protected_target": destination.selector,
+                "classification": destination.classification,
+            }
+        )
     if protected_entity is not None:
         attribution["dsxa_protected_entity_id"] = protected_entity
     return {key: value for key, value in attribution.items() if value not in (None, "")}
@@ -464,7 +470,7 @@ def list_file_destinations(
 
 @router.post("/transfers", response_model=GatewayTransferResponse)
 async def submit_file_transfer(
-    destination_id: str = Form(...),
+    destination_id: str = Form(default=""),
     destination_path: str = Form(default=""),
     metadata: str | None = Form(default=None),
     files: list[UploadFile] = File(...),
@@ -474,11 +480,13 @@ async def submit_file_transfer(
 ) -> GatewayTransferResponse:
     if not files:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="files_required")
-    destination = _get_destination_or_404(control_plane, destination_id, principal)
-    if not _is_path_allowed(principal, destination, destination_path):
+    normalized_destination_id = destination_id.strip()
+    destination = _get_destination_or_404(control_plane, normalized_destination_id, principal) if normalized_destination_id else None
+    if destination is not None and not _is_path_allowed(principal, destination, destination_path):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="destination_path_not_allowed")
     parsed_metadata = _parse_metadata(metadata)
     transfer_id = f"transfer_{uuid.uuid4().hex}"
+    scan_only = destination is None
     attribution = _build_gateway_attribution(
         metadata=parsed_metadata,
         destination=destination,
@@ -490,7 +498,11 @@ async def submit_file_transfer(
     for index, upload in enumerate(files):
         cached_path, size_bytes, sha256 = await _persist_upload(upload, transfer_dir=transfer_dir)
         original_name = upload.filename or cached_path.name
-        object_identity = str(Path(destination.selector) / destination_path.strip("/") / _safe_name(original_name))
+        object_identity = (
+            f"gateway-upload/{transfer_id}/{_safe_name(original_name)}"
+            if scan_only
+            else str(Path(destination.selector) / destination_path.strip("/") / _safe_name(original_name))
+        )
         item_attribution = _item_attribution(
             attribution,
             file_index=index,
@@ -508,7 +520,7 @@ async def submit_file_transfer(
                     "source": "desktop_upload",
                     "attribution": item_attribution,
                     "transferId": transfer_id,
-                    "destinationId": destination.id,
+                    **({"destinationId": destination.id} if destination is not None else {}),
                     "destinationPath": destination_path,
                     "originalFilename": original_name,
                     "sizeInBytes": size_bytes,
@@ -524,34 +536,40 @@ async def submit_file_transfer(
                             "source": "desktop_upload",
                         },
                     },
-                    "deliveryTarget": {
-                        "type": "gateway_destination",
-                        "destinationId": destination.id,
-                        "integrationId": destination.integration_id,
-                        "scopeId": destination.scope_id,
-                        "platform": destination.platform,
-                        "platformKey": destination.platform_key,
-                        "displayName": destination.display_name,
-                        "selector": destination.selector,
-                        "path": object_identity,
-                    },
-                    "scanOnly": False,
+                    **(
+                        {
+                            "deliveryTarget": {
+                                "type": "gateway_destination",
+                                "destinationId": destination.id,
+                                "integrationId": destination.integration_id,
+                                "scopeId": destination.scope_id,
+                                "platform": destination.platform,
+                                "platformKey": destination.platform_key,
+                                "displayName": destination.display_name,
+                                "selector": destination.selector,
+                                "path": object_identity,
+                            }
+                        }
+                        if destination is not None
+                        else {}
+                    ),
+                    "scanOnly": scan_only,
                     **({"protectedEntity": protected_entity} if protected_entity is not None else {}),
                 },
             }
         )
     request = BatchJobSubmitRequest(
-        job_type="file.transfer",
-        integration_id=destination.integration_id,
-        scope_id=destination.scope_id,
+        job_type="file.scan" if scan_only else "file.transfer",
+        integration_id=destination.integration_id if destination else None,
+        scope_id=destination.scope_id if destination else None,
         payload={
-            "source": "desktop_transfer",
+            "source": "desktop_upload_scan_only" if scan_only else "desktop_transfer",
             "transferId": transfer_id,
-            "destinationId": destination.id,
-            "destination": destination.model_dump(mode="json"),
+            **({"destinationId": destination.id, "destination": destination.model_dump(mode="json")} if destination else {}),
             "metadata": parsed_metadata,
             "attribution": attribution,
             "itemCount": len(items),
+            "scanOnly": scan_only,
         },
         items=items,
     )
@@ -560,7 +578,8 @@ async def submit_file_transfer(
         transfer_id=transfer_id,
         job_id=batch.job.job_id,
         state=batch.job.state,
-        destination_id=destination.id,
+        mode="scan_only" if scan_only else "transfer",
+        destination_id=destination.id if destination else None,
         submitted_files=len(items),
         status_url=f"{settings.api_prefix}/execution/jobs/{batch.job.job_id}/progress",
         job=batch,

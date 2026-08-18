@@ -7,7 +7,7 @@ The app lets a developer:
 1. Connect to DSX-Connect.
 2. Discover enterprise-approved destinations.
 3. Pick one or more local files.
-4. Submit those files to DSX-Connect.
+4. Submit those files to DSX-Connect for either governed delivery or scan-only verdicts.
 5. Watch the governed DSX-Connect job status.
 
 The app does not own scan policy, remediation, audit, or destination governance.
@@ -38,3 +38,5 @@ GET  /api/v1/execution/jobs/{job_id}/progress
 ```
 
 `POST /api/v1/files/transfers` accepts multipart file uploads, stores them in the DSX-Connect gateway upload cache, and submits a durable `file.transfer` job using cached content sources.
+
+When `destination_id` is omitted, the same endpoint submits a durable `file.scan` job. The uploaded files are scanned from the gateway cache and no delivery target is created.

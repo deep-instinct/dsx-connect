@@ -80,10 +80,17 @@
           <input id="gatewayToken" type="password" placeholder="optional bearer token" spellcheck="false" />
         </label>
         <label>
+          Upload mode
+          <select id="uploadMode">
+            <option value="destination">Scan and deliver to destination</option>
+            <option value="scan_only">Scan only, return verdict</option>
+          </select>
+        </label>
+        <label id="destinationSettings">
           Protected destination
           <select id="destinationId"></select>
         </label>
-        <label>
+        <label id="destinationPathSettings">
           Relative path
           <input id="destinationPath" type="text" placeholder="optional/path/prefix" spellcheck="false" />
         </label>

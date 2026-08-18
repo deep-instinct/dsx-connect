@@ -97,6 +97,10 @@ function setSettingsExpanded(expanded) {
 
 function renderSettingsSummary() {
   const node = $("settingsSummary");
+  if (currentUploadMode() === "scan_only") {
+    node.textContent = "Scan only - no destination delivery.";
+    return;
+  }
   const destination = currentDestination();
   if (!destination) {
     node.textContent = destinations.length
@@ -112,6 +116,20 @@ function renderSettingsSummary() {
 
 function renderDestinationPreview() {
   const node = $("destinationPreview");
+  if (currentUploadMode() === "scan_only") {
+    const sampleFiles = selectedFiles.slice(0, 3);
+    node.innerHTML = `
+      <div><span>Mode</span><strong>Scan only</strong></div>
+      <div><span>Delivery</span><strong>No destination delivery</strong></div>
+      ${
+        sampleFiles.length
+          ? `<ul>${sampleFiles.map((filePath) => `<li>${escapeHtml(fileNameFromPath(filePath))}</li>`).join("")}</ul>`
+          : `<p>Select files to submit for verdict-only scanning.</p>`
+      }
+    `;
+    renderSettingsSummary();
+    return;
+  }
   const destination = currentDestination();
   if (!destination) {
     node.textContent = "Choose a protected destination and file.";
@@ -135,13 +153,15 @@ function renderDestinationPreview() {
 }
 
 function setSubmitEnabled() {
-  $("submitTransfer").disabled = !currentDestination() || selectedFiles.length === 0;
+  $("submitTransfer").disabled =
+    selectedFiles.length === 0 || (currentUploadMode() === "destination" && !currentDestination());
 }
 
 function readForm() {
   return {
     dsxConnectUrl: $("dsxConnectUrl").value.trim(),
     gatewayToken: $("gatewayToken").value.trim(),
+    uploadMode: currentUploadMode(),
     destinationId: $("destinationId").value,
     destinationPath: $("destinationPath").value.trim(),
     selectedFiles,
@@ -149,6 +169,19 @@ function readForm() {
       application: "desktop-mvp"
     }
   };
+}
+
+function currentUploadMode() {
+  return $("uploadMode")?.value === "scan_only" ? "scan_only" : "destination";
+}
+
+function renderUploadMode() {
+  const scanOnly = currentUploadMode() === "scan_only";
+  $("destinationSettings").hidden = scanOnly;
+  $("destinationPathSettings").hidden = scanOnly;
+  renderDestinationDetail();
+  renderDestinationPreview();
+  setSubmitEnabled();
 }
 
 async function persistForm() {
@@ -167,6 +200,7 @@ function renderDestinations() {
     renderDestinationDetail();
     renderDestinationPreview();
     setSubmitEnabled();
+    renderUploadMode();
     return;
   }
   for (const destination of destinations) {
@@ -180,6 +214,7 @@ function renderDestinations() {
   renderDestinationDetail();
   renderDestinationPreview();
   setSubmitEnabled();
+  renderUploadMode();
 }
 
 function currentDestination() {
@@ -187,6 +222,10 @@ function currentDestination() {
 }
 
 function renderDestinationDetail() {
+  if (currentUploadMode() === "scan_only") {
+    $("destinationDetail").textContent = "Files will be scanned from the upload cache and no delivery target will be created.";
+    return;
+  }
   const destination = currentDestination();
   if (!destination) {
     $("destinationDetail").textContent = "No destination selected.";
@@ -271,12 +310,13 @@ async function pickFiles() {
 
 function renderTransferResult(result) {
   activeJobId = result?.job_id || activeJobId;
+  const scanOnly = result?.mode === "scan_only";
   $("jobId").textContent = activeJobId || "-";
   $("jobState").textContent = result?.state || result?.job?.job?.state || "-";
   $("jobProgress").textContent = "-";
   $("jobTerminal").textContent = "-";
   $("resultSummary").innerHTML = `
-    <strong>Transfer accepted</strong>
+    <strong>${scanOnly ? "Scan accepted" : "Transfer accepted"}</strong>
     <span>${escapeHtml(result?.submitted_files || 0)} file(s) submitted to DSX-Connect.</span>
   `;
   $("rawResult").textContent = JSON.stringify(result || {}, null, 2);
@@ -310,7 +350,7 @@ async function submitTransfer() {
     await persistForm();
     const result = await window.dsxGateway.submitTransfer(readForm());
     renderTransferResult(result);
-    setStatus("Transfer accepted by DSX-Connect", "ok");
+    setStatus(result?.mode === "scan_only" ? "Scan accepted by DSX-Connect" : "Transfer accepted by DSX-Connect", "ok");
     await refreshStatus({ quiet: true });
     schedulePoll();
   } catch (error) {
@@ -345,6 +385,7 @@ async function init() {
   settings = await window.dsxGateway.loadSettings();
   $("dsxConnectUrl").value = settings.dsxConnectUrl || "";
   $("gatewayToken").value = settings.gatewayToken || "";
+  $("uploadMode").value = settings.uploadMode === "scan_only" ? "scan_only" : "destination";
   $("destinationPath").value = settings.destinationPath || "";
   selectedFiles = Array.isArray(settings.selectedFiles) ? settings.selectedFiles : [];
   renderFiles();
@@ -357,6 +398,10 @@ async function init() {
     if (event.key === "Escape") setSettingsExpanded(false);
   });
   $("refreshDestinations").addEventListener("click", refreshDestinations);
+  $("uploadMode").addEventListener("change", () => {
+    renderUploadMode();
+    persistForm();
+  });
   $("destinationId").addEventListener("change", () => {
     renderDestinationDetail();
     renderDestinationPreview();

@@ -11,7 +11,7 @@ env:
   DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@postgres:5432/dsx_connect_2"
   DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@rabbitmq:5672/%2F"
   DSX_CONNECT_NG_SCANNER__MODE: "stub"
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
 
 workers:
   relay:

@@ -227,14 +227,15 @@ Scan worker modes:
   - integration config, for example `config.reader.default_strategy`
   - `DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY`
 - supported strategies today are:
-  - `native`
   - `proxy`
+  - `native`
   - `cached`
   - `quarantine`
+- `proxy` is the default strategy. It keeps repository credentials inside connector runtimes and lets generic scan workers stream content through connector-compatible `read_file` endpoints.
 - `native` uses a worker-hosted native reader when one exists for the integration platform. GCS integrations use the native GCS reader, which streams object bytes directly from GCS to the scan transport.
 - `native` falls back to the local-path reader for platforms without a native reader.
 - `cached` and `quarantine` currently resolve to local artifact readers.
-- `proxy` uses a `ConnectorProxyReader` that calls a connector-compatible `read_file` endpoint and streams the response to DSXA scanning.
+- Use `native` only as an explicit deployment-specific optimization when credentials and benchmark results justify it.
 - result sink backends currently supported are:
   - `stdout`
   - `json_lines`

@@ -8,7 +8,7 @@ env:
   DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
   DSX_CONNECT_NG_SCANNER__BASE_URL: "http://dsxa-scanner:15000"
   DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY: "65"
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
   DSX_CONNECT_NG_GATEWAY__AUTH_ENABLED: "true"
   DSX_CONNECT_NG_GATEWAY__ALLOW_ANONYMOUS: "true"
   DSX_CONNECT_NG_GATEWAY__ANONYMOUS_PRINCIPAL_JSON: '{"principal_id":"guest","auth_method":"none","tenant_id":"demo","tenant_name":"Demo Tenant","application_id":"guest-browser","application_name":"Guest Browser","submitted_by":"anonymous","grants":[{"actions":["discover"]}]}'

@@ -86,7 +86,7 @@ class ReaderSettings(BaseSettings):
         extra="ignore",
     )
 
-    default_strategy: ReaderStrategy = "native"
+    default_strategy: ReaderStrategy = "proxy"
     chunk_size_bytes: int = Field(default=1024 * 1024, ge=1)
 
 

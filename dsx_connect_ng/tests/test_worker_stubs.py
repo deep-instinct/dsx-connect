@@ -31,6 +31,7 @@ from dsx_connect_ng.jobs.repository import InMemoryJobRepository
 from dsx_connect_ng.jobs.service import JobService
 from dsx_connect_ng.readers.proxy import ConnectorProxyReader, build_connector_proxy_reader, local_stub_connector_read, resolve_connector_proxy_runtime_config
 from dsx_connect_ng.readers.gcs_native import GCSNativeReader
+from dsx_connect_ng.readers.local_path import LocalPathReader
 from dsx_connect_ng.readers.resolver import build_scan_reader, resolve_reader_strategy
 from dsx_connect_ng.workers.delivery_worker import process_result_sink_message
 from dsx_connect_ng.workers.dianna_worker import process_dianna_message
@@ -1027,6 +1028,12 @@ def test_scan_worker_handoff_includes_resolved_policy_context_from_control_plane
             platform_key="local-fs",
             display_name="Filesystem",
             config={
+                "reader": {
+                    "proxy": {
+                        "base_url": "http://filesystem.local",
+                        "connector_name": "filesystem-connector",
+                    }
+                },
                 "scanner": {"protected_entity": 77},
                 "policy": {
                     "policy_id": "integration-policy",
@@ -1552,6 +1559,18 @@ def test_build_scan_reader_returns_connector_proxy_reader_for_proxy_strategy() -
     reader = build_scan_reader(request, control_plane=control_plane)
 
     assert isinstance(reader, ConnectorProxyReader)
+
+
+def test_build_scan_reader_uses_local_reader_for_default_proxy_without_integration() -> None:
+    request = SimpleNamespace(
+        scan_options={},
+        read_hint={},
+        integration_id=None,
+    )
+
+    reader = build_scan_reader(request)
+
+    assert isinstance(reader, LocalPathReader)
 
 
 def test_build_scan_reader_returns_native_gcs_reader_for_gcs_native_strategy() -> None:

@@ -170,7 +170,7 @@ helm upgrade --install "$RELEASE" \
   --set-string env.DSX_CONNECT_NG_POSTGRES__URL=postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2 \
   --set-string env.DSX_CONNECT_NG_RABBITMQ__URL=amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F \
   --set-string env.DSX_CONNECT_NG_SCANNER__MODE=stub \
-  --set-string env.DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY=native
+  --set-string env.DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY=proxy
 ```
 
 To use a reachable DSXA scanner instead of the stub scanner, replace the scanner values:
@@ -262,8 +262,10 @@ env:
   DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
   DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 
-  # Worker reader mode. "native" lets workers read content through registered connectors.
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+  # Worker reader mode. "proxy" keeps repository credentials in connectors and
+  # lets generic scan workers read content through connector proxy endpoints.
+  # Use "native" only as an explicit, benchmark-proven optimization.
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
 
 postgresql:
   # Embedded PostgreSQL is convenient for lab and local validation.

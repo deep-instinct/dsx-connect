@@ -243,7 +243,7 @@ env:
   DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
   DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
   DSX_CONNECT_NG_SCANNER__BASE_URL: "${DSXA_SCANNER_BASE_URL}"
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "native"
+  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
 
 postgresql:
   enabled: true

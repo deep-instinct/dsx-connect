@@ -50,8 +50,12 @@ def build_scan_reader(
     *,
     control_plane: ControlPlaneService | None = None,
 ) -> Reader:
-    strategy = resolve_reader_strategy(request, control_plane=control_plane)
+    request_strategy = _reader_strategy_from_request(request)
+    integration_strategy = _reader_strategy_from_integration(request, control_plane=control_plane)
+    strategy = request_strategy or integration_strategy or settings.readers.default_strategy
     if strategy == "proxy":
+        if not request_strategy and not request.integration_id:
+            return LocalPathReader()
         return build_connector_proxy_reader(request, control_plane=control_plane)
     if strategy == "cached":
         return CachedArtifactReader()

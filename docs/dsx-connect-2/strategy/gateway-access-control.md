@@ -156,6 +156,7 @@ Initial actions:
 - `discover`: caller can see the destination in `GET /files/destinations`
 - `submit`: caller can submit files to the destination
 - `status`: caller can read status for jobs it submitted
+- `scan`: caller can submit files for scan-only verdict workflows that do not deliver to a destination
 - `read_result`: caller can read detailed scan/result payloads
 - `cancel`: caller can cancel jobs it submitted
 
@@ -228,6 +229,30 @@ Example:
 - connector has required repository capability
 
 Only after gateway authorization passes should DSX-Connect create the job.
+
+### Destination-Less Scan Submission
+
+Some applications only need a verdict.
+They are not asking DSX-Connect to deliver the file to a repository.
+
+That workflow should be modeled explicitly instead of overloading destination-backed transfer.
+For example, a future `POST /files/scans` endpoint could require:
+
+- caller identity exists
+- caller has the `scan` action
+- application or request resolves to a scan policy
+- application or request resolves to a DSXA protected entity
+- quota checks pass
+
+This preserves the same identity, attribution, metering, and audit model while avoiding a fake destination.
+
+### Quota Enforcement
+
+Gateway authorization should eventually include application quota checks before job creation.
+Quotas may apply to file count, bytes processed, request rate, concurrent jobs, or monthly usage.
+
+Quota denial should be explicit and auditable.
+The denial should identify the application and quota category without exposing unrelated tenant or destination details.
 
 ### Job Status
 

@@ -34,11 +34,17 @@ gateway:
 
 postgresql:
   enabled: true
+  # Keep control-plane state across pod restarts so lab-protected destinations,
+  # gateway application onboarding, scan history, and attribution data do not
+  # disappear when the embedded Postgres pod is recreated.
   persistence:
-    enabled: false
+    enabled: true
+    size: 8Gi
 
 rabbitmq:
   enabled: true
+  # Queue state is intentionally ephemeral in the lab. Durable control-plane
+  # state lives in Postgres; RabbitMQ can safely restart empty for demos.
   persistence:
     enabled: false
 

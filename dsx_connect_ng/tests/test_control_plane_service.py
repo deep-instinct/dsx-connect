@@ -252,9 +252,9 @@ def test_create_gateway_application_rejects_duplicate_application_id() -> None:
     service = build_service()
     payload = GatewayApplicationCreate(
         application_id="claims-upload-service",
-        display_name="Claims Upload Service",
     )
-    service.create_gateway_application(payload)
+    created = service.create_gateway_application(payload)
+    assert created.display_name == "claims-upload-service"
     try:
         service.create_gateway_application(payload)
     except HTTPException as exc:

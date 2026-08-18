@@ -264,7 +264,25 @@ class ControlPlaneService:
                     },
                 )
 
+    def _normalize_gateway_application_create(self, payload: GatewayApplicationCreate) -> GatewayApplicationCreate:
+        data = payload.model_dump()
+        data["display_name"] = (payload.display_name or payload.application_id).strip() or payload.application_id
+        return GatewayApplicationCreate.model_validate(data)
+
+    def _normalize_gateway_application_update(
+        self,
+        application_id: str,
+        payload: GatewayApplicationUpdate,
+    ) -> GatewayApplicationUpdate:
+        update = payload.model_dump(exclude_unset=True)
+        if "display_name" in update:
+            display_name = (update["display_name"] or "").strip()
+            update["display_name"] = display_name or application_id
+            return GatewayApplicationUpdate.model_validate(update)
+        return payload
+
     def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
+        payload = self._normalize_gateway_application_create(payload)
         self._validate_gateway_application(payload)
         if self.repo.get_gateway_application(payload.application_id) is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="gateway_application_conflict")
@@ -276,6 +294,7 @@ class ControlPlaneService:
         payload: GatewayApplicationUpdate,
     ) -> GatewayApplicationRecord:
         self.get_gateway_application_or_404(application_id)
+        payload = self._normalize_gateway_application_update(application_id, payload)
         self._validate_gateway_application(payload)
         row = self.repo.update_gateway_application(application_id, payload)
         if row is None:

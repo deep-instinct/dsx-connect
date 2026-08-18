@@ -892,6 +892,40 @@
       padding-left: var(--space-8);
     }
 
+    .form-section {
+      display: grid;
+      gap: var(--space-5);
+      padding-bottom: var(--space-6);
+      margin-bottom: var(--space-6);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .form-section:last-of-type {
+      border-bottom: 0;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .form-section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-5);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-strong);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .form-section-title span {
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
     .switch {
       position: relative;
       display: inline-flex;
@@ -1852,72 +1886,78 @@
       <div class="drawer-header">
         <div>
           <h2 id="application-drawer-title">Onboard Application</h2>
-          <p>Map a caller identity to destinations, attribution, and DSXA protected entity defaults.</p>
+          <p>Map a caller identity to destinations, attribution, and the DSXA protected entity used for scans.</p>
         </div>
         <button id="close-application" type="button">Close</button>
       </div>
       <div class="drawer-body">
         <form id="application-form">
           <input name="mode" type="hidden" value="create">
-          <div class="grid-2">
-            <label>Application ID
-              <input name="application_id" placeholder="claims-upload-service" required>
-            </label>
-            <label>Display Name
-              <input name="display_name" placeholder="Claims Upload Service" required>
-            </label>
-          </div>
-          <div class="setting-row">
-            <span>Enabled</span>
-            <label class="switch" aria-label="Application enabled">
-              <input type="checkbox" name="enabled" checked>
-              <span></span>
-            </label>
-          </div>
-          <div class="grid-2">
+          <section class="form-section">
+            <div class="form-section-title">Required <span>Identity and scan attribution</span></div>
+            <div class="grid-2">
+              <label>Application ID
+                <input name="application_id" placeholder="claims-upload-service" required>
+              </label>
+              <label>DSXA Protected Entity ID
+                <input name="default_protected_entity_id" inputmode="numeric" placeholder="required" required>
+              </label>
+            </div>
             <label>Static Bearer Token
-              <input name="static_token" placeholder="demo-token-or-generated-secret">
+              <input name="static_token" placeholder="demo-token-or-generated-secret" required>
             </label>
-            <label>Default Protected Entity ID
-              <input name="default_protected_entity_id" inputmode="numeric" placeholder="65">
+          </section>
+          <section class="form-section">
+            <div class="form-section-title">Optional <span>Operator display and governance metadata</span></div>
+            <div class="grid-2">
+              <label>Display Name
+                <input name="display_name" placeholder="defaults to Application ID">
+              </label>
+              <div class="setting-row">
+                <span>Enabled</span>
+                <label class="switch" aria-label="Application enabled">
+                  <input type="checkbox" name="enabled" checked>
+                  <span></span>
+                </label>
+              </div>
+            </div>
+            <div class="grid-3">
+              <label>Tenant ID
+                <input name="tenant_id" placeholder="claims-business-unit">
+              </label>
+              <label>Customer ID
+                <input name="customer_id" placeholder="enterprise-internal">
+              </label>
+              <label>Business Unit
+                <input name="business_unit" placeholder="Claims">
+              </label>
+            </div>
+            <div class="grid-3">
+              <label>Submitted By
+                <input name="submitted_by" placeholder="svc-claims-upload">
+              </label>
+              <label>Cost Center
+                <input name="cost_center" placeholder="CC-1042">
+              </label>
+              <label>Billing Code
+                <input name="billing_code" placeholder="CLAIMS-UPLOAD-PROD">
+              </label>
+            </div>
+            <label>Allowed Destinations
+              <select name="destination_ids" id="application-destinations" multiple size="6"></select>
             </label>
-          </div>
-          <div class="grid-3">
-            <label>Tenant ID
-              <input name="tenant_id" placeholder="claims-business-unit">
+            <div class="grid-2">
+              <label>Allowed Actions
+                <input name="actions" value="discover,submit,status">
+              </label>
+              <label>Path Prefixes
+                <input name="path_prefixes" placeholder="inbound, uploads/team-a">
+              </label>
+            </div>
+            <label>Metadata JSON
+              <textarea name="metadata_json" placeholder='{"owner":"platform"}'></textarea>
             </label>
-            <label>Customer ID
-              <input name="customer_id" placeholder="enterprise-internal">
-            </label>
-            <label>Business Unit
-              <input name="business_unit" placeholder="Claims">
-            </label>
-          </div>
-          <div class="grid-3">
-            <label>Submitted By
-              <input name="submitted_by" placeholder="svc-claims-upload">
-            </label>
-            <label>Cost Center
-              <input name="cost_center" placeholder="CC-1042">
-            </label>
-            <label>Billing Code
-              <input name="billing_code" placeholder="CLAIMS-UPLOAD-PROD">
-            </label>
-          </div>
-          <label>Allowed Destinations
-            <select name="destination_ids" id="application-destinations" multiple size="6"></select>
-          </label>
-          <div class="grid-2">
-            <label>Allowed Actions
-              <input name="actions" value="discover,submit,status">
-            </label>
-            <label>Path Prefixes
-              <input name="path_prefixes" placeholder="inbound, uploads/team-a">
-            </label>
-          </div>
-          <label>Metadata JSON
-            <textarea name="metadata_json" placeholder='{"owner":"platform"}'></textarea>
-          </label>
+          </section>
           <div class="form-actions">
             <button type="button" id="cancel-application">Cancel</button>
             <button class="primary" type="submit">Save Application</button>
@@ -2092,6 +2132,7 @@
       scanResultsNextPollAt: null,
       connectorsPolling: false,
       connectorsPollingInFlight: false,
+      defaultScannerProtectedEntity: null,
     };
     let protectedFilterReloadTimer = null;
     let scanResultsPollTimer = null;
@@ -2508,9 +2549,11 @@
       try {
         const meta = await fetchJson(endpoints.meta);
         const displayName = meta.display_name || `DSX-Connect v${meta.version || ""}`.trim();
+        state.defaultScannerProtectedEntity = meta.scanner_protected_entity ?? null;
         document.getElementById("product-version").textContent = displayName;
         document.title = `${displayName} Operator Console`;
       } catch (error) {
+        state.defaultScannerProtectedEntity = null;
         document.getElementById("product-version").textContent = "DSX-Connect";
         document.title = "DSX-Connect Operator Console";
       }
@@ -2706,10 +2749,10 @@
         },
         {
           key: "protected_entity",
-          label: "Protected Entity",
+          label: "DSXA PE",
           render: (app) => app.default_protected_entity_id !== null && app.default_protected_entity_id !== undefined
             ? `<span class="mono">${escapeHtml(String(app.default_protected_entity_id))}</span>${app.default_protected_entity_name ? `<br><span class="muted">${escapeHtml(app.default_protected_entity_name)}</span>` : ""}`
-            : '<span class="muted">inherit</span>',
+            : '<span class="muted">unset</span>',
         },
         {
           key: "grants",
@@ -2753,6 +2796,18 @@
       const value = raw ? Number.parseInt(raw, 10) : null;
       if (raw && (!Number.isInteger(value) || value < 1)) {
         throw new Error(`${label} must be a positive integer or blank.`);
+      }
+      return value;
+    }
+
+    function parseRequiredPositiveIntegerValue(rawValue, label) {
+      const raw = String(rawValue || "").trim();
+      if (!raw) {
+        throw new Error(`${label} is required.`);
+      }
+      const value = Number.parseInt(raw, 10);
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`${label} must be a positive integer.`);
       }
       return value;
     }
@@ -4301,6 +4356,9 @@
       form.mode.value = "create";
       form.application_id.readOnly = false;
       form.enabled.checked = true;
+      form.static_token.required = true;
+      form.default_protected_entity_id.required = true;
+      form.default_protected_entity_id.value = state.defaultScannerProtectedEntity ?? "";
       form.actions.value = "discover,submit,status";
       form.metadata_json.value = "{}";
       populateApplicationDestinations([]);
@@ -4323,7 +4381,9 @@
       form.application_id.readOnly = true;
       form.display_name.value = app.display_name || "";
       form.enabled.checked = Boolean(app.enabled);
+      form.static_token.required = true;
       form.static_token.value = applicationStaticToken(app);
+      form.default_protected_entity_id.required = true;
       form.default_protected_entity_id.value = app.default_protected_entity_id ?? "";
       form.tenant_id.value = app.tenant_id || "";
       form.customer_id.value = app.customer_id || "";
@@ -4344,9 +4404,16 @@
     function applicationPayloadFromForm(form) {
       const destinationIds = Array.from(form.destination_ids.selectedOptions).map((option) => option.value);
       const staticToken = form.static_token.value.trim();
+      if (!staticToken) {
+        throw new Error("Static bearer token is required.");
+      }
       const metadata = parseOptionalJson(form.metadata_json.value || "{}");
+      const applicationId = state.applicationEditorMode === "create"
+        ? form.application_id.value.trim()
+        : state.editingApplicationId;
+      const displayName = form.display_name.value.trim() || applicationId;
       const payload = {
-        display_name: form.display_name.value.trim(),
+        display_name: displayName,
         enabled: form.enabled.checked,
         identity_bindings: staticToken ? [{ provider: "static_bearer", token: staticToken }] : [],
         tenant_id: emptyToNull(form.tenant_id.value),
@@ -4355,7 +4422,7 @@
         submitted_by: emptyToNull(form.submitted_by.value),
         cost_center: emptyToNull(form.cost_center.value),
         billing_code: emptyToNull(form.billing_code.value),
-        default_protected_entity_id: parsePositiveIntegerValue(form.default_protected_entity_id.value, "Protected entity"),
+        default_protected_entity_id: parseRequiredPositiveIntegerValue(form.default_protected_entity_id.value, "DSXA protected entity"),
         grants: [{
           destination_ids: destinationIds,
           actions: splitCsv(form.actions.value || "discover,submit,status"),
@@ -4364,7 +4431,7 @@
         metadata,
       };
       if (state.applicationEditorMode === "create") {
-        payload.application_id = form.application_id.value.trim();
+        payload.application_id = applicationId;
       }
       return payload;
     }

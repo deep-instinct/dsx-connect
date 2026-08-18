@@ -117,6 +117,7 @@ def test_ui_meta_returns_display_version() -> None:
         "product": "DSX-Connect",
         "version": DSX_CONNECT_VERSION,
         "display_name": f"DSX-Connect v{DSX_CONNECT_VERSION}",
+        "scanner_protected_entity": None,
     }
 
 

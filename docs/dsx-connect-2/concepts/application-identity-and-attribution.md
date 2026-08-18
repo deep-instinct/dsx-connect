@@ -142,6 +142,56 @@ DSX-Connect application registry
 trusted application identity and attribution context
 ```
 
+## Product Backlog
+
+The application onboarding model should track these near-term design and implementation items:
+
+### Entra Integration
+
+Add a first-class Microsoft Entra ID integration path for gateway application authentication.
+The initial goal is not to replace the DSX-Connect application registry.
+The goal is to let DSX-Connect trust Entra-issued tokens, map token claims to onboarded applications, and continue using the DSX-Connect application record for grants, attribution, protected entity binding, and usage metering.
+
+Open design points:
+
+- tenant-specific versus multi-tenant Entra app registration
+- expected audience for DSX-Connect gateway API tokens
+- claim mapping for application identity, such as `appid`, `azp`, `client_id`, or `sub`
+- JWKS discovery and key rotation behavior
+- handling disabled applications or revoked credentials
+- how the Operator Console guides setup without becoming a full IAM product
+
+### Application Quotas
+
+Add quota controls to gateway application records.
+An application should be limitable by scan count, byte count, request count, or concurrency over a defined time period.
+
+Examples:
+
+- no more than 10,000 file scans per day
+- no more than 100 GB processed per month
+- no more than 5 concurrent transfer jobs
+- burst and sustained rate limits for API submissions
+
+Quotas should be enforced before job creation and should produce clear denial responses.
+Quota events should also become usage records so operators can see when an application is approaching or exceeding its allowance.
+
+### Destination-Less Submissions
+
+Support scan-only gateway submissions where the application needs verdicts and audit records, but does not want DSX-Connect to deliver the file to a protected destination.
+
+This is different from a governed transfer.
+The application submits file content, DSX-Connect scans it, applies policy, records attribution, and returns or exposes the verdict.
+No repository destination is required.
+
+Open design points:
+
+- API shape, for example `POST /files/scans` versus a transfer request with no destination
+- whether destination grants are replaced by an explicit `scan` action grant
+- how path-prefix authorization applies when there is no repository path
+- whether policy is attached to the application, request, or a named scan profile
+- result retention and whether uploaded content is deleted immediately after scanning
+
 ## Onboarding Workflow
 
 Application onboarding has two related tracks.

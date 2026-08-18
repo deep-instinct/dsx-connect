@@ -218,7 +218,9 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
         return self._gateway_applications.get(application_id)
 
     def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
-        row = GatewayApplicationRecord(**payload.model_dump())
+        data = payload.model_dump()
+        data["display_name"] = (payload.display_name or payload.application_id).strip() or payload.application_id
+        row = GatewayApplicationRecord(**data)
         self._gateway_applications[payload.application_id] = row
         return row
 
@@ -234,6 +236,8 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
             **payload.model_dump(exclude_unset=True),
             "updated_at": utcnow(),
         }
+        if "display_name" in update:
+            update["display_name"] = (update["display_name"] or "").strip() or application_id
         merged = GatewayApplicationRecord.model_validate({**current.model_dump(), **update})
         self._gateway_applications[application_id] = merged
         return merged

@@ -336,6 +336,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
 
     def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
         data = payload.model_dump()
+        data["display_name"] = (payload.display_name or payload.application_id).strip() or payload.application_id
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
@@ -391,8 +392,11 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
         current = self.get_gateway_application(application_id)
         if current is None:
             return None
+        update = payload.model_dump(exclude_unset=True)
+        if "display_name" in update:
+            update["display_name"] = (update["display_name"] or "").strip() or application_id
         merged = GatewayApplicationRecord.model_validate(
-            {**current.model_dump(), **payload.model_dump(exclude_unset=True)}
+            {**current.model_dump(), **update}
         )
         data = merged.model_dump()
         with self._connect() as conn, conn.cursor() as cur:

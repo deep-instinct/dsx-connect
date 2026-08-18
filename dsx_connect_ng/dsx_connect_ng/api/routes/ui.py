@@ -64,6 +64,7 @@ class UIMetaResponse(BaseModel):
     product: str = "DSX-Connect"
     version: str
     display_name: str
+    scanner_protected_entity: int | None = None
 
 
 class UIIntegrationSummary(BaseModel):
@@ -1777,7 +1778,11 @@ async def operator_console_slash() -> HTMLResponse:
 @router.get("/meta", response_model=UIMetaResponse)
 async def get_ui_meta() -> UIMetaResponse:
     display_name = f"DSX-Connect v{DSX_CONNECT_VERSION}"
-    return UIMetaResponse(version=DSX_CONNECT_VERSION, display_name=display_name)
+    return UIMetaResponse(
+        version=DSX_CONNECT_VERSION,
+        display_name=display_name,
+        scanner_protected_entity=settings.scanner.protected_entity,
+    )
 
 
 @router.get("/status")

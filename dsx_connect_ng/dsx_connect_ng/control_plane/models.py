@@ -112,7 +112,7 @@ class GatewayApplicationIdentityBinding(BaseModel):
 
 class GatewayApplicationBase(BaseModel):
     application_id: str = Field(min_length=1)
-    display_name: str = Field(min_length=1)
+    display_name: str | None = None
     enabled: bool = True
     identity_bindings: list[GatewayApplicationIdentityBinding] = Field(default_factory=list)
     tenant_id: str | None = None
@@ -152,6 +152,7 @@ class GatewayApplicationUpdate(BaseModel):
 
 
 class GatewayApplicationRecord(GatewayApplicationBase):
+    display_name: str = Field(min_length=1)
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
 

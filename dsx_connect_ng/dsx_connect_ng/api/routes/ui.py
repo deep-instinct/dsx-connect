@@ -1521,6 +1521,38 @@ def _scope_policy(scopes_by_id: dict[str, ProtectedScopeRecord], scope_id: str |
     return scope.post_scan_policy if scope is not None else {}
 
 
+def _default_protection_profile_policy() -> dict[str, Any]:
+    return {
+        "policy_id": "policy-1",
+        "display_name": "Default Protection Profile",
+        "source": "implicit_default",
+        "malicious_verdict": {"action": "detect_only", "tag_on_detect": True},
+    }
+
+
+def _effective_scope_policy(
+    *,
+    integration: IntegrationRecord,
+    scopes_by_id: dict[str, ProtectedScopeRecord],
+    scope_id: str | None,
+) -> dict[str, Any]:
+    if not scope_id:
+        return {}
+    scope = scopes_by_id.get(scope_id)
+    if scope is None:
+        return {}
+    if scope.post_scan_policy:
+        return scope.post_scan_policy
+    resolved = resolve_policy_runtime_config(integration.config, {}).model_dump(mode="json", exclude_none=True)
+    if resolved:
+        resolved.setdefault("policy_id", "policy-1")
+        if resolved.get("policy_id") == "policy-1":
+            resolved.setdefault("display_name", "Default Protection Profile")
+            resolved.setdefault("source", "implicit_default")
+        return resolved
+    return _default_protection_profile_policy()
+
+
 def _integration_protected_entity(integration: IntegrationRecord) -> int | None:
     runtime = parse_integration_runtime_config(integration.config)
     return runtime.scanner.protected_entity if runtime.scanner is not None else None
@@ -1597,7 +1629,11 @@ def _summarize_protected_assets_for_integration(
                 selector=asset.selector,
                 coverage_state=asset.coverage_state,
                 matching_scope_id=asset.matching_scope_id,
-                policy=_scope_policy(scopes_by_id, asset.matching_scope_id),
+                policy=_effective_scope_policy(
+                    integration=integration,
+                    scopes_by_id=scopes_by_id,
+                    scope_id=asset.matching_scope_id,
+                ),
                 protected_entity=protected_entity,
                 inherited_protected_entity=inherited_protected_entity,
                 effective_protected_entity=protected_entity or inherited_protected_entity,
@@ -1637,7 +1673,11 @@ def _summarize_scope_backed_protected_assets_for_integration(
                 selector=scope.resource_selector,
                 coverage_state="protected" if scope.enabled else "disabled",
                 matching_scope_id=scope.scope_id,
-                policy=_scope_policy(scopes_by_id, scope.scope_id),
+                policy=_effective_scope_policy(
+                    integration=integration,
+                    scopes_by_id=scopes_by_id,
+                    scope_id=scope.scope_id,
+                ),
                 protected_entity=protected_entity,
                 inherited_protected_entity=inherited_protected_entity,
                 effective_protected_entity=protected_entity or inherited_protected_entity,

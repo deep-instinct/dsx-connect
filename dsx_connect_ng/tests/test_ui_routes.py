@@ -743,6 +743,63 @@ def test_ui_assets_protected_aggregates_discovered_assets_with_policy(monkeypatc
     assert [asset["selector"] for asset in all_coverage.json()["assets"]] == ["bucket-a", "bucket-b"]
 
 
+def test_ui_assets_protected_uses_implicit_default_profile_for_policyless_protected_scope(monkeypatch) -> None:
+    app = create_app()
+    service = app.state.control_plane_service
+    service.create_integration(
+        IntegrationCreate(
+            integration_id="gcs-a",
+            platform="gcs",
+            platform_key="tenant-a",
+            display_name="GCS A",
+            config={},
+        )
+    )
+    service.create_scope(
+        ProtectedScopeCreate(
+            scope_id="scope-a",
+            integration_id="gcs-a",
+            scope_type="path",
+            resource_selector="bucket-a",
+            display_name="Bucket A",
+            mode="full_scan",
+        )
+    )
+
+    from dsx_connect_ng.api.routes import ui as ui_routes
+
+    def fake_fetch(
+        base_url,
+        connector_name,
+        *,
+        asset_type,
+        source,
+        limit,
+        cursor,
+        asset_filter_mode=None,
+        asset_filter_value=None,
+    ):
+        return {
+            "asset_type": "bucket",
+            "source": source,
+            "status": "success",
+            "assets": [{"id": "bucket-a", "display_name": "Bucket A", "selector": "bucket-a"}],
+        }
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_assets", fake_fetch)
+
+    client = TestClient(app)
+    response = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket")
+
+    assert response.status_code == 200
+    asset = response.json()["assets"][0]
+    assert asset["coverage_state"] == "protected"
+    assert asset["policy"]["policy_id"] == "policy-1"
+    assert asset["policy"]["display_name"] == "Default Protection Profile"
+    assert asset["policy"]["source"] == "implicit_default"
+    assert asset["policy"]["malicious_verdict"]["action"] == "detect_only"
+
+
 def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeypatch) -> None:
     app = create_app()
     service = app.state.control_plane_service
@@ -1356,6 +1413,8 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
     assert protected_asset["protected_entity"] is None
     assert protected_asset["inherited_protected_entity"] == 77
     assert protected_asset["effective_protected_entity"] == 77
+    assert protected_asset["policy"]["policy_id"] == "policy-default-gcs"
+    assert protected_asset["policy"]["malicious_verdict"]["action"] == "detect_only"
     scope_binding = client.patch("/api/v1/ui/scopes/scope-bucket-a/scanner-binding", json={"protected_entity": 88})
     assert scope_binding.status_code == 200
     assert scope_binding.json()["post_scan_policy"]["scanner"]["protected_entity"] == 88

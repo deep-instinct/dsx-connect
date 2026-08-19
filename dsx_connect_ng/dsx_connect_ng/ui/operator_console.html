@@ -3406,7 +3406,12 @@
 
     function protectedAssetPolicyLabel(asset) {
       const policy = asset.policy || {};
-      return policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action || "none";
+      const label = policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action;
+      if (label) return label;
+      if (asset.coverage_state === "protected" || asset.coverage_state === "disabled") {
+        return policyDisplayName(defaultProfileForIntegration(asset.integration_id)) || "Default Protection Profile";
+      }
+      return "none";
     }
 
     function scanSourceLabel(result) {

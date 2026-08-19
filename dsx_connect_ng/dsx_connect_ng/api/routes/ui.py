@@ -1530,6 +1530,34 @@ def _default_protection_profile_policy() -> dict[str, Any]:
     }
 
 
+def _policy_has_profile_config(policy: dict[str, Any]) -> bool:
+    profile_keys = {
+        "policy_id",
+        "display_name",
+        "name",
+        "policy_name",
+        "malicious_verdict",
+        "verdict_actions",
+        "auto_dianna_on_verdicts",
+        "outcome_triggers",
+        "non_compliant_treatment",
+        "not_scanned_treatment",
+        "remediation_plan_by_verdict",
+        "result_delivery_policy",
+        "delivery",
+        "content_preservation_mode_by_verdict",
+        "malicious",
+        "suspicious",
+        "not_scanned",
+        "non_compliant",
+    }
+    return any(policy.get(key) not in (None, "", {}, []) for key in profile_keys)
+
+
+def _with_default_profile(policy: dict[str, Any]) -> dict[str, Any]:
+    return {**_default_protection_profile_policy(), **policy}
+
+
 def _effective_scope_policy(
     *,
     integration: IntegrationRecord,
@@ -1542,7 +1570,8 @@ def _effective_scope_policy(
     if scope is None:
         return {}
     if scope.post_scan_policy:
-        return scope.post_scan_policy
+        policy = dict(scope.post_scan_policy)
+        return policy if _policy_has_profile_config(policy) else _with_default_profile(policy)
     resolved = resolve_policy_runtime_config(integration.config, {}).model_dump(mode="json", exclude_none=True)
     if resolved:
         resolved.setdefault("policy_id", "policy-1")

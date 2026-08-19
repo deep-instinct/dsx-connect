@@ -763,6 +763,7 @@ def test_ui_assets_protected_uses_implicit_default_profile_for_policyless_protec
             resource_selector="bucket-a",
             display_name="Bucket A",
             mode="full_scan",
+            post_scan_policy={"gateway": {"classification": "internal"}},
         )
     )
 
@@ -798,6 +799,7 @@ def test_ui_assets_protected_uses_implicit_default_profile_for_policyless_protec
     assert asset["policy"]["display_name"] == "Default Protection Profile"
     assert asset["policy"]["source"] == "implicit_default"
     assert asset["policy"]["malicious_verdict"]["action"] == "detect_only"
+    assert asset["policy"]["gateway"] == {"classification": "internal"}
 
 
 def test_ui_assets_protected_uses_registered_connector_instance_endpoint(monkeypatch) -> None:

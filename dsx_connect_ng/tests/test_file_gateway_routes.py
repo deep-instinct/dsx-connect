@@ -234,6 +234,21 @@ def test_file_gateway_scan_only_dsxa_items_projection_returns_verdicts(tmp_path:
     assert projected[0]["attribution"]["application_id"] == "verdict-only"
     assert projected[1]["dsxa"]["verdict"] == "Benign"
 
+    job_projected = client.get(f"/api/v1/execution/jobs/{job_id}/dsxa").json()
+
+    assert job_projected["job_id"] == job_id
+    assert job_projected["summary"]["total_items"] == 2
+    assert job_projected["attribution"]["application_id"] == "verdict-only"
+    assert "file_name" not in job_projected["attribution"]
+    assert "file_sha256" not in job_projected["attribution"]
+    assert len(job_projected["items"]) == 2
+    assert job_projected["items"][0]["file"]["file_name"] == "eicar.txt"
+    assert job_projected["items"][0]["file"]["file_size_bytes"] == 9
+    assert job_projected["items"][0]["file"]["object_identity"].endswith("/eicar.txt")
+    assert job_projected["items"][0]["dsxa"]["verdict"] == "Malicious"
+    assert job_projected["items"][1]["file"]["file_name"] == "clean.txt"
+    assert job_projected["items"][1]["dsxa"]["verdict"] == "Benign"
+
 
 def test_file_gateway_static_token_filters_destinations_and_applies_attribution(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))

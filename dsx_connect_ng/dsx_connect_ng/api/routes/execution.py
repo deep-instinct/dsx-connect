@@ -33,6 +33,15 @@ from dsx_connect_ng.jobs.service import JobService
 
 router = APIRouter(prefix="/execution", tags=["execution"])
 
+ITEM_ATTRIBUTION_KEYS = {
+    "file_index",
+    "file_name",
+    "file_size_bytes",
+    "file_sha256",
+    "object_identity",
+    "source_locator",
+}
+
 
 class DsxaItemResult(BaseModel):
     job_item_id: str
@@ -45,6 +54,25 @@ class DsxaItemResult(BaseModel):
     attribution: dict[str, Any] = Field(default_factory=dict)
 
 
+class DsxaJobItemResult(BaseModel):
+    job_item_id: str
+    item_index: int
+    object_identity: str
+    state: str
+    scan_state: str
+    file: dict[str, Any] = Field(default_factory=dict)
+    dsxa: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+
+
+class DsxaJobResult(BaseModel):
+    job_id: str
+    state: str
+    summary: dict[str, Any] = Field(default_factory=dict)
+    attribution: dict[str, Any] = Field(default_factory=dict)
+    items: list[DsxaJobItemResult] = Field(default_factory=list)
+
+
 def _dsxa_item_result(item: JobItemRecord) -> DsxaItemResult:
     return DsxaItemResult(
         job_item_id=item.job_item_id,
@@ -55,6 +83,49 @@ def _dsxa_item_result(item: JobItemRecord) -> DsxaItemResult:
         dsxa=item.scan_stage.result,
         error=item.scan_stage.error or item.error,
         attribution=item.payload.get("attribution") if isinstance(item.payload.get("attribution"), dict) else {},
+    )
+
+
+def _item_attribution(item: JobItemRecord) -> dict[str, Any]:
+    attribution = item.payload.get("attribution")
+    return attribution if isinstance(attribution, dict) else {}
+
+
+def _common_attribution(items: list[JobItemRecord]) -> dict[str, Any]:
+    if not items:
+        return {}
+    common = {
+        key: value
+        for key, value in _item_attribution(items[0]).items()
+        if key not in ITEM_ATTRIBUTION_KEYS
+    }
+    for item in items[1:]:
+        attribution = _item_attribution(item)
+        common = {
+            key: value
+            for key, value in common.items()
+            if key in attribution and attribution[key] == value
+        }
+    return common
+
+
+def _dsxa_job_item_result(item: JobItemRecord, common_attribution: dict[str, Any]) -> DsxaJobItemResult:
+    file_attribution = {
+        key: value
+        for key, value in _item_attribution(item).items()
+        if common_attribution.get(key) != value
+    }
+    file_attribution.setdefault("object_identity", item.object_identity)
+    file_attribution.setdefault("file_index", item.item_index)
+    return DsxaJobItemResult(
+        job_item_id=item.job_item_id,
+        item_index=item.item_index,
+        object_identity=item.object_identity,
+        state=item.state,
+        scan_state=item.scan_stage.state,
+        file=file_attribution,
+        dsxa=item.scan_stage.result,
+        error=item.scan_stage.error or item.error,
     )
 
 
@@ -164,6 +235,26 @@ def get_job_progress(
     service: JobService = Depends(get_job_service),
 ) -> JobProgressSnapshot:
     return service.get_job_progress(job_id, item_limit=item_limit)
+
+
+@router.get("/jobs/{job_id}/dsxa", response_model=DsxaJobResult)
+def get_job_dsxa(
+    job_id: str,
+    state: str | None = Query(default=None),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    service: JobService = Depends(get_job_service),
+) -> DsxaJobResult:
+    progress = service.get_job_progress(job_id, item_limit=limit)
+    items = service.list_job_items(job_id=job_id, state=state, limit=limit)
+    attribution = _common_attribution(items)
+    summary = progress.model_dump(mode="json", exclude={"job_id", "state"})
+    return DsxaJobResult(
+        job_id=job_id,
+        state=progress.state,
+        summary=summary,
+        attribution=attribution,
+        items=[_dsxa_job_item_result(item, attribution) for item in items],
+    )
 
 
 @router.get("/jobs/{job_id}/items", response_model=list[JobItemRecord])

@@ -323,23 +323,27 @@ function renderTransferResult(result) {
   $("refreshStatus").disabled = !activeJobId;
 }
 
-function renderProgress(progress, dsxaItems = null) {
+function dsxaItemsFromResult(dsxaResult) {
+  if (Array.isArray(dsxaResult)) return dsxaResult;
+  if (Array.isArray(dsxaResult?.items)) return dsxaResult.items;
+  return [];
+}
+
+function renderProgress(progress, dsxaResult = null) {
   $("jobState").textContent = progress?.state || "-";
   $("jobProgress").textContent =
     progress?.percent_complete == null ? "-" : `${Math.round(Number(progress.percent_complete))}%`;
   $("jobTerminal").textContent = `${progress?.terminal_items || 0} / ${progress?.total_items || 0}`;
-  const verdicts = Array.isArray(dsxaItems)
-    ? dsxaItems
+  const verdicts = dsxaItemsFromResult(dsxaResult)
         .map((item) => item?.dsxa?.verdict)
-        .filter(Boolean)
-    : [];
+        .filter(Boolean);
   $("resultSummary").innerHTML = `
     <strong>${escapeHtml(progress?.state || "unknown")}</strong>
     <span>${escapeHtml(progress?.terminal_items || 0)} of ${escapeHtml(progress?.total_items || 0)} item(s) terminal${
       verdicts.length ? ` - ${escapeHtml(verdicts.join(", "))}` : ""
     }.</span>
   `;
-  $("rawResult").textContent = JSON.stringify({ progress: progress || {}, dsxa_results: dsxaItems || [] }, null, 2);
+  $("rawResult").textContent = JSON.stringify({ progress: progress || {}, dsxa_result: dsxaResult || null }, null, 2);
 }
 
 function schedulePoll() {
@@ -379,13 +383,17 @@ async function refreshStatus(options = {}) {
     const progress = await window.dsxGateway.getTransferStatus({
       ...request
     });
-    let dsxaItems = [];
+    let dsxaResult = null;
     try {
-      dsxaItems = await window.dsxGateway.getDsxaItems(request);
+      dsxaResult = await window.dsxGateway.getDsxaJob(request);
     } catch {
-      dsxaItems = [];
+      try {
+        dsxaResult = await window.dsxGateway.getDsxaItems(request);
+      } catch {
+        dsxaResult = null;
+      }
     }
-    renderProgress(progress, dsxaItems);
+    renderProgress(progress, dsxaResult);
     const terminal = ["completed", "failed", "cancelled"].includes(progress?.state);
     if (terminal && pollTimer) {
       clearInterval(pollTimer);

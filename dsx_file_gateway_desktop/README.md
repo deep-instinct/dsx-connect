@@ -35,6 +35,7 @@ The MVP uses:
 GET  /api/v1/files/destinations
 POST /api/v1/files/transfers
 GET  /api/v1/execution/jobs/{job_id}/progress
+GET  /api/v1/execution/jobs/{job_id}/dsxa
 GET  /api/v1/execution/jobs/{job_id}/items/dsxa
 ```
 

@@ -112,6 +112,17 @@ async function getDsxaItems(request) {
   });
 }
 
+async function getDsxaJob(request) {
+  const baseUrl = normalizeApiBaseUrl(request?.dsxConnectUrl);
+  const jobId = String(request?.jobId || "").trim();
+  if (!jobId) {
+    throw new Error("jobId is required.");
+  }
+  return fetchJson(`${baseUrl}/execution/jobs/${encodeURIComponent(jobId)}/dsxa?limit=100`, {
+    headers: gatewayHeaders(request)
+  });
+}
+
 async function submitTransfer(request) {
   const baseUrl = normalizeApiBaseUrl(request?.dsxConnectUrl);
   const uploadMode = request?.uploadMode === "scan_only" ? "scan_only" : "destination";
@@ -174,6 +185,7 @@ app.whenReady().then(async () => {
   ipcMain.handle("gateway:submit-transfer", (_event, request) => submitTransfer(request));
   ipcMain.handle("gateway:get-transfer-status", (_event, request) => getTransferStatus(request));
   ipcMain.handle("gateway:get-dsxa-items", (_event, request) => getDsxaItems(request));
+  ipcMain.handle("gateway:get-dsxa-job", (_event, request) => getDsxaJob(request));
   createWindow();
 });
 

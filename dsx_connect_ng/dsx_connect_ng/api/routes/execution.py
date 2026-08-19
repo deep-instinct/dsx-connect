@@ -1,6 +1,8 @@
 import asyncio
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from dsx_connect_ng.api.job_bus_dependencies import get_job_bus
@@ -30,6 +32,30 @@ from dsx_connect_ng.jobs.models import (
 from dsx_connect_ng.jobs.service import JobService
 
 router = APIRouter(prefix="/execution", tags=["execution"])
+
+
+class DsxaItemResult(BaseModel):
+    job_item_id: str
+    item_index: int
+    object_identity: str
+    state: str
+    scan_state: str
+    dsxa: dict[str, Any] | None = None
+    error: dict[str, Any] | None = None
+    attribution: dict[str, Any] = Field(default_factory=dict)
+
+
+def _dsxa_item_result(item: JobItemRecord) -> DsxaItemResult:
+    return DsxaItemResult(
+        job_item_id=item.job_item_id,
+        item_index=item.item_index,
+        object_identity=item.object_identity,
+        state=item.state,
+        scan_state=item.scan_stage.state,
+        dsxa=item.scan_stage.result,
+        error=item.scan_stage.error or item.error,
+        attribution=item.payload.get("attribution") if isinstance(item.payload.get("attribution"), dict) else {},
+    )
 
 
 @router.get("/status")
@@ -148,6 +174,17 @@ def list_job_items(
     service: JobService = Depends(get_job_service),
 ) -> list[JobItemRecord]:
     return service.list_job_items(job_id=job_id, state=state, limit=limit)
+
+
+@router.get("/jobs/{job_id}/items/dsxa", response_model=list[DsxaItemResult])
+def list_job_items_dsxa(
+    job_id: str,
+    state: str | None = Query(default=None),
+    limit: int = Query(default=1000, ge=1, le=5000),
+    service: JobService = Depends(get_job_service),
+) -> list[DsxaItemResult]:
+    items = service.list_job_items(job_id=job_id, state=state, limit=limit)
+    return [_dsxa_item_result(item) for item in items]
 
 
 @router.get("/job-items/{job_item_id}", response_model=JobItemRecord)

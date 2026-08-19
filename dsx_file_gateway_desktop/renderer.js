@@ -323,16 +323,23 @@ function renderTransferResult(result) {
   $("refreshStatus").disabled = !activeJobId;
 }
 
-function renderProgress(progress) {
+function renderProgress(progress, dsxaItems = null) {
   $("jobState").textContent = progress?.state || "-";
   $("jobProgress").textContent =
     progress?.percent_complete == null ? "-" : `${Math.round(Number(progress.percent_complete))}%`;
   $("jobTerminal").textContent = `${progress?.terminal_items || 0} / ${progress?.total_items || 0}`;
+  const verdicts = Array.isArray(dsxaItems)
+    ? dsxaItems
+        .map((item) => item?.dsxa?.verdict)
+        .filter(Boolean)
+    : [];
   $("resultSummary").innerHTML = `
     <strong>${escapeHtml(progress?.state || "unknown")}</strong>
-    <span>${escapeHtml(progress?.terminal_items || 0)} of ${escapeHtml(progress?.total_items || 0)} item(s) terminal.</span>
+    <span>${escapeHtml(progress?.terminal_items || 0)} of ${escapeHtml(progress?.total_items || 0)} item(s) terminal${
+      verdicts.length ? ` - ${escapeHtml(verdicts.join(", "))}` : ""
+    }.</span>
   `;
-  $("rawResult").textContent = JSON.stringify(progress || {}, null, 2);
+  $("rawResult").textContent = JSON.stringify({ progress: progress || {}, dsxa_results: dsxaItems || [] }, null, 2);
 }
 
 function schedulePoll() {
@@ -364,12 +371,21 @@ async function refreshStatus(options = {}) {
   if (!activeJobId) return;
   if (!options.quiet) setStatus("Refreshing job status", "busy");
   try {
-    const progress = await window.dsxGateway.getTransferStatus({
+    const request = {
       dsxConnectUrl: $("dsxConnectUrl").value.trim(),
       gatewayToken: $("gatewayToken").value.trim(),
       jobId: activeJobId
+    };
+    const progress = await window.dsxGateway.getTransferStatus({
+      ...request
     });
-    renderProgress(progress);
+    let dsxaItems = [];
+    try {
+      dsxaItems = await window.dsxGateway.getDsxaItems(request);
+    } catch {
+      dsxaItems = [];
+    }
+    renderProgress(progress, dsxaItems);
     const terminal = ["completed", "failed", "cancelled"].includes(progress?.state);
     if (terminal && pollTimer) {
       clearInterval(pollTimer);

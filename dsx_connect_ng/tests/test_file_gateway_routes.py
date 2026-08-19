@@ -173,6 +173,68 @@ def test_file_gateway_scan_only_upload_does_not_require_destination(tmp_path: Pa
     assert "destination_id" not in attribution
 
 
+def test_file_gateway_scan_only_dsxa_items_projection_returns_verdicts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
+    client = TestClient(create_app())
+
+    accepted = client.post(
+        "/api/v1/files/transfers",
+        data={"metadata": '{"application":"verdict-only","dsxa_protected_entity_id":65}'},
+        files=[
+            ("files", ("eicar.txt", b"malicious", "text/plain")),
+            ("files", ("clean.txt", b"clean", "text/plain")),
+        ],
+    )
+    assert accepted.status_code == 200
+    job_id = accepted.json()["job_id"]
+    items = client.get(f"/api/v1/execution/jobs/{job_id}/items").json()
+
+    first_update = client.post(
+        f"/api/v1/execution/job-items/{items[0]['job_item_id']}/scan-stage",
+        json={
+            "state": "completed",
+            "scan_result": {
+                "verdict": "Malicious",
+                "scanGuid": "scan-malicious",
+                "verdictDetails": {"event_description": "File identified as malicious"},
+                "fileInfo": {
+                    "file_hash": "hash-malicious",
+                    "file_type": "EICARType",
+                    "file_size_in_bytes": 9,
+                },
+                "scanDurationUs": 123,
+            },
+            "scanner_metadata": {"reader": "cached_artifact"},
+        },
+    )
+    assert first_update.status_code == 200
+    second_update = client.post(
+        f"/api/v1/execution/job-items/{items[1]['job_item_id']}/scan-stage",
+        json={
+            "state": "completed",
+            "scan_result": {
+                "verdict": "Benign",
+                "scanGuid": "scan-benign",
+                "fileInfo": {"file_hash": "hash-benign", "file_type": "TextFileType"},
+            },
+        },
+    )
+    assert second_update.status_code == 200
+
+    projected = client.get(f"/api/v1/execution/jobs/{job_id}/items/dsxa").json()
+
+    assert len(projected) == 2
+    assert projected[0]["object_identity"].endswith("/eicar.txt")
+    assert projected[0]["scan_state"] == "completed"
+    assert projected[0]["dsxa"]["verdict"] == "Malicious"
+    assert projected[0]["dsxa"]["scan_guid"] == "scan-malicious"
+    assert projected[0]["dsxa"]["file_info"]["file_hash"] == "hash-malicious"
+    assert projected[0]["dsxa"]["file_info"]["file_type"] == "EICARType"
+    assert projected[0]["dsxa"]["scan_duration_in_microseconds"] == 123
+    assert projected[0]["attribution"]["application_id"] == "verdict-only"
+    assert projected[1]["dsxa"]["verdict"] == "Benign"
+
+
 def test_file_gateway_static_token_filters_destinations_and_applies_attribution(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
     monkeypatch.setattr(settings.gateway, "auth_enabled", True)

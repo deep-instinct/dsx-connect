@@ -241,6 +241,68 @@ class AWSS3Client:
                     for item in _emit(obj):
                         yield item
 
+    def list_object_page(
+        self,
+        bucket: str,
+        *,
+        base_prefix: str = "",
+        filter_str: str = "",
+        limit: int = 1000,
+        cursor: str | None = None,
+    ) -> tuple[list[dict[str, Any]], str | None]:
+        """
+        Return one page of S3 objects for DSX-Connect 2 object browsing.
+
+        The cursor is the S3 ListObjectsV2 continuation token. Prefix narrowing is
+        intentionally limited to the requested protected scope; DSXCONNECTOR_FILTER
+        is still applied client-side for correctness.
+        """
+        paginator = self.s3_client.get_paginator('list_objects_v2')
+        effective_limit = max(1, min(int(limit or 1000), 1000))
+        bp = (base_prefix or "").strip("/")
+        if bp:
+            bp = bp + "/"
+
+        paginate_kwargs: dict[str, Any] = {
+            "Bucket": bucket,
+            "PaginationConfig": {"PageSize": effective_limit, "MaxItems": effective_limit},
+        }
+        if bp:
+            paginate_kwargs["Prefix"] = bp
+        if cursor:
+            paginate_kwargs["PaginationConfig"]["StartingToken"] = cursor
+
+        def _rel(key: str) -> str:
+            if not bp:
+                return key
+            return key[len(bp):] if key.startswith(bp) else key
+
+        page_iterator = paginator.paginate(**paginate_kwargs)
+        objects: list[dict[str, Any]] = []
+        next_cursor: str | None = None
+        for page in page_iterator:
+            for obj in page.get("Contents", []):
+                key = obj.get("Key")
+                if not key or str(key).endswith("/"):
+                    continue
+                if filter_str and not relpath_matches_filter(_rel(str(key)), filter_str):
+                    continue
+                objects.append(
+                    {
+                        "Key": str(key),
+                        "Size": int(obj.get("Size", 0) or 0),
+                        "LastModified": str(obj.get("LastModified")) if obj.get("LastModified") is not None else None,
+                        "ETag": str(obj.get("ETag", "") or "").strip('"') or None,
+                        "StorageClass": str(obj.get("StorageClass", "") or "") or None,
+                    }
+                )
+                if len(objects) >= effective_limit:
+                    break
+            next_cursor = getattr(page_iterator, "resume_token", None)
+            if len(objects) >= effective_limit:
+                break
+        return objects, str(next_cursor) if next_cursor else None
+
     def move_object(self, src_bucket: str, src_key: str, dest_bucket: str, dest_key: str) -> bool:
         """
         Moves an object from one bucket/key to another by copying then deleting the original.

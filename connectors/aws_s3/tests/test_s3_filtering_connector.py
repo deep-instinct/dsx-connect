@@ -105,3 +105,168 @@ async def test_item_action_movetag_uses_requested_destination_filename(monkeypat
         ("move", "bucket-a", "scan/eicar.txt", "bucket-a", "quarantine/eicar.txt_c23bbf85bc"),
         ("tag", "bucket-a", "quarantine/eicar.txt_c23bbf85bc", {"Verdict": "Malicious"}),
     ]
+
+
+@pytest.mark.asyncio
+async def test_asset_discovery_reports_configured_bucket_prefix(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    s3c.config.asset = "bucket-a/inbound"
+    s3c.config.asset_bucket = "bucket-a"
+    s3c.config.asset_prefix_root = "inbound"
+
+    response = await s3c.asset_discovery_handler(asset_type="bucket", source="configured_asset")
+
+    assert response.status == "success"
+    assert [asset.selector for asset in response.assets] == ["bucket-a/inbound"]
+    assert response.assets[0].metadata == {
+        "provider": "s3",
+        "kind": "configured_bucket_prefix",
+        "bucket": "bucket-a",
+        "prefix": "inbound",
+    }
+
+
+@pytest.mark.asyncio
+async def test_asset_discovery_all_combines_configured_bucket_and_inventory(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    s3c.config.asset = "bucket-a"
+    s3c.config.asset_bucket = "bucket-a"
+    s3c.config.asset_prefix_root = ""
+
+    monkeypatch.setattr(s3c.aws_s3_client, "buckets", lambda: ["bucket-a", "bucket-b", "bucket-c"])
+
+    response = await s3c.asset_discovery_handler(asset_type="bucket", source="all", limit=2)
+
+    assert response.status == "success"
+    assert response.source == "all"
+    assert [asset.selector for asset in response.assets] == ["bucket-a", "bucket-b"]
+    assert response.next_cursor == "2"
+
+
+@pytest.mark.asyncio
+async def test_asset_discovery_reports_unsupported_asset_type(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    response = await s3c.asset_discovery_handler(asset_type="folder", source="inventory_enumeration")
+
+    assert response.status == "unsupported"
+    assert response.unsupported is True
+    assert response.message == "unsupported_asset_type:folder"
+
+
+@pytest.mark.asyncio
+async def test_object_listing_handler_uses_requested_bucket(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    s3c.config.asset = "bucket-default"
+    s3c.config.asset_bucket = "bucket-default"
+    s3c.config.asset_prefix_root = ""
+    s3c.config.filter = ""
+
+    calls = []
+
+    def fake_list_object_page(bucket, *, base_prefix, filter_str, limit, cursor):
+        calls.append((bucket, base_prefix, filter_str, limit, cursor))
+        return (
+            [
+                {
+                    "Key": "incoming/one.pdf",
+                    "Size": 123,
+                    "ETag": "etag-a",
+                    "StorageClass": "STANDARD",
+                }
+            ],
+            "cursor-b",
+        )
+
+    monkeypatch.setattr(s3c.aws_s3_client, "list_object_page", fake_list_object_page)
+
+    response = await s3c.object_listing_handler(scope="bucket-requested/incoming", limit=10, cursor="cursor-a")
+
+    assert response.status == "success"
+    assert calls == [("bucket-requested", "incoming", "", 10, "cursor-a")]
+    assert response.next_cursor == "cursor-b"
+    assert [item.identity for item in response.objects] == ["bucket-requested/incoming/one.pdf"]
+    assert response.objects[0].location == "incoming/one.pdf"
+    assert response.objects[0].size_in_bytes == 123
+    assert response.objects[0].metadata["provider"] == "s3"
+    assert response.objects[0].metadata["bucket"] == "bucket-requested"
+
+
+@pytest.mark.asyncio
+async def test_read_file_handler_uses_metainfo_bucket(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    class FakeBody:
+        def __init__(self, chunks):
+            self._chunks = list(chunks)
+            self.closed = False
+
+        def read(self, _size):
+            if not self._chunks:
+                return b""
+            return self._chunks.pop(0)
+
+        def close(self):
+            self.closed = True
+
+    s3c.config.asset = "bucket-default"
+    s3c.config.asset_bucket = "bucket-default"
+    s3c.config.asset_prefix_root = ""
+
+    calls = []
+    body = FakeBody([b"abc"])
+
+    def fake_get_object_stream(bucket, key):
+        calls.append((bucket, key))
+        return body, 3
+
+    monkeypatch.setattr(s3c.aws_s3_client, "get_object_stream", fake_get_object_stream)
+
+    response = await s3c.read_file_handler(
+        ScanRequestModel(
+            location="incoming/one.pdf",
+            metainfo="bucket-requested/incoming/one.pdf",
+        )
+    )
+
+    assert calls == [("bucket-requested", "incoming/one.pdf")]
+    assert response.headers["content-length"] == "3"
+
+
+@pytest.mark.asyncio
+async def test_write_file_handler_uploads_to_requested_bucket(monkeypatch):
+    import connectors.aws_s3.aws_s3_connector as s3c
+
+    class FakeUpload:
+        filename = "payload.txt"
+
+        def __init__(self):
+            self._chunks = [b"hello", b""]
+
+        async def read(self, _size):
+            return self._chunks.pop(0)
+
+    calls = []
+
+    def fake_upload_file(filepath, *, file_key, bucket):
+        calls.append((bucket, file_key, filepath.read_bytes()))
+
+    monkeypatch.setattr(s3c.aws_s3_client, "upload_file", fake_upload_file)
+
+    response = await s3c.write_file_handler(
+        bucket="bucket-requested",
+        key="inbox/payload.txt",
+        destination=None,
+        file=FakeUpload(),
+    )
+
+    assert response == {
+        "status": "success",
+        "bucket": "bucket-requested",
+        "key": "inbox/payload.txt",
+        "uri": "s3://bucket-requested/inbox/payload.txt",
+    }
+    assert calls == [("bucket-requested", "inbox/payload.txt", b"hello")]

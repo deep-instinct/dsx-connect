@@ -25,9 +25,11 @@ from dsx_connect_ng.workers.runtime import build_job_service
 ResultSinkExecutor = Callable[[ResultSinkEmitRequested], Awaitable[DeliveryResult]]
 
 
-def _split_gcs_path(value: str | None) -> tuple[str, str]:
+def _split_object_storage_path(value: str | None, *, platform: str) -> tuple[str, str]:
     raw = str(value or "").strip()
-    if raw.startswith("gs://"):
+    if platform == "gcs" and raw.startswith("gs://"):
+        raw = raw[5:]
+    if platform == "s3" and raw.startswith("s3://"):
         raw = raw[5:]
     raw = raw.strip("/")
     if "/" not in raw:
@@ -36,11 +38,11 @@ def _split_gcs_path(value: str | None) -> tuple[str, str]:
     return bucket.strip(), key.strip("/")
 
 
-def _gateway_gcs_target(request: ResultSinkEmitRequested) -> dict | None:
+def _gateway_object_storage_target(request: ResultSinkEmitRequested) -> dict | None:
     target = request.delivery_target.delivery_target
     if target.get("type") != "gateway_destination":
         return None
-    if str(target.get("platform") or "").lower() != "gcs":
+    if str(target.get("platform") or "").lower() not in {"gcs", "s3"}:
         return None
     return target
 
@@ -48,12 +50,12 @@ def _gateway_gcs_target(request: ResultSinkEmitRequested) -> dict | None:
 def _content_source_locator(request: ResultSinkEmitRequested) -> str:
     content_source = request.final_result.get("contentSource") if isinstance(request.final_result, dict) else None
     if not isinstance(content_source, dict):
-        raise RuntimeError("gateway GCS delivery requires contentSource metadata")
+        raise RuntimeError("gateway object storage delivery requires contentSource metadata")
     if content_source.get("mode") != "cached":
-        raise RuntimeError("gateway GCS delivery requires cached content source")
+        raise RuntimeError("gateway object storage delivery requires cached content source")
     locator = str(content_source.get("locator") or "").strip()
     if not locator:
-        raise RuntimeError("gateway GCS delivery requires cached content locator")
+        raise RuntimeError("gateway object storage delivery requires cached content locator")
     path = Path(locator)
     if not path.is_file():
         raise RuntimeError(f"gateway cached artifact not found: {locator}")
@@ -62,7 +64,7 @@ def _content_source_locator(request: ResultSinkEmitRequested) -> str:
 
 def _delivery_proxy_config(service: JobService, request: ResultSinkEmitRequested) -> ConnectorProxyRuntimeConfig:
     if not request.integration_id:
-        raise RuntimeError("gateway GCS delivery requires integration_id")
+        raise RuntimeError("gateway object storage delivery requires integration_id")
     integration = service.control_plane.get_integration_or_404(request.integration_id)
     runtime = parse_integration_runtime_config(integration.config)
     proxy = runtime.delivery.proxy if runtime.delivery and runtime.delivery.proxy else None
@@ -80,7 +82,7 @@ def _delivery_proxy_config(service: JobService, request: ResultSinkEmitRequested
     if not endpoint_url and proxy and proxy.base_url and proxy.connector_name:
         endpoint_url = f"{str(proxy.base_url).rstrip('/')}/{str(proxy.connector_name).strip('/')}/write_file"
     if not endpoint_url:
-        raise RuntimeError("gateway GCS delivery requires integration delivery.proxy endpoint_url")
+        raise RuntimeError("gateway object storage delivery requires integration delivery.proxy endpoint_url")
     return ConnectorProxyRuntimeConfig(
         endpoint_url=str(endpoint_url),
         auth_mode=str(proxy.auth_mode if proxy else "none"),
@@ -92,13 +94,17 @@ def _delivery_proxy_config(service: JobService, request: ResultSinkEmitRequested
     )
 
 
-async def deliver_gateway_gcs(service: JobService, request: ResultSinkEmitRequested, target: dict) -> DeliveryResult:
-    bucket, key = _split_gcs_path(target.get("path") or request.object_identity)
+async def deliver_gateway_object_storage(service: JobService, request: ResultSinkEmitRequested, target: dict) -> DeliveryResult:
+    platform = str(target.get("platform") or "").lower()
+    if platform not in {"gcs", "s3"}:
+        raise RuntimeError(f"unsupported gateway object storage platform: {platform}")
+    bucket, key = _split_object_storage_path(target.get("path") or request.object_identity, platform=platform)
     if not bucket or not key:
-        raise RuntimeError("gateway GCS delivery target must include bucket/object path")
+        raise RuntimeError("gateway object storage delivery target must include bucket/object path")
     locator = _content_source_locator(request)
     config = _delivery_proxy_config(service, request)
-    uri = f"gs://{bucket}/{key}"
+    scheme = "gs" if platform == "gcs" else "s3"
+    uri = f"{scheme}://{bucket}/{key}"
     fields = {"bucket": bucket, "key": key, "destination": uri}
     headers: dict[str, str] = {}
     if config.auth_mode == "static_header":
@@ -106,7 +112,7 @@ async def deliver_gateway_gcs(service: JobService, request: ResultSinkEmitReques
             raise RuntimeError("static_header auth requires header_name and header_value")
         headers[config.header_name] = config.header_value
     elif config.auth_mode == "dsx_hmac":
-        raise RuntimeError("gateway GCS multipart delivery does not support dsx_hmac connector auth yet")
+        raise RuntimeError("gateway object storage multipart delivery does not support dsx_hmac connector auth yet")
     timeout = httpx.Timeout(config.timeout_seconds, connect=min(config.timeout_seconds, 10.0))
     async with httpx.AsyncClient(timeout=timeout) as client:
         with open(locator, "rb") as handle:
@@ -117,20 +123,25 @@ async def deliver_gateway_gcs(service: JobService, request: ResultSinkEmitReques
                 headers=headers,
             )
     if response.status_code >= 400:
-        raise RuntimeError(f"GCS connector delivery failed: http {response.status_code} {response.text}")
+        raise RuntimeError(f"{platform} connector delivery failed: http {response.status_code} {response.text}")
     payload = response.json()
     return DeliveryResult(
         destination=uri,
         outcome="delivered",
         externalReference=str(payload.get("uri") or uri),
         details={
-            "worker": "gcs_gateway_delivery",
+            "worker": f"{platform}_gateway_delivery",
             "endpointUrl": config.endpoint_url,
+            "platform": platform,
             "bucket": bucket,
             "key": key,
             "connectorResponse": payload,
         },
     )
+
+
+async def deliver_gateway_gcs(service: JobService, request: ResultSinkEmitRequested, target: dict) -> DeliveryResult:
+    return await deliver_gateway_object_storage(service, request, target)
 
 
 async def process_result_sink_message(
@@ -168,9 +179,9 @@ async def stub_result_sink_executor(request: ResultSinkEmitRequested) -> Deliver
 
 def build_result_sink_executor(service: JobService, sink: ResultSink) -> ResultSinkExecutor:
     async def execute(request: ResultSinkEmitRequested) -> DeliveryResult:
-        gcs_target = _gateway_gcs_target(request)
-        if gcs_target is not None:
-            return await deliver_gateway_gcs(service, request, gcs_target)
+        object_storage_target = _gateway_object_storage_target(request)
+        if object_storage_target is not None:
+            return await deliver_gateway_object_storage(service, request, object_storage_target)
 
         event = ResultSinkEvent.from_result_sink_emit_request(request)
         await sink.emit(event)

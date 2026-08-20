@@ -1,10 +1,26 @@
 import os
 import asyncio
+import tempfile
+from pathlib import Path
+from typing import Annotated
+
+from fastapi import Depends, File, Form, HTTPException, UploadFile
 from starlette.responses import StreamingResponse
 
+import connectors.framework.dsx_connector as connector_framework
 from connectors.aws_s3.aws_s3_client import AWSS3Client
 from connectors.framework.dsx_connector import DSXConnector, apply_requested_action_config_update, resolve_item_action_request
-from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel, ConnectorStatusEnum
+from connectors.framework.auth_hmac import require_dsx_hmac
+from shared.models.connector_models import (
+    AssetDiscoveryItem,
+    AssetDiscoveryResponse,
+    ObjectListingItem,
+    ObjectListingResponse,
+    ScanRequestModel,
+    ItemActionEnum,
+    ConnectorInstanceModel,
+    ConnectorStatusEnum,
+)
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 from connectors.aws_s3.config import ConfigManager
@@ -28,6 +44,11 @@ def _derive_asset_parts(asset_value: str) -> tuple[str, str]:
 bucket, prefix = _derive_asset_parts(config.asset)
 config.asset_bucket = bucket
 config.asset_prefix_root = prefix
+
+try:
+    config.ng_capabilities = {**(getattr(config, "ng_capabilities", {}) or {}), "write": True}
+except Exception:
+    pass
 
 connector = DSXConnector(config)
 
@@ -72,6 +93,62 @@ def _aws_runtime_value(key: str) -> str:
 
 def _aws_masked_value(key: str) -> str:
     return "**********" if _aws_runtime_value(key) else ""
+
+
+def _split_bucket_scope(scope: str | None) -> tuple[str, str]:
+    raw = str(scope or "").strip().strip("/")
+    if not raw:
+        return "", ""
+    if raw.startswith("s3://"):
+        raw = raw[5:].strip("/")
+    if "/" not in raw:
+        return raw, ""
+    bucket_name, key_prefix = raw.split("/", 1)
+    return bucket_name.strip(), key_prefix.strip("/")
+
+
+def _split_s3_destination_path(value: str | None) -> tuple[str, str]:
+    return _split_bucket_scope(value)
+
+
+def _relative_to_configured_prefix(key: str) -> str:
+    bp = (config.asset_prefix_root or "").strip("/")
+    if not bp:
+        return key
+    bp = bp + "/"
+    return key[len(bp):] if key.startswith(bp) else key
+
+
+def _resolve_bucket_and_key_for_request(scan_request: ScanRequestModel) -> tuple[str, str]:
+    location = str(scan_request.location or "").strip().lstrip("/")
+    metainfo = str(scan_request.metainfo or "").strip().strip("/")
+    configured_bucket = (config.asset_bucket or "").strip()
+
+    if metainfo and metainfo != location:
+        bucket_name, key = _split_bucket_scope(metainfo)
+        if bucket_name and key:
+            return bucket_name, key
+    bucket_name, key = _split_bucket_scope(location)
+    if bucket_name and key and (not configured_bucket or bucket_name == configured_bucket):
+        return bucket_name, key
+    return configured_bucket, location
+
+
+def _matches_asset_filter(value: str, *, mode: str | None, needle: str | None) -> bool:
+    if not mode or not needle:
+        return True
+    normalized_value = value.lower()
+    normalized_needle = needle.strip().lower()
+    if not normalized_needle:
+        return True
+    normalized_mode = mode.strip().lower().replace("-", "_")
+    if normalized_mode in {"begins_with", "starts_with", "prefix"}:
+        return normalized_value.startswith(normalized_needle)
+    if normalized_mode in {"ends_with", "suffix"}:
+        return normalized_value.endswith(normalized_needle)
+    if normalized_mode in {"contains", "substring"}:
+        return normalized_needle in normalized_value
+    return True
 
 
 @connector.startup
@@ -245,6 +322,212 @@ async def preview_provider(limit: int) -> list[str]:
     return items
 
 
+@connector.object_listing
+async def object_listing_handler(scope: str = "", limit: int = 1000, cursor: str | None = None) -> ObjectListingResponse:
+    requested_scope = (scope or config.asset or config.asset_bucket or "").strip().strip("/")
+    configured_bucket = (config.asset_bucket or "").strip()
+    if not configured_bucket and not requested_scope:
+        return ObjectListingResponse(
+            scope=requested_scope,
+            status="not_configured",
+            objects=[],
+            message="asset_bucket_not_configured",
+        )
+
+    bucket_name = configured_bucket
+    requested_prefix = (config.asset_prefix_root or "").strip("/")
+    if requested_scope:
+        if requested_scope == configured_bucket:
+            requested_prefix = (config.asset_prefix_root or "").strip("/")
+        elif configured_bucket and requested_scope.startswith(configured_bucket + "/"):
+            requested_prefix = requested_scope[len(configured_bucket) + 1:].strip("/")
+        else:
+            bucket_name, requested_prefix = _split_bucket_scope(requested_scope)
+            if not bucket_name:
+                return ObjectListingResponse(
+                    scope=requested_scope,
+                    status="unsupported_scope",
+                    objects=[],
+                    message=f"scope_not_served_by_connector:{requested_scope}",
+                )
+
+    try:
+        objects_page, next_cursor = aws_s3_client.list_object_page(
+            bucket_name,
+            base_prefix=requested_prefix,
+            filter_str=config.filter,
+            limit=limit,
+            cursor=cursor,
+        )
+    except Exception as exc:
+        dsx_logging.warning(f"S3 object listing failed: {_redact_aws_secret_text(str(exc))}")
+        return ObjectListingResponse(
+            scope=requested_scope or bucket_name,
+            status="error",
+            objects=[],
+            message=f"object_listing_failed:{_redact_aws_secret_text(str(exc))}",
+        )
+
+    listed: list[ObjectListingItem] = []
+    for obj in objects_page:
+        key = str(obj.get("Key") or "").strip()
+        if not key:
+            continue
+        identity = f"{bucket_name}/{key}"
+        metadata = {
+            "provider": "s3",
+            "bucket": bucket_name,
+        }
+        for source_key, metadata_key in (
+            ("ETag", "etag"),
+            ("LastModified", "last_modified"),
+            ("StorageClass", "storage_class"),
+        ):
+            value = obj.get(source_key)
+            if value is not None:
+                metadata[metadata_key] = str(value)
+        listed.append(
+            ObjectListingItem(
+                identity=identity,
+                location=key,
+                display_name=_relative_to_configured_prefix(key),
+                size_in_bytes=obj.get("Size") if isinstance(obj.get("Size"), int) else None,
+                metadata=metadata,
+            )
+        )
+    return ObjectListingResponse(
+        scope=requested_scope or bucket_name,
+        status="success",
+        objects=listed,
+        next_cursor=next_cursor,
+    )
+
+
+@connector.asset_discovery
+async def asset_discovery_handler(
+    asset_type: str = "bucket",
+    source: str = "configured_asset",
+    limit: int = 100,
+    cursor: str | None = None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
+) -> AssetDiscoveryResponse:
+    normalized_type = (asset_type or "bucket").strip().lower()
+    if ":" in normalized_type:
+        normalized_type, requested_source = normalized_type.split(":", 1)
+    else:
+        requested_source = (source or "configured_asset").strip().lower()
+    if normalized_type not in {"bucket", "buckets"}:
+        return AssetDiscoveryResponse(
+            asset_type=normalized_type,
+            source=requested_source,
+            status="unsupported",
+            assets=[],
+            unsupported=True,
+            message=f"unsupported_asset_type:{normalized_type}",
+        )
+
+    configured_selector = (config.asset or config.asset_bucket or "").strip().strip("/")
+
+    def configured_asset_item() -> AssetDiscoveryItem | None:
+        if not configured_selector:
+            return None
+        bucket_name = config.asset_bucket or configured_selector.split("/", 1)[0]
+        metadata = {
+            "provider": "s3",
+            "kind": "configured_bucket",
+            "bucket": bucket_name,
+        }
+        if getattr(config, "asset_prefix_root", ""):
+            metadata["prefix"] = config.asset_prefix_root
+            metadata["kind"] = "configured_bucket_prefix"
+        if not _matches_asset_filter(configured_selector, mode=asset_filter_mode, needle=asset_filter_value):
+            return None
+        return AssetDiscoveryItem(
+            id=configured_selector,
+            display_name=configured_selector,
+            selector=configured_selector,
+            metadata=metadata,
+        )
+
+    if requested_source == "configured_asset":
+        item = configured_asset_item()
+        if configured_selector and item is None:
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="configured_asset",
+                status="success",
+                assets=[],
+            )
+        if item is None:
+            return AssetDiscoveryResponse(
+                asset_type="bucket",
+                source="configured_asset",
+                status="not_configured",
+                assets=[],
+                message="configured_asset_not_set",
+            )
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="configured_asset",
+            status="success",
+            assets=[item],
+        )
+
+    combined_source = requested_source in {"all", "configured_and_inventory", "configured_plus_inventory"}
+    try:
+        buckets = aws_s3_client.buckets()
+    except Exception as exc:
+        message = _redact_aws_secret_text(str(exc))
+        dsx_logging.warning(f"S3 asset discovery failed: {message}")
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="inventory_enumeration",
+            status="permission_denied" if "AccessDenied" in message or "403" in message else "error",
+            assets=[],
+            unsupported=False,
+            message=f"asset_discovery_failed:{message}",
+            required_permission="s3:ListAllMyBuckets",
+        )
+
+    start = 0
+    if cursor:
+        try:
+            start = max(0, int(cursor))
+        except ValueError:
+            start = 0
+    buckets = [
+        bucket_name
+        for bucket_name in buckets
+        if _matches_asset_filter(bucket_name, mode=asset_filter_mode, needle=asset_filter_value)
+    ]
+    configured_item = configured_asset_item() if combined_source else None
+    if configured_item is not None:
+        buckets = [bucket_name for bucket_name in buckets if bucket_name != configured_item.selector]
+        buckets = [configured_item.selector, *buckets]
+    effective_limit = max(1, min(int(limit or 100), 1000))
+    selected = buckets[start:start + effective_limit]
+    next_index = start + len(selected)
+    next_cursor = str(next_index) if next_index < len(buckets) else None
+    return AssetDiscoveryResponse(
+        asset_type="bucket",
+        source=requested_source if combined_source else "inventory_enumeration",
+        status="success",
+        assets=[
+            configured_item
+            if configured_item is not None and bucket_name == configured_item.selector
+            else AssetDiscoveryItem(
+                id=bucket_name,
+                display_name=bucket_name,
+                selector=bucket_name,
+                metadata={"provider": "s3"},
+            )
+            for bucket_name in selected
+        ],
+        next_cursor=next_cursor,
+    )
+
+
 @connector.config
 async def config_handler(base: ConnectorInstanceModel):
     """Expose runtime config for UI, including AWS credential placeholders."""
@@ -404,51 +687,52 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> Status
         SimpleResponse: A response indicating that the remediation action was performed successfully,
             or an error if the action is not implemented.
     """
-    full_path = scan_event_queue_info.metainfo
+    bucket_name, source_key = _resolve_bucket_and_key_for_request(scan_event_queue_info)
+    full_path = scan_event_queue_info.metainfo or f"{bucket_name}/{source_key}"
     requested_action, target_prefix, target_filename, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
 
-    if not aws_s3_client.key_exists(config.asset_bucket, scan_event_queue_info.location):
+    if not aws_s3_client.key_exists(bucket_name, source_key):
         return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                         message="Item action failed.",
                                         description=f"File does not exist at {full_path}")
 
     if requested_action == ItemActionEnum.DELETE:
         dsx_logging.debug(f'Item action {ItemActionEnum.DELETE} on {full_path} invoked.')
-        if aws_s3_client.delete_object(config.asset_bucket, scan_event_queue_info.location):
+        if aws_s3_client.delete_object(bucket_name, source_key):
             return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                             message="File deleted.",
-                                            description=f"File deleted from {config.asset_bucket}: {scan_event_queue_info.location}")
+                                            description=f"File deleted from {bucket_name}: {source_key}")
     elif requested_action == ItemActionEnum.MOVE:
         dsx_logging.debug(f'Item action {ItemActionEnum.MOVE} on {full_path} invoked.')
         if not target_prefix:
             return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                             message="Item action failed.",
                                             description="Move action requires a destination path.")
-        dest_key = _resolve_destination_key(scan_event_queue_info.location, target_prefix=target_prefix, target_filename=target_filename)
-        aws_s3_client.move_object(src_bucket=config.asset_bucket, src_key=scan_event_queue_info.location,
-                                  dest_bucket=config.asset_bucket,
+        dest_key = _resolve_destination_key(source_key, target_prefix=target_prefix, target_filename=target_filename)
+        aws_s3_client.move_object(src_bucket=bucket_name, src_key=source_key,
+                                  dest_bucket=bucket_name,
                                   dest_key=dest_key)
         return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File moved.",
-                                        description=f"File moved from {config.asset_bucket}: {scan_event_queue_info.location} to {config.asset_bucket}: {dest_key}")
+                                        description=f"File moved from {bucket_name}: {source_key} to {bucket_name}: {dest_key}")
     elif requested_action == ItemActionEnum.TAG:
         dsx_logging.debug(f'Item action {ItemActionEnum.TAG} on {full_path} invoked.')
-        aws_s3_client.tag_object(config.asset_bucket, scan_event_queue_info.location, tags=requested_tags)
+        aws_s3_client.tag_object(bucket_name, source_key, tags=requested_tags)
         return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message="File tagged.",
-                                        description=f"File tagged at {config.asset_bucket}: {scan_event_queue_info.location}")
+                                        description=f"File tagged at {bucket_name}: {source_key}")
     elif requested_action == ItemActionEnum.MOVE_TAG:
         dsx_logging.debug(f'Item action {ItemActionEnum.MOVE_TAG} on {full_path} invoked.')
         if not target_prefix:
             return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
                                             message="Item action failed.",
                                             description="Move/tag action requires a destination path.")
-        dest_key = _resolve_destination_key(scan_event_queue_info.location, target_prefix=target_prefix, target_filename=target_filename)
+        dest_key = _resolve_destination_key(source_key, target_prefix=target_prefix, target_filename=target_filename)
 
-        aws_s3_client.move_object(src_bucket=config.asset_bucket, src_key=scan_event_queue_info.location,
-                                  dest_bucket=config.asset_bucket, dest_key=dest_key)
+        aws_s3_client.move_object(src_bucket=bucket_name, src_key=source_key,
+                                  dest_bucket=bucket_name, dest_key=dest_key)
 
-        aws_s3_client.tag_object(config.asset_bucket, dest_key, tags=requested_tags)
+        aws_s3_client.tag_object(bucket_name, dest_key, tags=requested_tags)
 
         return ItemActionStatusResponse(status=StatusResponseEnum.SUCCESS, item_action=requested_action,
                                         message=f'Item action {requested_action} was invoked. File {full_path} successfully tagged.')
@@ -495,9 +779,10 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
     """
     # Read the file content
     try:
+        bucket_name, key = _resolve_bucket_and_key_for_request(scan_event_queue_info)
         body, size_bytes = aws_s3_client.get_object_stream(
-            bucket=config.asset_bucket,
-            key=scan_event_queue_info.location,
+            bucket=bucket_name,
+            key=key,
         )
 
         def _iter_s3_body():
@@ -525,6 +810,53 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
         err = _redact_aws_secret_text(str(e))
         return StatusResponse(status=StatusResponseEnum.ERROR,
                               message=f"Failed to read file: {err}")
+
+
+@connector_framework.connector_api.post(
+    f"/{connector.connector_running_model.name}/write_file",
+    dependencies=[Depends(require_dsx_hmac)],
+)
+async def write_file_handler(
+    bucket: Annotated[str | None, Form()] = None,
+    key: Annotated[str | None, Form()] = None,
+    destination: Annotated[str | None, Form()] = None,
+    file: UploadFile = File(...),
+) -> dict:
+    resolved_bucket = str(bucket or "").strip()
+    resolved_key = str(key or "").strip().strip("/")
+    if destination and (not resolved_bucket or not resolved_key):
+        destination_bucket, destination_key = _split_s3_destination_path(destination)
+        resolved_bucket = resolved_bucket or destination_bucket
+        resolved_key = resolved_key or destination_key
+    if not resolved_bucket or not resolved_key:
+        raise HTTPException(status_code=400, detail="bucket_and_key_required")
+
+    suffix = Path(file.filename or resolved_key).suffix
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix="dsx-s3-write-", suffix=suffix, delete=False) as handle:
+            tmp_path = Path(handle.name)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                handle.write(chunk)
+        aws_s3_client.upload_file(tmp_path, file_key=resolved_key, bucket=resolved_bucket)
+        return {
+            "status": "success",
+            "bucket": resolved_bucket,
+            "key": resolved_key,
+            "uri": f"s3://{resolved_bucket}/{resolved_key}",
+        }
+    except Exception as exc:
+        dsx_logging.error(f"S3 write_file error: {_redact_aws_secret_text(str(exc))}")
+        raise HTTPException(status_code=500, detail=_redact_aws_secret_text(str(exc))) from exc
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
 
 @connector.repo_check

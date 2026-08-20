@@ -81,9 +81,16 @@ class GatewayPrincipal(BaseModel):
 def _destination_capabilities(integration: IntegrationRecord) -> list[str]:
     capabilities = ["scan"]
     configured_capabilities = integration.config.get("capabilities") if isinstance(integration.config, dict) else {}
+    configured_delivery = integration.config.get("delivery") if isinstance(integration.config, dict) else {}
     if integration.capability_read:
         capabilities.append("read")
-    if isinstance(configured_capabilities, dict) and configured_capabilities.get("write") is True:
+    has_configured_write = isinstance(configured_capabilities, dict) and configured_capabilities.get("write") is True
+    has_delivery_proxy = (
+        isinstance(configured_delivery, dict)
+        and isinstance(configured_delivery.get("proxy"), dict)
+        and bool(configured_delivery["proxy"].get("endpoint_url"))
+    )
+    if has_configured_write or has_delivery_proxy:
         capabilities.append("write")
     if integration.capability_remediate:
         capabilities.append("remediate")

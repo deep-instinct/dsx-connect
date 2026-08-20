@@ -59,6 +59,54 @@ def test_file_gateway_lists_enabled_scope_destinations() -> None:
     assert destinations[0]["classification"] == "internal"
 
 
+def test_file_gateway_destination_write_capability_uses_delivery_proxy() -> None:
+    client = TestClient(create_app())
+    integration = client.post(
+        "/api/v1/control-plane/integrations",
+        json={
+            "platform": "s3",
+            "platform_key": "account-a",
+            "display_name": "S3 Account A",
+            "capability_read": True,
+            "config": {
+                "reader": {
+                    "default_strategy": "proxy",
+                    "proxy": {
+                        "endpoint_url": "http://s3/aws-s3-connector/read_file",
+                        "base_url": "http://s3/aws-s3-connector",
+                        "connector_name": "aws-s3-connector",
+                    },
+                },
+                "delivery": {
+                    "proxy": {
+                        "endpoint_url": "http://s3/aws-s3-connector/write_file",
+                        "base_url": "http://s3/aws-s3-connector",
+                        "connector_name": "aws-s3-connector",
+                    },
+                },
+            },
+        },
+    ).json()
+    scope = client.post(
+        "/api/v1/control-plane/scopes",
+        json={
+            "integration_id": integration["integration_id"],
+            "scope_type": "path",
+            "resource_selector": "claims-bucket/incoming",
+            "display_name": "Claims S3 Intake",
+            "mode": "full_scan",
+            "enabled": True,
+        },
+    ).json()
+
+    response = client.get("/api/v1/files/destinations")
+
+    assert response.status_code == 200
+    destinations = response.json()["destinations"]
+    assert destinations[0]["id"] == scope["scope_id"]
+    assert destinations[0]["capabilities"] == ["scan", "read", "write"]
+
+
 def test_file_gateway_transfer_upload_creates_cached_scan_job(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(settings.gateway, "upload_cache_dir", str(tmp_path))
     client = TestClient(create_app())

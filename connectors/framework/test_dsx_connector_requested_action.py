@@ -201,6 +201,33 @@ def test_ng_registration_payload_uses_runtime_identity_and_capabilities() -> Non
     assert payload["labels"] == {"namespace": "dsx-connect"}
 
 
+def test_ng_registration_payload_honors_explicit_capabilities() -> None:
+    connector = DSXConnector(
+        BaseConnectorConfig(
+            name="aws-s3-connector",
+            connector_url="http://s3:80",
+            dsx_connect_url="http://dsx-connect-ng:8091",
+            register_with_core=False,
+            register_with_ng_control_plane=True,
+            instance_id="s3-pod-1",
+            ng_platform_key="account-a",
+            ng_capabilities={"write": True},
+        )
+    )
+
+    async def read_file(_request):
+        return None
+
+    connector.read_file(read_file)
+
+    payload = connector._ng_registration_payload()
+
+    assert payload["platform"] == "s3"
+    assert payload["platform_key"] == "account-a"
+    assert payload["capabilities"]["read"] is True
+    assert payload["capabilities"]["write"] is True
+
+
 def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, str, dict]] = []
 

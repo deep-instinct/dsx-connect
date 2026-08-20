@@ -697,8 +697,6 @@ class DSXConnector:
         if isinstance(explicit, dict):
             for key, value in explicit.items():
                 capabilities[str(key)] = bool(value)
-        if self.connector_id == "google-cloud-storage-connector":
-            capabilities["write"] = True
         capabilities.setdefault("write", False)
         return capabilities
 

@@ -60,6 +60,10 @@ class BaseConnectorConfig(BaseSettings):
         default_factory=dict,
         description="Optional labels included with dsx-connect-ng connector instance registration.",
     )
+    ng_capabilities: dict = Field(
+        default_factory=dict,
+        description="Optional dsx-connect-ng connector capabilities override, for example write=true.",
+    )
     ng_lease_seconds: int = Field(
         default=120,
         description="Connector instance lease duration advertised to dsx-connect-ng.",

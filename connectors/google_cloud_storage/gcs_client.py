@@ -198,9 +198,12 @@ class GCSClient:
             return False
 
     def upload_bytes(self, content: io.BytesIO, key: str, bucket: str):
+        content.seek(0)
+        self.upload_stream(content, key=key, bucket=bucket)
+
+    def upload_stream(self, content: BinaryIO, key: str, bucket: str):
         client = self._get_client()
         blob = client.bucket(bucket).blob(key)
-        content.seek(0)
         blob.upload_from_file(content)
 
     def upload_file(self, filepath: pathlib.Path, key: str, bucket: str):

@@ -1,6 +1,9 @@
 import pytest
 import sys
 import types
+import io
+
+from starlette.datastructures import UploadFile
 
 pytest.importorskip("google.cloud.storage")
 
@@ -220,6 +223,42 @@ async def test_asset_discovery_reports_configured_bucket_by_default(monkeypatch)
     assert resp.assets[0].metadata["kind"] == "configured_bucket_prefix"
     assert resp.assets[0].metadata["bucket"] == "bucket-gcs"
     assert resp.assets[0].metadata["prefix"] == "sub1"
+
+
+@pytest.mark.asyncio
+async def test_write_file_handler_streams_upload_without_tempfile(monkeypatch):
+    import connectors.google_cloud_storage.google_cloud_storage_connector as gc
+
+    captured = {}
+
+    class FakeGCSClient:
+        def upload_stream(self, content, key: str, bucket: str) -> None:
+            captured["bucket"] = bucket
+            captured["key"] = key
+            captured["content"] = content.read()
+
+    monkeypatch.setattr(gc, "gcs_client", FakeGCSClient())
+
+    upload = UploadFile(filename="payload.txt", file=io.BytesIO(b"hello world"))
+
+    result = await gc.write_file_handler(
+        bucket="bucket-name",
+        key="inbox/payload.txt",
+        destination=None,
+        file=upload,
+    )
+
+    assert result == {
+        "status": "success",
+        "bucket": "bucket-name",
+        "key": "inbox/payload.txt",
+        "uri": "gs://bucket-name/inbox/payload.txt",
+    }
+    assert captured == {
+        "bucket": "bucket-name",
+        "key": "inbox/payload.txt",
+        "content": b"hello world",
+    }
 
 
 @pytest.mark.asyncio

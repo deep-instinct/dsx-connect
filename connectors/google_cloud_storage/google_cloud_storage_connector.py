@@ -1,6 +1,5 @@
 import json
 import os
-import tempfile
 import threading
 from pathlib import Path
 from typing import Annotated
@@ -1242,17 +1241,9 @@ async def write_file_handler(
     if not resolved_bucket or not resolved_key:
         raise HTTPException(status_code=400, detail="bucket_and_key_required")
 
-    suffix = Path(file.filename or resolved_key).suffix
-    tmp_path = None
     try:
-        with tempfile.NamedTemporaryFile(prefix="dsx-gcs-write-", suffix=suffix, delete=False) as handle:
-            tmp_path = Path(handle.name)
-            while True:
-                chunk = await file.read(1024 * 1024)
-                if not chunk:
-                    break
-                handle.write(chunk)
-        gcs_client.upload_file(tmp_path, key=resolved_key, bucket=resolved_bucket)
+        await file.seek(0)
+        gcs_client.upload_stream(file.file, key=resolved_key, bucket=resolved_bucket)
         return {
             "status": "success",
             "bucket": resolved_bucket,
@@ -1262,12 +1253,6 @@ async def write_file_handler(
     except Exception as exc:
         dsx_logging.error(f"GCS write_file error: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    finally:
-        if tmp_path is not None:
-            try:
-                tmp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
 
 
 @connector.repo_check

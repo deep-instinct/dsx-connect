@@ -334,6 +334,11 @@
       background: var(--toolbar-bg);
     }
 
+    tr[data-action]:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: -1px;
+    }
+
     td.actions {
       width: 1%;
       white-space: nowrap;
@@ -2481,7 +2486,7 @@
       updateConnectorsPolling();
     }
 
-    function selectAssetsTab(tabName) {
+    function selectAssetsTab(tabName, { forceReload = false } = {}) {
       state.activeAssetsTab = tabName;
       document.querySelectorAll(".subtab").forEach((button) => {
         button.setAttribute("aria-selected", String(button.dataset.assetsTab === tabName));
@@ -2490,7 +2495,7 @@
         pane.classList.toggle("hidden", pane.id !== `asset-pane-${tabName}`);
       });
       document.getElementById("protected-assets-pager").classList.toggle("hidden", tabName !== "protected");
-      if (tabName === "protected" && !state.protectedAssetsLoaded) {
+      if (tabName === "protected" && (forceReload || !state.protectedAssetsLoaded)) {
         loadProtectedAssets().catch(showProtectedAssetsError);
       }
       updateConnectorsPolling();
@@ -2671,6 +2676,15 @@
         columns,
         rows: state.connectorRows,
         emptyMessage: "No repository connectors configured.",
+        rowAttributes: (row) => ({
+          "data-action": "open-protected-assets",
+          "data-integration": row.integration.integration_id,
+          class: "clickable-row",
+          role: "button",
+          tabindex: "0",
+          title: `View protected assets for ${row.integration.display_name}`,
+          "aria-label": `View protected assets for ${row.integration.display_name}`,
+        }),
       });
     }
 
@@ -4044,10 +4058,9 @@
       const integrationOptions = ['<option value="">all</option>'].concat(
         state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
       ).join("");
-      const registeredConnectorRows = state.connectorRows.filter((row) => (row.connector_instances || []).length > 0);
       if (
         state.protectedIntegrationFilter
-        && !registeredConnectorRows.some((row) => row.integration.integration_id === state.protectedIntegrationFilter)
+        && !state.connectorRows.some((row) => row.integration.integration_id === state.protectedIntegrationFilter)
       ) {
         state.protectedIntegrationFilter = "";
       }
@@ -4056,8 +4069,7 @@
     }
 
     function protectedConnectorFilterOptions() {
-      const registeredConnectorRows = state.connectorRows.filter((row) => (row.connector_instances || []).length > 0);
-      return ['<option value="">all</option>'].concat(registeredConnectorRows
+      return ['<option value="">all</option>'].concat(state.connectorRows
         .map((row) => {
           const selected = row.integration.integration_id === state.protectedIntegrationFilter ? " selected" : "";
           return `<option value="${escapeHtml(row.integration.integration_id)}"${selected}>${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`;
@@ -4773,18 +4785,35 @@
 
     document.getElementById("connectors-body").addEventListener("click", async (event) => {
       const button = event.target.closest("[data-action='toggle-integration']");
-      if (!button) return;
-      button.disabled = true;
-      try {
-        await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(button.dataset.id)}/enabled`, {
-          method: "POST",
-          body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
-        });
-        await loadConnectors();
-      } catch (error) {
-        alert(`Connector update failed: ${error.message}`);
-        button.disabled = false;
+      if (button) {
+        button.disabled = true;
+        try {
+          await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(button.dataset.id)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
+          });
+          await loadConnectors();
+        } catch (error) {
+          alert(`Connector update failed: ${error.message}`);
+          button.disabled = false;
+        }
+        return;
       }
+      if (event.target.closest("button, input, select, textarea, a, label, [contenteditable='true']")) return;
+      const row = event.target.closest("tr[data-action='open-protected-assets']");
+      if (!row?.dataset.integration) return;
+      state.protectedIntegrationFilter = row.dataset.integration;
+      selectAssetsTab("protected", { forceReload: true });
+    });
+
+    document.getElementById("connectors-body").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, input, select, textarea, a, label, [contenteditable='true']")) return;
+      const row = event.target.closest("tr[data-action='open-protected-assets']");
+      if (!row?.dataset.integration) return;
+      event.preventDefault();
+      state.protectedIntegrationFilter = row.dataset.integration;
+      selectAssetsTab("protected", { forceReload: true });
     });
 
     document.getElementById("connectors-body").addEventListener("change", (event) => {

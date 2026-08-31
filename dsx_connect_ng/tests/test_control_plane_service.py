@@ -248,6 +248,121 @@ def test_gateway_application_onboarding_round_trip_and_static_token_lookup() -> 
     assert service.find_gateway_application_by_static_token("claims-token") is None
 
 
+def test_gateway_application_rejects_duplicate_static_bearer_token_on_create() -> None:
+    service = build_service()
+    service.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="claims-upload-service",
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="claims-token",
+                )
+            ],
+        )
+    )
+    try:
+        service.create_gateway_application(
+            GatewayApplicationCreate(
+                application_id="finance-upload-service",
+                identity_bindings=[
+                    GatewayApplicationIdentityBinding(
+                        provider="static_bearer",
+                        token="claims-token",
+                    )
+                ],
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 409
+        assert exc.detail["code"] == "gateway_application_token_conflict"
+        assert exc.detail["application_ids"] == ["claims-upload-service"]
+        assert exc.detail["tokens"] == ["claims-token"]
+    else:
+        raise AssertionError("expected gateway application token conflict")
+
+
+def test_gateway_application_rejects_duplicate_static_bearer_token_on_update() -> None:
+    service = build_service()
+    service.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="claims-upload-service",
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="claims-token",
+                )
+            ],
+        )
+    )
+    service.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="finance-upload-service",
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="finance-token",
+                )
+            ],
+        )
+    )
+    try:
+        service.update_gateway_application(
+            "finance-upload-service",
+            GatewayApplicationUpdate(
+                identity_bindings=[
+                    GatewayApplicationIdentityBinding(
+                        provider="static_bearer",
+                        token="claims-token",
+                    )
+                ]
+            ),
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 409
+        assert exc.detail["code"] == "gateway_application_token_conflict"
+        assert exc.detail["application_ids"] == ["claims-upload-service"]
+        assert exc.detail["tokens"] == ["claims-token"]
+    else:
+        raise AssertionError("expected gateway application token conflict")
+
+
+def test_gateway_application_lookup_rejects_duplicate_tokens_in_existing_data() -> None:
+    service = build_service()
+    service.repo.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="claims-upload-service",
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="claims-token",
+                )
+            ],
+        )
+    )
+    service.repo.create_gateway_application(
+        GatewayApplicationCreate(
+            application_id="finance-upload-service",
+            identity_bindings=[
+                GatewayApplicationIdentityBinding(
+                    provider="static_bearer",
+                    token="claims-token",
+                )
+            ],
+        )
+    )
+
+    try:
+        service.find_gateway_application_by_static_token("claims-token")
+    except HTTPException as exc:
+        assert exc.status_code == 409
+        assert exc.detail["code"] == "gateway_application_token_conflict"
+        assert exc.detail["application_ids"] == ["claims-upload-service", "finance-upload-service"]
+        assert exc.detail["token"] == "claims-token"
+    else:
+        raise AssertionError("expected gateway application token conflict")
+
+
 def test_create_gateway_application_rejects_duplicate_application_id() -> None:
     service = build_service()
     payload = GatewayApplicationCreate(

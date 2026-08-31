@@ -12,6 +12,7 @@ from dsx_connect_ng.control_plane.models import (
     ConnectorInstanceRecord,
     ConnectorInstanceRegister,
     GatewayApplicationCreate,
+    GatewayApplicationIdentityBinding,
     GatewayApplicationRecord,
     GatewayApplicationUpdate,
     IntegrationCreate,
@@ -40,6 +41,13 @@ def selectors_overlap(scope_type: str, left: str, right: str) -> bool:
     left_prefix = left.rstrip("/") + "/"
     right_prefix = right.rstrip("/") + "/"
     return left.startswith(right_prefix) or right.startswith(left_prefix)
+
+
+def _static_bearer_token(binding: GatewayApplicationIdentityBinding) -> str | None:
+    if binding.provider != "static_bearer":
+        return None
+    token = (binding.token or "").strip()
+    return token or None
 
 
 def normalize_registered_connector_base_url(base_url: str) -> str:
@@ -79,6 +87,81 @@ class ControlPlaneService:
                     "errors": exc.errors(),
                 },
             ) from exc
+
+    def _normalize_gateway_application_identity_bindings(
+        self,
+        payload: GatewayApplicationCreate | GatewayApplicationUpdate,
+    ) -> GatewayApplicationCreate | GatewayApplicationUpdate:
+        bindings = payload.identity_bindings
+        if bindings is None:
+            return payload
+        normalized_bindings: list[GatewayApplicationIdentityBinding] = []
+        for binding in bindings:
+            data = binding.model_dump()
+            if isinstance(data.get("token"), str):
+                data["token"] = data["token"].strip() or None
+            normalized_bindings.append(GatewayApplicationIdentityBinding.model_validate(data))
+        payload_data = payload.model_dump(exclude_none=False)
+        payload_data["identity_bindings"] = normalized_bindings
+        return type(payload).model_validate(payload_data)
+
+    def _validate_gateway_application_static_token_uniqueness(
+        self,
+        payload: GatewayApplicationCreate | GatewayApplicationUpdate,
+        *,
+        exclude_application_id: str | None = None,
+    ) -> None:
+        bindings = payload.identity_bindings
+        if bindings is None:
+            return
+
+        tokens: list[str] = []
+        for binding in bindings:
+            token = _static_bearer_token(binding)
+            if token is not None:
+                tokens.append(token)
+
+        if not tokens:
+            return
+
+        seen: set[str] = set()
+        duplicates: set[str] = set()
+        for token in tokens:
+            if token in seen:
+                duplicates.add(token)
+            seen.add(token)
+        if duplicates:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={
+                    "code": "duplicate_gateway_application_static_token",
+                    "tokens": sorted(duplicates),
+                },
+            )
+
+        conflict_app_ids: set[str] = set()
+        conflict_tokens: set[str] = set()
+        for token in seen:
+            for application in self.repo.list_gateway_applications():
+                if exclude_application_id and application.application_id == exclude_application_id:
+                    continue
+                for binding in application.identity_bindings:
+                    if _static_bearer_token(binding) == token:
+                        conflict_app_ids.add(application.application_id)
+                        conflict_tokens.add(token)
+                        break
+                if token in conflict_tokens:
+                    break
+
+        if conflict_app_ids:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "gateway_application_token_conflict",
+                    "application_ids": sorted(conflict_app_ids),
+                    "tokens": sorted(conflict_tokens),
+                },
+            )
 
     def list_integrations(self) -> list[IntegrationRecord]:
         return self.repo.list_integrations()
@@ -267,7 +350,8 @@ class ControlPlaneService:
     def _normalize_gateway_application_create(self, payload: GatewayApplicationCreate) -> GatewayApplicationCreate:
         data = payload.model_dump()
         data["display_name"] = (payload.display_name or payload.application_id).strip() or payload.application_id
-        return GatewayApplicationCreate.model_validate(data)
+        normalized = GatewayApplicationCreate.model_validate(data)
+        return self._normalize_gateway_application_identity_bindings(normalized)
 
     def _normalize_gateway_application_update(
         self,
@@ -278,12 +362,13 @@ class ControlPlaneService:
         if "display_name" in update:
             display_name = (update["display_name"] or "").strip()
             update["display_name"] = display_name or application_id
-            return GatewayApplicationUpdate.model_validate(update)
-        return payload
+        normalized = GatewayApplicationUpdate.model_validate(update)
+        return self._normalize_gateway_application_identity_bindings(normalized)
 
     def create_gateway_application(self, payload: GatewayApplicationCreate) -> GatewayApplicationRecord:
         payload = self._normalize_gateway_application_create(payload)
         self._validate_gateway_application(payload)
+        self._validate_gateway_application_static_token_uniqueness(payload)
         if self.repo.get_gateway_application(payload.application_id) is not None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="gateway_application_conflict")
         return self.repo.create_gateway_application(payload)
@@ -296,19 +381,34 @@ class ControlPlaneService:
         self.get_gateway_application_or_404(application_id)
         payload = self._normalize_gateway_application_update(application_id, payload)
         self._validate_gateway_application(payload)
+        self._validate_gateway_application_static_token_uniqueness(payload, exclude_application_id=application_id)
         row = self.repo.update_gateway_application(application_id, payload)
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="gateway_application_not_found")
         return row
 
     def find_gateway_application_by_static_token(self, token: str) -> GatewayApplicationRecord | None:
+        normalized_token = token.strip()
+        if not normalized_token:
+            return None
+        matches: list[GatewayApplicationRecord] = []
         for application in self.repo.list_gateway_applications():
             if not application.enabled:
                 continue
             for binding in application.identity_bindings:
-                if binding.provider == "static_bearer" and binding.token == token:
-                    return application
-        return None
+                if _static_bearer_token(binding) == normalized_token:
+                    matches.append(application)
+                    break
+        if len(matches) > 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "gateway_application_token_conflict",
+                    "application_ids": sorted({application.application_id for application in matches}),
+                    "token": normalized_token,
+                },
+            )
+        return matches[0] if matches else None
 
     def list_scopes(self, integration_id: str | None = None) -> list[ProtectedScopeRecord]:
         if integration_id:

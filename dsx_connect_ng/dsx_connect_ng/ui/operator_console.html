@@ -581,6 +581,58 @@
       margin: var(--space-5) 0 var(--space-4);
     }
 
+    .asset-context {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      padding: 0 var(--space-8) var(--space-4);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+      line-height: var(--line-height-copy);
+    }
+
+    .asset-context-link {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      padding: 0;
+      min-height: 0;
+      font: inherit;
+      font-weight: var(--font-weight-strong);
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .asset-context-link:hover,
+    .asset-context-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    .asset-context-current {
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
+    }
+
+    .asset-context-muted {
+      color: var(--muted);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .asset-context-sep {
+      color: var(--line-strong);
+    }
+
+    tr.is-selected td {
+      background: var(--surface-strong);
+    }
+
+    tr.is-selected td:first-child {
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
     .asset-pane .table-actions {
       margin: 0 0 var(--space-4);
     }
@@ -1685,6 +1737,7 @@
           </div>
 
           <div class="asset-pane hidden" id="asset-pane-protected">
+            <div class="asset-context" id="protected-context" aria-label="Protected assets navigation"></div>
             <div class="protected-summary">
               <div class="metric-row">
                 <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
@@ -2679,13 +2732,33 @@
         rowAttributes: (row) => ({
           "data-action": "open-protected-assets",
           "data-integration": row.integration.integration_id,
-          class: "clickable-row",
+          class: `clickable-row${row.integration.integration_id === state.protectedIntegrationFilter ? " is-selected" : ""}`,
           role: "button",
           tabindex: "0",
           title: `View protected assets for ${row.integration.display_name}`,
           "aria-label": `View protected assets for ${row.integration.display_name}`,
         }),
       });
+    }
+
+    function selectedProtectedConnectorRow() {
+      return state.connectorRows.find((row) => row.integration.integration_id === state.protectedIntegrationFilter) || null;
+    }
+
+    function renderProtectedContext() {
+      const node = document.getElementById("protected-context");
+      if (!node) return;
+      const connector = selectedProtectedConnectorRow();
+      const connectorLabel = connector
+        ? escapeHtml(connector.integration.display_name)
+        : '<span class="asset-context-muted">all connectors</span>';
+      node.innerHTML = `
+        <button class="asset-context-link" type="button" data-action="go-connectors">Connectors</button>
+        <span class="asset-context-sep" aria-hidden="true">/</span>
+        <span class="asset-context-current">${connectorLabel}</span>
+        <span class="asset-context-sep" aria-hidden="true">/</span>
+        <span class="asset-context-current">Protected</span>
+      `;
     }
 
     function destinationLabel(scope) {
@@ -2882,6 +2955,7 @@
       const previousFilters = protectedFilterValues();
       const activeFilter = protectedActiveFilterState();
       const assets = state.protectedAssets;
+      renderProtectedContext();
       const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
       const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
       document.getElementById("metric-assets").textContent = String(assets.length);
@@ -4631,6 +4705,12 @@
 
     document.querySelectorAll(".subtab").forEach((button) => {
       button.addEventListener("click", () => selectAssetsTab(button.dataset.assetsTab));
+    });
+
+    document.getElementById("protected-context").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='go-connectors']");
+      if (!button) return;
+      selectAssetsTab("connectors");
     });
 
     document.getElementById("refresh-all").addEventListener("click", (event) => {

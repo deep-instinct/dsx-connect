@@ -4704,7 +4704,14 @@
     });
 
     document.querySelectorAll(".subtab").forEach((button) => {
-      button.addEventListener("click", () => selectAssetsTab(button.dataset.assetsTab));
+      button.addEventListener("click", () => {
+        if (button.dataset.assetsTab === "protected") {
+          state.protectedIntegrationFilter = "";
+          selectAssetsTab("protected", { forceReload: true });
+          return;
+        }
+        selectAssetsTab(button.dataset.assetsTab);
+      });
     });
 
     document.getElementById("protected-context").addEventListener("click", (event) => {

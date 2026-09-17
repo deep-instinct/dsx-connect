@@ -218,11 +218,20 @@ jobs:
           name: dsx-file-gateway-desktop-windows
           path: dist/release
 
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.resolve-version.outputs.release_tag }}
-          files: dist/release/*
-          generate_release_notes: true
+      - name: Create GitHub Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.resolve-version.outputs.release_tag }}" \
+            --verify-tag \
+            --generate-notes \
+            --title "DSX File Gateway Desktop ${{ needs.resolve-version.outputs.version }}"
+
+      - name: Upload release assets sequentially
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for asset in dist/release/*; do
+            echo "Uploading ${asset}"
+            gh release upload "${{ needs.resolve-version.outputs.release_tag }}" "${asset}" --clobber
+          done

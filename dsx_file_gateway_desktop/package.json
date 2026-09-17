@@ -1,6 +1,6 @@
 {
   "name": "dsx-file-gateway-desktop",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MVP desktop client for governed DSX-Connect file transfers.",
   "homepage": "https://github.com/deep-instinct/dsx-connect",
   "main": "main.js",

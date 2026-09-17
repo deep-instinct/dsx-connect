@@ -2,15 +2,78 @@
   "name": "dsx-file-gateway-desktop",
   "version": "0.1.0",
   "description": "MVP desktop client for governed DSX-Connect file transfers.",
+  "homepage": "https://github.com/deep-instinct/dsx-connect",
   "main": "main.js",
   "author": "Deep Instinct",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
     "dev": "electron .",
-    "check": "node --check main.js && node --check preload.js && node --check renderer.js"
+    "check": "node --check main.js && node --check preload.js && node --check renderer.js",
+    "build:mac": "electron-builder --mac --publish never",
+    "build:mac:x64": "electron-builder --mac --x64 --publish never",
+    "build:mac:arm64": "electron-builder --mac --arm64 --publish never",
+    "build:win": "electron-builder --win nsis --publish never",
+    "build:linux": "electron-builder --linux AppImage deb --publish never"
   },
   "devDependencies": {
-    "electron": "^41.0.4"
+    "electron": "^41.0.4",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "com.deepinstinct.dsxfilegateway.desktop",
+    "productName": "DSX File Gateway",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "style.css",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE"
+      },
+      {
+        "from": "../NOTICE.md",
+        "to": "NOTICE.md"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility",
+      "maintainer": "Deep Instinct <support@deepinstinct.com>"
+    }
   }
 }

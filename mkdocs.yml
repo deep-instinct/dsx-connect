@@ -112,6 +112,8 @@ theme:
 nav:
   - Home: index.md
 
+  - Kubernetes Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
+
   - Core Concepts:
       - Overview: core-concepts/index.md
       - DSX-Connect 2 Architecture: core-concepts/architecture.md
@@ -222,7 +224,6 @@ nav:
           - ADR 011 Result Sink and External Forwarding: architecture-vnext/adr/adr-011-result-sink-and-external-forwarding.md
       - Deployment:
           - Overview: dsx-connect-2/deployment/index.md
-          - Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
           - DSX-Connect: dsx-connect-2/deployment/kubernetes.md
           - Connectors:
               - Overview: dsx-connect-2/deployment/connectors/index.md

@@ -103,6 +103,10 @@ The same operation can be performed through the control-plane API. The API model
 
 *Figure 2: The connector-specific asset view shows 14 discovered buckets, with the coverage filter set to `unprotected` and no protection profile assigned yet.*
 
+![DSX-Connect 2 Operator Console showing a protected GCS asset](../assets/screenshots/gcs-assets-protected.png)
+
+*Figure 3: `lg-test-01` is now protected and assigned the default protection profile, while the same connector inventory still shows other buckets as `unprotected`.*
+
 ## Discovery is not protection
 
 This distinction is central to the v2 model:

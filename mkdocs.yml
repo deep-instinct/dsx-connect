@@ -112,6 +112,15 @@ theme:
 nav:
   - Home: index.md
 
+  - Core Concepts:
+      - Overview: core-concepts/index.md
+      - DSX-Connect 2 Architecture: core-concepts/architecture.md
+      - Connector and Asset Model: core-concepts/connectors-and-assets.md
+      - Repository Monitoring and Scanning: core-concepts/repository-protection.md
+      - Governed File Movement: core-concepts/governed-file-movement.md
+      - Application Identity and Attribution: dsx-connect-2/concepts/application-identity-and-attribution.md
+      - Gateway Access Control: dsx-connect-2/strategy/gateway-access-control.md
+
   - DSX-Connect v1:
       - Getting Started:
           - Overview: getting-started/index.md

@@ -135,20 +135,3 @@ The same model applies to other platforms:
 - an object-storage connector can expose buckets and prefixes.
 
 For the broader architecture, see [DSX-Connect 2 Architecture](architecture.md). For the application-facing use case, see [Normalized Enterprise File Gateway](../dsx-connect-2/strategy/normalized-enterprise-file-gateway.md).
-
-## Screenshots in this documentation
-
-MkDocs supports screenshots directly. Store an image under `docs/assets/` and embed it with standard Markdown:
-
-```markdown
-![Protected GCS assets in the Operator Console](../assets/screenshots/gcs-protected-assets.png)
-```
-
-For a console walkthrough, the useful screenshots would be:
-
-- the registered GCS connector under **Assets > Connectors**;
-- the asset list filtered to **Unprotected**;
-- the protected-scope form showing the selected bucket or prefix;
-- the same asset list filtered to **Protected**.
-
-No screenshot is included yet because the repository does not currently contain a GCS Operator Console capture. Once one is available, it can be added under `docs/assets/screenshots/` and embedded without any theme changes.

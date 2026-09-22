@@ -184,30 +184,30 @@ nav:
       - Connectors:
           - connectors/index.md
 
-      - Case Studies / Walkthroughs:
-          - Scanning Windows Fileshares: case-studies/windows-fileshares.md
-          - GKE Cluster Networking Troubleshooting: case-studies/gke-cluster-networking-troubleshooting.md
-          - BTP Inline Scan Flow: case-studies/btp-inline-scan-diagram.md
+  - Case Studies / Walkthroughs:
+      - Scanning Windows Fileshares: case-studies/windows-fileshares.md
+      - GKE Cluster Networking Troubleshooting: case-studies/gke-cluster-networking-troubleshooting.md
+      - BTP Inline Scan Flow: case-studies/btp-inline-scan-diagram.md
 
-      - Operations:
-          - Performance Tuning: operations/performance-tuning-job-comparisons.md
-          - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
-          - Syslog Forwarding: operations/syslog.md
+  - Operations:
+      - Performance Tuning: operations/performance-tuning-job-comparisons.md
+      - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
+      - Syslog Forwarding: operations/syslog.md
 
-      - Reference:
-          - Filter Syntax: reference/filters.md
-          - Concepts:
-              - Containers vs VMs: reference/concepts/containers-vs-vms.md
-              - Evolution of Containers: reference/concepts/evolutionofdocker.md
-          - Repository Credentials:
-              - Azure Credentials: reference/azure-credentials.md
-              - Google Cloud Credentials: reference/google-cloud-credentials.md
-              - Google Cloud WIF for GKE: reference/google-cloud-wif-gke.md
-              - Salesforce Credentials: reference/salesforce-credentials.md
-          - Kubernetes:
-              - Storage: reference/kubernetes-storage.md
-              - Traefik: reference/traefik.md
-          - UI Display Icons: reference/display-icons.md
+  - Reference:
+      - Filter Syntax: reference/filters.md
+      - Concepts:
+          - Containers vs VMs: reference/concepts/containers-vs-vms.md
+          - Evolution of Containers: reference/concepts/evolutionofdocker.md
+      - Repository Credentials:
+          - Azure Credentials: reference/azure-credentials.md
+          - Google Cloud Credentials: reference/google-cloud-credentials.md
+          - Google Cloud WIF for GKE: reference/google-cloud-wif-gke.md
+          - Salesforce Credentials: reference/salesforce-credentials.md
+      - Kubernetes:
+          - Storage: reference/kubernetes-storage.md
+          - Traefik: reference/traefik.md
+      - UI Display Icons: reference/display-icons.md
 
   - DSX-Connect 2:
       - Overview: dsx-connect-2/index.md

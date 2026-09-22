@@ -124,9 +124,9 @@ def _native_read_sync(ref: ObjectRef, *, chunk_size: int) -> int:
 
 
 async def _dsx_native_read(ref: ObjectRef, *, chunk_size: int) -> int:
-    from dsx_connect_ng.jobs.contracts import ScanItemRequested
-    from dsx_connect_ng.jobs.models import ContentSource
-    from dsx_connect_ng.readers.gcs_native import GCSNativeReader
+    from dsx_connect_v2.jobs.contracts import ScanItemRequested
+    from dsx_connect_v2.jobs.models import ContentSource
+    from dsx_connect_v2.readers.gcs_native import GCSNativeReader
 
     request = ScanItemRequested(
         job_id="gcs-reader-benchmark",
@@ -217,9 +217,9 @@ def _proxy_read_sync(ref: ObjectRef, *, endpoint_url: str, timeout_seconds: floa
 
 
 async def _dsx_proxy_read(ref: ObjectRef, *, endpoint_url: str, timeout_seconds: float, chunk_size: int) -> int:
-    from dsx_connect_ng.jobs.models import ContentSource
-    from dsx_connect_ng.readers.contracts import ConnectorProxyReadRequest
-    from dsx_connect_ng.readers.proxy import ConnectorProxyRuntimeConfig, http_connector_proxy_stream
+    from dsx_connect_v2.jobs.models import ContentSource
+    from dsx_connect_v2.readers.contracts import ConnectorProxyReadRequest
+    from dsx_connect_v2.readers.proxy import ConnectorProxyRuntimeConfig, http_connector_proxy_stream
 
     request = ConnectorProxyReadRequest(
         job_id="gcs-reader-benchmark",

@@ -41,7 +41,7 @@ Policy is:
 - deterministic (given same inputs)
 - independent of connectors and applications
 
-In `dsx_connect_ng`, policy is currently modeled as a **local component invoked by scan completion**, not as a required queue hop.
+In `dsx_connect_v2`, policy is currently modeled as a **local component invoked by scan completion**, not as a required queue hop.
 
 The canonical runtime contract is:
 

@@ -17,9 +17,9 @@ env:
 
   # For in-cluster DSX-Connect 2 installs, keep both URLs pointed at the API service.
   # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
-  # DSXCONNECTOR_DSX_CONNECT_NG_URL is used for DSX-Connect 2 registration and heartbeats.
+  # DSXCONNECTOR_DSX_CONNECT_V2_URL is used for DSX-Connect 2 registration and heartbeats.
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
 
   # Stable identity for this running connector instance.
   # Changing this value creates a new connector identity in DSX-Connect 2.

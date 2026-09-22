@@ -41,7 +41,7 @@ def test_gke_wif_values_render_service_account_without_json_credentials() -> Non
 
 
 def test_json_secret_values_still_render_credentials_mount() -> None:
-    rendered = _helm_template("-f", str(_chart_dir() / "values-local-ng.yaml"))
+    rendered = _helm_template("-f", str(_chart_dir() / "values-local-v2.yaml"))
 
     assert 'serviceAccountName: "default"' in rendered
     assert "gcp-creds" in rendered

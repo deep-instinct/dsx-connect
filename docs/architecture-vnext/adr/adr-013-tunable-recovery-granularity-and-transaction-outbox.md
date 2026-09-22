@@ -7,7 +7,7 @@
 
 ## Context
 
-`dsx_connect_ng` is adopting a durability-first execution model:
+`dsx_connect_v2` is adopting a durability-first execution model:
 
 - PostgreSQL is the canonical source of truth for execution state
 - RabbitMQ is the asynchronous transport boundary

@@ -36,7 +36,7 @@ Recent DSX-Connect 2 work includes:
 The main benchmark tooling is:
 
 ```text
-scripts/benchmark_ng_job.py
+scripts/benchmark_v2_job.py
 scripts/benchmark_gcs_readers.py
 ```
 
@@ -234,7 +234,7 @@ kubectl --context k3s-uslab -n dsx-connect get endpoints dsxa-scanner -o wide
 Run a protected-scope benchmark:
 
 ```bash
-./.venv/bin/python scripts/benchmark_ng_job.py \
+./.venv/bin/python scripts/benchmark_v2_job.py \
   --api-base-url https://dsx-connect.10.2.4.103.nip.io/api/v1 \
   --scope-id scope_ca7f4196027c4fb0a4e4d759cd571624 \
   --label "2G k3s GCS proxy reader benchmark" \

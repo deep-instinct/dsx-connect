@@ -91,10 +91,10 @@ Secrets become required when you enable private registries, externally managed s
 | Feature you enable | Values setting | Secret required | Example |
 | --- | --- | --- | --- |
 | Private image registry | `imagePullSecrets` | Docker registry Secret | `dsx-registry` |
-| Sensitive DSX-Connect 2 env vars | `envSecretRefs` | Generic Secret containing `DSX_CONNECT_NG_*` keys | `dsx-connect-runtime-env` |
-| External PostgreSQL | `envSecretRefs` or external secret workflow | Secret containing `DSX_CONNECT_NG_POSTGRES__URL` | `dsx-connect-runtime-env` |
-| External RabbitMQ | `envSecretRefs` or external secret workflow | Secret containing `DSX_CONNECT_NG_RABBITMQ__URL` | `dsx-connect-runtime-env` |
-| DSXA auth token | `envSecretRefs` | Secret containing `DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN` | `dsx-connect-runtime-env` |
+| Sensitive DSX-Connect 2 env vars | `envSecretRefs` | Generic Secret containing `DSX_CONNECT_V2_*` keys | `dsx-connect-runtime-env` |
+| External PostgreSQL | `envSecretRefs` or external secret workflow | Secret containing `DSX_CONNECT_V2_POSTGRES__URL` | `dsx-connect-runtime-env` |
+| External RabbitMQ | `envSecretRefs` or external secret workflow | Secret containing `DSX_CONNECT_V2_RABBITMQ__URL` | `dsx-connect-runtime-env` |
+| DSXA auth token | `envSecretRefs` | Secret containing `DSX_CONNECT_V2_SCANNER__DSXA_AUTH_TOKEN` | `dsx-connect-runtime-env` |
 
 Create an image pull Secret only if your image registry requires authentication:
 
@@ -118,9 +118,9 @@ Create a runtime env Secret when sensitive values should not be placed directly 
 ```bash
 kubectl create secret generic dsx-connect-runtime-env \
   --namespace "$NAMESPACE" \
-  --from-literal='DSX_CONNECT_NG_POSTGRES__URL=postgresql://user:password@postgres.example:5432/dsx_connect_2' \
-  --from-literal='DSX_CONNECT_NG_RABBITMQ__URL=amqp://user:password@rabbitmq.example:5672/%2F' \
-  --from-literal='DSX_CONNECT_NG_SCANNER__DSXA_AUTH_TOKEN=<scanner-auth-token>'
+  --from-literal='DSX_CONNECT_V2_POSTGRES__URL=postgresql://user:password@postgres.example:5432/dsx_connect_2' \
+  --from-literal='DSX_CONNECT_V2_RABBITMQ__URL=amqp://user:password@rabbitmq.example:5672/%2F' \
+  --from-literal='DSX_CONNECT_V2_SCANNER__DSXA_AUTH_TOKEN=<scanner-auth-token>'
 ```
 
 Then reference it from values:
@@ -163,21 +163,21 @@ helm upgrade --install "$RELEASE" \
   --set workers.remediation.enabled=true \
   --set workers.resultSink.enabled=true \
   --set workers.dianna.enabled=true \
-  --set-string env.DSX_CONNECT_NG__ENVIRONMENT=dev \
-  --set-string env.DSX_CONNECT_NG__CONTROL_PLANE_BACKEND=postgres \
-  --set-string env.DSX_CONNECT_NG__JOB_BUS_BACKEND=rabbitmq \
-  --set-string env.DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA=true \
-  --set-string env.DSX_CONNECT_NG_POSTGRES__URL=postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2 \
-  --set-string env.DSX_CONNECT_NG_RABBITMQ__URL=amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F \
-  --set-string env.DSX_CONNECT_NG_SCANNER__MODE=stub \
-  --set-string env.DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY=proxy
+  --set-string env.DSX_CONNECT_V2__ENVIRONMENT=dev \
+  --set-string env.DSX_CONNECT_V2__CONTROL_PLANE_BACKEND=postgres \
+  --set-string env.DSX_CONNECT_V2__JOB_BUS_BACKEND=rabbitmq \
+  --set-string env.DSX_CONNECT_V2_POSTGRES__AUTO_APPLY_SCHEMA=true \
+  --set-string env.DSX_CONNECT_V2_POSTGRES__URL=postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2 \
+  --set-string env.DSX_CONNECT_V2_RABBITMQ__URL=amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F \
+  --set-string env.DSX_CONNECT_V2_SCANNER__MODE=stub \
+  --set-string env.DSX_CONNECT_V2_READERS__DEFAULT_STRATEGY=proxy
 ```
 
 To use a reachable DSXA scanner instead of the stub scanner, replace the scanner values:
 
 ```bash
---set-string env.DSX_CONNECT_NG_SCANNER__MODE=dsxa \
---set-string env.DSX_CONNECT_NG_SCANNER__BASE_URL=http://<dsxa-host>:15000
+--set-string env.DSX_CONNECT_V2_SCANNER__MODE=dsxa \
+--set-string env.DSX_CONNECT_V2_SCANNER__BASE_URL=http://<dsxa-host>:15000
 ```
 
 The DSXA URL must be reachable from inside the Kubernetes cluster, not only from your laptop.
@@ -244,28 +244,28 @@ api:
 
 env:
   # Free-form environment label shown in logs and diagnostics.
-  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+  DSX_CONNECT_V2__ENVIRONMENT: "dev"
 
   # Use the in-cluster PostgreSQL and RabbitMQ services enabled below.
-  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
-  DSX_CONNECT_NG__JOB_BUS_BACKEND: "rabbitmq"
+  DSX_CONNECT_V2__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_V2__JOB_BUS_BACKEND: "rabbitmq"
 
   # Auto-apply the database schema from the API pod on startup.
   # For stricter production workflows, handle migrations separately and set this to "false".
-  DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
-  DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
-  DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
+  DSX_CONNECT_V2_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_V2_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
+  DSX_CONNECT_V2_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
 
   # DSXA scanner mode.
   # Use "dsxa" when the cluster can reach a real DSXA scanner.
   # Use "stub" only for control-plane smoke tests where no real scanning is required.
-  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
-  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
+  DSX_CONNECT_V2_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_V2_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 
   # Worker reader mode. "proxy" keeps repository credentials in connectors and
   # lets generic scan workers read content through connector proxy endpoints.
   # Use "native" only as an explicit, benchmark-proven optimization.
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
+  DSX_CONNECT_V2_READERS__DEFAULT_STRATEGY: "proxy"
 
 postgresql:
   # Embedded PostgreSQL is convenient for lab and local validation.

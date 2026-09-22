@@ -34,7 +34,7 @@ env:
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
   DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "connector-instance-1"
   DSXCONNECTOR_NG_PLATFORM: "<platform>"
   DSXCONNECTOR_NG_PLATFORM_KEY: "<operator-chosen-platform-boundary>"

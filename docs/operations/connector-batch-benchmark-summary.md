@@ -69,7 +69,7 @@ After batching is enabled, the dominant bottleneck usually shifts downstream to 
 So batching is not the whole performance story.
 It is the handoff optimization that exposes the next real bottleneck.
 
-For `dsx_connect_ng` local batch scans, deferred publish should be treated as the operational default.
+For `dsx_connect_v2` local batch scans, deferred publish should be treated as the operational default.
 The API should persist the batch and item outbox first, and the relay should publish scan work only up to the configured active-item cap.
 This keeps API calls and cancellation responsive when a batch contains thousands of items.
 
@@ -77,7 +77,7 @@ Use inline publish only for small diagnostic runs that intentionally test immedi
 
 ## NG Batch Scan Findings
 
-Follow-up `dsx_connect_ng` tests used a `1003` file local corpus under `/Users/logangilbert/Documents/SAMPLES/1kdocs`.
+Follow-up `dsx_connect_v2` tests used a `1003` file local corpus under `/Users/logangilbert/Documents/SAMPLES/1kdocs`.
 
 Direct DSXA SDK scanning against the same corpus showed the scanner and SDK path are not the limiting factor:
 
@@ -212,7 +212,7 @@ Near-term direction:
 Current local test command:
 
 ```bash
-dsx-connect-ng-local \
+dsx-connect-v2-local \
   --with-postgres-docker \
   --with-rabbit-docker \
   --scan-worker-count 4 \
@@ -229,7 +229,7 @@ dsx-connect-ng-local \
 Current validator command:
 
 ```bash
-./.venv/bin/python scripts/validate_ng_batch_proxy_reader.py \
+./.venv/bin/python scripts/validate_v2_batch_proxy_reader.py \
   --reader-strategy native \
   --scan-only \
   --sample-dir /Users/logangilbert/Documents/SAMPLES/1kdocs \
@@ -268,9 +268,9 @@ The strongest local baseline after trusted scan-batch items is:
 
 ```bash
 LOG_LEVEL=INFO \
-DSX_CONNECT_NG_LOCAL__SCAN_BATCH_ITEM_LOGGING=false \
-DSX_CONNECT_NG_LOCAL__WORKER_ACK_LOGGING=false \
-./.venv/bin/python -m dsx_connect_ng.local.dsx_connect_ng_local \
+DSX_CONNECT_V2_LOCAL__SCAN_BATCH_ITEM_LOGGING=false \
+DSX_CONNECT_V2_LOCAL__WORKER_ACK_LOGGING=false \
+./.venv/bin/python -m dsx_connect_v2.local.dsx_connect_v2_local \
   --with-postgres-docker \
   --with-rabbit-docker \
   --scan-worker-count 4 \

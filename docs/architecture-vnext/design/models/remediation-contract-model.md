@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the runtime contract for repository mutation in `dsx_connect_ng`.
+This document defines the runtime contract for repository mutation in `dsx_connect_v2`.
 
 It covers:
 
@@ -254,7 +254,7 @@ The intended split is:
 
 ### 1g Connector Compatibility
 
-`dsx_connect_ng` must continue to interoperate with existing 1g connectors during transition.
+`dsx_connect_v2` must continue to interoperate with existing 1g connectors during transition.
 
 That compatibility layer may:
 
@@ -295,7 +295,7 @@ For producer-side reliability and consumer-side duplicate tolerance, see:
 
 ## Current Direction
 
-`dsx_connect_ng` should treat remediation as a first-class stage with:
+`dsx_connect_v2` should treat remediation as a first-class stage with:
 
 - policy-driven action selection in core
 - connector-driven mutation execution

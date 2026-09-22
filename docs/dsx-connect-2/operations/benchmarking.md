@@ -38,7 +38,7 @@ Start a protected-scope scan and watch it to completion:
 export DSX_CONNECT_URL="https://dsx-connect.10.2.4.103.nip.io/api/v1"
 export SCOPE_ID="<scope-id>"
 
-./scripts/benchmark_ng_job.py \
+./scripts/benchmark_v2_job.py \
   --api-base-url "$DSX_CONNECT_URL" \
   --scope-id "$SCOPE_ID" \
   --label "2G GCS protected scope" \
@@ -67,7 +67,7 @@ If a scan is already running:
 ```bash
 export JOB_ID="<job-id>"
 
-./scripts/benchmark_ng_job.py \
+./scripts/benchmark_v2_job.py \
   --api-base-url "$DSX_CONNECT_URL" \
   --job-id "$JOB_ID" \
   --label "2G GCS existing job" \
@@ -97,7 +97,7 @@ export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.dsx-connect-local/google-cloud-sto
 ```
 
 For lab runs, point `--proxy-endpoint` at the connector `read_file` endpoint reachable from the benchmark host. Native mode uses `GOOGLE_APPLICATION_CREDENTIALS` and reads GCS directly from the benchmark process.
-DSX-Connect 2 reader chunk size is controlled by `DSX_CONNECT_NG_READERS__CHUNK_SIZE_BYTES`, defaulting to `1048576`.
+DSX-Connect 2 reader chunk size is controlled by `DSX_CONNECT_V2_READERS__CHUNK_SIZE_BYTES`, defaulting to `1048576`.
 The GCS connector accepts `DSXCONNECTOR_CHUNK_SIZE_BYTES`; the older `CHUNK_SIZE` environment variable remains supported for compatibility.
 
 Local July 14, 2026 result against `lg-test-01/benchmarks/1kdocs`:
@@ -155,7 +155,7 @@ Use this table shape when comparing with 1G:
 | 1G GCS batch | `1g-gcs-batch` | `1002` | `159` | `6.3` | `0` | | | | | historical local benchmark |
 | 2G local GCS protected scope (stub scanner) | `2g-local-gcs-protected-scope-stub` | `1000` | `114.746` | `8.715` | `0` | | | | | Stub scanner isolates GCS read plus 2G workflow overhead. |
 
-Paste the row emitted by `benchmark_ng_job.py` under the 1G row.
+Paste the row emitted by `benchmark_v2_job.py` under the 1G row.
 
 The stub-scanner row is not a DSXA or reader throughput measurement. The stub scanner does not open the object stream, so it is useful for isolating protected-scope enumeration, RabbitMQ dispatch, persistence, policy completion, and item finalization. In the July 14, 2026 local run, scan-stage latency averaged `77.865 ms` with `181.805 ms` p95, while queue wait averaged `57953.586 ms` with `95898.633 ms` p95. That points first at relay/queue/worker/policy workflow throughput rather than DSXA.
 

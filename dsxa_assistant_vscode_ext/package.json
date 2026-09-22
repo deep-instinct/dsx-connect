@@ -63,7 +63,7 @@
           "type": "string",
           "enum": [
             "direct-dsxa",
-            "dsx-connect-ng"
+            "dsx-connect-v2"
           ],
           "default": "direct-dsxa",
           "description": "Preferred generated integration pattern."
@@ -71,7 +71,7 @@
         "dsxa.dsxConnectNgBaseUrl": {
           "type": "string",
           "default": "http://127.0.0.1:8091/api/v1",
-          "description": "Base URL for DSX-Connect NG when using dsx-connect-ng integration mode."
+          "description": "Base URL for DSX-Connect NG when using dsx-connect-v2 integration mode."
         }
       }
     },

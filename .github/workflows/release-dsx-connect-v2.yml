@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version. Leave blank to use dsx_connect_ng/pyproject.toml"
+        description: "Release version. Leave blank to use dsx_connect_v2/pyproject.toml"
         required: false
         default: ""
       image_registry:
@@ -67,10 +67,10 @@ jobs:
           import pathlib
           import re
 
-          text = pathlib.Path("dsx_connect_ng/pyproject.toml").read_text(encoding="utf-8")
+          text = pathlib.Path("dsx_connect_v2/pyproject.toml").read_text(encoding="utf-8")
           match = re.search(r"^version\s*=\s*['\"]([^'\"]+)['\"]", text, flags=re.MULTILINE)
           if not match:
-              raise SystemExit("version not found in dsx_connect_ng/pyproject.toml")
+              raise SystemExit("version not found in dsx_connect_v2/pyproject.toml")
           print(match.group(1))
           PY
           )"
@@ -148,7 +148,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e "./dsxa_sdk_py"
-          python -m pip install -e "./dsx_connect_ng[dev,workers]"
+          python -m pip install -e "./dsx_connect_v2[dev,workers]"
 
       - name: Release DSX-Connect v2
         env:
@@ -169,4 +169,4 @@ jobs:
           else
             args+=(--no-latest)
           fi
-          scripts/dsx-connect-ng/release.sh "${args[@]}"
+          scripts/dsx-connect-v2/release.sh "${args[@]}"

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This note defines how `dsx_connect_ng` should represent quarantine destination and naming behavior in policy and remediation plans.
+This note defines how `dsx_connect_v2` should represent quarantine destination and naming behavior in policy and remediation plans.
 
 It exists to make quarantine behavior explicit across connectors instead of relying on ad hoc connector-local conventions.
 
@@ -121,7 +121,7 @@ If unsupported, connectors should return a normalized unsupported or degraded ou
 
 ## Current 2g Direction
 
-Current `dsx_connect_ng` policy config should default quarantine to:
+Current `dsx_connect_v2` policy config should default quarantine to:
 
 - `preserve_relative_path = false`
 - `collision_strategy = suffix_random`

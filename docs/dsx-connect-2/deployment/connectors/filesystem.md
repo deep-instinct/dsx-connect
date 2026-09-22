@@ -341,7 +341,7 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
       --set-string env.DSXCONNECTOR_REGISTER_WITH_CORE=false \
       --set-string env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_URL=http://dsx-connect-api:8091 \
-      --set-string env.DSXCONNECTOR_DSX_CONNECT_NG_URL=http://dsx-connect-api:8091 \
+      --set-string env.DSXCONNECTOR_DSX_CONNECT_V2_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_INSTANCE_ID=filesystem-local-1 \
       --set-string env.DSXCONNECTOR_NG_PLATFORM=filesystem \
       --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=local-kubernetes \
@@ -379,7 +379,7 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
       DSXCONNECTOR_REGISTER_WITH_CORE: "false"
       DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-      DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+      DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
       DSXCONNECTOR_NG_PLATFORM: "filesystem"
       DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
@@ -505,7 +505,7 @@ Required pattern:
 | --- | --- |
 | `env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
 | `env.DSXCONNECTOR_REGISTER_WITH_CORE` | Usually `"false"` for DSX-Connect 2-only deployments. |
-| `env.DSXCONNECTOR_DSX_CONNECT_NG_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
+| `env.DSXCONNECTOR_DSX_CONNECT_V2_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
 | `env.DSXCONNECTOR_INSTANCE_ID` | Stable connector instance ID. |
 | `env.DSXCONNECTOR_NG_PLATFORM` | Use `"filesystem"`. |
 | `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Host, cluster, tenant, or other boundary represented by this connector. |
@@ -577,6 +577,6 @@ helm uninstall filesystem -n dsx-connect
 | --- | --- | --- |
 | Connector pod is `ImagePullBackOff` | Cluster cannot pull the image | Verify registry, tag, pull secret, and `image.pullPolicy` |
 | Filesystem pod has `FailedMount` | PVC, hostPath, or storage class is wrong | `kubectl describe pod -n dsx-connect` |
-| Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_NG_URL` and API service |
+| Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_V2_URL` and API service |
 | Connector registers but reads fail | Mounted path and `DSXCONNECTOR_ASSET` do not align | Check `scanVolume.mountPath` and `env.DSXCONNECTOR_ASSET` |
 | Monitoring misses changes | Filesystem events do not propagate through the mount | Enable `DSXCONNECTOR_MONITOR_FORCE_POLLING` |

@@ -10,30 +10,30 @@ api:
 
 env:
   # Free-form environment label shown in logs and diagnostics.
-  DSX_CONNECT_NG__ENVIRONMENT: "dev"
+  DSX_CONNECT_V2__ENVIRONMENT: "dev"
 
   # Use the in-cluster PostgreSQL and RabbitMQ services enabled below.
-  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
-  DSX_CONNECT_NG__JOB_BUS_BACKEND: "rabbitmq"
+  DSX_CONNECT_V2__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_V2__JOB_BUS_BACKEND: "rabbitmq"
 
   # Auto-apply the database schema from the API pod on startup.
   # For stricter production workflows, handle migrations separately and set this to "false".
-  DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
-  DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
-  DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
+  DSX_CONNECT_V2_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_V2_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
+  DSX_CONNECT_V2_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
 
   # DSXA scanner mode.
   # Use "dsxa" when the cluster can reach a real DSXA scanner.
   # Use "stub" only for control-plane smoke tests where no real scanning is required.
-  # Optional: set DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY only to a valid DI protected entity id.
+  # Optional: set DSX_CONNECT_V2_SCANNER__PROTECTED_ENTITY only to a valid DI protected entity id.
   # Do not set it to the DSXA scanner SCANNER_ID.
-  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
-  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
+  DSX_CONNECT_V2_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_V2_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 
   # Worker reader mode. "proxy" keeps repository credentials in connectors and
   # lets generic scan workers read content through connector proxy endpoints.
   # Use "native" only as an explicit, benchmark-proven optimization.
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
+  DSX_CONNECT_V2_READERS__DEFAULT_STRATEGY: "proxy"
 
 postgresql:
   # Embedded PostgreSQL is convenient for lab and local validation.

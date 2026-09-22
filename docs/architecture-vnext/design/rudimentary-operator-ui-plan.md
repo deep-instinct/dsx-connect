@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build a thin operator UI for `dsx_connect_ng` that proves the 2g control-plane model can drive real operations without inventing a second orchestration layer in the frontend.
+Build a thin operator UI for `dsx_connect_v2` that proves the 2g control-plane model can drive real operations without inventing a second orchestration layer in the frontend.
 
 The first UI should be:
 

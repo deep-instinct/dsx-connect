@@ -34,39 +34,39 @@ class BaseConnectorConfig(BaseSettings):
     )
     register_with_ng_control_plane: bool = Field(
         default=False,
-        description="Whether this connector should self-register with the dsx-connect-ng control plane.",
+        description="Whether this connector should self-register with the dsx-connect-v2 control plane.",
     )
-    dsx_connect_ng_url: Optional[HttpUrl] = Field(
+    dsx_connect_v2_url: Optional[HttpUrl] = Field(
         default=None,
-        description="Optional dsx-connect-ng base URL. Defaults to dsx_connect_url when NG registration is enabled.",
+        description="Optional dsx-connect-v2 base URL. Defaults to dsx_connect_url when NG registration is enabled.",
     )
     ng_integration_id: str = Field(
         default="",
-        description="Optional existing dsx-connect-ng integration_id to link during connector registration.",
+        description="Optional existing dsx-connect-v2 integration_id to link during connector registration.",
     )
     instance_id: str = Field(
         default="",
-        description="Optional runtime instance identifier for dsx-connect-ng registration.",
+        description="Optional runtime instance identifier for dsx-connect-v2 registration.",
     )
     ng_platform: str = Field(
         default="",
-        description="Optional dsx-connect-ng platform identifier override.",
+        description="Optional dsx-connect-v2 platform identifier override.",
     )
     ng_platform_key: str = Field(
         default="",
-        description="Optional dsx-connect-ng stable platform key override.",
+        description="Optional dsx-connect-v2 stable platform key override.",
     )
     ng_connector_labels: dict = Field(
         default_factory=dict,
-        description="Optional labels included with dsx-connect-ng connector instance registration.",
+        description="Optional labels included with dsx-connect-v2 connector instance registration.",
     )
     ng_capabilities: dict = Field(
         default_factory=dict,
-        description="Optional dsx-connect-ng connector capabilities override, for example write=true.",
+        description="Optional dsx-connect-v2 connector capabilities override, for example write=true.",
     )
     ng_lease_seconds: int = Field(
         default=120,
-        description="Connector instance lease duration advertised to dsx-connect-ng.",
+        description="Connector instance lease duration advertised to dsx-connect-v2.",
     )
     item_action: ItemActionEnum = ItemActionEnum.NOTHING
     item_action_move_metainfo: str = "dsxconnect-quarantine"

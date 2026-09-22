@@ -274,7 +274,7 @@ env:
   DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
 ```
 
 Install:

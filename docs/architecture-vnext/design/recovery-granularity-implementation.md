@@ -1,6 +1,6 @@
 # Recovery Granularity Implementation Guide
 
-This document turns [ADR-013](../adr/adr-013-tunable-recovery-granularity-and-transaction-outbox.md) into concrete implementation work for `dsx_connect_ng`.
+This document turns [ADR-013](../adr/adr-013-tunable-recovery-granularity-and-transaction-outbox.md) into concrete implementation work for `dsx_connect_v2`.
 
 It assumes the existing v2 execution model remains in place:
 
@@ -59,8 +59,8 @@ At acceptance time the system may evaluate policy dynamically, but after that th
 
 Primary modules:
 
-- [dsx_connect_ng/dsx_connect_ng/config.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/config.py:1)
-- [dsx_connect_ng/dsx_connect_ng/control_plane/config_models.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/control_plane/config_models.py:1)
+- [dsx_connect_v2/dsx_connect_v2/config.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/config.py:1)
+- [dsx_connect_v2/dsx_connect_v2/control_plane/config_models.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/control_plane/config_models.py:1)
 
 Add execution recovery settings with explicit defaults.
 
@@ -93,7 +93,7 @@ Implementation requirement:
 
 Primary module:
 
-- [dsx_connect_ng/dsx_connect_ng/jobs/models.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/models.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/models.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/models.py:1)
 
 Add execution metadata to parent job / batch models.
 
@@ -128,8 +128,8 @@ Design note:
 
 Primary modules:
 
-- [dsx_connect_ng/dsx_connect_ng/jobs/repository.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/repository.py:1)
-- [dsx_connect_ng/dsx_connect_ng/jobs/postgres_repo.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/postgres_repo.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/repository.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/repository.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/postgres_repo.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/postgres_repo.py:1)
 
 Extend repository APIs so recovery metadata is first-class rather than hidden in opaque payload JSON.
 
@@ -152,7 +152,7 @@ Suggested first step:
 
 Primary module:
 
-- [dsx_connect_ng/dsx_connect_ng/api/routes/execution.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/execution.py:1)
+- [dsx_connect_v2/dsx_connect_v2/api/routes/execution.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/api/routes/execution.py:1)
 
 Expose recovery metadata through the execution API so operators and tests can inspect effective behavior.
 
@@ -170,7 +170,7 @@ Non-goal for first implementation:
 
 Primary module:
 
-- [dsx_connect_ng/dsx_connect_ng/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/service.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/service.py:1)
 
 Add one explicit recovery policy resolver in `JobService` or a helper it owns.
 
@@ -196,7 +196,7 @@ Design rule:
 
 Primary module:
 
-- [dsx_connect_ng/dsx_connect_ng/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/service.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/service.py:1)
 
 Create one recovery planner path that turns persisted state into replay work.
 
@@ -237,9 +237,9 @@ Mode-specific behavior:
 
 Primary modules:
 
-- [dsx_connect_ng/dsx_connect_ng/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/service.py:1)
-- [dsx_connect_ng/dsx_connect_ng/jobs/repository.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/repository.py:1)
-- [dsx_connect_ng/dsx_connect_ng/jobs/postgres_repo.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/jobs/postgres_repo.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/service.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/service.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/repository.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/repository.py:1)
+- [dsx_connect_v2/dsx_connect_v2/jobs/postgres_repo.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/jobs/postgres_repo.py:1)
 
 This design assumes:
 
@@ -282,10 +282,10 @@ Design rule:
 
 Relevant current test locations:
 
-- `dsx_connect_ng/tests/test_job_service.py`
-- `dsx_connect_ng/tests/test_job_repository.py`
-- `dsx_connect_ng/tests/test_job_postgres_repo.py`
-- `dsx_connect_ng/tests/test_local_runtime.py`
+- `dsx_connect_v2/tests/test_job_service.py`
+- `dsx_connect_v2/tests/test_job_repository.py`
+- `dsx_connect_v2/tests/test_job_postgres_repo.py`
+- `dsx_connect_v2/tests/test_local_runtime.py`
 
 Add tests for:
 
@@ -362,4 +362,4 @@ The implementation should preserve one core separation:
 - durability of accepted work is mandatory
 - precision of restart boundary is tunable
 
-That allows `dsx_connect_ng` to remain correctness-first while still making performance-sensitive workloads cheaper to operate.
+That allows `dsx_connect_v2` to remain correctness-first while still making performance-sensitive workloads cheaper to operate.

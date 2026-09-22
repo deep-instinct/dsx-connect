@@ -73,7 +73,7 @@ More precisely for runtime operations:
 
 The preferred operational model is:
 
-- connectors are deployed within the same container environment as `dsx_connect_ng`
+- connectors are deployed within the same container environment as `dsx_connect_v2`
 
 This is ideal because it simplifies:
 

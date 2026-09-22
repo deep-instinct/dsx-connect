@@ -45,7 +45,7 @@ GitHub Releases should remain the human-facing release surface:
 Build and push a multi-architecture DSX-Connect 2 image:
 
 ```bash
-scripts/dsx-connect-ng/build-image.sh \
+scripts/dsx-connect-v2/build-image.sh \
   --tag 2.0.0 \
   --registry dsxconnect \
   --push \
@@ -63,7 +63,7 @@ dsxconnect/dsx-connect:2.0.0
 Package and push the Helm chart as an OCI artifact:
 
 ```bash
-scripts/dsx-connect-ng/package-chart.sh \
+scripts/dsx-connect-v2/package-chart.sh \
   --push oci://registry-1.docker.io/dsxconnect
 ```
 
@@ -139,7 +139,7 @@ The workflow can be started manually from GitHub Actions, or by pushing a tag th
 dsx-connect-v2.0.0
 ```
 
-For tag-triggered releases, the tag version must match `dsx_connect_ng/pyproject.toml`.
+For tag-triggered releases, the tag version must match `dsx_connect_v2/pyproject.toml`.
 For example, if `pyproject.toml` says `2.0.0`, the expected tag is:
 
 ```text
@@ -179,13 +179,13 @@ Use the environment to require approval before pushing customer-facing images an
 Use this flow when cutting a DSX-Connect 2 release and immediately updating the shared lab stack.
 
 1. Bump the DSX-Connect version in source.
-   Update `dsx_connect_ng/pyproject.toml`, `dsx_connect_ng/deploy/helm/Chart.yaml`, and version-pinned DSX-Connect 2 docs.
+   Update `dsx_connect_v2/pyproject.toml`, `dsx_connect_v2/deploy/helm/Chart.yaml`, and version-pinned DSX-Connect 2 docs.
 
 2. Validate before tagging.
 
    ```bash
-   pytest dsx_connect_ng/tests/test_ui_routes.py
-   scripts/dsx-connect-ng/package-chart.sh --destination /tmp/dsx-connect-charts
+   pytest dsx_connect_v2/tests/test_ui_routes.py
+   scripts/dsx-connect-v2/package-chart.sh --destination /tmp/dsx-connect-charts
    ```
 
 3. Commit, tag, push, and watch the DSX-Connect release.
@@ -231,7 +231,7 @@ Use this flow when cutting a DSX-Connect 2 release and immediately updating the 
    For a persistent lab, prefer the helper documented in [Development deployment](deployment/development.md#update-a-lab-stack-with-helper-scripts).
 
    ```bash
-   scripts/dsx-connect-ng/update-lab-stack.sh \
+   scripts/dsx-connect-v2/update-lab-stack.sh \
      --connect-version 2.0.20 \
      --gcs-version 2.0.10 \
      --filesystem-version 2.0.8 \

@@ -440,8 +440,8 @@ async function generateIntegrationPlan() {
     "- Add tests for benign, malicious, timeout, and scanner-unavailable cases.",
     "",
   ];
-  if (integrationMode === "dsx-connect-ng") {
-    lines.push("## DSX-Connect NG Mode", "", `Submit scan jobs to ${dsxConnectNgBaseUrl || "DSX_CONNECT_NG_BASE_URL"}.`, "");
+  if (integrationMode === "dsx-connect-v2") {
+    lines.push("## DSX-Connect NG Mode", "", `Submit scan jobs to ${dsxConnectNgBaseUrl || "DSX_CONNECT_V2_BASE_URL"}.`, "");
   }
   for (const [language, items] of grouped.entries()) {
     lines.push(`## ${language}`, "");

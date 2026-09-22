@@ -170,7 +170,7 @@ def test_ng_registration_payload_uses_runtime_identity_and_capabilities() -> Non
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             instance_id="gcs-pod-1",
@@ -206,7 +206,7 @@ def test_ng_registration_payload_honors_explicit_capabilities() -> None:
         BaseConnectorConfig(
             name="aws-s3-connector",
             connector_url="http://s3:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             instance_id="s3-pod-1",
@@ -267,7 +267,7 @@ def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatc
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             instance_id="gcs-pod-1",
@@ -318,7 +318,7 @@ def test_ng_only_scan_request_uses_execution_batch_endpoint(monkeypatch: pytest.
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             ng_integration_id="int_gcs",
@@ -391,7 +391,7 @@ def test_ng_registration_response_sets_scan_integration_id(monkeypatch: pytest.M
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             instance_id="gcs-pod-1",
@@ -444,7 +444,7 @@ def test_ng_only_batch_scan_request_uses_execution_batch_endpoint(monkeypatch: p
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             ng_integration_id="int_gcs",
@@ -506,7 +506,7 @@ def test_ng_only_batch_scan_request_preserves_scan_source_hint(monkeypatch: pyte
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             ng_integration_id="int_gcs",
@@ -538,7 +538,7 @@ def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatc
         BaseConnectorConfig(
             name="google-cloud-storage-connector",
             connector_url="http://gcs:80",
-            dsx_connect_url="http://dsx-connect-ng:8091",
+            dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
             register_with_ng_control_plane=True,
             instance_id="gcs-pod-1",

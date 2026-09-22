@@ -1,0 +1,5137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DSX-Connect Operator Console</title>
+  <link rel="icon" type="image/svg+xml" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-16.png">
+  <link rel="apple-touch-icon" sizes="128x128" href="/api/v1/ui-static/icons/dsx-connect-icon-squircle-128.png">
+  <link rel="manifest" href="/api/v1/ui-static/manifest.webmanifest">
+  <style>
+    :root {
+      --bg: #080d14;
+      --surface: #0f1724;
+      --surface-2: #162338;
+      --surface-3: #1c2d47;
+      --field-bg: #080f18;
+      --toolbar-bg: #0b121d;
+      --ink: #e8f1ff;
+      --muted: #91a4be;
+      --heading-muted: #bdd0ea;
+      --line: #263851;
+      --line-strong: #365273;
+      --accent: #35c7ff;
+      --accent-contrast: #06111a;
+      --accent-soft: #102f45;
+      --accent-soft-ink: #b7edff;
+      --warn: #ffd166;
+      --warn-soft: #463b1e;
+      --danger: #ff5f73;
+      --danger-soft: #49202b;
+      --good: #4ee08d;
+      --good-soft: #173c2a;
+      --shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+
+      --font-family-ui: "Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      --font-family-mono: "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+      --font-size-2xs: 10px;
+      --font-size-xs: 11px;
+      --font-size-sm: 12px;
+      --font-size-md: 13px;
+      --font-size-lg: 14px;
+      --font-size-xl: 18px;
+      --font-weight-normal: 500;
+      --font-weight-strong: 600;
+      --font-weight-emphasis: 650;
+      --font-weight-heavy: 700;
+      --line-height-tight: 1.2;
+      --line-height-copy: 1.45;
+      --space-0: 0;
+      --space-1: 2px;
+      --space-2: 4px;
+      --space-3: 6px;
+      --space-4: 8px;
+      --space-5: 10px;
+      --space-6: 12px;
+      --space-7: 14px;
+      --space-8: 16px;
+      --space-9: 18px;
+      --space-10: 20px;
+      --space-12: 24px;
+      --space-14: 28px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-pill: 999px;
+      --control-height: 34px;
+      --control-height-sm: 24px;
+      --control-height-toggle: 32px;
+      --copy-icon-size: 14px;
+      --rail-icon-size: 15px;
+      --rail-width: 188px;
+      --rail-width-collapsed: 54px;
+      --table-min-width: 900px;
+      --table-min-width-protected: 1320px;
+      --table-cell-padding: 6px 7px;
+      --table-cell-padding-compact: var(--space-3);
+      --content-max-width: 1680px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--font-family-ui);
+      font-size: var(--font-size-md);
+      overflow: hidden;
+    }
+
+    button, input, select, textarea {
+      font: inherit;
+    }
+
+    button {
+      min-height: var(--control-height);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      padding: 7px 11px;
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: var(--font-weight-normal);
+    }
+
+    button.primary {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--accent-contrast);
+    }
+
+    button.danger {
+      border-color: var(--danger);
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+
+    button.is-loading svg {
+      animation: refresh-spin 0.8s linear infinite;
+    }
+
+    @keyframes refresh-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    button.copy-button {
+      width: var(--control-height-sm);
+      min-width: var(--control-height-sm);
+      min-height: var(--control-height-sm);
+      height: var(--control-height-sm);
+      padding: 0;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 auto;
+      line-height: 1;
+      opacity: 0.74;
+    }
+
+    button.copy-button:hover {
+      border-color: var(--line);
+      background: var(--toolbar-bg);
+      color: var(--ink);
+      opacity: 1;
+    }
+
+    button.copy-button.copied {
+      border-color: #b6d9cc;
+      background: var(--good-soft);
+      color: var(--good);
+      opacity: 1;
+    }
+
+    button.copy-button svg {
+      width: var(--copy-icon-size);
+      height: var(--copy-icon-size);
+      stroke-width: 1.8;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      min-height: var(--control-height);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      padding: 7px 9px;
+      background: var(--field-bg);
+      color: var(--ink);
+    }
+
+    textarea {
+      min-height: 82px;
+      resize: vertical;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+    }
+
+    h1, h2, h3, p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: var(--font-size-xl);
+      line-height: var(--line-height-tight);
+      font-weight: var(--font-weight-strong);
+    }
+
+    h2 {
+      font-size: var(--font-size-lg);
+      line-height: 1.25;
+      font-weight: var(--font-weight-strong);
+    }
+
+    h3 {
+      font-size: var(--font-size-md);
+      line-height: 1.3;
+      font-weight: var(--font-weight-strong);
+    }
+
+    p {
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
+    }
+
+    table {
+      width: max-content;
+      min-width: max(100%, var(--table-min-width));
+      border-collapse: collapse;
+      font-size: var(--font-size-md);
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: var(--table-cell-padding);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    thead .header-label-row.has-filter-row th {
+      border-bottom: 0;
+    }
+
+    td {
+      line-height: 1.28;
+    }
+
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--surface-2);
+    }
+
+    th {
+      position: static;
+      background: var(--surface-2);
+      color: var(--heading-muted);
+      font-size: var(--font-size-xs);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .th-label {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+    }
+
+    .info-icon {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      background: var(--surface);
+      line-height: 1;
+      cursor: default;
+      vertical-align: middle;
+    }
+
+    .info-icon::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 50%;
+      top: calc(100% + var(--space-4));
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: 260px;
+      padding: var(--space-4) var(--space-5);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+      letter-spacing: 0;
+      line-height: var(--line-height-copy);
+      text-transform: none;
+      white-space: normal;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.12s ease;
+      z-index: 20;
+    }
+
+    .info-icon:hover::after,
+    .info-icon:focus-visible::after {
+      opacity: 1;
+    }
+
+    .info-icon svg {
+      width: 11px;
+      height: 11px;
+      stroke-width: 2.2;
+    }
+
+    tr[data-action] {
+      cursor: pointer;
+    }
+
+    tr[data-action]:hover {
+      background: var(--toolbar-bg);
+    }
+
+    tr[data-action]:focus-visible {
+      outline: 1px solid var(--accent);
+      outline-offset: -1px;
+    }
+
+    td.actions {
+      width: 1%;
+      white-space: nowrap;
+      padding-left: var(--space-4);
+      padding-right: var(--space-4);
+    }
+
+    td.actions select,
+    td.actions button,
+    table td select {
+      min-height: 28px;
+      padding-top: var(--space-3);
+      padding-bottom: var(--space-3);
+    }
+
+    .coverage-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .coverage-action-select {
+      width: 84px;
+      min-width: 84px;
+      max-width: 84px;
+    }
+
+    .table-actions button,
+    .scan-action {
+      width: fit-content;
+      min-height: 28px;
+      padding-top: var(--space-3);
+      padding-bottom: var(--space-3);
+    }
+
+    .scan-action {
+      border-color: var(--good);
+      background: var(--good);
+      color: var(--accent-contrast);
+    }
+
+    .app {
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      overflow: hidden;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-8);
+      padding: var(--space-7) var(--space-10);
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .brand {
+      display: grid;
+      grid-template-columns: 32px minmax(0, auto);
+      align-items: center;
+      column-gap: var(--space-4);
+      row-gap: var(--space-1);
+    }
+
+    .brand-mark {
+      width: 32px;
+      height: 32px;
+      grid-row: 1 / span 2;
+      display: block;
+    }
+
+    .brand small {
+      color: var(--muted);
+      font-weight: var(--font-weight-heavy);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-size: var(--font-size-2xs);
+    }
+
+    .statusbar {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: var(--rail-width) minmax(0, 1fr);
+      min-height: 0;
+      overflow: hidden;
+      transition: grid-template-columns 0.16s ease;
+    }
+
+    .app.nav-collapsed .workspace {
+      grid-template-columns: var(--rail-width-collapsed) minmax(0, 1fr);
+    }
+
+    .rail {
+      border-right: 1px solid var(--line);
+      background: var(--toolbar-bg);
+      padding: var(--space-6) var(--space-4);
+      display: grid;
+      align-content: start;
+      gap: var(--space-4);
+      min-width: 0;
+    }
+
+    .rail-toggle {
+      width: 38px;
+      min-height: var(--control-height-toggle);
+      padding: 5px;
+      justify-self: end;
+    }
+
+    .app.nav-collapsed .rail-toggle {
+      justify-self: center;
+    }
+
+    .rail-nav {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .rail-item {
+      display: grid;
+      grid-template-columns: var(--control-height-sm) minmax(0, 1fr);
+      align-items: center;
+      gap: var(--space-4);
+      min-height: var(--control-height);
+      width: 100%;
+      padding: var(--space-3) var(--space-4);
+      border-color: transparent;
+      background: transparent;
+      text-align: left;
+      color: var(--ink);
+    }
+
+    .rail-item[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-soft-ink);
+    }
+
+    .rail-icon {
+      width: var(--control-height-sm);
+      height: var(--control-height-sm);
+      display: inline-grid;
+      place-items: center;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .rail-icon svg {
+      width: var(--rail-icon-size);
+      height: var(--rail-icon-size);
+      stroke-width: 1.9;
+    }
+
+    .rail-label {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .app.nav-collapsed .rail-label {
+      display: none;
+    }
+
+    .app.nav-collapsed .rail-item {
+      grid-template-columns: var(--control-height-sm);
+      justify-content: center;
+      padding-inline: var(--space-3);
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      padding: var(--space-8) var(--space-10) var(--space-14);
+      max-width: var(--content-max-width);
+      width: 100%;
+      margin: 0 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .main {
+      min-width: 0;
+      display: grid;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .view,
+    .asset-pane {
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #view-assets:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    #view-policy:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+
+    #view-scan-results:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    }
+
+    #asset-pane-connectors:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+    }
+
+    #asset-pane-protected:not(.hidden) {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+    }
+
+    .subtabs {
+      display: flex;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .asset-tabs {
+      margin: var(--space-5) 0 var(--space-4);
+    }
+
+    .asset-context {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-wrap: wrap;
+      padding: 0 var(--space-8) var(--space-4);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+      line-height: var(--line-height-copy);
+    }
+
+    .asset-context-link {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--accent);
+      padding: 0;
+      min-height: 0;
+      font: inherit;
+      font-weight: var(--font-weight-strong);
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .asset-context-link:hover,
+    .asset-context-link:focus-visible {
+      text-decoration: underline;
+    }
+
+    .asset-context-current {
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
+    }
+
+    .asset-context-muted {
+      color: var(--muted);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .asset-context-sep {
+      color: var(--line-strong);
+    }
+
+    tr.is-selected td {
+      background: var(--surface-strong);
+    }
+
+    tr.is-selected td:first-child {
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+
+    .asset-pane .table-actions {
+      margin: 0 0 var(--space-4);
+    }
+
+    .view-heading {
+      padding: 0 var(--space-2);
+    }
+
+    .view-heading p {
+      margin-top: var(--space-2);
+    }
+
+    .table-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+      margin: var(--space-5) 0 var(--space-4);
+    }
+
+    .table-actions label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      white-space: nowrap;
+    }
+
+    .table-actions .spacer {
+      flex: 1 1 auto;
+    }
+
+    .table-actions .poll-control {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .poll-countdown {
+      min-width: 76px;
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .icon-button {
+      width: 32px;
+      min-width: 32px;
+      height: 32px;
+      min-height: 32px;
+      padding: 0;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .icon-button svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .subtab {
+      background: var(--surface);
+    }
+
+    .subtab[aria-selected="true"] {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--accent-soft-ink);
+    }
+
+    .panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--space-6);
+      padding: var(--space-7) var(--space-8);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-body {
+      padding: var(--space-7) var(--space-8);
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr)) auto;
+      gap: var(--space-5);
+      align-items: end;
+      padding: var(--space-6) var(--space-8);
+      border-bottom: 1px solid var(--line);
+      background: var(--toolbar-bg);
+    }
+
+    .toolbar.scan {
+      grid-template-columns: repeat(2, minmax(130px, 1fr)) auto;
+    }
+
+    .toolbar.policy {
+      grid-template-columns: minmax(150px, 1fr) auto;
+    }
+
+    .toolbar.protected {
+      grid-template-columns: minmax(220px, 320px);
+    }
+
+    .toolbar.protected label {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      white-space: nowrap;
+    }
+
+    .toolbar.protected select {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
+    .table-wrap {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      min-height: 0;
+      overflow-x: auto;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .table-wrap.protected-assets table {
+      min-width: max(100%, var(--table-min-width-protected));
+    }
+
+    thead .filter-row th {
+      padding-top: 0;
+      padding-bottom: var(--space-4);
+      border-bottom: 0;
+      background: var(--surface-2);
+      vertical-align: top;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    .column-filter {
+      display: flex;
+      gap: var(--space-4);
+      align-items: center;
+      min-width: 0;
+    }
+
+    .column-filter select,
+    .column-filter input {
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: var(--font-size-sm);
+      font-weight: 400;
+      color: var(--muted);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+      box-shadow: none;
+    }
+
+    .column-filter select:focus,
+    .column-filter input:focus {
+      border-color: var(--line-strong);
+      outline: 0;
+    }
+
+    .filter-input-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-width: 120px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+    }
+
+    .filter-input-wrap input {
+      width: 100%;
+      padding-left: 28px;
+      padding-right: 28px;
+      border: 0;
+      border-radius: var(--radius-sm);
+      background: transparent;
+    }
+
+    .filter-input-wrap:focus-within {
+      border-color: var(--line-strong);
+    }
+
+    .filter-icon {
+      position: absolute;
+      left: 8px;
+      top: 50%;
+      width: 14px;
+      height: 14px;
+      color: var(--muted);
+      pointer-events: none;
+      transform: translateY(-50%);
+    }
+
+    button.filter-clear {
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      width: 18px;
+      min-width: 18px;
+      height: 18px;
+      min-height: 18px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      transform: translateY(-50%);
+      display: inline-grid;
+      place-items: center;
+    }
+
+    button.filter-clear:hover {
+      color: var(--ink);
+      background: transparent;
+    }
+
+    button.filter-clear svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .column-filter.asset-filter input {
+      flex: 1 1 auto;
+      min-width: 120px;
+    }
+
+    .cards {
+      display: grid;
+      gap: var(--space-5);
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      padding: var(--space-6);
+      display: grid;
+      gap: var(--space-5);
+    }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-5);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--space-5);
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-5);
+    }
+
+    .checks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-4) var(--space-6);
+    }
+
+    .checks label {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-3);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-emphasis);
+    }
+
+    .checks input {
+      width: auto;
+      min-height: 0;
+    }
+
+    .settings-list {
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      min-height: var(--control-height);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+    }
+
+    .setting-row.nested {
+      padding-left: var(--space-8);
+    }
+
+    .form-section {
+      display: grid;
+      gap: var(--space-5);
+      padding-bottom: var(--space-6);
+      margin-bottom: var(--space-6);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .form-section:last-of-type {
+      border-bottom: 0;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .form-section-title {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-5);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-strong);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .form-section-title span {
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      font-weight: var(--font-weight);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      width: 38px;
+      height: 22px;
+      flex: 0 0 auto;
+    }
+
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      inset: 0;
+      cursor: pointer;
+    }
+
+    .switch span {
+      width: 100%;
+      height: 100%;
+      border-radius: var(--radius-pill);
+      background: var(--line-strong);
+      transition: background 0.14s ease;
+    }
+
+    .switch span::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--surface);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+      transition: transform 0.14s ease;
+    }
+
+    .switch input:checked + span {
+      background: var(--accent);
+    }
+
+    .switch input:checked + span::after {
+      transform: translateX(16px);
+    }
+
+    .actions-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: var(--space-4);
+    }
+
+    .metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-9);
+      padding: 0 var(--space-8) var(--space-6);
+      color: var(--muted);
+    }
+
+    .protected-summary {
+      padding: 0 var(--space-8) var(--space-6);
+    }
+
+    .protected-summary .metric-row {
+      padding: 0;
+    }
+
+    .scan-stats-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-4) var(--space-8);
+      padding: 0 var(--space-8) var(--space-5);
+      color: var(--muted);
+    }
+
+    .scan-compare-wrap {
+      display: grid;
+      gap: var(--space-3);
+      padding: 0 var(--space-8) var(--space-6);
+      min-height: 0;
+    }
+
+    .scan-compare-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .scan-compare-note {
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .compact-table-wrap {
+      max-height: 240px;
+    }
+
+    #scan-compare-table {
+      min-width: 1480px;
+    }
+
+    #scan-compare-table td,
+    #scan-compare-table th {
+      white-space: nowrap;
+    }
+
+    .scan-compare-empty {
+      justify-content: flex-start;
+      padding-left: 0;
+      text-align: left;
+    }
+
+    .select-cell {
+      width: 36px;
+      text-align: center;
+    }
+
+    .select-cell input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+    }
+
+    .compare-button {
+      position: relative;
+    }
+
+    .compare-button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--surface-strong);
+    }
+
+    .icon-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--surface);
+      border-radius: var(--radius-pill);
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 10px;
+      line-height: 1;
+      font-weight: var(--font-weight-strong);
+      text-align: center;
+      z-index: 1;
+    }
+
+    .metric {
+      display: inline-flex;
+      align-items: baseline;
+      gap: var(--space-3);
+      min-height: var(--control-height-sm);
+    }
+
+    .metric strong {
+      color: var(--ink);
+      font-size: var(--font-size-lg);
+      font-weight: var(--font-weight-strong);
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+    }
+
+    .pager {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-4);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .table-footer {
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-4) var(--space-2) 0;
+    }
+
+    .table-footer:empty {
+      visibility: hidden;
+    }
+
+    .pager strong {
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 22px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      padding: var(--space-1) var(--space-4);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: var(--font-size-sm);
+      font-weight: var(--font-weight-normal);
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      border-color: #b6d9cc;
+      background: var(--good-soft);
+      color: var(--good);
+    }
+
+    .pill.warn {
+      border-color: #e4cf9d;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .readonly-field {
+      min-height: var(--control-height);
+      display: flex;
+      align-items: center;
+      padding: 7px 0;
+      color: var(--ink);
+      font-weight: var(--font-weight-strong);
+    }
+
+    .inline-number-input {
+      width: 92px;
+      min-width: 92px;
+      min-height: 28px;
+      padding: 4px 7px;
+      font-size: var(--font-size-sm);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--surface-3);
+      color: var(--ink);
+    }
+
+    .inline-number-input:focus {
+      border-color: var(--line-strong);
+      outline: 0;
+    }
+
+    .pill.bad {
+      border-color: #dfb2ae;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .mono {
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+    }
+
+    .copy-line {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      gap: var(--space-2);
+      vertical-align: middle;
+    }
+
+    .copy-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .empty {
+      padding: 22px;
+      color: var(--muted);
+      text-align: center;
+      background: var(--toolbar-bg);
+    }
+
+    .detail {
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius-md);
+      background: var(--toolbar-bg);
+      padding: var(--space-5);
+      overflow: auto;
+    }
+
+    tr.detail-row td {
+      padding: 0 var(--space-6) var(--space-5) calc(var(--space-6) + 20px);
+      border-top: 0;
+    }
+
+    .inline-result-detail {
+      position: relative;
+      display: grid;
+      gap: var(--space-4);
+    }
+
+    .inline-result-detail .table-wrap {
+      border-color: var(--line);
+      background: var(--surface);
+    }
+
+    .scan-sample-list {
+      display: grid;
+      gap: 1px;
+      padding: 0 0 var(--space-2);
+    }
+
+    .scan-sample-note {
+      padding: 0 var(--space-4) var(--space-2);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .scan-sample-item {
+      display: grid;
+      grid-template-columns: 28px 28px minmax(180px, 1fr) minmax(180px, 0.9fr);
+      align-items: center;
+      gap: var(--space-3);
+      min-height: 32px;
+      padding: 3px var(--space-4);
+      border-radius: var(--radius-sm);
+      color: var(--ink);
+    }
+
+    .scan-sample-name,
+    .scan-sample-hash {
+      min-width: 0;
+    }
+
+    .scan-sample-name .copy-value {
+      font-weight: var(--font-weight-normal);
+    }
+
+    .scan-sample-hash {
+      color: var(--muted);
+    }
+
+    .scan-sample-status {
+      grid-column: 3 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      padding-bottom: var(--space-1);
+    }
+
+    .stage-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 1px var(--space-3);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-pill);
+      color: var(--muted);
+      font-size: var(--font-size-xs);
+      text-transform: none;
+    }
+
+    .stage-chip.good {
+      border-color: var(--good-soft);
+      color: var(--good);
+    }
+
+    .stage-chip.warn {
+      border-color: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .stage-chip.bad {
+      border-color: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .sample-icon,
+    .verdict-icon {
+      width: 22px;
+      height: 22px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
+
+    .sample-icon svg,
+    .verdict-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 1.9;
+    }
+
+    .verdict-icon.benign {
+      color: var(--good);
+    }
+
+    .verdict-icon.malicious {
+      color: var(--danger);
+    }
+
+    .verdict-icon.not-scanned {
+      color: var(--warn);
+    }
+
+    .sample-item-row {
+      cursor: pointer;
+    }
+
+    .sample-item-row:hover {
+      background: var(--toolbar-bg);
+    }
+
+    .scan-sample-raw {
+      padding: 0 var(--space-4) var(--space-2) 52px;
+    }
+
+    .scan-result-row {
+      cursor: pointer;
+    }
+
+    .scan-result-row:hover {
+      background: var(--toolbar-bg);
+    }
+
+    pre {
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: var(--font-family-mono);
+      font-size: var(--font-size-sm);
+      line-height: var(--line-height-copy);
+    }
+
+    .status-line {
+      min-height: var(--space-9);
+      color: var(--muted);
+      font-size: var(--font-size-sm);
+    }
+
+    .status-line.error {
+      color: var(--danger);
+    }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      background: rgba(0, 0, 0, 0.28);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease;
+    }
+
+    .drawer-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .drawer {
+      position: fixed;
+      inset: 0 0 0 auto;
+      z-index: 31;
+      width: min(440px, 100vw);
+      background: var(--surface);
+      border-left: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      transform: translateX(100%);
+      transition: transform 0.18s ease;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+
+    .drawer.wide {
+      width: min(620px, 100vw);
+    }
+
+    .drawer.open {
+      transform: translateX(0);
+    }
+
+    .drawer-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--space-6);
+      padding: var(--space-7) var(--space-8);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .drawer-body {
+      overflow: auto;
+      padding: var(--space-7) var(--space-8);
+    }
+
+    .drawer-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-5);
+      padding: var(--space-6) var(--space-8);
+      border-top: 1px solid var(--line);
+      background: var(--toolbar-bg);
+    }
+
+    .drawer.with-footer {
+      grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(0, 0, 0, 0.34);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease;
+    }
+
+    .modal-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      position: fixed;
+      z-index: 41;
+      top: 50%;
+      left: 50%;
+      width: min(420px, calc(100vw - 32px));
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding: var(--space-7);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+      transform: translate(-50%, -48%) scale(0.98);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.16s ease;
+    }
+
+    .modal.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: var(--space-5);
+      margin-bottom: var(--space-5);
+    }
+
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: var(--space-3);
+      margin-top: var(--space-5);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1180px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace {
+        grid-template-columns: var(--rail-width-collapsed) minmax(0, 1fr);
+      }
+
+    }
+
+    @media (max-width: 820px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .statusbar {
+        justify-content: flex-start;
+      }
+
+      .shell {
+        padding: var(--space-6);
+      }
+
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: center;
+      }
+
+      .rail-toggle {
+        justify-self: start;
+      }
+
+      .rail-nav {
+        display: flex;
+        overflow-x: auto;
+      }
+
+      .rail-label,
+      .app.nav-collapsed .rail-label {
+        display: inline;
+      }
+
+      .app.nav-collapsed .rail-item {
+        grid-template-columns: var(--control-height-sm) minmax(0, 1fr);
+        justify-content: start;
+      }
+
+      .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+      }
+
+      th, td {
+        padding: var(--table-cell-padding-compact);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <img class="brand-mark" src="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg" alt="" aria-hidden="true">
+        <small id="product-version">DSX-Connect</small>
+        <h1>Operator Console</h1>
+      </div>
+      <div class="statusbar">
+        <span class="pill warn" id="stat-dsxa">DSXA checking</span>
+        <span class="pill" id="stat-integrations">0 connectors</span>
+        <span class="pill" id="stat-scopes">0 scopes</span>
+        <span class="pill" id="stat-jobs">0 jobs</span>
+        <span class="pill good" id="stat-healthy">0 healthy</span>
+        <button class="icon-button" id="refresh-all" type="button" aria-label="Refresh" title="Refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+            <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+            <path d="M18 3v4h-4"></path>
+            <path d="M6 21v-4h4"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <aside class="rail" aria-label="Primary navigation">
+        <button class="rail-toggle" id="nav-toggle" type="button" title="Collapse navigation" aria-label="Collapse navigation">&lt;&lt;</button>
+        <nav class="rail-nav">
+          <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z"></path>
+                <path d="M3 12.5 12 17l9-4.5"></path>
+                <path d="M3 17.5 12 22l9-4.5"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Assets</span>
+          </button>
+          <button class="rail-item" type="button" data-tab="scan-results" aria-selected="false" title="Scan Results">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19V5"></path>
+                <path d="M4 19h16"></path>
+                <path d="m7 14 3-3 3 2 5-6"></path>
+                <path d="M18 7h2v2"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Scan Results</span>
+          </button>
+          <button class="rail-item" type="button" data-tab="applications" aria-selected="false" title="Applications">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Applications</span>
+          </button>
+          <button class="rail-item" type="button" data-tab="policy" aria-selected="false" title="Protection Profiles">
+            <span class="rail-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 3 5 6v5c0 4.5 2.9 8.4 7 10 4.1-1.6 7-5.5 7-10V6l-7-3Z"></path>
+                <path d="m9 12 2 2 4-5"></path>
+              </svg>
+            </span>
+            <span class="rail-label">Protection Profiles</span>
+          </button>
+        </nav>
+      </aside>
+
+      <div class="shell">
+        <main class="main">
+
+        <section class="view" id="view-assets">
+          <div class="view-heading">
+            <h2>Assets</h2>
+          </div>
+
+          <div class="asset-pane" id="asset-pane-connectors">
+            <div class="metric-row">
+              <div class="metric"><span>Connectors</span><strong id="metric-connectors">0</strong></div>
+              <div class="metric"><span>Healthy</span><strong id="metric-healthy">0</strong></div>
+              <div class="metric"><span>Enabled</span><strong id="metric-enabled">0</strong></div>
+              <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
+            </div>
+            <nav class="subtabs asset-tabs" aria-label="Assets views">
+              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+            </nav>
+            <div class="table-actions">
+              <div class="poll-control">Poll for connector changes
+                <label class="switch"><input type="checkbox" id="connectors-poll"><span></span></label>
+              </div>
+              <span class="spacer" aria-hidden="true"></span>
+              <button class="icon-button" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                  <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                  <path d="M18 3v4h-4"></path>
+                  <path d="M6 21v-4h4"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="table-wrap">
+              <table id="connectors-table">
+                <thead></thead>
+                <tbody id="connectors-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="asset-pane hidden" id="asset-pane-protected">
+            <div class="asset-context" id="protected-context" aria-label="Protected assets navigation"></div>
+            <div class="protected-summary">
+              <div class="metric-row">
+                <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
+                <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
+                <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
+                <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
+              </div>
+            </div>
+            <nav class="subtabs asset-tabs" aria-label="Assets views">
+              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
+              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
+            </nav>
+            <div class="table-wrap protected-assets">
+              <table id="protected-assets-table">
+                <thead></thead>
+                <tbody id="protected-assets-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <footer class="table-footer" id="assets-footer">
+            <div class="pager hidden" id="protected-assets-pager">
+              <button type="button" id="protected-page-prev">Previous</button>
+              <span id="protected-page-range"><strong>0-0</strong></span>
+              <button type="button" id="protected-page-next">Next</button>
+            </div>
+          </footer>
+        </section>
+
+        <section class="view hidden" id="view-scan-results">
+          <div class="view-heading">
+            <h2>Scan Results</h2>
+            <p>Job progress, findings, remediation, and scan statistics and comparisons.</p>
+          </div>
+          <div class="scan-stats-row" id="scan-stats-row"></div>
+          <div class="table-actions">
+            <button class="icon-button" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+            <div class="poll-control">Poll for new results
+              <label class="switch"><input type="checkbox" id="scan-results-poll" checked><span></span></label>
+              <span class="poll-countdown" id="scan-results-poll-countdown">Next in 5s</span>
+            </div>
+            <button class="icon-button compare-button" id="toggle-scan-compare" type="button" aria-label="Compare scan results" title="Compare scan results">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 19V5"></path>
+                <path d="M4 19h16"></path>
+                <path d="M8 16V9"></path>
+                <path d="M13 16V7"></path>
+                <path d="M18 16v-4"></path>
+              </svg>
+              <span class="icon-badge hidden" id="scan-compare-count">0</span>
+            </button>
+          </div>
+          <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
+            <div class="scan-compare-header">
+              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.</div>
+              <button class="icon-button" id="export-scan-compare" type="button" aria-label="Export scan comparison CSV" title="Export scan comparison CSV" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 3v12"></path>
+                  <path d="m7 10 5 5 5-5"></path>
+                  <path d="M5 21h14"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="table-wrap compact-table-wrap">
+              <table id="scan-compare-table">
+                <thead></thead>
+                <tbody id="scan-compare-body"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table id="scan-results-table">
+              <thead></thead>
+              <tbody id="scan-results-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="scan-results-footer"></footer>
+        </section>
+
+        <section class="view hidden" id="view-applications">
+          <div class="view-heading">
+            <h2>Applications</h2>
+            <p>Onboarded callers, attribution defaults, protected entity bindings, and gateway grants.</p>
+          </div>
+          <div class="metric-row">
+            <div class="metric"><span>Applications</span><strong id="metric-applications">0</strong></div>
+            <div class="metric"><span>Enabled</span><strong id="metric-applications-enabled">0</strong></div>
+            <div class="metric"><span>With Token</span><strong id="metric-applications-token">0</strong></div>
+            <div class="metric"><span>PE Bound</span><strong id="metric-applications-pe">0</strong></div>
+          </div>
+          <div class="table-actions">
+            <button class="icon-button" id="refresh-applications" type="button" aria-label="Refresh applications" title="Refresh applications">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+            <span class="spacer" aria-hidden="true"></span>
+            <button class="primary" id="create-application" type="button">Onboard Application</button>
+          </div>
+          <div class="table-wrap">
+            <table id="applications-table">
+              <thead></thead>
+              <tbody id="applications-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="applications-footer"></footer>
+        </section>
+
+        <section class="view hidden" id="view-policy">
+          <div class="view-heading">
+            <h2>Protection Profiles</h2>
+            <p>Reusable file-flow behavior applied when protecting connector assets.</p>
+          </div>
+          <div class="table-actions">
+            <label>Connector
+              <select id="policy-filter-integration"></select>
+            </label>
+            <button class="primary" id="apply-policy-filter" type="button">Apply</button>
+            <span class="spacer" aria-hidden="true"></span>
+            <button class="icon-button" id="refresh-policies" type="button" aria-label="Refresh protection profiles" title="Refresh protection profiles">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                <path d="M18 3v4h-4"></path>
+                <path d="M6 21v-4h4"></path>
+              </svg>
+            </button>
+            <button class="primary" id="create-policy" type="button">Create Profile</button>
+          </div>
+          <div class="table-wrap">
+            <table id="policies-table">
+              <thead></thead>
+              <tbody id="policies-body"></tbody>
+            </table>
+          </div>
+          <footer class="table-footer" id="policies-footer"></footer>
+        </section>
+        </main>
+      </div>
+    </div>
+
+    <div class="drawer-backdrop" id="connector-drawer-backdrop"></div>
+    <aside class="drawer" id="connector-drawer" aria-label="Add Repository Connector" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>Add Repository Connector</h2>
+          <p>Preconfigure a repository boundary before a runtime instance registers.</p>
+        </div>
+        <button id="close-add-connector" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form class="cards" id="integration-form">
+          <div class="grid-2">
+            <label>Display Name
+              <input name="display_name" placeholder="GCS Tenant A" required>
+            </label>
+            <label>Platform
+              <input name="platform" placeholder="gcs" required>
+            </label>
+          </div>
+          <label>Platform Key
+            <input name="platform_key" placeholder="project-or-tenant-id" required>
+          </label>
+          <div class="grid-2">
+            <label>Reader
+              <select name="reader_strategy">
+                <option value="proxy">proxy</option>
+                <option value="native">native</option>
+              </select>
+            </label>
+            <label>Connector Name
+              <input name="connector_name" placeholder="google-cloud-storage-connector">
+            </label>
+          </div>
+          <label>Proxy Base URL
+            <input name="proxy_base_url" placeholder="http://127.0.0.1:8630">
+          </label>
+          <div class="checks">
+            <label><input type="checkbox" name="enabled" checked> Enabled</label>
+            <label><input type="checkbox" name="capability_discover" checked> Discover</label>
+            <label><input type="checkbox" name="capability_monitor" checked> Monitor</label>
+            <label><input type="checkbox" name="capability_read"> Read</label>
+            <label><input type="checkbox" name="capability_remediate" checked> Remediate</label>
+          </div>
+          <label>Advanced Config JSON
+            <textarea name="advanced_config_json" placeholder='{"policy": {"policy_id": "default"}}'></textarea>
+          </label>
+          <button class="primary" type="submit">Add Connector</button>
+          <div class="status-line" id="integration-form-status"></div>
+        </form>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" id="application-drawer-backdrop"></div>
+    <aside class="drawer wide" id="application-drawer" aria-label="Application Onboarding" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2 id="application-drawer-title">Onboard Application</h2>
+          <p>Map a caller identity to destinations, attribution, and the DSXA protected entity used for scans.</p>
+        </div>
+        <button id="close-application" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form id="application-form">
+          <input name="mode" type="hidden" value="create">
+          <section class="form-section">
+            <div class="form-section-title">Required <span>Identity and scan attribution</span></div>
+            <div class="grid-2">
+              <label>Application ID
+                <input name="application_id" placeholder="claims-upload-service" required>
+              </label>
+              <label>DSXA Protected Entity ID
+                <input name="default_protected_entity_id" inputmode="numeric" placeholder="required" required>
+              </label>
+            </div>
+            <label>Static Bearer Token
+              <input name="static_token" placeholder="demo-token-or-generated-secret" required>
+            </label>
+          </section>
+          <section class="form-section">
+            <div class="form-section-title">Optional <span>Operator display and governance metadata</span></div>
+            <div class="grid-2">
+              <label>Display Name
+                <input name="display_name" placeholder="defaults to Application ID">
+              </label>
+              <div class="setting-row">
+                <span>Enabled</span>
+                <label class="switch" aria-label="Application enabled">
+                  <input type="checkbox" name="enabled" checked>
+                  <span></span>
+                </label>
+              </div>
+            </div>
+            <div class="grid-3">
+              <label>Tenant ID
+                <input name="tenant_id" placeholder="claims-business-unit">
+              </label>
+              <label>Customer ID
+                <input name="customer_id" placeholder="enterprise-internal">
+              </label>
+              <label>Business Unit
+                <input name="business_unit" placeholder="Claims">
+              </label>
+            </div>
+            <div class="grid-3">
+              <label>Submitted By
+                <input name="submitted_by" placeholder="svc-claims-upload">
+              </label>
+              <label>Cost Center
+                <input name="cost_center" placeholder="CC-1042">
+              </label>
+              <label>Billing Code
+                <input name="billing_code" placeholder="CLAIMS-UPLOAD-PROD">
+              </label>
+            </div>
+            <label>Allowed Destinations
+              <select name="destination_ids" id="application-destinations" multiple size="6"></select>
+            </label>
+            <div class="grid-2">
+              <label>Allowed Actions
+                <input name="actions" value="discover,submit,status">
+              </label>
+              <label>Path Prefixes
+                <input name="path_prefixes" placeholder="inbound, uploads/team-a">
+              </label>
+            </div>
+            <label>Metadata JSON
+              <textarea name="metadata_json" placeholder='{"owner":"platform"}'></textarea>
+            </label>
+          </section>
+          <div class="form-actions">
+            <button type="button" id="cancel-application">Cancel</button>
+            <button class="primary" type="submit">Save Application</button>
+          </div>
+          <div class="status-line" id="application-form-status">Create an application identity binding.</div>
+        </form>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" id="policy-editor-backdrop"></div>
+    <aside class="drawer" id="policy-editor-drawer" aria-label="Protection Profile Editor" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2 id="policy-editor-title">Protection Profile Editor</h2>
+          <p id="policy-editor-caption">Edit remediation and outcome handling.</p>
+        </div>
+        <button id="close-policy-editor" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <form class="cards" id="default-policy-form">
+          <label id="policy-name-field">Profile Name
+            <input name="policy_name" value="Default Protection Profile" readonly>
+            <span class="readonly-field hidden" id="policy-name-readonly">Default Protection Profile</span>
+          </label>
+          <label class="hidden" id="policy-based-on-field">Based on Profile
+            <select name="based_on_policy"></select>
+          </label>
+          <input name="policy_id" type="hidden" value="policy-1">
+          <div>
+            <h3>Remediation</h3>
+            <label>Malicious verdicts
+              <select name="malicious_action">
+                <option value="detect_only">Detect Only</option>
+                <option value="quarantine">Quarantine</option>
+                <option value="delete">Delete</option>
+              </select>
+            </label>
+          </div>
+          <div>
+            <h3>Select actions for the following file verdicts</h3>
+            <div class="grid-2">
+              <label>Non-compliant
+                <select name="non_compliant_action">
+                  <option value="detect_only">Detect Only</option>
+                  <option value="quarantine">Quarantine</option>
+                  <option value="delete">Delete</option>
+                </select>
+              </label>
+              <label>Not scanned
+                <select name="not_scanned_action">
+                  <option value="detect_only">Detect Only</option>
+                  <option value="quarantine">Quarantine</option>
+                  <option value="delete">Delete</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div>
+            <h3>File Types</h3>
+            <p>Define non-compliant file types.</p>
+            <div class="settings-list">
+              <div class="setting-row">
+                <span>Executables (Windows, Mac, Linux)</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="executables"><span></span></label>
+              </div>
+              <div class="setting-row">
+                <span>PDF files</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="pdf"><span></span></label>
+              </div>
+              <div class="setting-row">
+                <span>Office files with macros</span>
+                <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_macro"><span></span></label>
+              </div>
+              <div>
+                <h3>Office files without macros</h3>
+                <div class="settings-list">
+                  <div class="setting-row nested">
+                    <span>Microsoft Word</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_word"><span></span></label>
+                  </div>
+                  <div class="setting-row nested">
+                    <span>Microsoft Excel</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_excel"><span></span></label>
+                  </div>
+                  <div class="setting-row nested">
+                    <span>Other Office files</span>
+                    <label class="switch"><input type="checkbox" name="blocked_file_type" value="office_other"><span></span></label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <h3>Quarantine Folder Setting</h3>
+            <label>Quarantine Folder Path
+              <input name="quarantine_folder_path" value="di-quarantine">
+            </label>
+          </div>
+          <div class="cluster">
+            <button id="policy-editor-cancel" type="button">Cancel</button>
+            <button class="primary" id="policy-editor-save" type="button">Save</button>
+          </div>
+          <div class="status-line" id="default-policy-status">Select a protection profile to edit.</div>
+        </form>
+      </div>
+    </aside>
+    <div class="drawer-backdrop" id="protection-profile-picker-backdrop"></div>
+    <aside class="drawer wide with-footer" id="protection-profile-picker-drawer" aria-label="Choose Protection Profile" aria-hidden="true">
+      <div class="drawer-header">
+        <div>
+          <h2>Choose Protection Profile</h2>
+          <p id="protection-profile-picker-caption">Select a protection profile to apply.</p>
+        </div>
+        <button id="close-protection-profile-picker" type="button">Close</button>
+      </div>
+      <div class="drawer-body">
+        <div class="table-wrap">
+          <table id="protection-profile-picker-table">
+            <thead></thead>
+            <tbody id="protection-profile-picker-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="drawer-footer">
+        <button id="protection-profile-picker-cancel" type="button">Cancel</button>
+        <button class="primary" id="protection-profile-picker-apply" type="button" disabled>Apply</button>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const state = {
+      integrations: [],
+      scopes: [],
+      connectorRows: [],
+      protectedAssets: [],
+      protectedAssetsLoaded: false,
+      protectedPageIndex: 0,
+      protectedPageLimit: 15,
+      protectedPageCursors: [""],
+      protectedNextCursor: null,
+      protectedIntegrationFilter: "",
+      scanResults: [],
+      applications: [],
+      policies: [],
+      policyCatalog: [],
+      defaultProfileByIntegration: {},
+      protectionProfileAsset: null,
+      selectedProtectionProfileId: "",
+      activePolicyId: "policy-1",
+      syncingPolicyForm: false,
+      policyEditorMode: "edit",
+      policyEditorBaseId: "policy-1",
+      activeTab: "assets",
+      activeAssetsTab: "connectors",
+      applicationEditorMode: "create",
+      editingApplicationId: "",
+      selectedScanResult: null,
+      selectedScanResultItemKey: null,
+      selectedScanCompareJobIds: [],
+      scanTargetFilter: "",
+      scanTargetFilterFocused: false,
+      scanTargetFilterSelectionStart: null,
+      scanTargetFilterSelectionEnd: null,
+      scanJobTypeFilter: "",
+      scanJobIdFilter: "",
+      scanJobIdFilterFocused: false,
+      scanJobIdFilterSelectionStart: null,
+      scanJobIdFilterSelectionEnd: null,
+      scanCompareVisible: false,
+      scanResultsPolling: true,
+      scanResultsPollingInFlight: false,
+      scanResultsNextPollAt: null,
+      connectorsPolling: false,
+      connectorsPollingInFlight: false,
+      defaultScannerProtectedEntity: null,
+    };
+    let protectedFilterReloadTimer = null;
+    let scanResultsPollTimer = null;
+    let scanResultsCountdownTimer = null;
+    let connectorsPollTimer = null;
+
+    const endpoints = {
+      meta: "/api/v1/ui/meta",
+      dsxaStatus: "/api/v1/ui/dsxa/status",
+      overview: "/api/v1/ui/overview",
+      connectors: "/api/v1/ui/assets/connectors",
+      protectedAssets: "/api/v1/ui/assets/protected",
+      scanResults: "/api/v1/ui/scan-results",
+      applications: "/api/v1/control-plane/gateway-applications",
+      policies: "/api/v1/ui/policies",
+      createIntegration: "/api/v1/ui/integrations",
+      createScope: "/api/v1/ui/assets/protected",
+    };
+
+    const navStorageKey = "dsx-connect-v2-nav-collapsed";
+    const policyStorageKey = "dsx-connect-v2-policy-catalog";
+    const defaultProfileStorageKey = "dsx-connect-v2-default-protection-profiles";
+
+    async function fetchJson(url, options = {}) {
+      const response = await fetch(url, {
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+        ...options,
+      });
+      if (!response.ok) {
+        let detail = response.statusText;
+        try {
+          detail = JSON.stringify(await response.json(), null, 2);
+        } catch (error) {
+          detail = await response.text();
+        }
+        throw new Error(detail || `Request failed: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function copyButton(value, label = "Copy") {
+      const text = String(value ?? "");
+      if (!text || text === "not configured") return "";
+      return `
+        <button class="copy-button" type="button" data-copy-value="${escapeHtml(text)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="9" y="9" width="11" height="11" rx="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+        </button>
+      `;
+    }
+
+    function containsFilterIcon(label = "Contains filter") {
+      return `
+        <svg class="filter-icon" viewBox="0 0 24 24" aria-label="${escapeHtml(label)}" role="img" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 7h16"></path>
+          <path d="M7 12h10"></path>
+          <path d="M10 17h4"></path>
+        </svg>
+      `;
+    }
+
+    function filenameFromIdentity(identity) {
+      const text = String(identity || "unknown");
+      const parts = text.split(/[\\/]/).filter(Boolean);
+      return parts[parts.length - 1] || text;
+    }
+
+    function truncateText(value, maxLength = 50) {
+      const text = String(value ?? "");
+      return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value || 0);
+      if (!Number.isFinite(bytes) || bytes <= 0) return "";
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let scaled = bytes;
+      let unit = 0;
+      while (scaled >= 1024 && unit < units.length - 1) {
+        scaled /= 1024;
+        unit += 1;
+      }
+      const precision = scaled >= 100 || unit === 0 ? 0 : scaled >= 10 ? 1 : 2;
+      return `${scaled.toFixed(precision)} ${units[unit]}`;
+    }
+
+    function formatRateBps(value) {
+      const rate = Number(value || 0);
+      return Number.isFinite(rate) && rate > 0 ? `${formatBytes(rate)}/s` : "";
+    }
+
+    function formatDurationSec(value) {
+      const seconds = Number(value || 0);
+      if (!Number.isFinite(seconds) || seconds <= 0) return "";
+      if (seconds < 1) return `${Math.round(seconds * 1000)}ms`;
+      const rounded = Math.round(seconds);
+      const days = Math.floor(rounded / 86400);
+      const hours = Math.floor((rounded % 86400) / 3600);
+      const minutes = Math.floor((rounded % 3600) / 60);
+      const secs = rounded % 60;
+      if (days) return `${days}d ${hours}h`;
+      if (hours) return `${hours}h ${minutes}m`;
+      if (minutes) return `${minutes}m ${secs}s`;
+      return `${secs}s`;
+    }
+
+    function formatNumber(value, digits = 2) {
+      const number = Number(value);
+      return Number.isFinite(number) ? number.toFixed(digits) : "";
+    }
+
+    function csvCell(value) {
+      if (value === null || value === undefined) return "";
+      const text = String(value);
+      return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }
+
+    function downloadTextFile(filename, content, type = "text/plain") {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function itemHash(item) {
+      return item.file_hash || item.fileHash || item.sha256 || item.hash || "";
+    }
+
+    function sampleStageChips(item) {
+      const stages = [
+        ["scan", item.scan, item.scan_reason],
+        ["policy", item.policy, item.policy_reason],
+        ["remediation", item.remediation, item.remediation_reason],
+        ["delivery", item.delivery, item.delivery_reason],
+        ["dianna", item.dianna, item.dianna_reason],
+      ];
+      return stages
+        .filter(([, state]) => state)
+        .map(([label, stageState, reason]) => {
+          const text = `${label}: ${stageState}${reason ? ` (${reason})` : ""}`;
+          return `<span class="stage-chip ${pillClass(stageState).replace("pill", "").trim()}" title="${escapeHtml(text)}">${escapeHtml(text)}</span>`;
+        })
+        .join("");
+    }
+
+    function fileTypeIcon(item) {
+      const identity = String(item.object_identity || "").toLowerCase();
+      const fileType = String(item.file_type || "").toLowerCase();
+      const source = `${identity} ${fileType}`;
+      let paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path>';
+      if (source.includes(".pdf") || source.includes("pdf")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 16h1.5a1.5 1.5 0 0 0 0-3H8v4"></path><path d="M13 17v-4h1a2 2 0 0 1 0 4h-1"></path>';
+      } else if (source.match(/\.(doc|docx|txt|rtf)\b/) || source.includes("office") || source.includes("document")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path>';
+      } else if (source.match(/\.(xls|xlsx|csv)\b/) || source.includes("spreadsheet")) {
+        paths = '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h8"></path><path d="M12 11v8"></path>';
+      } else if (source.match(/\.(exe|dll|bin|msi)\b/) || source.includes("executable")) {
+        paths = '<rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path><path d="M9 1v3"></path><path d="M15 1v3"></path><path d="M9 20v3"></path><path d="M15 20v3"></path>';
+      } else if (source.match(/\.(zip|tar|gz|7z|rar)\b/) || source.includes("archive")) {
+        paths = '<path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2z"></path><path d="M12 11v6"></path><path d="M10 13h4"></path><path d="M10 15h4"></path>';
+      }
+      return `<span class="sample-icon" title="${escapeHtml(item.file_type || "File")}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+    }
+
+    function normalizedVerdict(item) {
+      const value = String(item.verdict || item.failure_reason || item.scan || "").trim().toLowerCase();
+      if (["benign", "clean", "allowed", "allow"].includes(value)) return "benign";
+      if (["malicious", "malware", "infected", "suspicious"].includes(value)) return "malicious";
+      if (["not scanned", "not_scanned", "notscanned", "failed", "cancelled", "skipped"].includes(value)) return "not-scanned";
+      if (item.state === "failed" || item.state === "cancelled" || item.scan !== "completed") return "not-scanned";
+      return "not-scanned";
+    }
+
+    function verdictIcon(item) {
+      const verdict = normalizedVerdict(item);
+      const label = verdict === "benign" ? "Benign" : verdict === "malicious" ? "Malicious" : "Not scanned";
+      const paths = verdict === "benign"
+        ? '<path d="M20 6 9 17l-5-5"></path>'
+        : verdict === "malicious"
+          ? '<path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="m10.29 3.86-8.16 14A2 2 0 0 0 3.84 21h16.32a2 2 0 0 0 1.71-3.14l-8.16-14a2 2 0 0 0-3.42 0z"></path>'
+          : '<circle cx="12" cy="12" r="10"></circle><path d="M12 8v4"></path><path d="M12 16h.01"></path>';
+      return `<span class="verdict-icon ${verdict}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">${paths}</svg></span>`;
+    }
+
+    function clearFilterButton(targetId, value, label = "Clear filter") {
+      return `
+        <button class="filter-clear ${value ? "" : "hidden"}" type="button" data-clear-filter="${escapeHtml(targetId)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="M9 9l6 6"></path>
+            <path d="M15 9l-6 6"></path>
+          </svg>
+        </button>
+      `;
+    }
+
+    function iconSvg(name) {
+      if (name === "play") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 8-14 8V4Z"></path></svg>';
+      }
+      if (name === "x") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
+      }
+      if (name === "refresh") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-15.5 6.2"></path><path d="M3 12A9 9 0 0 1 18.5 5.8"></path><path d="M18 3v4h-4"></path><path d="M6 21v-4h4"></path></svg>';
+      }
+      return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>';
+    }
+
+    function updateFilterClearButton(input) {
+      const button = input?.parentElement?.querySelector("[data-clear-filter]");
+      if (!button) return;
+      button.classList.toggle("hidden", !input.value);
+    }
+
+    async function copyTextToClipboard(value) {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return;
+      }
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }
+
+    async function withBusyButton(button, action) {
+      if (!button || button.disabled) return;
+      button.disabled = true;
+      button.classList.add("is-loading");
+      button.setAttribute("aria-busy", "true");
+      try {
+        await action();
+      } finally {
+        button.disabled = false;
+        button.classList.remove("is-loading");
+        button.removeAttribute("aria-busy");
+      }
+    }
+
+    function parseOptionalJson(value) {
+      if (!value.trim()) return {};
+      return JSON.parse(value);
+    }
+
+    function mergeObjects(base, extra) {
+      const merged = structuredClone(base);
+      for (const [key, value] of Object.entries(extra)) {
+        if (value && typeof value === "object" && !Array.isArray(value) && merged[key] && typeof merged[key] === "object" && !Array.isArray(merged[key])) {
+          merged[key] = mergeObjects(merged[key], value);
+        } else {
+          merged[key] = value;
+        }
+      }
+      return merged;
+    }
+
+    function setStatus(id, message, isError = false) {
+      const node = document.getElementById(id);
+      node.textContent = message;
+      node.className = isError ? "status-line error" : "status-line";
+    }
+
+    function pillClass(value) {
+      const normalized = String(value || "").toLowerCase();
+      if (["healthy", "enabled", "completed", "protected", "clean", "active"].includes(normalized)) return "pill good";
+      if (["failed", "cancelled", "unhealthy", "disabled", "malicious", "unreachable"].includes(normalized)) return "pill bad";
+      if (["unknown", "running", "queued", "accepted", "publish_pending", "unprotected", "detect_only", "stub", "not_configured", "scheme_mismatch"].includes(normalized)) return "pill warn";
+      return "pill";
+    }
+
+    function renderEmptyRow(target, colspan, message) {
+      target.innerHTML = `<tr><td colspan="${colspan}"><div class="empty">${escapeHtml(message)}</div></td></tr>`;
+    }
+
+    function htmlAttributes(attributes = {}) {
+      return Object.entries(attributes)
+        .filter(([, value]) => value !== undefined && value !== null && value !== false)
+        .map(([key, value]) => value === true ? ` ${key}` : ` ${key}="${escapeHtml(value)}"`)
+        .join("");
+    }
+
+    function renderDataTable({ tableId, bodyId, columns, rows, emptyMessage, rowAttributes = null, rowDetailHtml = null }) {
+      const table = document.getElementById(tableId);
+      const body = document.getElementById(bodyId);
+      const header = table.querySelector("thead");
+      const hasFilters = columns.some((column) => column.filterHtml);
+      const labelRow = `<tr class="header-label-row${hasFilters ? " has-filter-row" : ""}">${columns.map((column) => {
+        const headerContent = column.headerHtml || escapeHtml(column.label || "");
+        return `<th${htmlAttributes(column.headerAttributes || {})}>${headerContent}</th>`;
+      }).join("")}</tr>`;
+      // Table-specific filters live under their matching column header.
+      const filterRow = hasFilters
+        ? `<tr class="filter-row">${columns.map((column) => `<th>${column.filterHtml || ""}</th>`).join("")}</tr>`
+        : "";
+      header.innerHTML = labelRow + filterRow;
+      body.innerHTML = "";
+      if (!rows.length) {
+        renderEmptyRow(body, columns.length, emptyMessage);
+        return;
+      }
+      body.innerHTML = rows.map((row, index) => {
+        const attributes = rowAttributes ? rowAttributes(row, index) : {};
+        const cells = columns.map((column) => {
+          const className = column.className ? ` class="${escapeHtml(column.className)}"` : "";
+          return `<td${className}>${column.render(row, index)}</td>`;
+        }).join("");
+        const detail = rowDetailHtml ? rowDetailHtml(row, index) : "";
+        const detailRow = detail
+          ? `<tr class="detail-row"><td colspan="${columns.length}">${detail}</td></tr>`
+          : "";
+        return `<tr${htmlAttributes(attributes)}>${cells}</tr>${detailRow}`;
+      }).join("");
+    }
+
+    function selectTab(tabName) {
+      state.activeTab = tabName;
+      document.querySelectorAll(".rail-item").forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.tab === tabName));
+      });
+      document.querySelectorAll(".view").forEach((view) => {
+        view.classList.toggle("hidden", view.id !== `view-${tabName}`);
+      });
+      updateScanResultsPolling();
+      updateScanResultsCountdownTimer();
+      updateConnectorsPolling();
+    }
+
+    function selectAssetsTab(tabName, { forceReload = false } = {}) {
+      state.activeAssetsTab = tabName;
+      document.querySelectorAll(".subtab").forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.assetsTab === tabName));
+      });
+      document.querySelectorAll(".asset-pane").forEach((pane) => {
+        pane.classList.toggle("hidden", pane.id !== `asset-pane-${tabName}`);
+      });
+      document.getElementById("protected-assets-pager").classList.toggle("hidden", tabName !== "protected");
+      if (tabName === "protected" && (forceReload || !state.protectedAssetsLoaded)) {
+        loadProtectedAssets().catch(showProtectedAssetsError);
+      }
+      updateConnectorsPolling();
+    }
+
+    function setNavCollapsed(collapsed) {
+      document.querySelector(".app").classList.toggle("nav-collapsed", collapsed);
+      localStorage.setItem(navStorageKey, collapsed ? "true" : "false");
+      const toggle = document.getElementById("nav-toggle");
+      toggle.title = collapsed ? "Expand navigation" : "Collapse navigation";
+      toggle.textContent = collapsed ? ">>" : "<<";
+      toggle.setAttribute("aria-label", toggle.title);
+    }
+
+    function initNav() {
+      setNavCollapsed(localStorage.getItem(navStorageKey) === "true");
+    }
+
+    function renderTopStats() {
+      const healthy = state.connectorRows.filter((row) => row.health?.status === "healthy").length;
+      document.getElementById("stat-integrations").textContent = `${state.integrations.length} connectors`;
+      document.getElementById("stat-scopes").textContent = `${state.scopes.length} scopes`;
+      document.getElementById("stat-jobs").textContent = `${state.scanResults.length} jobs`;
+      document.getElementById("stat-healthy").textContent = `${healthy} healthy`;
+      document.getElementById("metric-connectors").textContent = String(state.connectorRows.length);
+      document.getElementById("metric-healthy").textContent = String(healthy);
+      document.getElementById("metric-enabled").textContent = String(state.connectorRows.filter((row) => row.integration.enabled).length);
+      document.getElementById("metric-scopes").textContent = String(state.scopes.length);
+      document.getElementById("metric-applications").textContent = String(state.applications.length);
+      document.getElementById("metric-applications-enabled").textContent = String(state.applications.filter((app) => app.enabled).length);
+      document.getElementById("metric-applications-token").textContent = String(state.applications.filter((app) => (app.identity_bindings || []).some((binding) => binding.provider === "static_bearer" && binding.token)).length);
+      document.getElementById("metric-applications-pe").textContent = String(state.applications.filter((app) => app.default_protected_entity_id !== null && app.default_protected_entity_id !== undefined).length);
+    }
+
+    function renderDsxaStatus(payload) {
+      const node = document.getElementById("stat-dsxa");
+      node.textContent = payload?.label || "DSXA unknown";
+      node.className = pillClass(payload?.state || "unknown");
+      node.title = payload?.base_url ? `${payload.base_url} (${payload.mode || "unknown"})` : `scanner mode: ${payload?.mode || "unknown"}`;
+    }
+
+    async function loadDsxaStatus() {
+      try {
+        renderDsxaStatus(await fetchJson(endpoints.dsxaStatus));
+      } catch (error) {
+        renderDsxaStatus({
+          state: "unreachable",
+          label: "DSXA status unavailable",
+          mode: "unknown",
+          details: { message: error.message },
+        });
+      }
+    }
+
+    async function loadUiMeta() {
+      try {
+        const meta = await fetchJson(endpoints.meta);
+        const displayName = meta.display_name || `DSX-Connect v${meta.version || ""}`.trim();
+        state.defaultScannerProtectedEntity = meta.scanner_protected_entity ?? null;
+        document.getElementById("product-version").textContent = displayName;
+        document.title = `${displayName} Operator Console`;
+      } catch (error) {
+        state.defaultScannerProtectedEntity = null;
+        document.getElementById("product-version").textContent = "DSX-Connect";
+        document.title = "DSX-Connect Operator Console";
+      }
+    }
+
+    function renderConnectors() {
+      const columns = [
+        {
+          key: "connector",
+          label: "Connector",
+          render: (row) => {
+            const integration = row.integration;
+            return `
+              <strong>${escapeHtml(integration.display_name)}</strong><br>
+              <span class="copy-line"><span class="mono copy-value">${escapeHtml(integration.integration_id)}</span>${copyButton(integration.integration_id)}</span>
+            `;
+          },
+        },
+        { key: "type", label: "Type", render: (row) => escapeHtml(row.integration.platform) },
+        {
+          key: "status",
+          label: "Status",
+          render: (row) => `<span class="${pillClass(row.health?.status)}">${escapeHtml(row.health?.status || "unknown")}</span>`,
+        },
+        {
+          key: "instances",
+          label: "Instances",
+          render: (row) => {
+            const instances = row.connector_instances || [];
+            const liveInstance = instances[0] || null;
+            const version = liveInstance?.connector_version ? `v${liveInstance.connector_version}` : "version unknown";
+            return instances.length
+              ? `${instances.length} registered<br><span class="mono">${escapeHtml(liveInstance.connector_instance_id || "")}</span><br><span class="muted">${escapeHtml(version)}</span>`
+              : "none";
+          },
+        },
+        { key: "scopes", label: "Protected Scopes", render: (row) => String(row.scope_count) },
+        {
+          key: "protected_entity",
+          label: "Default Protected Entity",
+          render: (row) => {
+            const value = connectorProtectedEntity(row);
+            return `
+              <input
+                class="inline-number-input"
+                type="number"
+                min="1"
+                inputmode="numeric"
+                placeholder="unset"
+                value="${escapeHtml(value ?? "")}"
+                data-action="set-default-protected-entity"
+                data-integration="${escapeHtml(row.integration.integration_id)}"
+                aria-label="Protected entity for ${escapeHtml(row.integration.display_name)}"
+              >
+            `;
+          },
+        },
+        {
+          key: "default_profile",
+          label: "Default Protection Profile",
+          headerHtml: `
+            <span class="th-label">
+              <span>Default Protection Profile</span>
+              <span class="info-icon" tabindex="0" data-tooltip="Changing default profile only affects newly assigned protections, not existing ones." aria-label="Changing default profile only affects newly assigned protections, not existing ones." role="img">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <path d="M12 16v-4"></path>
+                  <path d="M12 8h.01"></path>
+                </svg>
+              </span>
+            </span>
+          `,
+          render: (row) => renderDefaultProfileSelect(row.integration.integration_id),
+        },
+        { key: "reader", label: "Reader", render: (row) => escapeHtml(row.reader_strategy || "unknown") },
+        {
+          key: "capabilities",
+          label: "Capabilities",
+          render: (row) => {
+            const capabilities = row.integration.remediation_capabilities || {};
+            const liveInstance = (row.connector_instances || [])[0] || null;
+            const runtimeCapabilities = liveInstance?.capabilities || {};
+            return `
+              <span class="pill">discover ${runtimeCapabilities.discover ? "yes" : "no"}</span>
+              <span class="pill">read ${runtimeCapabilities.read ? "yes" : "no"}</span>
+              <span class="pill">write ${runtimeCapabilities.write ? "yes" : "no"}</span>
+              <span class="pill">remediate ${runtimeCapabilities.remediate || capabilities.supports_move || capabilities.supports_tag ? "yes" : "no"}</span>
+              <span class="pill">move ${capabilities.supports_move ? "yes" : "no"}</span>
+              <span class="pill">tag ${capabilities.supports_tag ? "yes" : "no"}</span>
+            `;
+          },
+        },
+        {
+          key: "endpoint",
+          label: "Endpoint",
+          render: (row) => {
+            const liveInstance = (row.connector_instances || [])[0] || null;
+            const endpoint = row.health?.endpoint || row.proxy_base_url || liveInstance?.base_url || "not configured";
+            return `<span class="copy-line"><span class="mono copy-value">${escapeHtml(endpoint)}</span>${copyButton(endpoint)}</span>`;
+          },
+        },
+        {
+          key: "actions",
+          label: "",
+          className: "actions",
+          render: (row) => {
+            const integration = row.integration;
+            return `<button type="button" data-action="toggle-integration" data-id="${escapeHtml(integration.integration_id)}" data-enabled="${integration.enabled ? "false" : "true"}">${integration.enabled ? "Disable" : "Enable"}</button>`;
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "connectors-table",
+        bodyId: "connectors-body",
+        columns,
+        rows: state.connectorRows,
+        emptyMessage: "No repository connectors configured.",
+        rowAttributes: (row) => ({
+          "data-action": "open-protected-assets",
+          "data-integration": row.integration.integration_id,
+          class: `clickable-row${row.integration.integration_id === state.protectedIntegrationFilter ? " is-selected" : ""}`,
+          role: "button",
+          tabindex: "0",
+          title: `View protected assets for ${row.integration.display_name}`,
+          "aria-label": `View protected assets for ${row.integration.display_name}`,
+        }),
+      });
+    }
+
+    function selectedProtectedConnectorRow() {
+      return state.connectorRows.find((row) => row.integration.integration_id === state.protectedIntegrationFilter) || null;
+    }
+
+    function renderProtectedContext() {
+      const node = document.getElementById("protected-context");
+      if (!node) return;
+      const connector = selectedProtectedConnectorRow();
+      const connectorLabel = connector
+        ? escapeHtml(connector.integration.display_name)
+        : '<span class="asset-context-muted">all connectors</span>';
+      node.innerHTML = `
+        <button class="asset-context-link" type="button" data-action="go-connectors">Connectors</button>
+        <span class="asset-context-sep" aria-hidden="true">/</span>
+        <span class="asset-context-current">${connectorLabel}</span>
+        <span class="asset-context-sep" aria-hidden="true">/</span>
+        <span class="asset-context-current">Protected</span>
+      `;
+    }
+
+    function destinationLabel(scope) {
+      const connector = state.integrations.find((row) => row.integration?.integration_id === scope.integration_id)?.integration;
+      const connectorName = connector?.display_name || scope.integration_id || "connector";
+      return `${connectorName} / ${scope.display_name || scope.resource_selector || scope.scope_id}`;
+    }
+
+    function populateApplicationDestinations(selectedIds = []) {
+      const select = document.getElementById("application-destinations");
+      if (!select) return;
+      const selected = new Set(selectedIds);
+      select.innerHTML = state.scopes
+        .filter((scope) => scope.enabled)
+        .map((scope) => `
+          <option value="${escapeHtml(scope.scope_id)}"${selected.has(scope.scope_id) ? " selected" : ""}>
+            ${escapeHtml(destinationLabel(scope))}
+          </option>
+        `)
+        .join("");
+    }
+
+    function applicationStaticToken(app) {
+      return (app.identity_bindings || []).find((binding) => binding.provider === "static_bearer" && binding.token)?.token || "";
+    }
+
+    function applicationGrantSummary(app) {
+      const grants = app.grants || [];
+      if (!grants.length) return '<span class="muted">none</span>';
+      const destinationIds = new Set();
+      const actions = new Set();
+      grants.forEach((grant) => {
+        (grant.destination_ids || grant.scope_ids || []).forEach((id) => destinationIds.add(id));
+        (grant.actions || []).forEach((action) => actions.add(action));
+      });
+      const destinations = Array.from(destinationIds).map((id) => {
+        const scope = state.scopes.find((item) => item.scope_id === id);
+        return scope ? destinationLabel(scope) : id;
+      });
+      return `
+        <div>${destinations.length ? escapeHtml(destinations.join(", ")) : '<span class="muted">all destinations</span>'}</div>
+        <div class="muted">${escapeHtml(Array.from(actions).join(", ") || "discover, submit, status")}</div>
+      `;
+    }
+
+    function renderApplications() {
+      const columns = [
+        {
+          key: "application",
+          label: "Application",
+          render: (app) => `
+            <strong>${escapeHtml(app.display_name || app.application_id)}</strong><br>
+            <span class="copy-line"><span class="mono copy-value">${escapeHtml(app.application_id)}</span>${copyButton(app.application_id)}</span>
+          `,
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (app) => `<span class="${pillClass(app.enabled ? "protected" : "disabled")}">${app.enabled ? "enabled" : "disabled"}</span>`,
+        },
+        {
+          key: "identity",
+          label: "Identity",
+          render: (app) => applicationStaticToken(app)
+            ? '<span class="pill">static bearer</span>'
+            : '<span class="muted">no token</span>',
+        },
+        {
+          key: "attribution",
+          label: "Attribution",
+          render: (app) => `
+            <div>${escapeHtml(app.tenant_id || "tenant unset")} / ${escapeHtml(app.customer_id || "customer unset")}</div>
+            <div class="muted">${escapeHtml(app.business_unit || "business unit unset")} · ${escapeHtml(app.cost_center || "cost center unset")}</div>
+          `,
+        },
+        {
+          key: "protected_entity",
+          label: "DSXA PE",
+          render: (app) => app.default_protected_entity_id !== null && app.default_protected_entity_id !== undefined
+            ? `<span class="mono">${escapeHtml(String(app.default_protected_entity_id))}</span>${app.default_protected_entity_name ? `<br><span class="muted">${escapeHtml(app.default_protected_entity_name)}</span>` : ""}`
+            : '<span class="muted">unset</span>',
+        },
+        {
+          key: "grants",
+          label: "Grants",
+          render: applicationGrantSummary,
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          className: "actions",
+          render: (app) => `<button type="button" data-action="edit-application" data-id="${escapeHtml(app.application_id)}">Edit</button>`,
+        },
+      ];
+      renderDataTable({
+        tableId: "applications-table",
+        bodyId: "applications-body",
+        columns,
+        rows: state.applications,
+        emptyMessage: "No applications onboarded yet.",
+      });
+      document.getElementById("applications-footer").textContent = `${state.applications.length} applications`;
+      renderTopStats();
+    }
+
+    function connectorProtectedEntity(row) {
+      const scanner = row.integration.config?.scanner || {};
+      return scanner.protected_entity ?? scanner.protectedEntity ?? null;
+    }
+
+    function parseProtectedEntityInput(input) {
+      const raw = input.value.trim();
+      const protectedEntity = raw ? Number.parseInt(raw, 10) : null;
+      if (raw && (!Number.isInteger(protectedEntity) || protectedEntity < 1)) {
+        throw new Error("Protected entity must be a positive integer or blank.");
+      }
+      return protectedEntity;
+    }
+
+    function parsePositiveIntegerValue(rawValue, label) {
+      const raw = String(rawValue || "").trim();
+      const value = raw ? Number.parseInt(raw, 10) : null;
+      if (raw && (!Number.isInteger(value) || value < 1)) {
+        throw new Error(`${label} must be a positive integer or blank.`);
+      }
+      return value;
+    }
+
+    function parseRequiredPositiveIntegerValue(rawValue, label) {
+      const raw = String(rawValue || "").trim();
+      if (!raw) {
+        throw new Error(`${label} is required.`);
+      }
+      const value = Number.parseInt(raw, 10);
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`${label} must be a positive integer.`);
+      }
+      return value;
+    }
+
+    function splitCsv(value) {
+      return String(value || "")
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function emptyToNull(value) {
+      const trimmed = String(value || "").trim();
+      return trimmed ? trimmed : null;
+    }
+
+    function selectedApplicationDestinationIds(app) {
+      const ids = new Set();
+      (app.grants || []).forEach((grant) => {
+        (grant.destination_ids || grant.scope_ids || []).forEach((id) => ids.add(id));
+      });
+      return Array.from(ids);
+    }
+
+    function firstApplicationGrant(app) {
+      return (app.grants || [])[0] || {};
+    }
+
+    async function saveConnectorProtectedEntity(input) {
+      const protectedEntity = parseProtectedEntityInput(input);
+      input.disabled = true;
+      try {
+        await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(input.dataset.integration)}/scanner-binding`, {
+          method: "PATCH",
+          body: JSON.stringify({ protected_entity: protectedEntity }),
+        });
+        await loadConnectors();
+      } finally {
+        input.disabled = false;
+      }
+    }
+
+    async function saveScopeProtectedEntity(input) {
+      const protectedEntity = parseProtectedEntityInput(input);
+      input.disabled = true;
+      try {
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(input.dataset.scope)}/scanner-binding`, {
+          method: "PATCH",
+          body: JSON.stringify({ protected_entity: protectedEntity }),
+        });
+        await loadProtectedAssets();
+      } finally {
+        input.disabled = false;
+      }
+    }
+
+    function renderProtectedAssets(payload = null) {
+      const previousFilters = protectedFilterValues();
+      const activeFilter = protectedActiveFilterState();
+      const assets = state.protectedAssets;
+      renderProtectedContext();
+      const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
+      const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
+      document.getElementById("metric-assets").textContent = String(assets.length);
+      document.getElementById("metric-protected").textContent = String(protectedCount);
+      document.getElementById("metric-unprotected").textContent = String(unprotectedCount);
+      document.getElementById("metric-unsupported").textContent = String((payload?.unsupported_integrations || []).length);
+      const pageStart = assets.length ? state.protectedPageIndex * state.protectedPageLimit + 1 : 0;
+      const pageEnd = assets.length ? pageStart + assets.length - 1 : 0;
+      document.getElementById("protected-page-range").innerHTML = `<strong>${pageStart}-${pageEnd}</strong>`;
+      document.getElementById("protected-page-prev").disabled = state.protectedPageIndex <= 0;
+      document.getElementById("protected-page-next").disabled = !state.protectedNextCursor;
+      const columns = [
+        {
+          key: "asset",
+          label: "Asset",
+          filterHtml: `
+            <div class="column-filter asset-filter">
+              <span class="filter-input-wrap">
+                ${containsFilterIcon()}
+                <input id="protected-filter-asset-value" aria-label="Asset contains filter" title="Contains filter">
+                ${clearFilterButton("protected-filter-asset-value", previousFilters.assetValue)}
+              </span>
+            </div>
+          `,
+          render: (asset) => {
+            const assetName = asset.display_name || asset.selector;
+            const selectorDetail = asset.selector && asset.selector !== assetName
+              ? `<br><span class="mono">${escapeHtml(asset.selector)}</span>`
+              : "";
+            return `<span class="copy-line"><strong class="copy-value">${escapeHtml(assetName)}</strong>${copyButton(assetName)}</span>${selectorDetail}`;
+          },
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          className: "actions",
+          render: (asset) => asset.coverage_state === "protected"
+            ? `<button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}" aria-label="Start Full Scan" title="Start Full Scan">${iconSvg("play")}</button>`
+            : "",
+        },
+        {
+          key: "connector",
+          label: "Connector",
+          filterHtml: `
+            <div class="column-filter">
+              <select id="protected-filter-integration" aria-label="Connector filter">
+                ${protectedConnectorFilterOptions()}
+              </select>
+            </div>
+          `,
+          render: (asset) => `${escapeHtml(asset.integration_display_name)}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
+        },
+        { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
+        {
+          key: "coverage",
+          label: "Coverage",
+          filterHtml: `
+            <div class="column-filter">
+              <select id="protected-filter-coverage" aria-label="Coverage filter">
+                <option value="">all</option>
+                <option value="unprotected">unprotected</option>
+                <option value="protected">protected</option>
+                <option value="disabled">disabled</option>
+                <option value="unknown">unknown</option>
+              </select>
+            </div>
+          `,
+          render: (asset) => {
+            return `
+              <div class="coverage-cell">
+                <span class="${pillClass(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span>
+                ${renderProtectedAssetActionSelect(asset)}
+              </div>
+            `;
+          },
+        },
+        {
+          key: "policy",
+          label: "Protection Profile",
+          render: (asset) => {
+            const label = protectedAssetPolicyLabel(asset);
+            const policyId = asset.policy?.policy_id;
+            return policyId && policyId !== label
+              ? `${escapeHtml(label)}<br><span class="mono">${escapeHtml(policyId)}</span>`
+              : escapeHtml(label);
+          },
+        },
+        {
+          key: "protected_entity",
+          label: "Protected Entity",
+          render: (asset) => {
+            if (!asset.matching_scope_id) return '<span class="muted">protect first</span>';
+            const placeholder = asset.inherited_protected_entity ? `inherit ${asset.inherited_protected_entity}` : "inherit unset";
+            return `
+              <input
+                class="inline-number-input"
+                type="number"
+                min="1"
+                inputmode="numeric"
+                placeholder="${escapeHtml(placeholder)}"
+                value="${escapeHtml(asset.protected_entity ?? "")}"
+                data-action="set-scope-protected-entity"
+                data-scope="${escapeHtml(asset.matching_scope_id || "")}"
+                aria-label="Protected entity for ${escapeHtml(asset.display_name || asset.selector)}"
+              >
+            `;
+          },
+        },
+        {
+          key: "last_scan",
+          label: "Last Scan",
+          render: (asset) => {
+            const lastScan = asset.last_scan;
+            if (!lastScan) return "never";
+            const lastScanText = `${lastScan.state} ${lastScan.terminal_items || 0}/${lastScan.total_items || 0}`;
+            return `<span class="${pillClass(lastScan.state)}">${escapeHtml(lastScanText)}</span><br><span class="mono">${escapeHtml(lastScan.job_id)}</span>`;
+          },
+        },
+        {
+          key: "findings",
+          label: "Findings",
+          render: (asset) => {
+            const findings = asset.findings || {};
+            return Object.keys(findings).length
+              ? escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`)
+              : "none";
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "protected-assets-table",
+        bodyId: "protected-assets-body",
+        columns,
+        rows: assets,
+        emptyMessage: "No assets returned for this filter.",
+      });
+      bindProtectedTableFilters(previousFilters, activeFilter);
+    }
+
+    function protectedActiveFilterState() {
+      const active = document.activeElement;
+      const filterIds = new Set([
+        "protected-filter-integration",
+        "protected-filter-coverage",
+        "protected-filter-asset-value",
+      ]);
+      if (!active || !filterIds.has(active.id)) return null;
+      return {
+        id: active.id,
+        selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
+        selectionEnd: typeof active.selectionEnd === "number" ? active.selectionEnd : null,
+      };
+    }
+
+    function bindProtectedTableFilters(values = {}, activeFilter = null) {
+      const integration = document.getElementById("protected-filter-integration");
+      const coverage = document.getElementById("protected-filter-coverage");
+      const assetValue = document.getElementById("protected-filter-asset-value");
+      if (integration) {
+        integration.value = state.protectedIntegrationFilter;
+        integration.addEventListener("change", () => {
+          state.protectedIntegrationFilter = integration.value;
+          reloadProtectedAssetsFromFilters();
+        });
+      }
+      if (coverage) {
+        coverage.value = values.coverage || "";
+        coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
+      }
+      if (assetValue) {
+        assetValue.value = values.assetValue || "";
+        updateFilterClearButton(assetValue);
+        assetValue.addEventListener("input", () => {
+          updateFilterClearButton(assetValue);
+          reloadProtectedAssetsFromFilters({ debounce: true });
+        });
+        assetValue.parentElement?.querySelector("[data-clear-filter]")?.addEventListener("click", () => {
+          assetValue.value = "";
+          updateFilterClearButton(assetValue);
+          assetValue.focus();
+          reloadProtectedAssetsFromFilters();
+        });
+      }
+      if (activeFilter?.id) {
+        const restored = document.getElementById(activeFilter.id);
+        if (restored) {
+          restored.focus();
+          if (typeof restored.setSelectionRange === "function" && activeFilter.selectionStart !== null) {
+            restored.setSelectionRange(activeFilter.selectionStart, activeFilter.selectionEnd ?? activeFilter.selectionStart);
+          }
+        }
+      }
+    }
+
+    function renderScanResults() {
+      const rows = filteredScanResults();
+      const compareColumn = {
+          key: "compare",
+          label: "",
+          className: "select-cell",
+          filterHtml: `<input id="scan-results-compare-all" type="checkbox" aria-label="Select visible scan results for comparison">`,
+          render: (result) => `
+            <input
+              type="checkbox"
+              data-action="select-scan-compare"
+              data-id="${escapeHtml(result.job.job_id)}"
+              aria-label="Select scan result for comparison"
+              ${state.selectedScanCompareJobIds.includes(result.job.job_id) ? "checked" : ""}
+            >
+          `,
+      };
+      const columns = [
+        {
+          key: "job",
+          label: "Job",
+          filterHtml: `
+            <div class="column-filter">
+              <select id="scan-results-filter-job-type" aria-label="Job type filter">
+                ${scanJobTypeFilterOptions()}
+              </select>
+              <span class="filter-input-wrap">
+                ${containsFilterIcon("Job id contains filter")}
+                <input id="scan-results-filter-job-id" type="text" value="${escapeHtml(state.scanJobIdFilter)}" aria-label="Job id contains filter" title="Job id contains filter">
+                ${clearFilterButton("scan-results-filter-job-id", state.scanJobIdFilter)}
+              </span>
+            </div>
+          `,
+          render: (result) => `<strong>${escapeHtml(scanSourceLabel(result))}</strong><br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.job.job_id)}</span>${copyButton(result.job.job_id)}</span>`,
+        },
+        {
+          key: "actions",
+          label: "Actions",
+          className: "actions",
+          render: (result) => {
+            const cancel = isTerminalJobState(result.job.state)
+              ? ""
+              : `<button class="icon-button danger" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}" aria-label="Cancel Full Scan" title="Cancel Full Scan">${iconSvg("x")}</button>`;
+            return `<div class="actions-row">${cancel || '<span class="muted">-</span>'}</div>`;
+          },
+        },
+        {
+          key: "target",
+          label: "Target",
+          filterHtml: `
+            <div class="column-filter">
+              <span class="filter-input-wrap">
+                ${containsFilterIcon()}
+                <input id="scan-results-filter-target" type="text" value="${escapeHtml(state.scanTargetFilter)}" aria-label="Target contains filter" title="Contains filter">
+                ${clearFilterButton("scan-results-filter-target", state.scanTargetFilter)}
+              </span>
+            </div>
+          `,
+          render: (result) => `${escapeHtml(result.target?.label || "unknown")}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.target?.integration_id || "")}</span>${copyButton(result.target?.integration_id || "")}</span>`,
+        },
+        {
+          key: "state",
+          label: "State",
+          render: (result) => `<span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>`,
+        },
+        {
+          key: "progress",
+          label: "Processed",
+          render: (result) => {
+            const progress = result.progress || {};
+            return escapeHtml(formatProgress(progress, result.job.state));
+          },
+        },
+        {
+          key: "findings",
+          label: "Findings",
+          render: (result) => {
+            const findings = result.findings || {};
+            return escapeHtml(`clean ${findings.clean || 0}, malicious ${findings.malicious || 0}, not scanned ${findings.not_scanned || 0}, unknown ${findings.unknown || 0}`);
+          },
+        },
+        {
+          key: "remediation",
+          label: "Remediation",
+          render: (result) => {
+            const remediation = result.remediation || {};
+            return escapeHtml(`done ${remediation.completed || 0}, pending ${remediation.pending || 0}, failed ${remediation.failed || 0}`);
+          },
+        },
+      ];
+      if (state.scanCompareVisible) {
+        columns.unshift(compareColumn);
+      }
+      renderDataTable({
+        tableId: "scan-results-table",
+        bodyId: "scan-results-body",
+        columns,
+        rows,
+        emptyMessage: "No scan results match this filter.",
+        rowAttributes: (result) => ({
+          "data-job-id": result.job.job_id,
+          "data-action": "toggle-scan-result-detail",
+          class: "scan-result-row",
+        }),
+        rowDetailHtml: (result) => state.selectedScanResult === result.job.job_id ? scanResultDetailHtml(result) : "",
+      });
+      bindScanResultsTableFilters();
+      if (state.scanCompareVisible) {
+        bindScanCompareSelection(rows);
+      }
+      renderScanStats(rows);
+      renderScanComparison(rows);
+      renderTopStats();
+    }
+
+    function bindScanResultsTableFilters() {
+      const jobType = document.getElementById("scan-results-filter-job-type");
+      const jobIdInput = document.getElementById("scan-results-filter-job-id");
+      const targetInput = document.getElementById("scan-results-filter-target");
+      if (jobType) {
+        jobType.value = state.scanJobTypeFilter;
+        jobType.addEventListener("change", () => {
+          state.scanJobTypeFilter = jobType.value;
+          state.scanJobIdFilterFocused = false;
+          state.scanTargetFilterFocused = false;
+          renderScanResults();
+        });
+      }
+      const bindTextFilter = (input, config) => {
+        if (!input) return;
+        updateFilterClearButton(input);
+        input.addEventListener("input", (event) => {
+          state[config.value] = event.target.value;
+          state[config.focused] = true;
+          state[config.selectionStart] = event.target.selectionStart;
+          state[config.selectionEnd] = event.target.selectionEnd;
+          for (const other of config.otherFocused) {
+            state[other] = false;
+          }
+          updateFilterClearButton(input);
+          renderScanResults();
+        });
+        input.parentElement?.querySelector("[data-clear-filter]")?.addEventListener("click", () => {
+          state[config.value] = "";
+          state[config.focused] = true;
+          state[config.selectionStart] = 0;
+          state[config.selectionEnd] = 0;
+          for (const other of config.otherFocused) {
+            state[other] = false;
+          }
+          renderScanResults();
+        });
+        if (state[config.focused]) {
+          input.focus();
+          if (typeof input.setSelectionRange === "function" && state[config.selectionStart] !== null) {
+            input.setSelectionRange(
+              state[config.selectionStart],
+              state[config.selectionEnd] ?? state[config.selectionStart],
+            );
+          }
+        }
+      };
+      bindTextFilter(jobIdInput, {
+        value: "scanJobIdFilter",
+        focused: "scanJobIdFilterFocused",
+        selectionStart: "scanJobIdFilterSelectionStart",
+        selectionEnd: "scanJobIdFilterSelectionEnd",
+        otherFocused: ["scanTargetFilterFocused"],
+      });
+      bindTextFilter(targetInput, {
+        value: "scanTargetFilter",
+        focused: "scanTargetFilterFocused",
+        selectionStart: "scanTargetFilterSelectionStart",
+        selectionEnd: "scanTargetFilterSelectionEnd",
+        otherFocused: ["scanJobIdFilterFocused"],
+      });
+    }
+
+    function bindScanCompareSelection(rows) {
+      const selectAll = document.getElementById("scan-results-compare-all");
+      const visibleIds = rows.map((result) => result.job.job_id);
+      const visibleSelected = visibleIds.filter((id) => state.selectedScanCompareJobIds.includes(id));
+      if (selectAll) {
+        selectAll.checked = visibleIds.length > 0 && visibleSelected.length === visibleIds.length;
+        selectAll.indeterminate = visibleSelected.length > 0 && visibleSelected.length < visibleIds.length;
+        selectAll.addEventListener("change", () => {
+          const next = new Set(state.selectedScanCompareJobIds);
+          if (selectAll.checked) {
+            visibleIds.forEach((id) => next.add(id));
+          } else {
+            visibleIds.forEach((id) => next.delete(id));
+          }
+          state.selectedScanCompareJobIds = Array.from(next);
+          renderScanResults();
+        });
+      }
+      document.querySelectorAll("[data-action='select-scan-compare']").forEach((input) => {
+        input.addEventListener("change", (event) => {
+          const id = event.currentTarget.dataset.id;
+          const next = new Set(state.selectedScanCompareJobIds);
+          if (event.currentTarget.checked) {
+            next.add(id);
+          } else {
+            next.delete(id);
+          }
+          state.selectedScanCompareJobIds = Array.from(next);
+          renderScanResults();
+        });
+      });
+    }
+
+    function cloneValue(value) {
+      return JSON.parse(JSON.stringify(value ?? {}));
+    }
+
+    function policyDisplayName(policy) {
+      return policy.display_name || policy.definition?.display_name || policy.definition?.policy_id || policy.policy_id;
+    }
+
+    function defaultPolicyCatalogEntry() {
+      return {
+        policy_id: "policy-1",
+        display_name: "Default Protection Profile",
+        definition: {
+          policy_id: "policy-1",
+          display_name: "Default Protection Profile",
+          malicious_verdict: {
+            action: "detect_only",
+            tag_on_detect: true,
+            tag_on_quarantine: false,
+          },
+          verdict_actions: {
+            malicious: "detect_only",
+            non_compliant: "detect_only",
+            not_scanned: "detect_only",
+          },
+          outcome_triggers: {
+            malicious: true,
+            not_scanned: false,
+            non_compliant: false,
+          },
+          non_compliance: {
+            blocked_file_types: [],
+            quarantine_target: {
+              path: "di-quarantine",
+              collision_strategy: "suffix_random",
+              preserve_relative_path: false,
+            },
+          },
+        },
+      };
+    }
+
+    function loadPolicyCatalog() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(policyStorageKey) || "[]");
+        state.policyCatalog = Array.isArray(parsed) ? parsed : [];
+      } catch (error) {
+        state.policyCatalog = [];
+      }
+      if (!state.policyCatalog.length) {
+        state.policyCatalog.unshift(defaultPolicyCatalogEntry());
+      } else if (!state.policyCatalog.some((policy) => policy.policy_id === "policy-1")) {
+        const legacyDefault = state.policyCatalog.find((policy) => policy.policy_id === "default-policy");
+        if (legacyDefault) {
+          legacyDefault.policy_id = "policy-1";
+          legacyDefault.definition = legacyDefault.definition || {};
+          legacyDefault.definition.policy_id = "policy-1";
+        }
+      }
+      state.policyCatalog = state.policyCatalog.map(normalizePolicyCatalogEntry);
+      savePolicyCatalog();
+      state.activePolicyId = state.policyCatalog[0]?.policy_id || "policy-1";
+    }
+
+    function savePolicyCatalog() {
+      localStorage.setItem(policyStorageKey, JSON.stringify(state.policyCatalog));
+    }
+
+    function loadDefaultProfiles() {
+      try {
+        const parsed = JSON.parse(localStorage.getItem(defaultProfileStorageKey) || "{}");
+        state.defaultProfileByIntegration = parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+      } catch (error) {
+        state.defaultProfileByIntegration = {};
+      }
+    }
+
+    function saveDefaultProfiles() {
+      localStorage.setItem(defaultProfileStorageKey, JSON.stringify(state.defaultProfileByIntegration));
+    }
+
+    function defaultProfileIdForIntegration(integrationId) {
+      const profileId = state.defaultProfileByIntegration[integrationId];
+      if (profileId && state.policyCatalog.some((policy) => policy.policy_id === profileId)) {
+        return profileId;
+      }
+      return state.policyCatalog[0]?.policy_id || "policy-1";
+    }
+
+    function defaultProfileForIntegration(integrationId) {
+      const profileId = defaultProfileIdForIntegration(integrationId);
+      return state.policyCatalog.find((policy) => policy.policy_id === profileId) || selectedPolicyEntry();
+    }
+
+    function renderDefaultProfileSelect(integrationId) {
+      const selected = defaultProfileIdForIntegration(integrationId);
+      const options = state.policyCatalog
+        .map((policy) => `<option value="${escapeHtml(policy.policy_id)}"${policy.policy_id === selected ? " selected" : ""}>${escapeHtml(policyDisplayName(policy))}</option>`)
+        .join("");
+      return `<select data-action="set-default-profile" data-integration="${escapeHtml(integrationId)}">${options}</select>`;
+    }
+
+    function renderProtectedAssetActionSelect(asset) {
+      const defaultProfile = defaultProfileForIntegration(asset.integration_id);
+      const defaultName = policyDisplayName(defaultProfile);
+      const attrs = `
+        class="coverage-action-select"
+        data-action="protected-asset-action"
+        data-integration="${escapeHtml(asset.integration_id)}"
+        data-selector="${escapeHtml(asset.selector)}"
+        data-name="${escapeHtml(asset.display_name || asset.selector)}"
+        data-scope="${escapeHtml(asset.matching_scope_id || "")}"
+        data-scope-type="path"
+      `;
+      const enableOptions = `
+        <option value="">Action</option>
+        <option value="protect-default">Enable protect (default: ${escapeHtml(defaultName)})</option>
+        <option value="protect-choose">Enable protect...</option>
+      `;
+      if (asset.coverage_state === "unprotected") {
+        return `<select ${attrs}>${enableOptions}</select>`;
+      }
+      if (asset.coverage_state === "disabled") {
+        return `<select ${attrs}>${enableOptions}<option value="enable-existing">Enable existing protection</option></select>`;
+      }
+      if (asset.coverage_state === "protected") {
+        return `<select ${attrs}><option value="">Action</option><option value="protect-choose">Change profile...</option><option value="disable">Disable</option></select>`;
+      }
+      return "";
+    }
+
+    function protectedAssetPolicyLabel(asset) {
+      const policy = asset.policy || {};
+      const label = policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action;
+      if (label) return label;
+      if (asset.coverage_state === "protected" || asset.coverage_state === "disabled") {
+        return policyDisplayName(defaultProfileForIntegration(asset.integration_id)) || "Default Protection Profile";
+      }
+      return "none";
+    }
+
+    function scanSourceLabel(result) {
+      const target = result.target || {};
+      if (target.source_label) return target.source_label;
+      const source = String(target.source || "").trim();
+      if (!source) return "Unknown source";
+      if (source === "connector_monitor") return "Monitor event";
+      if (source === "connector") return "Connector request";
+      if (source === "ui_scope_scan") return "Manual scan";
+      if (source === "desktop_transfer" || source === "file_gateway_api") return "Application submission";
+      return source.replaceAll("_", " ");
+    }
+
+    function scanTargetFilterText(result) {
+      const target = result.target || {};
+      return [
+        target.label,
+        target.integration_id,
+        target.scope_id,
+        target.source,
+        target.source_label,
+      ].filter(Boolean).join(" ").toLowerCase();
+    }
+
+    function scanJobTypeFilterOptions() {
+      const labels = Array.from(new Set(state.scanResults.map((result) => scanSourceLabel(result)).filter(Boolean))).sort();
+      return ['<option value="">all</option>'].concat(labels.map((label) => {
+        const selected = label === state.scanJobTypeFilter ? " selected" : "";
+        return `<option value="${escapeHtml(label)}"${selected}>${escapeHtml(label)}</option>`;
+      })).join("");
+    }
+
+    function scanResultMatchesFilters(result) {
+      const targetFilter = state.scanTargetFilter.trim().toLowerCase();
+      const jobIdFilter = state.scanJobIdFilter.trim().toLowerCase();
+      const jobTypeFilter = state.scanJobTypeFilter;
+      if (targetFilter && !scanTargetFilterText(result).includes(targetFilter)) return false;
+      if (jobIdFilter && !String(result.job?.job_id || "").toLowerCase().includes(jobIdFilter)) return false;
+      if (jobTypeFilter && scanSourceLabel(result) !== jobTypeFilter) return false;
+      return true;
+    }
+
+    function filteredScanResults() {
+      if (state.selectedScanResult) {
+        const selected = state.scanResults.find((result) => result.job.job_id === state.selectedScanResult);
+        if (selected && !scanResultMatchesFilters(selected)) {
+          state.selectedScanResult = null;
+        }
+      }
+      return state.scanResults.filter(scanResultMatchesFilters);
+    }
+
+    function pruneScanCompareSelection() {
+      const available = new Set(state.scanResults.map((result) => result.job.job_id));
+      state.selectedScanCompareJobIds = state.selectedScanCompareJobIds.filter((id) => available.has(id));
+    }
+
+    function scanComparisonRow(result) {
+      const progress = result.progress || {};
+      const findings = result.findings || {};
+      const remediation = result.remediation || {};
+      const stats = result.stats || {};
+      const runtime = result.job?.payload?.dsxConnectRuntimeSnapshot || {};
+      const processed = Number(progress.terminal_items || 0);
+      const total = Number(progress.total_items || 0);
+      const succeeded = Number(progress.completed_items || 0);
+      const failed = Number(progress.failed_items || findings.failed || 0);
+      const cancelled = Number(progress.cancelled_items || findings.cancelled || 0);
+      const skipped = Number(remediation.skipped || 0);
+      const successPct = processed > 0 ? (succeeded / processed) * 100 : null;
+      const avgBytes = Number(stats.avg_bytes_per_file || stats.avg_file_size_bytes || 0);
+      const requestBps = Number(stats.request_bytes_per_second || stats.bytes_per_second || 0);
+      const scanBps = Number(stats.scan_bytes_per_second || stats.dsxa_bytes_per_second || 0);
+      const oneGb = 1024 * 1024 * 1024;
+      const oneTb = oneGb * 1024;
+      return {
+        job: result.job,
+        target: result.target || {},
+        processed,
+        total,
+        succeeded,
+        failed,
+        skipped,
+        cancelled,
+        successPct,
+        scanWorkerReplicas: runtime.scanWorkerReplicas,
+        jobTime: stats.job_elapsed_seconds,
+        totalBytes: stats.total_bytes,
+        requestBps,
+        scanBps,
+        filesPerSecond: stats.files_per_second,
+        avgRequestMs: stats.avg_request_ms,
+        avgReadMs: stats.avg_read_ms,
+        scanMsPerByte: stats.scan_ms_per_byte,
+        estScan1GB: scanBps > 0 ? oneGb / scanBps : null,
+        estJob1GB: requestBps > 0 ? oneGb / requestBps : null,
+        estScan1TB: scanBps > 0 ? oneTb / scanBps : null,
+        estJob1TB: requestBps > 0 ? oneTb / requestBps : null,
+        estScan1M: scanBps > 0 && avgBytes > 0 ? (avgBytes * 1000000) / scanBps : null,
+        estJob1M: requestBps > 0 && avgBytes > 0 ? (avgBytes * 1000000) / requestBps : null,
+      };
+    }
+
+    function selectedScanComparisonRows(rows = filteredScanResults()) {
+      const selectedIds = new Set(state.selectedScanCompareJobIds);
+      return rows
+        .filter((result) => selectedIds.has(result.job.job_id))
+        .map(scanComparisonRow);
+    }
+
+    function exportScanComparisonCsv() {
+      const rows = selectedScanComparisonRows();
+      if (!rows.length) return;
+      const headers = [
+        "job_id",
+        "target",
+        "state",
+        "processed",
+        "total",
+        "succeeded",
+        "failed",
+        "skipped",
+        "cancelled",
+        "success_pct",
+        "scan_worker_replicas",
+        "job_time_seconds",
+        "total_bytes",
+        "job_bytes_per_second",
+        "scan_bytes_per_second",
+        "files_per_second",
+        "avg_request_ms",
+        "avg_read_ms",
+        "scan_ms_per_byte",
+        "scan_time_1gb_seconds",
+        "scan_time_1gb",
+        "job_time_1gb_seconds",
+        "job_time_1gb",
+        "scan_time_1tb_seconds",
+        "scan_time_1tb",
+        "job_time_1tb_seconds",
+        "job_time_1tb",
+        "scan_time_1m_files_seconds",
+        "scan_time_1m_files",
+        "job_time_1m_files_seconds",
+        "job_time_1m_files",
+      ];
+      const lines = [headers.join(",")];
+      for (const row of rows) {
+        lines.push([
+          row.job.job_id,
+          row.target.label || row.job.integration_id || "unknown",
+          row.job.state,
+          row.processed,
+          row.total,
+          row.succeeded,
+          row.failed,
+          row.skipped,
+          row.cancelled,
+          row.successPct === null ? "" : formatNumber(row.successPct, 3),
+          row.scanWorkerReplicas ?? "",
+          row.jobTime ?? "",
+          row.totalBytes ?? "",
+          row.requestBps || "",
+          row.scanBps || "",
+          row.filesPerSecond ?? "",
+          row.avgRequestMs ?? "",
+          row.avgReadMs ?? "",
+          row.scanMsPerByte ?? "",
+          row.estScan1GB ?? "",
+          formatDurationSec(row.estScan1GB),
+          row.estJob1GB ?? "",
+          formatDurationSec(row.estJob1GB),
+          row.estScan1TB ?? "",
+          formatDurationSec(row.estScan1TB),
+          row.estJob1TB ?? "",
+          formatDurationSec(row.estJob1TB),
+          row.estScan1M ?? "",
+          formatDurationSec(row.estScan1M),
+          row.estJob1M ?? "",
+          formatDurationSec(row.estJob1M),
+        ].map(csvCell).join(","));
+      }
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      downloadTextFile(`dsx-connect-scan-comparison-${stamp}.csv`, `${lines.join("\n")}\n`, "text/csv;charset=utf-8");
+    }
+
+    function renderScanStats(rows) {
+      const target = document.getElementById("scan-stats-row");
+      if (!target) return;
+      const totals = rows.reduce((acc, result) => {
+        const progress = result.progress || {};
+        const findings = result.findings || {};
+        const stats = result.stats || {};
+        acc.jobs += 1;
+        acc.running += isTerminalJobState(result.job?.state) ? 0 : 1;
+        acc.processed += Number(progress.terminal_items || 0);
+        acc.total += Number(progress.total_items || 0);
+        acc.malicious += Number(findings.malicious || 0);
+        acc.notScanned += Number(findings.not_scanned || 0);
+        acc.bytes += Number(stats.total_bytes || 0);
+        return acc;
+      }, { jobs: 0, running: 0, processed: 0, total: 0, malicious: 0, notScanned: 0, bytes: 0 });
+      target.innerHTML = `
+        <div class="metric"><span>Jobs</span><strong>${totals.jobs}</strong></div>
+        <div class="metric"><span>Running</span><strong>${totals.running}</strong></div>
+        <div class="metric"><span>Processed</span><strong>${totals.processed}/${totals.total || 0}</strong></div>
+        <div class="metric"><span>Malicious</span><strong>${totals.malicious}</strong></div>
+        <div class="metric"><span>Not scanned</span><strong>${totals.notScanned}</strong></div>
+        <div class="metric"><span>Measured bytes</span><strong>${formatBytes(totals.bytes) || "0 B"}</strong></div>
+      `;
+    }
+
+    function renderScanComparison(rows) {
+      const wrapper = document.getElementById("scan-compare-wrap");
+      const toggle = document.getElementById("toggle-scan-compare");
+      const countNode = document.getElementById("scan-compare-count");
+      const exportButton = document.getElementById("export-scan-compare");
+      if (!wrapper) return;
+      const comparisonRows = selectedScanComparisonRows(rows);
+      const selectedCount = state.selectedScanCompareJobIds.length;
+      wrapper.classList.toggle("hidden", !state.scanCompareVisible);
+      if (toggle) {
+        const label = state.scanCompareVisible ? "Exit scan comparison" : "Compare scan results";
+        toggle.setAttribute("aria-label", label);
+        toggle.setAttribute("title", label);
+        toggle.classList.toggle("active", state.scanCompareVisible);
+      }
+      if (countNode) {
+        countNode.textContent = String(selectedCount);
+        countNode.classList.toggle("hidden", selectedCount === 0);
+      }
+      if (exportButton) {
+        exportButton.disabled = comparisonRows.length === 0;
+      }
+      if (!state.scanCompareVisible) return;
+      if (!comparisonRows.length) {
+        const table = document.getElementById("scan-compare-table");
+        const body = document.getElementById("scan-compare-body");
+        if (table) table.querySelector("thead").innerHTML = "";
+        if (body) body.innerHTML = `<tr><td><div class="empty scan-compare-empty">Select one or more scan results to compare.</div></td></tr>`;
+        return;
+      }
+      renderDataTable({
+        tableId: "scan-compare-table",
+        bodyId: "scan-compare-body",
+        columns: [
+          { key: "job", label: "Job", render: (row) => `<strong>${escapeHtml(scanSourceLabel({ job: row.job, target: row.target }))}</strong><br><span class="mono">${escapeHtml(row.job.job_id)}</span>` },
+          { key: "target", label: "Target", render: (row) => escapeHtml(row.target.label || row.job.integration_id || "unknown") },
+          { key: "state", label: "State", render: (row) => `<span class="${pillClass(row.job.state)}">${escapeHtml(row.job.state)}</span>` },
+          { key: "processed", label: "Processed", render: (row) => `${row.processed}${row.total ? ` / ${row.total}` : ""}` },
+          { key: "success", label: "Success %", render: (row) => row.successPct === null ? "" : `${formatNumber(row.successPct, 1)}%` },
+          { key: "scanWorkers", label: "Scan workers", render: (row) => row.scanWorkerReplicas ?? "" },
+          { key: "jobTime", label: "Job Time", render: (row) => formatDurationSec(row.jobTime) },
+          { key: "bytes", label: "Bytes", render: (row) => formatBytes(row.totalBytes) },
+          { key: "jobBps", label: "Job bytes/sec", render: (row) => formatRateBps(row.requestBps) },
+          { key: "scanBps", label: "Scan bytes/sec", render: (row) => formatRateBps(row.scanBps) },
+          { key: "filesSec", label: "Files/sec", render: (row) => formatNumber(row.filesPerSecond, 2) },
+          { key: "requestMs", label: "Avg Req ms", render: (row) => formatNumber(row.avgRequestMs, 1) },
+          { key: "readMs", label: "Avg Read ms", render: (row) => formatNumber(row.avgReadMs, 1) },
+          { key: "scanMsByte", label: "Scan ms/byte", render: (row) => formatNumber(row.scanMsPerByte, 6) },
+          { key: "scan1gb", label: "Scan time 1GB", render: (row) => formatDurationSec(row.estScan1GB) },
+          { key: "job1gb", label: "Job time 1GB", render: (row) => formatDurationSec(row.estJob1GB) },
+          { key: "scan1tb", label: "Scan time 1TB", render: (row) => formatDurationSec(row.estScan1TB) },
+          { key: "job1tb", label: "Job time 1TB", render: (row) => formatDurationSec(row.estJob1TB) },
+          { key: "scan1m", label: "Scan time 1M files", render: (row) => formatDurationSec(row.estScan1M) },
+          { key: "job1m", label: "Job time 1M files", render: (row) => formatDurationSec(row.estJob1M) },
+        ],
+        rows: comparisonRows,
+        emptyMessage: "Select one or more scan results to compare.",
+      });
+    }
+
+    function formatProgress(progress = {}, state = "") {
+      const done = progress.terminal_items || 0;
+      const total = progress.total_items || 0;
+      const terminal = isTerminalJobState(state);
+      const totalText = total ? `${terminal ? "" : "~"}${total} queued` : `${terminal ? "0 queued" : "~? queued"}`;
+      const percent = total ? ` (${progress.percent_complete ?? 0}%)` : "";
+      return `${done}/${totalText}${percent}`;
+    }
+
+    function isTerminalJobState(state) {
+      return ["completed", "failed", "cancelled"].includes(String(state || "").toLowerCase());
+    }
+
+    function normalizePolicyCatalogEntry(policyEntry) {
+      policyEntry.definition = policyEntry.definition || {};
+      const definition = policyEntry.definition;
+      definition.policy_id = policyEntry.policy_id || definition.policy_id || "policy-1";
+      definition.display_name = policyDisplayName(policyEntry);
+      if (definition.non_compliance?.quarantine_target?.path === "non-compliant") {
+        definition.non_compliance.quarantine_target.path = "di-quarantine";
+      }
+      if (!definition.non_compliance?.quarantine_target?.path) {
+        definition.non_compliance = definition.non_compliance || {};
+        definition.non_compliance.quarantine_target = {
+          path: "di-quarantine",
+          collision_strategy: "suffix_random",
+          preserve_relative_path: false,
+        };
+      }
+      policyEntry.display_name = policyDisplayName(policyEntry);
+      if (policyEntry.display_name === "Default Policy") {
+        policyEntry.display_name = "Default Protection Profile";
+        definition.display_name = "Default Protection Profile";
+      }
+      return policyEntry;
+    }
+
+    function selectedPolicyEntry() {
+      return state.policyCatalog.find((policy) => policy.policy_id === state.activePolicyId) || state.policyCatalog[0] || defaultPolicyCatalogEntry();
+    }
+
+    function makePolicyId() {
+      const existing = new Set(state.policyCatalog.map((policy) => policy.policy_id));
+      const maxNumber = state.policyCatalog.reduce((max, policy) => {
+        const match = String(policy.policy_id || "").match(/^policy-(\d+)$/);
+        return match ? Math.max(max, Number(match[1])) : max;
+      }, 0);
+      let nextNumber = maxNumber + 1;
+      let candidate = `policy-${nextNumber}`;
+      while (existing.has(candidate)) {
+        nextNumber += 1;
+        candidate = `policy-${nextNumber}`;
+      }
+      return candidate;
+    }
+
+    function normalizePolicyAction(action) {
+      return ["detect_only", "quarantine", "delete"].includes(action) ? action : "detect_only";
+    }
+
+    function policyActionLabel(action) {
+      const normalized = normalizePolicyAction(action);
+      if (normalized === "quarantine") return "Quarantine";
+      if (normalized === "delete") return "Delete";
+      return "Detect Only";
+    }
+
+    function policyVerdictActions(definition) {
+      const malicious = normalizePolicyAction(definition.verdict_actions?.malicious || definition.malicious_verdict?.action);
+      return {
+        malicious,
+        non_compliant: normalizePolicyAction(
+          definition.verdict_actions?.non_compliant
+          || definition.non_compliance?.action
+          || (definition.outcome_triggers?.non_compliant ? malicious : "detect_only")
+        ),
+        not_scanned: normalizePolicyAction(
+          definition.verdict_actions?.not_scanned
+          || definition.not_scanned?.action
+          || (definition.outcome_triggers?.not_scanned ? malicious : "detect_only")
+        ),
+      };
+    }
+
+    function renderPolicyBaseOptions() {
+      const options = state.policyCatalog
+        .map((policy) => `<option value="${escapeHtml(policy.policy_id)}">${escapeHtml(policyDisplayName(policy))}</option>`)
+        .join("");
+      const basedOn = document.querySelector("#default-policy-form select[name='based_on_policy']");
+      basedOn.innerHTML = options;
+      basedOn.value = state.policyEditorBaseId || selectedPolicyEntry().policy_id;
+    }
+
+    function applyPolicyToForm(policyEntry, options = {}) {
+      const form = document.getElementById("default-policy-form");
+      const definition = cloneValue(policyEntry.definition || {});
+      const actions = policyVerdictActions(definition);
+      const isCreate = options.mode === "create";
+      const quarantinePath = definition.malicious_verdict?.quarantine_target?.path || definition.non_compliance?.quarantine_target?.path || "di-quarantine";
+      state.syncingPolicyForm = true;
+      form.policy_name.value = isCreate ? (options.name || "") : policyDisplayName(policyEntry) || "Policy";
+      if (isCreate) {
+        form.based_on_policy.value = state.policyEditorBaseId || policyEntry.policy_id;
+      }
+      form.policy_name.readOnly = !isCreate;
+      form.policy_name.classList.toggle("hidden", !isCreate);
+      const readonlyName = document.getElementById("policy-name-readonly");
+      readonlyName.textContent = isCreate ? "" : policyDisplayName(policyEntry) || "Policy";
+      readonlyName.classList.toggle("hidden", isCreate);
+      form.policy_id.value = isCreate ? "" : policyEntry.policy_id || definition.policy_id || "policy-1";
+      form.malicious_action.value = actions.malicious;
+      form.non_compliant_action.value = actions.non_compliant;
+      form.not_scanned_action.value = actions.not_scanned;
+      form.quarantine_folder_path.value = quarantinePath === "non-compliant" ? "di-quarantine" : quarantinePath;
+      const blockedTypes = new Set(definition.non_compliance?.blocked_file_types || []);
+      form.querySelectorAll("input[name='blocked_file_type']").forEach((input) => {
+        input.checked = blockedTypes.has(input.value);
+      });
+      state.syncingPolicyForm = false;
+      syncDefaultPolicySummary();
+    }
+
+    function localPolicyToSummary(policyEntry, serverSummary = null) {
+      const definition = cloneValue(policyEntry.definition || {});
+      const summary = {
+        policy_id: policyEntry.policy_id,
+        display_name: policyDisplayName(policyEntry),
+        status: serverSummary?.status || "active",
+        definition,
+        outcome_rules: {
+          malicious_action: policyVerdictActions(definition).malicious,
+          verdict_actions: policyVerdictActions(definition),
+          outcome_triggers: definition.outcome_triggers || {},
+          non_compliance: definition.non_compliance || {},
+          auto_dianna_on_verdicts: definition.auto_dianna_on_verdicts || [],
+        },
+        assigned_assets: serverSummary?.assigned_assets || 0,
+        assignments: serverSummary?.assignments || [],
+        updated_at: serverSummary?.updated_at || "",
+      };
+      return summary;
+    }
+
+    function mergedPolicyRows() {
+      const serverById = new Map(state.policies.map((policy) => [policy.policy_id, policy]));
+      return state.policyCatalog
+        .map((policy) => localPolicyToSummary(policy, serverById.get(policy.policy_id)))
+        .sort((a, b) => policyDisplayName(a).localeCompare(policyDisplayName(b)));
+    }
+
+    function renderPolicies() {
+      const columns = [
+        {
+          key: "policy",
+          label: "Protection Profile",
+          render: (policy) => `<strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span>`,
+        },
+        {
+          key: "status",
+          label: "Status",
+          render: (policy) => `<span class="${pillClass(policy.status)}">${escapeHtml(policy.status)}</span>`,
+        },
+        {
+          key: "outcome_rules",
+          label: "Outcome Rules",
+          render: (policy) => {
+            const rules = policy.outcome_rules || {};
+            const actions = rules.verdict_actions || {};
+            const nonCompliance = rules.non_compliance || {};
+            const blockedTypes = nonCompliance.blocked_file_types || [];
+            return `
+              <span class="pill">malicious: ${escapeHtml(policyActionLabel(actions.malicious || rules.malicious_action))}</span>
+              <span class="pill">non-compliant: ${escapeHtml(policyActionLabel(actions.non_compliant))}</span>
+              <span class="pill">not scanned: ${escapeHtml(policyActionLabel(actions.not_scanned))}</span>
+              ${blockedTypes.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join(" ")}
+              ${(rules.auto_dianna_on_verdicts || []).map((item) => `<span class="pill">dianna ${escapeHtml(item)}</span>`).join(" ")}
+            `;
+          },
+        },
+        { key: "assigned_assets", label: "Assigned Assets", render: (policy) => String(policy.assigned_assets || 0) },
+        {
+          key: "assignments",
+          label: "Assignments",
+          render: (policy) => {
+            const assignments = (policy.assignments || [])
+              .map((assignment) => `${assignment.scope_display_name} (${assignment.source})`)
+              .join(", ");
+            return escapeHtml(assignments || "none");
+          },
+        },
+        { key: "updated", label: "Updated", render: (policy) => escapeHtml(policy.updated_at || "") },
+      ];
+      renderDataTable({
+        tableId: "policies-table",
+        bodyId: "policies-body",
+        columns,
+        rows: mergedPolicyRows(),
+        emptyMessage: "No protection profiles match this filter.",
+        rowAttributes: (policy) => ({
+          "data-action": "edit-policy",
+          "data-policy-id": policy.policy_id,
+        }),
+      });
+    }
+
+    function protectionProfilePickerRows() {
+      return mergedPolicyRows();
+    }
+
+    function renderProtectionProfilePicker() {
+      const selectedId = state.selectedProtectionProfileId || defaultProfileIdForIntegration(state.protectionProfileAsset?.integrationId || "");
+      const columns = [
+        {
+          key: "select",
+          label: "",
+          className: "actions",
+          render: (policy) => `<input type="radio" name="protection_profile_choice" value="${escapeHtml(policy.policy_id)}"${policy.policy_id === selectedId ? " checked" : ""}>`,
+        },
+        {
+          key: "profile",
+          label: "Protection Profile",
+          render: (policy) => `<strong>${escapeHtml(policy.display_name)}</strong><br><span class="mono">${escapeHtml(policy.policy_id)}</span>`,
+        },
+        {
+          key: "rules",
+          label: "Rules",
+          render: (policy) => {
+            const actions = policy.outcome_rules?.verdict_actions || {};
+            return `
+              <span class="pill">malicious: ${escapeHtml(policyActionLabel(actions.malicious || policy.outcome_rules?.malicious_action))}</span>
+              <span class="pill">non-compliant: ${escapeHtml(policyActionLabel(actions.non_compliant))}</span>
+              <span class="pill">not scanned: ${escapeHtml(policyActionLabel(actions.not_scanned))}</span>
+            `;
+          },
+        },
+      ];
+      renderDataTable({
+        tableId: "protection-profile-picker-table",
+        bodyId: "protection-profile-picker-body",
+        columns,
+        rows: protectionProfilePickerRows(),
+        emptyMessage: "No protection profiles are available.",
+        rowAttributes: (policy) => ({
+          "data-action": "select-protection-profile",
+          "data-policy-id": policy.policy_id,
+          class: policy.policy_id === selectedId ? "selected" : null,
+        }),
+      });
+      document.getElementById("protection-profile-picker-apply").disabled = !selectedId;
+    }
+
+    function selectedProtectionProfileEntry() {
+      return state.policyCatalog.find((policy) => policy.policy_id === state.selectedProtectionProfileId)
+        || defaultProfileForIntegration(state.protectionProfileAsset?.integrationId || "");
+    }
+
+    function currentDefaultPolicy() {
+      const form = document.getElementById("default-policy-form");
+      const maliciousAction = normalizePolicyAction(form.malicious_action.value);
+      const nonCompliantAction = normalizePolicyAction(form.non_compliant_action.value);
+      const notScannedAction = normalizePolicyAction(form.not_scanned_action.value);
+      const quarantineFolderPath = form.quarantine_folder_path.value.trim() || "di-quarantine";
+      const policyId = form.policy_id.value.trim() || "policy-1";
+      const displayName = form.policy_name.value.trim() || policyId;
+      const blockedFileTypes = Array.from(form.querySelectorAll("input[name='blocked_file_type']:checked")).map((input) => input.value);
+      const policy = {
+        policy_id: policyId,
+        display_name: displayName,
+        malicious_verdict: {
+          action: maliciousAction,
+          tag_on_detect: maliciousAction === "detect_only",
+          tag_on_quarantine: maliciousAction === "quarantine",
+        },
+        verdict_actions: {
+          malicious: maliciousAction,
+          non_compliant: nonCompliantAction,
+          not_scanned: notScannedAction,
+        },
+        outcome_triggers: {
+          malicious: true,
+          not_scanned: notScannedAction !== "detect_only",
+          non_compliant: nonCompliantAction !== "detect_only",
+        },
+        non_compliance: {
+          action: nonCompliantAction,
+          blocked_file_types: blockedFileTypes,
+          quarantine_target: {
+            path: quarantineFolderPath,
+            collision_strategy: "suffix_random",
+            preserve_relative_path: false,
+          },
+        },
+        not_scanned: {
+          action: notScannedAction,
+        },
+      };
+      if (maliciousAction === "quarantine") {
+        policy.malicious_verdict.quarantine_target = {
+          path: quarantineFolderPath,
+          collision_strategy: "suffix_random",
+          preserve_relative_path: false,
+        };
+      }
+      return policy;
+    }
+
+    function syncDefaultPolicySummary() {
+      const policy = currentDefaultPolicy();
+      const summary = `malicious ${policyActionLabel(policy.verdict_actions.malicious)}, non-compliant ${policyActionLabel(policy.verdict_actions.non_compliant)}, not scanned ${policyActionLabel(policy.verdict_actions.not_scanned)}`;
+      const label = state.policyEditorMode === "create"
+        ? `${policy.display_name || "New policy"}: ${summary}`
+        : `${policy.display_name} (${policy.policy_id}): ${summary}`;
+      setStatus("default-policy-status", label);
+    }
+
+    function scanResultDetailHtml(result) {
+      const latest = (result.latest_items || []).map((item, index) => {
+        const itemKey = `${result.job.job_id}:${index}`;
+        const filename = filenameFromIdentity(item.object_identity);
+        const hash = itemHash(item);
+        const rawPayload = item.scan_result && Object.keys(item.scan_result).length ? item.scan_result : item;
+        const raw = state.selectedScanResultItemKey === itemKey
+          ? `<div class="scan-sample-raw"><div class="detail"><pre>${escapeHtml(JSON.stringify(rawPayload, null, 2))}</pre></div></div>`
+          : "";
+        return `
+          <div class="scan-sample-item sample-item-row" data-action="toggle-scan-item-json" data-item-key="${escapeHtml(itemKey)}">
+            ${verdictIcon(item)}
+            ${fileTypeIcon(item)}
+            <div class="scan-sample-name"><span class="copy-line" title="${escapeHtml(filename)}"><span class="copy-value">${escapeHtml(truncateText(filename, 50))}</span>${copyButton(filename, "Copy filename")}</span></div>
+            <div class="scan-sample-hash">${hash ? `<span class="copy-line"><span class="mono copy-value">${escapeHtml(hash)}</span>${copyButton(hash, "Copy hash")}</span>` : '<span class="muted">hash unavailable</span>'}</div>
+            <div class="scan-sample-status">${sampleStageChips(item)}</div>
+          </div>
+          ${raw}
+        `;
+      }).join("");
+      return `
+        <div class="inline-result-detail" id="inline-scan-result-detail">
+          <div class="scan-sample-note">Sample set of scanned files, not the complete item set.</div>
+          <div class="scan-sample-list">${latest || '<div class="empty">No sampled items.</div>'}</div>
+        </div>
+      `;
+    }
+
+    function renderScanResultDetail(jobId) {
+      const result = state.scanResults.find((item) => item.job.job_id === jobId);
+      if (!result) {
+        state.selectedScanResult = null;
+        renderScanResults();
+        return;
+      }
+      state.selectedScanResult = jobId;
+      state.selectedScanResultItemKey = null;
+      renderScanResults();
+    }
+
+    function populateSelects() {
+      const integrationOptions = ['<option value="">all</option>'].concat(
+        state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
+      ).join("");
+      if (
+        state.protectedIntegrationFilter
+        && !state.connectorRows.some((row) => row.integration.integration_id === state.protectedIntegrationFilter)
+      ) {
+        state.protectedIntegrationFilter = "";
+      }
+      document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
+      populateApplicationDestinations(selectedApplicationDestinationIds(state.applications.find((app) => app.application_id === state.editingApplicationId) || {}));
+    }
+
+    function protectedConnectorFilterOptions() {
+      return ['<option value="">all</option>'].concat(state.connectorRows
+        .map((row) => {
+          const selected = row.integration.integration_id === state.protectedIntegrationFilter ? " selected" : "";
+          return `<option value="${escapeHtml(row.integration.integration_id)}"${selected}>${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`;
+        }))
+        .join("");
+    }
+
+    async function loadOverview() {
+      const overview = await fetchJson(endpoints.overview);
+      state.integrations = overview.integrations || [];
+      state.scopes = overview.scopes || [];
+      populateSelects();
+      renderTopStats();
+    }
+
+    async function loadConnectors() {
+      const payload = await fetchJson(endpoints.connectors);
+      state.connectorRows = payload.connectors || [];
+      state.integrations = state.connectorRows;
+      renderConnectors();
+      populateSelects();
+      renderTopStats();
+    }
+
+    async function pollConnectors() {
+      if (
+        !state.connectorsPolling
+        || state.activeTab !== "assets"
+        || state.activeAssetsTab !== "connectors"
+        || state.connectorsPollingInFlight
+      ) {
+        return;
+      }
+      state.connectorsPollingInFlight = true;
+      try {
+        await loadConnectors();
+      } catch (error) {
+        console.warn("Connector polling failed", error);
+      } finally {
+        state.connectorsPollingInFlight = false;
+      }
+    }
+
+    function updateConnectorsPolling() {
+      const shouldPoll = state.connectorsPolling && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
+      if (shouldPoll && !connectorsPollTimer) {
+        connectorsPollTimer = window.setInterval(() => {
+          pollConnectors();
+        }, 5000);
+      } else if (!shouldPoll && connectorsPollTimer) {
+        window.clearInterval(connectorsPollTimer);
+        connectorsPollTimer = null;
+      }
+    }
+
+    function resetProtectedPagination() {
+      state.protectedPageIndex = 0;
+      state.protectedPageCursors = [""];
+      state.protectedNextCursor = null;
+    }
+
+    function protectedFilterValues() {
+      return {
+        coverage: document.getElementById("protected-filter-coverage")?.value || "",
+        assetMode: "contains",
+        assetValue: document.getElementById("protected-filter-asset-value")?.value || "",
+      };
+    }
+
+    function reloadProtectedAssetsFromFilters({ debounce = false } = {}) {
+      resetProtectedPagination();
+      if (protectedFilterReloadTimer) {
+        clearTimeout(protectedFilterReloadTimer);
+        protectedFilterReloadTimer = null;
+      }
+      const run = () => loadProtectedAssets().catch(showProtectedAssetsError);
+      if (debounce) {
+        protectedFilterReloadTimer = setTimeout(run, 250);
+      } else {
+        run();
+      }
+    }
+
+    async function loadNextProtectedAssetsPage() {
+      if (!state.protectedNextCursor) return;
+      state.protectedPageIndex += 1;
+      state.protectedPageCursors[state.protectedPageIndex] = state.protectedNextCursor;
+      await loadProtectedAssets();
+    }
+
+    async function loadPreviousProtectedAssetsPage() {
+      if (state.protectedPageIndex <= 0) return;
+      state.protectedPageIndex -= 1;
+      await loadProtectedAssets();
+    }
+
+    async function loadProtectedAssets() {
+      const params = new URLSearchParams();
+      const integrationId = state.protectedIntegrationFilter;
+      const filters = protectedFilterValues();
+      const coverage = filters.coverage;
+      const assetFilterMode = filters.assetMode;
+      const assetFilterValue = filters.assetValue.trim();
+      const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
+      if (integrationId) params.set("integration_id", integrationId);
+      if (coverage) params.set("coverage_state", coverage);
+      params.set("limit", String(state.protectedPageLimit));
+      if (cursor) params.set("cursor", cursor);
+      if (assetFilterValue) {
+        params.set("asset_filter_mode", assetFilterMode);
+        params.set("asset_filter_value", assetFilterValue);
+      }
+      const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
+      state.protectedAssets = payload.assets || [];
+      state.protectedNextCursor = integrationId ? ((payload.next_cursors || {})[integrationId] || null) : null;
+      state.protectedAssetsLoaded = true;
+      renderProtectedAssets(payload);
+    }
+
+    function showProtectedAssetsError(error) {
+      state.protectedAssetsLoaded = false;
+      document.getElementById("protected-assets-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div></td></tr>`;
+    }
+
+    async function fetchScanResultsPayload() {
+      const params = new URLSearchParams();
+      params.set("item_limit", "100");
+      return fetchJson(`${endpoints.scanResults}?${params.toString()}`);
+    }
+
+    async function loadScanResults({ resetSelection = true } = {}) {
+      const payload = await fetchScanResultsPayload();
+      state.scanResults = payload.results || [];
+      if (resetSelection) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      } else if (state.selectedScanResult && !state.scanResults.some((result) => result.job.job_id === state.selectedScanResult)) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      }
+      pruneScanCompareSelection();
+      renderScanResults();
+    }
+
+    async function loadApplications() {
+      state.applications = await fetchJson(endpoints.applications);
+      renderApplications();
+    }
+
+    function scheduleNextScanResultsPoll() {
+      state.scanResultsNextPollAt = Date.now() + 5000;
+      if (scanResultsPollTimer) {
+        window.clearTimeout(scanResultsPollTimer);
+      }
+      scanResultsPollTimer = window.setTimeout(() => {
+        scanResultsPollTimer = null;
+        pollScanResults();
+      }, 5000);
+      updateScanResultsCountdown();
+    }
+
+    function updateScanResultsCountdown() {
+      const node = document.getElementById("scan-results-poll-countdown");
+      if (!node) return;
+      const active = state.scanResultsPolling && state.activeTab === "scan-results";
+      if (!active) {
+        node.textContent = "Paused";
+        return;
+      }
+      if (state.scanResultsPollingInFlight) {
+        node.textContent = "Refreshing...";
+        return;
+      }
+      if (!state.scanResultsNextPollAt) {
+        scheduleNextScanResultsPoll();
+        return;
+      }
+      const seconds = Math.max(0, Math.ceil((state.scanResultsNextPollAt - Date.now()) / 1000));
+      node.textContent = seconds > 0 ? `Next in ${seconds}s` : "Due now";
+    }
+
+    function updateScanResultsCountdownTimer() {
+      const shouldShow = state.activeTab === "scan-results";
+      if (shouldShow && !scanResultsCountdownTimer) {
+        scanResultsCountdownTimer = window.setInterval(updateScanResultsCountdown, 1000);
+      } else if (!shouldShow && scanResultsCountdownTimer) {
+        window.clearInterval(scanResultsCountdownTimer);
+        scanResultsCountdownTimer = null;
+      }
+      updateScanResultsCountdown();
+    }
+
+    function setScanResultsRefreshIndicator(active) {
+      const button = document.getElementById("refresh-scan-results");
+      if (!button) return;
+      button.classList.toggle("is-loading", Boolean(active));
+      button.setAttribute("aria-busy", String(Boolean(active)));
+      if (!active) {
+        button.removeAttribute("aria-busy");
+      }
+    }
+
+    async function pollScanResults() {
+      if (!state.scanResultsPolling || state.activeTab !== "scan-results" || state.scanResultsPollingInFlight) return;
+      state.scanResultsPollingInFlight = true;
+      state.scanResultsNextPollAt = null;
+      setScanResultsRefreshIndicator(true);
+      updateScanResultsCountdown();
+      try {
+        const openJobId = state.selectedScanResult;
+        const payload = await fetchScanResultsPayload();
+        const nextResults = payload.results || [];
+        const nextOpen = openJobId
+          ? nextResults.find((result) => result.job.job_id === openJobId)
+          : null;
+        state.scanResults = nextResults;
+        if (openJobId && !nextOpen) {
+          state.selectedScanResult = null;
+          state.selectedScanResultItemKey = null;
+        }
+        pruneScanCompareSelection();
+        renderScanResults();
+      } catch (error) {
+        console.warn("Scan result polling failed", error);
+      } finally {
+        state.scanResultsPollingInFlight = false;
+        setScanResultsRefreshIndicator(false);
+        if (state.scanResultsPolling && state.activeTab === "scan-results") {
+          scheduleNextScanResultsPoll();
+        } else {
+          updateScanResultsCountdown();
+        }
+      }
+    }
+
+    function updateScanResultsPolling() {
+      const shouldPoll = state.scanResultsPolling && state.activeTab === "scan-results";
+      if (shouldPoll && !scanResultsPollTimer) {
+        scheduleNextScanResultsPoll();
+      } else if (!shouldPoll && scanResultsPollTimer) {
+        window.clearTimeout(scanResultsPollTimer);
+        scanResultsPollTimer = null;
+        state.scanResultsNextPollAt = null;
+      }
+      updateScanResultsCountdownTimer();
+    }
+
+    async function cancelScanResult(jobId, button) {
+      button.disabled = true;
+      button.textContent = "Cancelling";
+      try {
+        await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/cancel`, {
+          method: "POST",
+        });
+        await loadScanResults();
+      } catch (error) {
+        alert(`Cancel failed: ${error.message}`);
+        button.disabled = false;
+        button.textContent = "Cancel";
+      }
+    }
+
+    async function loadPolicies() {
+      const params = new URLSearchParams();
+      const integrationId = document.getElementById("policy-filter-integration").value;
+      if (integrationId) params.set("integration_id", integrationId);
+      const payload = await fetchJson(`${endpoints.policies}?${params.toString()}`);
+      state.policies = payload.policies || [];
+      renderPolicies();
+    }
+
+    async function refreshAll() {
+      await loadDsxaStatus();
+      await loadOverview();
+      await loadConnectors();
+      await loadApplications();
+      await loadScanResults();
+      await loadPolicies();
+      if (state.activeAssetsTab === "protected") {
+        await loadProtectedAssets();
+      }
+    }
+
+    function setConnectorDrawerOpen(open) {
+      document.getElementById("connector-drawer").classList.toggle("open", open);
+      document.getElementById("connector-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("connector-drawer-backdrop").classList.toggle("open", open);
+    }
+
+    function setApplicationDrawerOpen(open) {
+      document.getElementById("application-drawer").classList.toggle("open", open);
+      document.getElementById("application-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("application-drawer-backdrop").classList.toggle("open", open);
+    }
+
+    function openApplicationCreate() {
+      state.applicationEditorMode = "create";
+      state.editingApplicationId = "";
+      const form = document.getElementById("application-form");
+      form.reset();
+      form.mode.value = "create";
+      form.application_id.readOnly = false;
+      form.enabled.checked = true;
+      form.static_token.required = true;
+      form.default_protected_entity_id.required = true;
+      form.default_protected_entity_id.value = state.defaultScannerProtectedEntity ?? "";
+      form.actions.value = "discover,submit,status";
+      form.metadata_json.value = "{}";
+      populateApplicationDestinations([]);
+      document.getElementById("application-drawer-title").textContent = "Onboard Application";
+      setStatus("application-form-status", "");
+      setApplicationDrawerOpen(true);
+      form.application_id.focus();
+    }
+
+    function openApplicationEdit(applicationId) {
+      const app = state.applications.find((item) => item.application_id === applicationId);
+      if (!app) return;
+      state.applicationEditorMode = "edit";
+      state.editingApplicationId = applicationId;
+      const form = document.getElementById("application-form");
+      const grant = firstApplicationGrant(app);
+      form.reset();
+      form.mode.value = "edit";
+      form.application_id.value = app.application_id;
+      form.application_id.readOnly = true;
+      form.display_name.value = app.display_name || "";
+      form.enabled.checked = Boolean(app.enabled);
+      form.static_token.required = true;
+      form.static_token.value = applicationStaticToken(app);
+      form.default_protected_entity_id.required = true;
+      form.default_protected_entity_id.value = app.default_protected_entity_id ?? "";
+      form.tenant_id.value = app.tenant_id || "";
+      form.customer_id.value = app.customer_id || "";
+      form.business_unit.value = app.business_unit || "";
+      form.submitted_by.value = app.submitted_by || "";
+      form.cost_center.value = app.cost_center || "";
+      form.billing_code.value = app.billing_code || "";
+      form.actions.value = (grant.actions || ["discover", "submit", "status"]).join(",");
+      form.path_prefixes.value = (grant.path_prefixes || []).join(",");
+      form.metadata_json.value = JSON.stringify(app.metadata || {}, null, 2);
+      populateApplicationDestinations(selectedApplicationDestinationIds(app));
+      document.getElementById("application-drawer-title").textContent = "Edit Application";
+      setStatus("application-form-status", "");
+      setApplicationDrawerOpen(true);
+      form.display_name.focus();
+    }
+
+    function applicationPayloadFromForm(form) {
+      const destinationIds = Array.from(form.destination_ids.selectedOptions).map((option) => option.value);
+      const staticToken = form.static_token.value.trim();
+      if (!staticToken) {
+        throw new Error("Static bearer token is required.");
+      }
+      const metadata = parseOptionalJson(form.metadata_json.value || "{}");
+      const applicationId = state.applicationEditorMode === "create"
+        ? form.application_id.value.trim()
+        : state.editingApplicationId;
+      const displayName = form.display_name.value.trim() || applicationId;
+      const payload = {
+        display_name: displayName,
+        enabled: form.enabled.checked,
+        identity_bindings: staticToken ? [{ provider: "static_bearer", token: staticToken }] : [],
+        tenant_id: emptyToNull(form.tenant_id.value),
+        customer_id: emptyToNull(form.customer_id.value),
+        business_unit: emptyToNull(form.business_unit.value),
+        submitted_by: emptyToNull(form.submitted_by.value),
+        cost_center: emptyToNull(form.cost_center.value),
+        billing_code: emptyToNull(form.billing_code.value),
+        default_protected_entity_id: parseRequiredPositiveIntegerValue(form.default_protected_entity_id.value, "DSXA protected entity"),
+        grants: [{
+          destination_ids: destinationIds,
+          actions: splitCsv(form.actions.value || "discover,submit,status"),
+          path_prefixes: splitCsv(form.path_prefixes.value),
+        }],
+        metadata,
+      };
+      if (state.applicationEditorMode === "create") {
+        payload.application_id = applicationId;
+      }
+      return payload;
+    }
+
+    async function saveApplicationForm(form) {
+      const payload = applicationPayloadFromForm(form);
+      const applicationId = state.applicationEditorMode === "edit" ? state.editingApplicationId : payload.application_id;
+      const url = state.applicationEditorMode === "edit"
+        ? `${endpoints.applications}/${encodeURIComponent(applicationId)}`
+        : endpoints.applications;
+      setStatus("application-form-status", state.applicationEditorMode === "edit" ? "Saving application..." : "Creating application...");
+      await fetchJson(url, {
+        method: state.applicationEditorMode === "edit" ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      setStatus("application-form-status", "Saved.");
+      setApplicationDrawerOpen(false);
+      await loadApplications();
+    }
+
+    function setPolicyEditorOpen(open) {
+      document.getElementById("policy-editor-drawer").classList.toggle("open", open);
+      document.getElementById("policy-editor-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("policy-editor-backdrop").classList.toggle("open", open);
+    }
+
+    function setProtectionProfilePickerOpen(open) {
+      document.getElementById("protection-profile-picker-drawer").classList.toggle("open", open);
+      document.getElementById("protection-profile-picker-drawer").setAttribute("aria-hidden", String(!open));
+      document.getElementById("protection-profile-picker-backdrop").classList.toggle("open", open);
+      if (!open) {
+        state.protectionProfileAsset = null;
+        state.selectedProtectionProfileId = "";
+      }
+    }
+
+    function openProtectionProfilePicker(asset) {
+      state.protectionProfileAsset = asset;
+      state.selectedProtectionProfileId = defaultProfileIdForIntegration(asset.integrationId);
+      document.getElementById("protection-profile-picker-caption").textContent = `Apply a protection profile to ${asset.name || asset.selector}.`;
+      renderProtectionProfilePicker();
+      setProtectionProfilePickerOpen(true);
+    }
+
+    function openPolicyEditor(policyId) {
+      const policy = state.policyCatalog.find((item) => item.policy_id === policyId) || selectedPolicyEntry();
+      state.activePolicyId = policy.policy_id;
+      state.policyEditorMode = "edit";
+      state.policyEditorBaseId = policy.policy_id;
+      document.getElementById("policy-editor-title").textContent = policyDisplayName(policy);
+      document.getElementById("policy-editor-caption").textContent = "Edit remediation and outcome handling.";
+      document.getElementById("policy-name-field").classList.remove("hidden");
+      document.getElementById("policy-based-on-field").classList.add("hidden");
+      document.getElementById("policy-editor-save").textContent = "Save";
+      renderPolicyBaseOptions();
+      applyPolicyToForm(policy, { mode: "edit" });
+      setPolicyEditorOpen(true);
+    }
+
+    function openPolicyCreate() {
+      const base = selectedPolicyEntry();
+      state.policyEditorMode = "create";
+      state.policyEditorBaseId = base.policy_id;
+      document.getElementById("policy-editor-title").textContent = "Create Protection Profile";
+      document.getElementById("policy-editor-caption").textContent = "Clone an existing protection profile as a starting point.";
+      document.getElementById("policy-name-field").classList.remove("hidden");
+      document.getElementById("policy-based-on-field").classList.remove("hidden");
+      document.getElementById("policy-editor-save").textContent = "Create Profile";
+      renderPolicyBaseOptions();
+      applyPolicyToForm(base, { mode: "create" });
+      setPolicyEditorOpen(true);
+      document.querySelector("#default-policy-form input[name='policy_name']").focus();
+    }
+
+    function cancelPolicyEditor() {
+      applyPolicyToForm(selectedPolicyEntry(), { mode: "edit" });
+      setPolicyEditorOpen(false);
+    }
+
+    function savePolicyEditor() {
+      const form = document.getElementById("default-policy-form");
+      if (state.policyEditorMode === "create") {
+        const name = form.policy_name.value.trim();
+        if (!name) {
+          setStatus("default-policy-status", "Profile Name is required.", true);
+          return;
+        }
+        const policyId = makePolicyId(name);
+        form.policy_id.value = policyId;
+        const definition = currentDefaultPolicy();
+        definition.policy_id = policyId;
+        definition.display_name = name;
+        state.policyCatalog.push({
+          policy_id: policyId,
+          display_name: name,
+          definition,
+        });
+        state.activePolicyId = policyId;
+      } else {
+        const entry = selectedPolicyEntry();
+        const definition = currentDefaultPolicy();
+        definition.policy_id = entry.policy_id;
+        definition.display_name = entry.display_name;
+        entry.definition = definition;
+      }
+      savePolicyCatalog();
+      renderPolicyBaseOptions();
+      renderPolicies();
+      renderConnectors();
+      setPolicyEditorOpen(false);
+    }
+
+    async function protectAsset(asset) {
+      const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
+      const policy = cloneValue(policyEntry.definition || currentDefaultPolicy());
+      const scopeType = asset.scopeType === "identity" ? "identity" : "path";
+      if (asset.matchingScopeId) {
+        const existingAsset = state.protectedAssets.find((row) => row.matching_scope_id === asset.matchingScopeId);
+        if (existingAsset?.policy?.scanner) {
+          policy.scanner = cloneValue(existingAsset.policy.scanner);
+        }
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/policy`, {
+          method: "PUT",
+          body: JSON.stringify({ policy }),
+        });
+        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/enabled`, {
+          method: "POST",
+          body: JSON.stringify({ enabled: true }),
+        });
+        await refreshAll();
+        if (state.activeAssetsTab === "protected") {
+          await loadProtectedAssets();
+        }
+        return;
+      }
+      await fetchJson(endpoints.createScope, {
+        method: "POST",
+        body: JSON.stringify({
+          integration_id: asset.integrationId,
+          display_name: asset.name || asset.selector,
+          scope_type: scopeType,
+          resource_selector: asset.selector,
+          mode: "full_scan",
+          enabled: true,
+          post_scan_policy: policy,
+        }),
+      });
+      await refreshAll();
+      if (state.activeAssetsTab === "protected") {
+        await loadProtectedAssets();
+      }
+    }
+
+    async function applySelectedProtectionProfile() {
+      if (!state.protectionProfileAsset) return;
+      const policyEntry = selectedProtectionProfileEntry();
+      await protectAsset({
+        ...state.protectionProfileAsset,
+        policyEntry,
+      });
+      setProtectionProfilePickerOpen(false);
+    }
+
+    async function scanScope(scopeId) {
+      const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
+        method: "POST",
+        body: JSON.stringify({ reader_strategy: "proxy", limit: 10000 }),
+      });
+      await loadScanResults();
+      selectTab("scan-results");
+    }
+
+    document.querySelectorAll(".rail-item").forEach((button) => {
+      button.addEventListener("click", () => selectTab(button.dataset.tab));
+    });
+
+    document.getElementById("nav-toggle").addEventListener("click", () => {
+      setNavCollapsed(!document.querySelector(".app").classList.contains("nav-collapsed"));
+    });
+
+    document.querySelectorAll(".subtab").forEach((button) => {
+      button.addEventListener("click", () => {
+        if (button.dataset.assetsTab === "protected") {
+          state.protectedIntegrationFilter = "";
+          selectAssetsTab("protected", { forceReload: true });
+          return;
+        }
+        selectAssetsTab(button.dataset.assetsTab);
+      });
+    });
+
+    document.getElementById("protected-context").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='go-connectors']");
+      if (!button) return;
+      selectAssetsTab("connectors");
+    });
+
+    document.getElementById("refresh-all").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await refreshAll();
+        } catch (error) {
+          alert(`Refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("refresh-connectors").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadConnectors();
+        } catch (error) {
+          alert(`Connector refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("connectors-poll").addEventListener("change", (event) => {
+      state.connectorsPolling = event.target.checked;
+      updateConnectorsPolling();
+      if (state.connectorsPolling) {
+        pollConnectors();
+      }
+    });
+    document.getElementById("open-add-connector")?.addEventListener("click", () => setConnectorDrawerOpen(true));
+    document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
+    document.getElementById("refresh-applications").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadApplications();
+        } catch (error) {
+          alert(`Application refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("create-application").addEventListener("click", openApplicationCreate);
+    document.getElementById("close-application").addEventListener("click", () => setApplicationDrawerOpen(false));
+    document.getElementById("cancel-application").addEventListener("click", () => setApplicationDrawerOpen(false));
+    document.getElementById("application-drawer-backdrop").addEventListener("click", () => setApplicationDrawerOpen(false));
+    document.getElementById("create-policy").addEventListener("click", openPolicyCreate);
+    document.getElementById("close-policy-editor").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("policy-editor-cancel").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("policy-editor-save").addEventListener("click", savePolicyEditor);
+    document.getElementById("policy-editor-backdrop").addEventListener("click", cancelPolicyEditor);
+    document.getElementById("close-protection-profile-picker").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-cancel").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-backdrop").addEventListener("click", () => setProtectionProfilePickerOpen(false));
+    document.getElementById("protection-profile-picker-apply").addEventListener("click", async () => {
+      const button = document.getElementById("protection-profile-picker-apply");
+      button.disabled = true;
+      try {
+        await applySelectedProtectionProfile();
+      } catch (error) {
+        alert(`Protect failed: ${error.message}`);
+        button.disabled = false;
+      }
+    });
+    document.querySelector("#default-policy-form select[name='based_on_policy']").addEventListener("change", (event) => {
+      if (state.policyEditorMode !== "create") return;
+      const name = document.querySelector("#default-policy-form input[name='policy_name']").value;
+      state.policyEditorBaseId = event.target.value;
+      const base = state.policyCatalog.find((policy) => policy.policy_id === event.target.value) || selectedPolicyEntry();
+      applyPolicyToForm(base, { mode: "create", name });
+      document.querySelector("#default-policy-form select[name='based_on_policy']").value = state.policyEditorBaseId;
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setConnectorDrawerOpen(false);
+        setApplicationDrawerOpen(false);
+        cancelPolicyEditor();
+        setProtectionProfilePickerOpen(false);
+      }
+    });
+    document.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-copy-value]");
+      if (!button) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const originalTitle = button.title;
+      const originalLabel = button.getAttribute("aria-label") || originalTitle;
+      try {
+        await copyTextToClipboard(button.dataset.copyValue || "");
+        button.classList.add("copied");
+        button.title = "Copied";
+        button.setAttribute("aria-label", "Copied");
+        setTimeout(() => {
+          button.classList.remove("copied");
+          button.title = originalTitle;
+          button.setAttribute("aria-label", originalLabel);
+        }, 900);
+      } catch (error) {
+        button.title = "Copy failed";
+        button.setAttribute("aria-label", "Copy failed");
+        setTimeout(() => {
+          button.title = originalTitle;
+          button.setAttribute("aria-label", originalLabel);
+        }, 1200);
+      }
+    });
+    document.getElementById("protected-page-prev").addEventListener("click", () => {
+      loadPreviousProtectedAssetsPage().catch(showProtectedAssetsError);
+    });
+    document.getElementById("protected-page-next").addEventListener("click", () => {
+      loadNextProtectedAssetsPage().catch(showProtectedAssetsError);
+    });
+    document.getElementById("refresh-scan-results").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadScanResults();
+        } catch (error) {
+          alert(`Scan result refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("toggle-scan-compare").addEventListener("click", () => {
+      if (state.scanCompareVisible) {
+        state.scanCompareVisible = false;
+        state.selectedScanCompareJobIds = [];
+      } else {
+        state.scanCompareVisible = true;
+      }
+      renderScanResults();
+    });
+    document.getElementById("export-scan-compare").addEventListener("click", exportScanComparisonCsv);
+    document.getElementById("scan-results-poll").addEventListener("change", (event) => {
+      state.scanResultsPolling = event.target.checked;
+      updateScanResultsPolling();
+      if (state.scanResultsPolling) {
+        scheduleNextScanResultsPoll();
+        pollScanResults();
+      } else {
+        state.scanResultsNextPollAt = null;
+        updateScanResultsCountdown();
+      }
+    });
+    document.getElementById("refresh-policies").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, async () => {
+        try {
+          await loadPolicies();
+        } catch (error) {
+          alert(`Protection profile refresh failed: ${error.message}`);
+        }
+      });
+    });
+    document.getElementById("apply-policy-filter").addEventListener("click", () => {
+      loadPolicies().catch((error) => alert(`Protection profile refresh failed: ${error.message}`));
+    });
+
+    document.getElementById("connectors-body").addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-action='toggle-integration']");
+      if (button) {
+        button.disabled = true;
+        try {
+          await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(button.dataset.id)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
+          });
+          await loadConnectors();
+        } catch (error) {
+          alert(`Connector update failed: ${error.message}`);
+          button.disabled = false;
+        }
+        return;
+      }
+      if (event.target.closest("button, input, select, textarea, a, label, [contenteditable='true']")) return;
+      const row = event.target.closest("tr[data-action='open-protected-assets']");
+      if (!row?.dataset.integration) return;
+      state.protectedIntegrationFilter = row.dataset.integration;
+      selectAssetsTab("protected", { forceReload: true });
+    });
+
+    document.getElementById("connectors-body").addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest("button, input, select, textarea, a, label, [contenteditable='true']")) return;
+      const row = event.target.closest("tr[data-action='open-protected-assets']");
+      if (!row?.dataset.integration) return;
+      event.preventDefault();
+      state.protectedIntegrationFilter = row.dataset.integration;
+      selectAssetsTab("protected", { forceReload: true });
+    });
+
+    document.getElementById("connectors-body").addEventListener("change", (event) => {
+      const protectedEntityInput = event.target.closest("[data-action='set-default-protected-entity']");
+      if (protectedEntityInput) {
+        saveConnectorProtectedEntity(protectedEntityInput).catch((error) => {
+          alert(`Protected entity update failed: ${error.message}`);
+          loadConnectors().catch(console.error);
+        });
+        return;
+      }
+      const select = event.target.closest("[data-action='set-default-profile']");
+      if (!select) return;
+      state.defaultProfileByIntegration[select.dataset.integration] = select.value;
+      saveDefaultProfiles();
+    });
+
+    document.getElementById("applications-body").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-action='edit-application']");
+      if (!button) return;
+      openApplicationEdit(button.dataset.id);
+    });
+
+    document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
+      const prefill = event.target.closest("[data-action='prefill-scope']");
+      if (prefill) {
+        prefill.disabled = true;
+        try {
+          await protectAsset({
+            integrationId: prefill.dataset.integration,
+            selector: prefill.dataset.selector,
+            name: prefill.dataset.name,
+          });
+        } catch (error) {
+          alert(`Protect failed: ${error.message}`);
+          prefill.disabled = false;
+        }
+        return;
+      }
+      const scan = event.target.closest("[data-action='scan-asset-scope']");
+      if (scan && scan.dataset.scope) {
+        scan.disabled = true;
+        try {
+          await scanScope(scan.dataset.scope);
+        } catch (error) {
+          alert(`Scan failed: ${error.message}`);
+        } finally {
+          scan.disabled = false;
+        }
+        return;
+      }
+      const toggleScope = event.target.closest("[data-action='toggle-scope-protection']");
+      if (toggleScope && toggleScope.dataset.scope) {
+        toggleScope.disabled = true;
+        try {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(toggleScope.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: toggleScope.dataset.enabled === "true" }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } catch (error) {
+          alert(`Protection update failed: ${error.message}`);
+          toggleScope.disabled = false;
+        }
+      }
+    });
+    document.getElementById("protected-assets-body").addEventListener("change", async (event) => {
+      const protectedEntityInput = event.target.closest("[data-action='set-scope-protected-entity']");
+      if (protectedEntityInput) {
+        saveScopeProtectedEntity(protectedEntityInput).catch((error) => {
+          alert(`Protected entity update failed: ${error.message}`);
+          loadProtectedAssets().catch(showProtectedAssetsError);
+        });
+        return;
+      }
+      const select = event.target.closest("[data-action='protected-asset-action']");
+      if (!select) return;
+      const action = select.value;
+      const asset = {
+        integrationId: select.dataset.integration,
+        selector: select.dataset.selector,
+        name: select.dataset.name,
+        matchingScopeId: select.dataset.scope || "",
+        scopeType: select.dataset.scopeType || "path",
+      };
+      select.disabled = true;
+      try {
+        if (action === "protect-default") {
+          await protectAsset(asset);
+        } else if (action === "protect-choose") {
+          openProtectionProfilePicker(asset);
+          select.disabled = false;
+          select.value = "";
+        } else if (action === "enable-existing" && select.dataset.scope) {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: true }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } else if (action === "disable" && select.dataset.scope) {
+          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
+            method: "POST",
+            body: JSON.stringify({ enabled: false }),
+          });
+          await loadOverview();
+          await loadProtectedAssets();
+        } else {
+          select.disabled = false;
+          select.value = "";
+        }
+      } catch (error) {
+        alert(`Protection update failed: ${error.message}`);
+        select.disabled = false;
+        select.value = "";
+      }
+    });
+    document.getElementById("protection-profile-picker-body").addEventListener("click", (event) => {
+      const row = event.target.closest("[data-action='select-protection-profile']");
+      if (!row) return;
+      state.selectedProtectionProfileId = row.dataset.policyId;
+      renderProtectionProfilePicker();
+    });
+    document.getElementById("protection-profile-picker-body").addEventListener("change", (event) => {
+      const input = event.target.closest("input[name='protection_profile_choice']");
+      if (!input) return;
+      state.selectedProtectionProfileId = input.value;
+      renderProtectionProfilePicker();
+    });
+
+    document.getElementById("scan-results-body").addEventListener("click", (event) => {
+      if (event.target.closest("[data-copy-value]")) return;
+      const cancelButton = event.target.closest("[data-action='cancel-scan-result']");
+      if (cancelButton) {
+        cancelScanResult(cancelButton.dataset.id, cancelButton);
+        return;
+      }
+      const sampleItem = event.target.closest("[data-action='toggle-scan-item-json']");
+      if (sampleItem) {
+        state.selectedScanResultItemKey = state.selectedScanResultItemKey === sampleItem.dataset.itemKey ? null : sampleItem.dataset.itemKey;
+        renderScanResults();
+        return;
+      }
+      if (event.target.closest("button, input, select, textarea, a")) return;
+      const row = event.target.closest("[data-action='toggle-scan-result-detail']");
+      if (!row) return;
+      const jobId = row.dataset.jobId;
+      state.scanTargetFilterFocused = false;
+      if (state.selectedScanResult === jobId) {
+        state.selectedScanResult = null;
+        state.selectedScanResultItemKey = null;
+      } else {
+        state.selectedScanResult = jobId;
+        state.selectedScanResultItemKey = null;
+      }
+      renderScanResults();
+    });
+
+    document.getElementById("policies-body").addEventListener("click", (event) => {
+      const row = event.target.closest("[data-action='edit-policy']");
+      if (!row) return;
+      openPolicyEditor(row.dataset.policyId);
+    });
+
+    document.getElementById("integration-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      setStatus("integration-form-status", "Creating connector...");
+      try {
+        let config = {
+          reader: {
+            default_strategy: form.reader_strategy.value,
+          },
+        };
+        if (form.proxy_base_url.value.trim() || form.connector_name.value.trim()) {
+          config.reader.proxy = {
+            base_url: form.proxy_base_url.value.trim() || null,
+            connector_name: form.connector_name.value.trim() || null,
+          };
+        }
+        config = mergeObjects(config, parseOptionalJson(form.advanced_config_json.value));
+        await fetchJson(endpoints.createIntegration, {
+          method: "POST",
+          body: JSON.stringify({
+            display_name: form.display_name.value,
+            platform: form.platform.value,
+            platform_key: form.platform_key.value,
+            enabled: form.enabled.checked,
+            capability_discover: form.capability_discover.checked,
+            capability_monitor: form.capability_monitor.checked,
+            capability_read: form.capability_read.checked,
+            capability_remediate: form.capability_remediate.checked,
+            config,
+          }),
+        });
+        form.reset();
+        form.enabled.checked = true;
+        form.capability_discover.checked = true;
+        form.capability_monitor.checked = true;
+        form.capability_remediate.checked = true;
+        form.reader_strategy.value = "proxy";
+        setStatus("integration-form-status", "Connector created.");
+        setConnectorDrawerOpen(false);
+        await refreshAll();
+      } catch (error) {
+        setStatus("integration-form-status", `Create failed: ${error.message}`, true);
+      }
+    });
+
+    document.getElementById("application-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      try {
+        await saveApplicationForm(form);
+      } catch (error) {
+        setStatus("application-form-status", `Save failed: ${error.message}`, true);
+      }
+    });
+
+    initNav();
+    loadPolicyCatalog();
+    loadDefaultProfiles();
+    renderPolicyBaseOptions();
+    applyPolicyToForm(selectedPolicyEntry());
+    loadUiMeta();
+    document.getElementById("default-policy-form").addEventListener("input", syncDefaultPolicySummary);
+    syncDefaultPolicySummary();
+    refreshAll().catch((error) => {
+      document.getElementById("connectors-body").innerHTML = `<tr><td colspan="9"><div class="empty">Failed to load console data: ${escapeHtml(error.message)}</div></td></tr>`;
+    });
+  </script>
+</body>
+</html>

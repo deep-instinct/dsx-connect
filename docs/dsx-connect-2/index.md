@@ -199,7 +199,7 @@ The control-plane model handles those differences explicitly:
 
 ## Current Naming
 
-Some code paths still use the internal package name `dsx_connect_ng`.
+Some code paths still use the internal package name `dsx_connect_v2`.
 Documentation and user-facing UI should refer to this platform as **DSX-Connect 2** or **DSX-Connect v2.x**.
 
 ## What to Read First

@@ -29,10 +29,10 @@ For collector-based forwarding, the recommended example pattern is:
 
 Checked-in example configs live under:
 
-- `dsx_connect_ng/examples/vector/vector-console.yaml`
-- `dsx_connect_ng/examples/vector/vector-splunk-hec.yaml`
-- `dsx_connect_ng/examples/vector/vector-chronicle.yaml`
-- `dsx_connect_ng/examples/vector/README.md`
+- `dsx_connect_v2/examples/vector/vector-console.yaml`
+- `dsx_connect_v2/examples/vector/vector-splunk-hec.yaml`
+- `dsx_connect_v2/examples/vector/vector-chronicle.yaml`
+- `dsx_connect_v2/examples/vector/README.md`
 
 This keeps DSX-Connect itself agnostic about the final destination.
 
@@ -138,8 +138,8 @@ Use this pattern when:
 Example DSX-Connect settings:
 
 ```bash
-DSX_CONNECT_NG_RESULT_SINK__BACKEND=json_lines
-DSX_CONNECT_NG_RESULT_SINK__PATH=/var/log/dsx-connect-ng/results.jsonl
+DSX_CONNECT_V2_RESULT_SINK__BACKEND=json_lines
+DSX_CONNECT_V2_RESULT_SINK__PATH=/var/log/dsx-connect-v2/results.jsonl
 ```
 
 ### Vector Config Shape
@@ -147,7 +147,7 @@ DSX_CONNECT_NG_RESULT_SINK__PATH=/var/log/dsx-connect-ng/results.jsonl
 ```yaml
 See:
 
-- `dsx_connect_ng/examples/vector/vector-splunk-hec.yaml`
+- `dsx_connect_v2/examples/vector/vector-splunk-hec.yaml`
 ```
 
 ### Why This Works Well
@@ -178,8 +178,8 @@ Use this pattern when:
 Example DSX-Connect settings:
 
 ```bash
-DSX_CONNECT_NG_RESULT_SINK__BACKEND=json_lines
-DSX_CONNECT_NG_RESULT_SINK__PATH=/var/log/dsx-connect-ng/results.jsonl
+DSX_CONNECT_V2_RESULT_SINK__BACKEND=json_lines
+DSX_CONNECT_V2_RESULT_SINK__PATH=/var/log/dsx-connect-v2/results.jsonl
 ```
 
 ### Vector Config Shape
@@ -187,7 +187,7 @@ DSX_CONNECT_NG_RESULT_SINK__PATH=/var/log/dsx-connect-ng/results.jsonl
 ```yaml
 See:
 
-- `dsx_connect_ng/examples/vector/vector-chronicle.yaml`
+- `dsx_connect_v2/examples/vector/vector-chronicle.yaml`
 ```
 
 ### Why This Works Well
@@ -226,7 +226,7 @@ For local development, the simplest collector path is:
 
 Use:
 
-- `dsx_connect_ng/examples/vector/vector-console.yaml`
+- `dsx_connect_v2/examples/vector/vector-console.yaml`
 
 This example is intentionally useful even before any SIEM forwarding is configured, because it lets you watch normalized result events as they are emitted.
 

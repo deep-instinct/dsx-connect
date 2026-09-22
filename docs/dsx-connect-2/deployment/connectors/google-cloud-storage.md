@@ -98,7 +98,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
       --set-string env.DSXCONNECTOR_REGISTER_WITH_CORE=false \
       --set-string env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_URL=http://dsx-connect-api:8091 \
-      --set-string env.DSXCONNECTOR_DSX_CONNECT_NG_URL=http://dsx-connect-api:8091 \
+      --set-string env.DSXCONNECTOR_DSX_CONNECT_V2_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_INSTANCE_ID=gcs-local-1 \
       --set-string env.DSXCONNECTOR_NG_PLATFORM=gcs \
       --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=demo-project \
@@ -137,7 +137,7 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
       DSXCONNECTOR_REGISTER_WITH_CORE: "false"
       DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-      DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+      DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_INSTANCE_ID: "gcs-local-1"
       DSXCONNECTOR_NG_PLATFORM: "gcs"
       DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
@@ -206,7 +206,7 @@ env:
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
   DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
   DSXCONNECTOR_NG_PLATFORM: "gcs"
   DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
@@ -287,7 +287,7 @@ Actual bucket access comes from the mounted Google Cloud credential and IAM perm
 | --- | --- |
 | `env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
 | `env.DSXCONNECTOR_REGISTER_WITH_CORE` | Usually `"false"` for DSX-Connect 2-only deployments. |
-| `env.DSXCONNECTOR_DSX_CONNECT_NG_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
+| `env.DSXCONNECTOR_DSX_CONNECT_V2_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
 | `env.DSXCONNECTOR_INSTANCE_ID` | Stable identity for this running connector instance. Changing it creates a separate connector record. |
 | `env.DSXCONNECTOR_NG_PLATFORM` | Connector adapter type. Use `"gcs"`. |
 | `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Stable operator-chosen key for the platform boundary shown and routed by DSX-Connect 2. It may match a GCP project, folder, org, tenant, or lab/account label, but it is not the credential source. |
@@ -375,6 +375,6 @@ helm uninstall gcs -n dsx-connect
 | --- | --- | --- |
 | Connector pod is `ImagePullBackOff` | Cluster cannot pull the image | Verify registry, tag, pull secret, and `image.pullPolicy` |
 | GCS pod has `FailedMount` | Secret name or namespace is wrong | `kubectl get secret gcp-sa -n dsx-connect` |
-| Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_NG_URL` and API service |
+| Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_V2_URL` and API service |
 | Connector registers but asset reads fail | Repository credentials or asset settings are wrong | Check connector logs and repository-specific secret values |
 | Connector appears offline | Heartbeats stopped or lease expired | Check connector pod status and logs |

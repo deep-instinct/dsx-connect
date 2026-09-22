@@ -66,10 +66,10 @@ image:
   pullPolicy: "Always"
 
 env:
-  DSX_CONNECT_NG__ENVIRONMENT: "dev"
-  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "memory"
-  DSX_CONNECT_NG__JOB_BUS_BACKEND: "memory"
-  DSX_CONNECT_NG_SCANNER__MODE: "stub"
+  DSX_CONNECT_V2__ENVIRONMENT: "dev"
+  DSX_CONNECT_V2__CONTROL_PLANE_BACKEND: "memory"
+  DSX_CONNECT_V2__JOB_BUS_BACKEND: "memory"
+  DSX_CONNECT_V2_SCANNER__MODE: "stub"
 
 postgresql:
   enabled: false
@@ -235,15 +235,15 @@ image:
   pullPolicy: "Always"
 
 env:
-  DSX_CONNECT_NG__ENVIRONMENT: "dev"
-  DSX_CONNECT_NG__CONTROL_PLANE_BACKEND: "postgres"
-  DSX_CONNECT_NG__JOB_BUS_BACKEND: "rabbitmq"
-  DSX_CONNECT_NG_POSTGRES__AUTO_APPLY_SCHEMA: "true"
-  DSX_CONNECT_NG_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
-  DSX_CONNECT_NG_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
-  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
-  DSX_CONNECT_NG_SCANNER__BASE_URL: "${DSXA_SCANNER_BASE_URL}"
-  DSX_CONNECT_NG_READERS__DEFAULT_STRATEGY: "proxy"
+  DSX_CONNECT_V2__ENVIRONMENT: "dev"
+  DSX_CONNECT_V2__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_V2__JOB_BUS_BACKEND: "rabbitmq"
+  DSX_CONNECT_V2_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_V2_POSTGRES__URL: "postgresql://dsx:dsx@dsx-connect-postgres:5432/dsx_connect_2"
+  DSX_CONNECT_V2_RABBITMQ__URL: "amqp://dsx:dsx@dsx-connect-rabbitmq:5672/%2F"
+  DSX_CONNECT_V2_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_V2_SCANNER__BASE_URL: "${DSXA_SCANNER_BASE_URL}"
+  DSX_CONNECT_V2_READERS__DEFAULT_STRATEGY: "proxy"
 
 postgresql:
   enabled: true
@@ -357,7 +357,7 @@ env:
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
   DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
-  DSXCONNECTOR_DSX_CONNECT_NG_URL: "http://dsx-connect-api:8091"
+  DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
   DSXCONNECTOR_NG_PLATFORM: "filesystem"
   DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
@@ -469,7 +469,7 @@ In the Operator Console:
 6. Open **Scan Results** and monitor progress.
 
 This quickstart uses DSXA scanner mode, so scan results come from the configured DSXA scanner.
-For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_NG_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.
+For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_V2_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.
 
 If scan work exhausts retries and lands in a dead letter queue, see [Dead Letter Queues](../operations/dead-letter-queues.md) for the current RabbitMQ inspection and scan restart flow.
 

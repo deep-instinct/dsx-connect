@@ -10,7 +10,7 @@ For release-based Kubernetes deployment, use [Deploying DSX-Connect 2 with Helm]
 Using the helper script:
 
 ```bash
-scripts/dsx-connect-ng/build-image.sh \
+scripts/dsx-connect-v2/build-image.sh \
   --tag dev \
   --registry local/dsx-connect \
   --load
@@ -22,7 +22,7 @@ Equivalent Docker command:
 docker buildx build \
   --load \
   --tag local/dsx-connect/dsx-connect:dev \
-  -f dsx_connect_ng/Dockerfile \
+  -f dsx_connect_v2/Dockerfile \
   .
 ```
 
@@ -68,12 +68,12 @@ API-only mode is useful for a quick Operator Console and API smoke test.
 It uses in-memory backends and does not run PostgreSQL, RabbitMQ, or workers.
 
 ```bash
-scripts/dsx-connect-ng/deploy-k3s.sh \
+scripts/dsx-connect-v2/deploy-k3s.sh \
   --tag dev \
   --registry local/dsx-connect \
   --release dsx-connect \
   --namespace dsx-connect \
-  -f dsx_connect_ng/deploy/helm/values-local.yaml
+  -f dsx_connect_v2/deploy/helm/values-local.yaml
 ```
 
 Use this only for API pod, service, image, and UI shell validation.
@@ -87,12 +87,12 @@ Use this for connector registration, asset inventory, protection workflows, scan
 Using the helper script:
 
 ```bash
-scripts/dsx-connect-ng/deploy-k3s.sh \
+scripts/dsx-connect-v2/deploy-k3s.sh \
   --tag dev \
   --registry local/dsx-connect \
   --release dsx-connect \
   --namespace dsx-connect \
-  -f dsx_connect_ng/deploy/helm/values-local-stack.yaml
+  -f dsx_connect_v2/deploy/helm/values-local-stack.yaml
 ```
 
 Equivalent Helm command using the local chart directory:
@@ -107,7 +107,7 @@ cp docs/dsx-connect-2/deployment/examples/dsx-connect-local-image-values.yaml \
   /tmp/dsx-connect-local-values.yaml
 
 helm upgrade --install "$RELEASE" \
-  ./dsx_connect_ng/deploy/helm \
+  ./dsx_connect_v2/deploy/helm \
   --namespace "$NAMESPACE" \
   --create-namespace \
   -f /tmp/dsx-connect-local-values.yaml
@@ -144,7 +144,7 @@ scripts/connectors/deploy-k3s.sh google_cloud_storage \
   --registry local/dsx-connect \
   --release gcs \
   --namespace dsx-connect \
-  -f connectors/google_cloud_storage/deploy/helm/values-local-ng.yaml \
+  -f connectors/google_cloud_storage/deploy/helm/values-local-v2.yaml \
   --pull-policy IfNotPresent
 ```
 
@@ -181,7 +181,7 @@ scripts/connectors/deploy-k3s.sh filesystem \
   --registry local/dsx-connect \
   --release filesystem \
   --namespace dsx-connect \
-  -f connectors/filesystem/deploy/helm/values-local-ng.yaml \
+  -f connectors/filesystem/deploy/helm/values-local-v2.yaml \
   --pull-policy IfNotPresent
 ```
 
@@ -215,7 +215,7 @@ This is available for local development and lab validation, not through the Kube
 Create a DSXA env file:
 
 ```bash
-cat > ~/.dsx-connect-local/dsx-connect-ng/.env.dsxa.local <<'EOF'
+cat > ~/.dsx-connect-local/dsx-connect-v2/.env.dsxa.local <<'EOF'
 APPLIANCE_URL=<your-appliance>.deepinstinctweb.com
 TOKEN=<scanner-registration-token>
 SCANNER_ID=<scanner-id>
@@ -230,24 +230,24 @@ EOF
 Run the local stack with PostgreSQL, RabbitMQ, and DSXA:
 
 ```bash
-./.venv/bin/python -m dsx_connect_ng.local.dsx_connect_ng_local \
+./.venv/bin/python -m dsx_connect_v2.local.dsx_connect_v2_local \
   --with-postgres-docker \
   --with-rabbit-docker \
   --with-dsxa-docker \
-  --dsxa-env-file ~/.dsx-connect-local/dsx-connect-ng/.env.dsxa.local \
+  --dsxa-env-file ~/.dsx-connect-local/dsx-connect-v2/.env.dsxa.local \
   foreground
 ```
 
 The launcher configures DSX-Connect 2 scanner mode automatically:
 
 ```text
-DSX_CONNECT_NG_SCANNER__MODE=dsxa
-DSX_CONNECT_NG_SCANNER__BASE_URL=http://127.0.0.1:15000
+DSX_CONNECT_V2_SCANNER__MODE=dsxa
+DSX_CONNECT_V2_SCANNER__BASE_URL=http://127.0.0.1:15000
 ```
 
-Do not copy the DSXA container `SCANNER_ID` into `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY`. `SCANNER_ID` registers the scanner itself with Deep Instinct, while `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY` is an optional per-scan protected entity header. Leave it unset unless you have a specific protected entity id from the management console.
+Do not copy the DSXA container `SCANNER_ID` into `DSX_CONNECT_V2_SCANNER__PROTECTED_ENTITY`. `SCANNER_ID` registers the scanner itself with Deep Instinct, while `DSX_CONNECT_V2_SCANNER__PROTECTED_ENTITY` is an optional per-scan protected entity header. Leave it unset unless you have a specific protected entity id from the management console.
 
-When an operator creates a protected entity in the Deep Instinct console for a repository boundary, bind that id in DSX-Connect instead of setting a global scanner default. In the Operator Console, use **Assets > Connectors > Default Protected Entity** for the connector-level default, and **Assets > Protected > Protected Entity** to override it for an individual protected asset. At scan time, DSX-Connect resolves the value in this order: per-request scan option, protected asset `post_scan_policy.scanner.protected_entity`, connector `config.scanner.protected_entity`, then the global `DSX_CONNECT_NG_SCANNER__PROTECTED_ENTITY` setting.
+When an operator creates a protected entity in the Deep Instinct console for a repository boundary, bind that id in DSX-Connect instead of setting a global scanner default. In the Operator Console, use **Assets > Connectors > Default Protected Entity** for the connector-level default, and **Assets > Protected > Protected Entity** to override it for an individual protected asset. At scan time, DSX-Connect resolves the value in this order: per-request scan option, protected asset `post_scan_policy.scanner.protected_entity`, connector `config.scanner.protected_entity`, then the global `DSX_CONNECT_V2_SCANNER__PROTECTED_ENTITY` setting.
 
 DSX-Connect also sends `X-Custom-Metadata` to DSXA with connector and scan context: source, object identity, content source, integration id/name/platform/platform key, scope id/name/type/mode/selector, job id, job item id, reader, connector endpoint, and any caller-provided custom metadata.
 
@@ -255,8 +255,8 @@ For Kubernetes deployments, deploy DSXA separately or use an existing DSXA endpo
 
 ```yaml
 env:
-  DSX_CONNECT_NG_SCANNER__MODE: "dsxa"
-  DSX_CONNECT_NG_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
+  DSX_CONNECT_V2_SCANNER__MODE: "dsxa"
+  DSX_CONNECT_V2_SCANNER__BASE_URL: "http://<dsxa-host>:15000"
 ```
 
 ## Update a Lab Stack with Helper Scripts
@@ -273,7 +273,7 @@ For a persistent lab VM or k3s host, keep environment-specific values files on t
 Update all releases using versions from the checked-out repo:
 
 ```bash
-scripts/dsx-connect-ng/update-lab-stack.sh \
+scripts/dsx-connect-v2/update-lab-stack.sh \
   --namespace dsx-connect \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
   --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \
@@ -283,7 +283,7 @@ scripts/dsx-connect-ng/update-lab-stack.sh \
 Update to explicit released versions:
 
 ```bash
-scripts/dsx-connect-ng/update-lab-stack.sh \
+scripts/dsx-connect-v2/update-lab-stack.sh \
   --connect-version 2.0.20 \
   --gcs-version 2.0.10 \
   --filesystem-version 2.0.8 \
@@ -295,7 +295,7 @@ scripts/dsx-connect-ng/update-lab-stack.sh \
 Preview without applying:
 
 ```bash
-scripts/dsx-connect-ng/update-lab-stack.sh \
+scripts/dsx-connect-v2/update-lab-stack.sh \
   --dry-run \
   --core-values ~/.dsx-connect-lab/dsx-connect-values.yaml \
   --gcs-values ~/.dsx-connect-lab/gcs-values.yaml \

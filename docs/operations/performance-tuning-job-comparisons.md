@@ -64,7 +64,7 @@ Do not tune without one.
 
 ## DSX-Connect NG Local Batch Defaults
 
-For large local `dsx_connect_ng` batch scans, use deferred publish by default.
+For large local `dsx_connect_v2` batch scans, use deferred publish by default.
 
 Deferred publish means the API persists the parent job, job items, and outbox rows first.
 The relay then publishes scan messages gradually, honoring the active scan-item cap.
@@ -73,7 +73,7 @@ This prevents a large batch submit from flooding RabbitMQ and keeps API operatio
 Recommended local stack for 10k-item validation:
 
 ```bash
-dsx-connect-ng-local \
+dsx-connect-v2-local \
   --with-postgres-docker \
   --with-rabbit-docker \
   --scan-worker-prefetch-count 100 \
@@ -87,7 +87,7 @@ dsx-connect-ng-local \
 Equivalent source checkout invocation:
 
 ```bash
-./.venv/bin/python dsx_connect_ng/dsx_connect_ng/local/dsx_connect_ng_local.py \
+./.venv/bin/python dsx_connect_v2/dsx_connect_v2/local/dsx_connect_v2_local.py \
   --with-postgres-docker \
   --with-rabbit-docker \
   --scan-worker-prefetch-count 100 \
@@ -101,7 +101,7 @@ Equivalent source checkout invocation:
 Recommended validation command:
 
 ```bash
-./.venv/bin/python scripts/validate_ng_batch_proxy_reader.py \
+./.venv/bin/python scripts/validate_v2_batch_proxy_reader.py \
   --scan-only \
   --sample-kind benign \
   --item-count 10000 \
@@ -112,7 +112,7 @@ Recommended validation command:
   --poll-interval-seconds 10
 ```
 
-`validate_ng_batch_proxy_reader.py` now enables deferred publish by default.
+`validate_v2_batch_proxy_reader.py` now enables deferred publish by default.
 Use `--no-defer-publish` only for small diagnostic runs where inline publish behavior is the thing being tested.
 
 Completion semantics:

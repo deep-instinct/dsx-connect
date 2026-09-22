@@ -6,7 +6,7 @@ This document defines how implementation should begin without coupling the new a
 
 Implementation starts in a standalone application package:
 
-- `dsx_connect_ng/`
+- `dsx_connect_v2/`
 
 This is not a preview mode inside `dsx_connect_v1/.
 
@@ -25,7 +25,7 @@ The next-generation app needs:
 
 ## Separation Rules
 
-1. `dsx_connect_ng` must not import `dsx_connect.*`.
+1. `dsx_connect_v2` must not import `dsx_connect.*`.
 2. Legacy preview routers are reference material only.
 3. Legacy DLQ patterns should not be copied into vnext.
 4. RabbitMQ dead-lettering should be implemented with broker-native exchanges and queue policies.
@@ -81,12 +81,12 @@ Reason:
 
 The initial application scaffold lives under:
 
-- [dsx_connect_ng/README.md](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/README.md:1)
-- [dsx_connect_ng/dsx_connect_ng/app.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/app.py:1)
-- [dsx_connect_ng/dsx_connect_ng/config.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/config.py:1)
-- [dsx_connect_ng/dsx_connect_ng/api/routes/control_plane.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/control_plane.py:1)
-- [dsx_connect_ng/dsx_connect_ng/api/routes/execution.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/execution.py:1)
-- [dsx_connect_ng/dsx_connect_ng/api/routes/ui.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_ng/dsx_connect_ng/api/routes/ui.py:1)
+- [dsx_connect_v2/README.md](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/README.md:1)
+- [dsx_connect_v2/dsx_connect_v2/app.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/app.py:1)
+- [dsx_connect_v2/dsx_connect_v2/config.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/config.py:1)
+- [dsx_connect_v2/dsx_connect_v2/api/routes/control_plane.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/api/routes/control_plane.py:1)
+- [dsx_connect_v2/dsx_connect_v2/api/routes/execution.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/api/routes/execution.py:1)
+- [dsx_connect_v2/dsx_connect_v2/api/routes/ui.py](/Users/logangilbert/PycharmProjects/dsx-connect/dsx_connect_v2/dsx_connect_v2/api/routes/ui.py:1)
 
 For the first thin operator UI built on top of this split, see:
 

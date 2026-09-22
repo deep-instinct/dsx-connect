@@ -1,0 +1,61 @@
+[project]
+name = "dsx-connect-v2"
+version = "2.0.33"
+description = "Standalone next-generation control-plane and worker architecture for DSX-Connect"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Deep Instinct" }
+]
+dependencies = [
+  "colorlog>=6.9.0",
+  "fastapi>=0.115.0,<0.116.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.9.0",
+  "pydantic-settings>=2.5.0",
+  "psycopg[binary]>=3.2.0",
+  "python-multipart>=0.0.20",
+  "starlette>=0.41.0,<0.42.0",
+  "typer>=0.12.0",
+  "uvicorn>=0.32.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx2",
+  "pytest>=8.0",
+]
+gcs = [
+  "google-cloud-storage>=3.3.0",
+]
+workers = [
+  "aio-pika>=9.5.0",
+]
+
+[project.scripts]
+dsx-connect-v2 = "dsx_connect_v2.app:run"
+dsx-connect-v2-relay = "dsx_connect_v2.workers.relay_worker:run"
+dsx-connect-v2-scan-worker = "dsx_connect_v2.workers.scan_worker:run"
+dsx-connect-v2-policy-worker = "dsx_connect_v2.workers.policy_worker:run"
+dsx-connect-v2-remediation-worker = "dsx_connect_v2.workers.remediation_worker:run"
+dsx-connect-v2-result-sink-worker = "dsx_connect_v2.workers.result_sink_worker:run"
+dsx-connect-v2-delivery-worker = "dsx_connect_v2.workers.delivery_worker:run"
+dsx-connect-v2-dianna-worker = "dsx_connect_v2.workers.dianna_worker:run"
+dsx-connect-v2-local = "dsx_connect_v2.local.dsx_connect_v2_local:run"
+
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dsx_connect_v2*"]
+
+[tool.setuptools.package-data]
+dsx_connect_v2 = [
+  "ui/*.html",
+  "ui/assets/**/*.png",
+  "ui/assets/**/*.svg",
+  "ui/assets/**/*.json",
+  "ui/assets/**/*.webmanifest",
+]

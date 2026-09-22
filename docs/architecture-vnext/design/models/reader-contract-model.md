@@ -148,7 +148,7 @@ The resulting value becomes the legacy connector payload `location`.
 
 Connector examples:
 
-- Filesystem: `location` is a local filesystem path, for example `/tmp/dsx-connect-ng/proxy-reader-sample.txt`
+- Filesystem: `location` is a local filesystem path, for example `/tmp/dsx-connect-v2/proxy-reader-sample.txt`
 - GCS: `location` is the object key inside the configured bucket, for example `BadMojoResume` or `folder/BadMojoResume`
 
 The legacy payload also includes:

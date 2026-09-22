@@ -1,0 +1,30 @@
+image:
+  repository: dsxconnect/dsx-connect
+  pullPolicy: IfNotPresent
+  tag: "2.0.33"
+
+env:
+  DSX_CONNECT_V2__ENVIRONMENT: "dev"
+  DSX_CONNECT_V2__CONTROL_PLANE_BACKEND: "postgres"
+  DSX_CONNECT_V2__JOB_BUS_BACKEND: "rabbitmq"
+  DSX_CONNECT_V2_POSTGRES__AUTO_APPLY_SCHEMA: "true"
+  DSX_CONNECT_V2_POSTGRES__URL: "postgresql://dsx:dsx@postgres:5432/dsx_connect_2"
+  DSX_CONNECT_V2_RABBITMQ__URL: "amqp://dsx:dsx@rabbitmq:5672/%2F"
+  DSX_CONNECT_V2_SCANNER__MODE: "stub"
+  DSX_CONNECT_V2_READERS__DEFAULT_STRATEGY: "proxy"
+
+workers:
+  relay:
+    enabled: true
+  scan:
+    enabled: true
+    args: ["--prefetch-count", "10"]
+  policy:
+    enabled: true
+    args: ["--prefetch-count", "100"]
+  remediation:
+    enabled: true
+  resultSink:
+    enabled: true
+  dianna:
+    enabled: true

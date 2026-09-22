@@ -18,6 +18,7 @@ This repository houses the full DSX-Connect stack: the core orchestration servic
 | `dsx_connect_v1/` | Deprecated v1 core API, Celery workers, Helm chart, and web UI assets. |
 | `dsx_connect_v1/desktop/` | Deprecated v1 Electron desktop application. |
 | `dsx_connect_v1/sdk/` | Deprecated v1 DSX-Connect Python SDK source distribution. |
+| `dsx_connect_v2/` | Current next-generation control plane, workers, Helm chart, and operator UI. |
 | `connectors/` | Each connector lives in its own subdirectory with code, tests, Helm/Docker artifacts, and a README specific to that connector. |
 | `dsxa_sdk_py/` | Python package + CLI for DSXA integrations (`README.md` and tests inside). |
 | `shared/` | Cross-cutting modules (e.g., `shared/dev_env.py`, models). |

@@ -281,10 +281,10 @@ class DSXConnector:
         self.dsx_connect_url = str(connector_config.dsx_connect_url).rstrip('/')
         if not self.register_with_core:
             dsx_logging.info("Connector registration with 1g dsx-connect is disabled for this runtime.")
-        self.dsx_connect_ng_url = str(getattr(connector_config, "dsx_connect_ng_url", None) or self.dsx_connect_url).rstrip("/")
+        self.dsx_connect_v2_url = str(getattr(connector_config, "dsx_connect_v2_url", None) or self.dsx_connect_url).rstrip("/")
         self._ng_registered_integration_id = str(getattr(connector_config, "ng_integration_id", "") or "").strip() or None
         if self.register_with_ng_control_plane:
-            dsx_logging.info("Connector registration with dsx-connect-ng control plane is enabled.")
+            dsx_logging.info("Connector registration with dsx-connect-v2 control plane is enabled.")
 
         self.connector_running_model = ConnectorInstanceModel(
             name=connector_config.name,
@@ -802,7 +802,7 @@ class DSXConnector:
                 message="NG registration disabled",
                 description="register_with_ng_control_plane=false",
             )
-        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "control-plane", "connectors", "register")
+        url = service_url(self.dsx_connect_v2_url, NG_API_PREFIX_V1, "control-plane", "connectors", "register")
         headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
         try:
             async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
@@ -812,18 +812,18 @@ class DSXConnector:
             if isinstance(data, dict) and data.get("integration_id"):
                 self._ng_registered_integration_id = str(data["integration_id"])
             dsx_logging.info(
-                "Registered connector with dsx-connect-ng control plane: %s",
+                "Registered connector with dsx-connect-v2 control plane: %s",
                 data.get("connector_instance_id", self.connector_instance_id) if isinstance(data, dict) else self.connector_instance_id,
             )
-            return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Registered with dsx-connect-ng", description=url)
+            return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Registered with dsx-connect-v2", description=url)
         except httpx.RequestError as e:
-            dsx_logging.warning(f"NG connector registration request error: {e}. Verify dsx-connect-ng URL, scheme and port.")
+            dsx_logging.warning(f"v2 connector registration request error: {e}. Verify dsx-connect-v2 URL, scheme and port.")
             return StatusResponse(status=StatusResponseEnum.ERROR, message="NG registration failed", description=str(e))
         except httpx.HTTPStatusError as e:
-            dsx_logging.error(f"NG connector registration rejected: HTTP {e.response.status_code} {e.response.text}")
+            dsx_logging.error(f"v2 connector registration rejected: HTTP {e.response.status_code} {e.response.text}")
             return StatusResponse(status=StatusResponseEnum.ERROR, message="NG registration failed", description=e.response.text)
         except Exception as e:
-            dsx_logging.error("Unexpected error during NG connector registration", exc_info=True)
+            dsx_logging.error("Unexpected error during v2 connector registration", exc_info=True)
             return StatusResponse(status=StatusResponseEnum.ERROR, message="NG registration failed", description=str(e))
 
     async def heartbeat_ng_control_plane(self) -> StatusResponse:
@@ -835,7 +835,7 @@ class DSXConnector:
             )
         instance_id = self.connector_instance_id
         url = service_url(
-            self.dsx_connect_ng_url,
+            self.dsx_connect_v2_url,
             NG_API_PREFIX_V1,
             "control-plane",
             "connectors",
@@ -849,7 +849,7 @@ class DSXConnector:
                 if resp.status_code == 404:
                     return await self.register_ng_control_plane()
                 resp.raise_for_status()
-            return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Heartbeat sent to dsx-connect-ng", description=url)
+            return StatusResponse(status=StatusResponseEnum.SUCCESS, message="Heartbeat sent to dsx-connect-v2", description=url)
         except httpx.RequestError as e:
             return StatusResponse(status=StatusResponseEnum.ERROR, message="NG heartbeat failed", description=str(e))
         except httpx.HTTPStatusError as e:
@@ -1130,7 +1130,7 @@ class DSXConnector:
     def _ng_scan_batch_payload(self, scan_requests: list[ScanRequestModel]) -> dict[str, Any]:
         integration_id = self._ng_registered_integration_id
         if not integration_id:
-            raise ValueError("dsx-connect-ng integration_id is not available; connector must register before enqueueing scans")
+            raise ValueError("dsx-connect-v2 integration_id is not available; connector must register before enqueueing scans")
 
         source = "connector"
         for scan_request in scan_requests:
@@ -1170,7 +1170,7 @@ class DSXConnector:
 
     async def _scan_file_request_ng(self, scan_request: ScanRequestModel) -> StatusResponse:
         payload = self._ng_scan_batch_payload([scan_request])
-        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
+        url = service_url(self.dsx_connect_v2_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
         headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
         async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
@@ -1179,13 +1179,13 @@ class DSXConnector:
         self.scan_request_count += 1
         return StatusResponse(
             status=StatusResponseEnum.SUCCESS,
-            message="Queued in dsx-connect-ng",
+            message="Queued in dsx-connect-v2",
             description=str(body.get("job_id") or url),
         )
 
     async def _scan_file_request_batch_ng(self, scan_requests: list[ScanRequestModel]) -> StatusResponse:
         payload = self._ng_scan_batch_payload(scan_requests)
-        url = service_url(self.dsx_connect_ng_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
+        url = service_url(self.dsx_connect_v2_url, NG_API_PREFIX_V1, "execution", "jobs", "batch")
         headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
         async with httpx.AsyncClient(verify=self._httpx_verify, timeout=20.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
@@ -1194,7 +1194,7 @@ class DSXConnector:
         self.scan_request_count += len(scan_requests)
         return StatusResponse(
             status=StatusResponseEnum.SUCCESS,
-            message="Queued batch in dsx-connect-ng",
+            message="Queued batch in dsx-connect-v2",
             description=str(body.get("job_id") or url),
         )
 

@@ -102,8 +102,8 @@ For DSX-Connect 2 runtime Secrets:
 ```bash
 kubectl create secret generic dsx-connect-runtime-env \
   -n dsx-connect \
-  --from-literal='DSX_CONNECT_NG_POSTGRES__URL=postgresql://user:password@postgres.example:5432/dsx_connect_2' \
-  --from-literal='DSX_CONNECT_NG_RABBITMQ__URL=amqp://user:password@rabbitmq.example:5672/%2F'
+  --from-literal='DSX_CONNECT_V2_POSTGRES__URL=postgresql://user:password@postgres.example:5432/dsx_connect_2' \
+  --from-literal='DSX_CONNECT_V2_RABBITMQ__URL=amqp://user:password@rabbitmq.example:5672/%2F'
 ```
 
 ## Upgrades

@@ -112,7 +112,7 @@ theme:
 nav:
   - Home: index.md
 
-  - Kubernetes Quickstart: dsx-connect-2/deployment/kubernetes-quickstart.md
+  - Getting Started: dsx-connect-2/deployment/kubernetes-quickstart.md
 
   - Core Concepts:
       - Overview: core-concepts/index.md

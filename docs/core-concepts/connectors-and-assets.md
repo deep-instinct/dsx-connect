@@ -95,6 +95,10 @@ The protected scope is the control-plane decision that changes a discovered buck
 
 The same operation can be performed through the control-plane API. The API model associates a protected scope with an integration and an asset selection; jobs then reference the integration and scope rather than relying on a connector-wide bucket default.
 
+![DSX-Connect 2 Operator Console showing the Assets > Connectors list](../assets/screenshots/gcs-connectors-list.png)
+
+*Figure 1: The `google-cloud-storage-connector` appears as the third GCS entry in the connector list. Its row currently reports one protected scope.*
+
 ## Discovery is not protection
 
 This distinction is central to the v2 model:

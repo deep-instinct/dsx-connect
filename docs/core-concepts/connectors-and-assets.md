@@ -99,6 +99,10 @@ The same operation can be performed through the control-plane API. The API model
 
 *Figure 1: The `google-cloud-storage-connector` appears as the third GCS entry in the connector list. Its row currently reports one protected scope.*
 
+![DSX-Connect 2 Operator Console showing unprotected GCS assets](../assets/screenshots/gcs-assets-unprotected.png)
+
+*Figure 2: The connector-specific asset view shows 14 discovered buckets, with the coverage filter set to `unprotected` and no protection profile assigned yet.*
+
 ## Discovery is not protection
 
 This distinction is central to the v2 model:

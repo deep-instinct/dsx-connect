@@ -1,18 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="0 0 220 32"
-     fill="none"
-     preserveAspectRatio="xMidYMid meet"
-     overflow="visible">
-    <!-- Bottom arrow (points right) -->
-    <path d="M 12 16.22 L 17.19 16.22 L 17.19 13 L 32 20 L 17.19 27 L 17.19 23.78 L 12 23.78 L 12 20 Z"
-          fill="#4CA7FF" stroke="none"/>
-    <!-- Top arrow (points left) -->
-    <path d="M 0 3.22 L 5.19 3.22 L 5.19 0 L 20 7 L 5.19 14 L 5.19 10.78 L 0 10.78 L 0 7 Z"
-          fill="#4CA7FF" stroke="none" transform="rotate(180 10 7)"/>
-    <!-- Text -->
-    <text x="42" y="22"
-          font-family="'Segoe UI', Arial, sans-serif"
-          font-size="24"
-          fill="#4CA7FF"
-          font-weight="200">DSX-Connect</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 64" fill="none" role="img" aria-labelledby="title">
+    <title id="title">DSX-Connect</title>
+    <g transform="translate(0 2) scale(.46875)">
+        <path d="M12 64 38 48v32L12 64Z" fill="#4CA7FF"/>
+        <path d="M116 64 90 48v32l26-16Z" fill="#4CA7FF"/>
+        <path d="M64 35 86 45v17c0 17-8 30-22 38-14-8-22-21-22-38V45l22-10Z" fill="#4CA7FF"/>
+        <path d="M64 42 80 49v14c0 12-5 22-16 28-11-6-16-16-16-28V49l16-7Z" fill="#FFFFFF"/>
+        <path d="M64 53 73 57v8c0 8-3 14-9 18-6-4-9-10-9-18v-8l9-4Z" fill="#4CA7FF"/>
+    </g>
+    <text x="72" y="42" font-family="'Segoe UI', Arial, sans-serif" font-size="32" fill="#4CA7FF" font-weight="500">DSX-Connect</text>
 </svg>

@@ -144,10 +144,10 @@ You can build this local connector manager as a native binary via:
 
 ```bash
 pip install nuitka
-python3 dsx_connect/local/build_local_binaries.py build filesystem
+python3 dsx_connect_v1/local/build_local_binaries.py build filesystem
 
 # macOS .app bundle
-python3 dsx_connect/local/build_local_binaries.py build-app filesystem
+python3 dsx_connect_v1/local/build_local_binaries.py build-app filesystem
 ```
 
 Then run:

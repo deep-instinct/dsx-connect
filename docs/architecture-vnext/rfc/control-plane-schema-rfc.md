@@ -4,7 +4,7 @@ This document defines the initial PostgreSQL schema for DSX-Connect control-plan
 
 SQL source:
 
-- `dsx_connect/database/sql/control_plane_schema.sql`
+- `dsx_connect_v1/database/sql/control_plane_schema.sql`
 
 ## Goals
 
@@ -133,7 +133,7 @@ docker run --name dsxcp-pg \
 Install dependencies (includes `psycopg[binary]`):
 
 ```bash
-pip install -r dsx_connect/requirements.txt
+pip install -r dsx_connect_v1/requirements.txt
 ```
 
 Set env for preview mirror:

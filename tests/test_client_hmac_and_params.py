@@ -36,10 +36,10 @@ class _StubAsyncClient:
 @pytest.mark.asyncio
 async def test_async_client_params_in_url_without_hmac(monkeypatch):
     # Reload config and client modules to pick up env
-    import dsx_connect.config as cfg
+    import dsx_connect_v1.config as cfg
     importlib.reload(cfg)
 
-    import dsx_connect.connectors.client as client_mod
+    import dsx_connect_v1.connectors.client as client_mod
     # Patch httpx.AsyncClient used in the client module
     stub_httpx = types.SimpleNamespace(AsyncClient=_StubAsyncClient)
     monkeypatch.setattr(client_mod, "httpx", stub_httpx, raising=True)
@@ -62,10 +62,10 @@ async def test_async_client_params_in_url_without_hmac(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_async_client_params_and_hmac(monkeypatch):
-    import dsx_connect.config as cfg
+    import dsx_connect_v1.config as cfg
     importlib.reload(cfg)
 
-    import dsx_connect.connectors.client as client_mod
+    import dsx_connect_v1.connectors.client as client_mod
     stub_httpx = types.SimpleNamespace(AsyncClient=_StubAsyncClient)
     monkeypatch.setattr(client_mod, "httpx", stub_httpx, raising=True)
     importlib.reload(client_mod)

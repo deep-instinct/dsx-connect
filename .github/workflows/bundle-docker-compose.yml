@@ -32,7 +32,7 @@ jobs:
         run: |
           ver=$(python - <<'PY'
           import pathlib, re
-          text = pathlib.Path("dsx_connect/version.py").read_text()
+          text = pathlib.Path("dsx_connect_v1/version.py").read_text()
           m = re.search(r"DSX_CONNECT_VERSION\s*=\s*'([^']+)'", text)
           print(m.group(1) if m else "latest")
           PY

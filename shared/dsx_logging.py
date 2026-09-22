@@ -1,4 +1,4 @@
-# dsx_connect/ops_logging.py
+# dsx_connect_v1/ops_logging.py
 import os
 import logging
 import colorlog

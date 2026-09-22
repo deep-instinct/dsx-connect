@@ -165,7 +165,7 @@ inv bump --version 1.2.4
 DSX-Connect Desktop:
 
 ```bash
-cd dsx_connect_desktop
+cd dsx_connect_v1/desktop
 inv bump
 inv bump --version 0.8.2
 ```
@@ -177,7 +177,7 @@ Those tasks update the version files for each desktop app without involving the 
 For local testing, charts should generally be installed from the working tree:
 
 ```bash
-helm upgrade --install dsx-connect ./dsx_connect/deploy/helm
+helm upgrade --install dsx-connect ./dsx_connect_v1/deploy/helm
 ```
 
 or via `inv deploy-all-local`.

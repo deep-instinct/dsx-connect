@@ -15,7 +15,9 @@ This repository houses the full DSX-Connect stack: the core orchestration servic
 
 | Path | Purpose |
 | --- | --- |
-| `dsx_connect/` | Core API, Celery workers, Helm chart, and web UI assets. |
+| `dsx_connect_v1/` | Deprecated v1 core API, Celery workers, Helm chart, and web UI assets. |
+| `dsx_connect_v1/desktop/` | Deprecated v1 Electron desktop application. |
+| `dsx_connect_v1/sdk/` | Deprecated v1 DSX-Connect Python SDK source distribution. |
 | `connectors/` | Each connector lives in its own subdirectory with code, tests, Helm/Docker artifacts, and a README specific to that connector. |
 | `dsxa_sdk_py/` | Python package + CLI for DSXA integrations (`README.md` and tests inside). |
 | `shared/` | Cross-cutting modules (e.g., `shared/dev_env.py`, models). |
@@ -23,12 +25,12 @@ This repository houses the full DSX-Connect stack: the core orchestration servic
 | `docs/` | MkDocs content (deployment guides, references, diagrams). |
 | `tests/` | Cross-project tests (integration/contract style) that don’t belong to a single component. |
 
-See each directory’s README for component-specific details (e.g., `dsx_connect/README.md`, `connectors/<name>/README.md`, `dsxa_sdk_py/README.md`).
+See each directory’s README for component-specific details (e.g., `dsx_connect_v1/README.md`, `connectors/<name>/README.md`, `dsxa_sdk_py/README.md`).
 
 ## Getting Started
 
 1. **Read developer tasks** – `DEVELOPER_TASKS.md` captures open work items, coding conventions, and review expectations. Start there when onboarding or picking up a ticket.
-2. **Component READMEs** – Each connector and `dsx_connect` have their own README covering local dev, env vars, and release steps. Consult these before editing or running those services.
+2. **Component READMEs** – Each connector and `dsx_connect_v1` have their own README covering local dev, env vars, and release steps. Consult these before editing or running those services.
 3. **Shared tooling** – Invoke tasks (`tasks.py`), Make targets, and scripts under `scripts/` assist with linting, packaging, and local orchestration.
 
 

@@ -4,13 +4,13 @@ This folder is the *convenience location* for dev-generated TLS materials. The
 certificate and key are intentionally not committed to git.
 
 Generate them locally using either of the included scripts:
-- `dsx_connect/deploy/docker/certs/generate-dev-cert.sh`
+- `dsx_connect_v1/deploy/docker/certs/generate-dev-cert.sh`
 - `connectors/framework/deploy/certs/generate-dev-cert.sh`
 
 Then copy the outputs here:
 ```bash
-cp dsx_connect/deploy/docker/certs/dev.localhost.crt shared/deploy/certs/dev.localhost.crt
-cp dsx_connect/deploy/docker/certs/dev.localhost.key shared/deploy/certs/dev.localhost.key
+cp dsx_connect_v1/deploy/docker/certs/dev.localhost.crt shared/deploy/certs/dev.localhost.crt
+cp dsx_connect_v1/deploy/docker/certs/dev.localhost.key shared/deploy/certs/dev.localhost.key
 ```
 
 Usage examples:

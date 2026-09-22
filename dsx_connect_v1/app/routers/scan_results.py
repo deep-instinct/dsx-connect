@@ -1,0 +1,442 @@
+from typing import List
+
+from fastapi import APIRouter, Request, HTTPException
+
+from dsx_connect_v1.models.scan_result import ScanResultModel, ScanStatsModel
+from dsx_connect_v1.config import get_config
+from shared.routes import DSXConnectAPI, API_PREFIX_V1, route_name, Action, ScanPath, route_path
+from dsx_connect_v1.database.database_factory import database_scan_stats_factory, database_scan_results_factory
+from redis.asyncio import Redis
+from fastapi import Depends
+from shared.dsx_logging import dsx_logging
+from dsx_connect_v1.messaging.state_keys import job_key, job_key_pattern, job_keys
+
+router = APIRouter(prefix=route_path(API_PREFIX_V1))
+
+config = get_config()
+_results_database = database_scan_results_factory(database_loc=config.results_database.loc,
+                                                  retain=config.results_database.retain)
+
+_stats_database = database_scan_stats_factory(database_loc=config.results_database.loc)
+
+
+async def _publish_job_status_event(request: Request, job_id: str, forced_status: str | None = None) -> None:
+    """Best-effort SSE push so the UI reflects job control actions immediately."""
+    try:
+        r = getattr(request.app.state, "redis", None)
+        notifiers = getattr(request.app.state, "notifiers", None)
+        if r is None or notifiers is None:
+            return
+        key = job_key(job_id)
+        data = await r.hgetall(key)
+        if not data:
+            return
+
+        def _to_int(v):
+            try:
+                return int(v)
+            except Exception:
+                return None
+
+        processed = _to_int(data.get("processed_count")) or 0
+        enq_total = _to_int(data.get("enqueued_total"))
+        expected = _to_int(data.get("expected_total"))
+        enq_count = _to_int(data.get("enqueued_count")) or 0
+        succeeded = _to_int(data.get("succeeded_count")) or 0
+        failed = _to_int(data.get("failed_count")) or 0
+        cancelled = _to_int(data.get("cancelled_count")) or 0
+        skipped = _to_int(data.get("skipped_count")) or 0
+        total = enq_total if (enq_total is not None and enq_total >= 0) else expected
+
+        import time as _t
+        started = _to_int(data.get("started_at")) or 0
+        finished = _to_int(data.get("finished_at")) or 0
+        now_ts = int(_t.time())
+        duration = (finished or now_ts) - started if started else None
+
+        summary = {
+            "job_id": job_id,
+            "status": forced_status or data.get("status", "running"),
+            "processed_count": processed,
+            "total": total,
+            "enqueued_total": enq_total,
+            "enqueued_count": enq_count,
+            "succeeded_count": succeeded,
+            "failed_count": failed,
+            "cancelled_count": cancelled,
+            "skipped_count": skipped,
+            "enqueue_done": data.get("enqueue_done"),
+            "last_update": data.get("last_update"),
+            "duration_secs": duration,
+        }
+        event = {"type": "scan_result", "scan_result": {"type": "job_status"}, "job": summary}
+        await notifiers.publish_scan_results(event)
+    except Exception:
+        pass
+
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.LIST),
+    response_model=List[ScanResultModel],
+    description="List recent scan results (optionally filtered by job_id)."
+)
+async def list_scan_results(limit: int = 200, job_id: str | None = None) -> List[ScanResultModel]:
+    return _results_database.recent(limit=limit, job_id=job_id)
+
+
+@router.delete(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.DELETE),
+    description="Clear stored scan results (optionally by job_id)."
+)
+async def clear_scan_results(job_id: str | None = None) -> dict:
+    try:
+        _results_database.clear(job_id=job_id)
+    except Exception as e:
+        dsx_logging.error(f"Failed to clear scan results: {e}")
+        raise HTTPException(status_code=500, detail="clear_failed")
+    return {"status": "success", "job_id": job_id or "all"}
+
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value, "job", "{job_id}"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.LIST),
+    response_model=List[ScanResultModel],
+    description="List scan results by scan_job_id."
+)
+async def list_scan_results_by_job(job_id: str) -> List[ScanResultModel]:
+    return _results_database.find("scan_job_id", job_id) or []
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.RESULTS.value, "{task_id}"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.RESULTS, Action.GET),
+    response_model=List[ScanResultModel],
+    description="List scan results."
+)
+async def get_scan_result(task_id: str) -> List[ScanResultModel]:
+    return _results_database.find("scan_request_task_id", task_id)
+
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.STATS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.STATS, Action.GET),
+    response_model=ScanStatsModel,
+    description="Retrieve scan statistics.")
+async def get_scan_stats() -> ScanStatsModel:
+    return _stats_database.get()
+
+
+# --- Job status (Redis) ---
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.GET),
+    description="Get job status and counters.",
+)
+async def get_job_status(job_id: str, request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    data = await r.hgetall(key)
+    if not data:
+        raise HTTPException(status_code=404, detail="job_not_found")
+    # Derive simple progress if expected_total is known
+    try:
+        enq = int(data.get("enqueued_count", 0))
+        proc = int(data.get("processed_count", 0))
+        exp = int(data.get("expected_total", -1))
+        if exp > 0:
+            data["progress_pct"] = f"{min(100, int(proc * 100 / exp))}"
+        elif enq > 0:
+            data["progress_pct"] = f"{min(100, int(proc * 100 / max(1, enq)))}"
+        # Duration
+        import time as _t
+        started = int(data.get("started_at", 0) or 0)
+        finished = int(data.get("finished_at", 0) or 0)
+        now = int(_t.time())
+        if started:
+            data["duration_secs"] = str((finished or now) - started)
+        # Processing window (first start to last completion)
+        try:
+            first_start = int(data.get("first_scan_started_at", 0) or 0)
+            last_done = int(data.get("last_terminal_at", 0) or data.get("last_completed_at", 0) or 0)
+            if first_start and last_done:
+                data["processing_window_secs"] = str(max(0, last_done - first_start))
+        except Exception:
+            pass
+        for field in ("succeeded_count", "failed_count", "cancelled_count", "skipped_count", "terminal_count"):
+            try:
+                data[field] = str(int(data.get(field, 0) or 0))
+            except Exception:
+                pass
+        # ETA (if total known and some progress)
+        try:
+            total = None
+            enq_total = int(data.get("enqueued_total", -1)) if data.get("enqueued_total") is not None else -1
+            if enq_total > 0:
+                total = enq_total
+            elif exp > 0:
+                total = exp
+            if total and total > 0 and started and proc > 0 and proc < total:
+                elapsed = max(1, (finished or now) - started)
+                throughput = proc / elapsed
+                if throughput > 0:
+                    remaining = max(0, total - proc)
+                    eta = int(remaining / throughput)
+                    data["eta_secs"] = str(eta)
+                    # human friendly time remaining
+                    def _fmt_eta(sec: int) -> str:
+                        days, rem = divmod(sec, 86400)
+                        hrs, rem = divmod(rem, 3600)
+                        mins, secs = divmod(rem, 60)
+                        if days > 0:
+                            return f"{days}d {hrs:02d}:{mins:02d}:{secs:02d}"
+                        return f"{hrs:02d}:{mins:02d}:{secs:02d}"
+                    data["time_remaining"] = _fmt_eta(eta)
+        except Exception:
+            pass
+        # Throughput & per-job averages
+        try:
+            total_bytes = int(float(data.get("total_bytes", 0) or 0))
+        except Exception:
+            total_bytes = 0
+        try:
+            total_scan_us = int(float(data.get("total_scan_time_us", 0) or 0))
+        except Exception:
+            total_scan_us = 0
+        try:
+            total_request_ms = float(data.get("total_request_elapsed_ms", 0) or 0.0)
+        except Exception:
+            total_request_ms = 0.0
+        try:
+            total_read_ms = float(data.get("total_read_elapsed_ms", 0) or 0.0)
+        except Exception:
+            total_read_ms = 0.0
+        try:
+            if proc > 0 and total_bytes >= 0:
+                data["avg_bytes_per_file"] = str(int(total_bytes / proc)) if proc else "0"
+            if proc > 0 and total_request_ms > 0:
+                data["avg_request_elapsed_ms"] = f"{(total_request_ms / proc):.3f}"
+            if proc > 0 and total_read_ms > 0:
+                data["avg_read_elapsed_ms"] = f"{(total_read_ms / proc):.3f}"
+            if total_scan_us > 0 and total_bytes > 0:
+                data["scan_us_per_byte"] = f"{(total_scan_us / total_bytes):.6f}"
+                data["scan_bytes_per_sec"] = f"{(total_bytes / (total_scan_us / 1_000_000.0)):.2f}"
+            if total_request_ms > 0 and total_bytes > 0:
+                data["request_bytes_per_sec"] = f"{(total_bytes / (total_request_ms / 1000.0)):.2f}"
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return data
+
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}", "raw"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.GET) + ":raw",
+    description="Debug: return raw Redis hash for a job and TTL.",
+)
+async def get_job_status_raw(job_id: str, request: Request) -> dict:
+    r: Redis | None = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    data = await r.hgetall(key)
+    ttl = await r.ttl(key)
+    return {"key": key, "ttl": ttl, "data": data}
+
+
+@router.post(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}", "enqueue_done"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.UPDATE),
+    description="Mark that a job has finished enqueueing items; optionally set enqueued_total.",
+)
+async def mark_job_enqueue_done(job_id: str, request: Request, payload: dict | None = None) -> dict:
+    # Auth: require connector bearer when enabled
+    try:
+        from dsx_connect_v1.app.auth_hmac_inbound import require_dsx_hmac_inbound
+        await require_dsx_hmac_inbound(request)
+    except Exception as e:
+        # propagate FastAPI HTTPException if raised
+        if isinstance(e, HTTPException):
+            raise
+        raise
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    now = str(int(__import__('time').time()))
+    mapping = {"enqueue_done": "1", "enqueue_finished_at": now, "last_update": now}
+    await r.hset(key, mapping=mapping)
+    await r.expire(key, 7 * 24 * 3600)
+    try:
+        data = await r.hgetall(key)
+        dsx_logging.info(
+            f"job.enqueue_done job={job_id} enqueued_total={data.get('enqueued_total','')} at={now}"
+        )
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+@router.post(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}", "pause"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.UPDATE),
+    description="Pause a job: prevent new tasks from being enqueued.",
+)
+async def pause_job(job_id: str, request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    await r.hset(key, mapping={"paused": "1", "status": "paused", "last_update": str(int(__import__('time').time()))})
+    await r.expire(key, 7 * 24 * 3600)
+    await _publish_job_status_event(request, job_id, forced_status="paused")
+    return {"ok": True}
+
+
+@router.post(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}", "resume"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.UPDATE),
+    description="Resume a paused job.",
+)
+async def resume_job(job_id: str, request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    await r.hdel(key, "paused")
+    await r.hset(key, mapping={"status": "running", "last_update": str(int(__import__('time').time()))})
+    await r.expire(key, 7 * 24 * 3600)
+    await _publish_job_status_event(request, job_id, forced_status="running")
+    return {"ok": True}
+
+
+@router.post(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value, "{job_id}", "cancel"),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.UPDATE),
+    description="Cancel a job: revoke queued/started tasks and mark as cancelled.",
+)
+async def cancel_job(job_id: str, request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    key = job_key(job_id)
+    # Revoke tasks (best-effort)
+    try:
+        from dsx_connect_v1.taskworkers.celery_app import celery_app
+        tasks = await r.lrange(job_keys(job_id), 0, -1)
+        for tid in tasks or []:
+            try:
+                celery_app.control.revoke(tid, terminate=True, signal="SIGTERM")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    now = str(int(__import__('time').time()))
+    await r.hset(key, mapping={"status": "cancelled", "cancel": "1", "finished_at": now, "last_update": now})
+    await r.expire(key, 7 * 24 * 3600)
+    await _publish_job_status_event(request, job_id, forced_status="cancelled")
+    return {"ok": True}
+
+
+@router.get(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.LIST),
+    description="List recent jobs (summary)",
+)
+async def list_jobs(request: Request) -> list[dict]:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    out: list[dict] = []
+    async for key in r.scan_iter(match=job_key_pattern(), count=100):
+        try:
+            # Skip task list keys (handled via the parent job hash)
+            if key.endswith(":tasks"):
+                continue
+            data = await r.hgetall(key)
+            if not data:
+                continue
+            # Attach job_id from key if missing
+            if "job_id" not in data:
+                data["job_id"] = key.rsplit(":", 1)[-1]
+            # Derive simple fields
+            try:
+                proc = int(data.get("processed_count", 0))
+                exp = int(data.get("expected_total", -1)) if data.get("expected_total") is not None else -1
+                enq_total = int(data.get("enqueued_total", -1)) if data.get("enqueued_total") is not None else -1
+                if enq_total > 0:
+                    total = enq_total
+                elif exp > 0:
+                    total = exp
+                else:
+                    total = None
+                if total:
+                    data["progress_pct"] = str(min(100, int(proc * 100 / max(1, total))))
+                # duration
+                import time as _t
+                started = int(data.get("started_at", 0) or 0)
+                finished = int(data.get("finished_at", 0) or 0)
+                now = int(_t.time())
+                if started:
+                    data["duration_secs"] = str((finished or now) - started)
+                # eta
+                if total and started and proc > 0 and (not finished) and proc < total:
+                    elapsed = max(1, (now - started))
+                    throughput = proc / elapsed
+                    if throughput > 0:
+                        remaining = max(0, total - proc)
+                        eta = int(remaining / throughput)
+                        data["eta_secs"] = str(eta)
+                        # human-friendly
+                        days, rem = divmod(eta, 86400)
+                        hrs, rem = divmod(rem, 3600)
+                        mins, secs = divmod(rem, 60)
+                        data["time_remaining"] = (f"{days}d {hrs:02d}:{mins:02d}:{secs:02d}" if days > 0
+                                                   else f"{hrs:02d}:{mins:02d}:{secs:02d}")
+            except Exception:
+                pass
+            out.append(data)
+        except Exception:
+            continue
+    return out
+
+
+@router.delete(
+    route_path(DSXConnectAPI.SCAN_PREFIX.value, ScanPath.JOBS.value),
+    name=route_name(DSXConnectAPI.SCAN_PREFIX, ScanPath.JOBS, Action.DELETE),
+    description="Clear job status entries (Redis job keys).",
+)
+async def clear_jobs(request: Request) -> dict:
+    r = getattr(request.app.state, "redis", None)
+    if r is None:
+        raise HTTPException(status_code=503, detail="job_store_unavailable")
+    deleted = 0
+    try:
+        async for key in r.scan_iter(match=job_key_pattern(), count=200):
+            job_id = None
+            if key.endswith(":tasks"):
+                job_id = key[len(job_key("")):-len(":tasks")]
+            else:
+                job_id = key.rsplit(":", 1)[-1]
+            try:
+                await r.delete(key)
+                deleted += 1
+            except Exception:
+                pass
+            if job_id:
+                try:
+                    await r.delete(job_keys(job_id))
+                except Exception:
+                    pass
+                # Best-effort: clear per-job scan results index
+                try:
+                    await r.delete(f"dsxconnect:scan_results_by_job:{job_id}")
+                except Exception:
+                    pass
+    except Exception as e:
+        dsx_logging.error(f"Failed to clear jobs: {e}")
+        raise HTTPException(status_code=500, detail="clear_failed")
+    return {"status": "success", "deleted_jobs": deleted}

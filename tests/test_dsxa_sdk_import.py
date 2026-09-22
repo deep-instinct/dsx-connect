@@ -1,7 +1,7 @@
 import sys
 import types
 
-from dsx_connect.dsxa_sdk_import import ensure_sdk_on_path
+from dsx_connect_v1.dsxa_sdk_import import ensure_sdk_on_path
 
 
 def test_ensure_sdk_on_path_replaces_cached_namespace_package(monkeypatch):

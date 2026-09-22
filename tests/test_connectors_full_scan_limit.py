@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from shared.models.connector_models import ConnectorInstanceModel, ConnectorStatusEnum
-from dsx_connect.app.routers import connectors as connectors_router
+from dsx_connect_v1.app.routers import connectors as connectors_router
 
 
 class _FakeResponse:

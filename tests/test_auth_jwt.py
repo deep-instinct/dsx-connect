@@ -5,9 +5,9 @@ import pytest
 
 
 def reload_auth():
-    import dsx_connect.config as cfg
+    import dsx_connect_v1.config as cfg
     importlib.reload(cfg)
-    import dsx_connect.app.auth_jwt as auth
+    import dsx_connect_v1.app.auth_jwt as auth
     importlib.reload(auth)
     return auth
 

@@ -30,7 +30,7 @@ VERSION_PATTERN = re.compile(r"(?:VERSION|DSX_CONNECT_VERSION|CONNECTOR_VERSION)
 
 # Base directories
 PROJECT_ROOT = Path(__file__).parent.resolve()
-CORE_VERSION_FILE = PROJECT_ROOT / "dsx_connect" / "version.py"
+CORE_VERSION_FILE = PROJECT_ROOT / "dsx_connect_v1" / "version.py"
 QUICKSTART_PATH = PROJECT_ROOT / "docs" / "deployment" / "kubernetes" / "getting-started-quickstart.md"
 CONNECTORS_DIR = PROJECT_ROOT / "connectors"
 DEPLOYMENT_DIR = "docker_bundle"
@@ -84,11 +84,11 @@ def release_connector_nobump(c, name: str, repo_uname: str = "dsxconnect"):
 @task
 def sync_core_chart_version(c):
     """
-    Sync dsx-connect Helm Chart.yaml version/appVersion with dsx_connect/version.py.
+    Sync dsx-connect Helm Chart.yaml version/appVersion with dsx_connect_v1/version.py.
     Run this before packaging/pushing the core Helm chart to avoid drift.
     """
     version = read_version_file(CORE_VERSION_FILE)
-    chart_path = PROJECT_ROOT / "dsx_connect" / "deploy" / "helm" / "Chart.yaml"
+    chart_path = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "helm" / "Chart.yaml"
     _sync_chart_yaml(chart_path, version)
     print(f"[sync] Updated {chart_path} to version {version}")
 
@@ -119,14 +119,14 @@ def helm_release(
     import os as _os
     if include_core:
         version = read_version_file(CORE_VERSION_FILE)
-        chart_path = PROJECT_ROOT / "dsx_connect" / "deploy" / "helm" / "Chart.yaml"
+        chart_path = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "helm" / "Chart.yaml"
         _sync_chart_yaml(chart_path, version)
         print(f"[helm-release] Core Chart.yaml synced to {version}")
         print("=== Helm release: core (dsx_connect) ===")
         repo = repo or _os.environ.get("HELM_REPO", DEFAULT_HELM_REPO)
         # Pushing charts to the 'dsxconnect' namespace is safe because chart names carry a '-chart' suffix.
         core_cmd = f"invoke helm-release --repo={repo}"
-        code = _run(c, core_cmd, cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+        code = _run(c, core_cmd, cwd=PROJECT_ROOT / "dsx_connect_v1", dry_run=dry_run)
         if code != 0:
             raise Exit(code)
 
@@ -183,7 +183,7 @@ def generate_manifest(c, out: str = "versions.json"):
     """
     manifest = {}
     # Core
-    manifest["dsx_connect"] = read_version_file(CORE_VERSION_FILE)
+    manifest["dsx_connect_v1"] = read_version_file(CORE_VERSION_FILE)
     # Connectors (manifest still scans actual dirs so it's accurate even if disabled)
     if CONNECTORS_DIR.exists():
         for connector_path in CONNECTORS_DIR.iterdir():
@@ -201,7 +201,7 @@ def _update_quickstart_versions(manifest: dict[str, str]) -> None:
         print(f"[quickstart] Skipping update; not found: {QUICKSTART_PATH}")
         return
 
-    dsx_version = manifest.get("dsx_connect")
+    dsx_version = manifest.get("dsx_connect_v1")
     aws_version = manifest.get("aws_s3")
 
     if not dsx_version and not aws_version:
@@ -498,7 +498,7 @@ def audit_connector_images(c, repo: str = "dsxconnect", tag: str = "latest", pul
 @task(help={
     "move": "Remove original repo-local .dev.env files after successful copy (true/false).",
     "overwrite": "Overwrite target ~/.dsx-connect-local/<name>/.env.local if it exists (true/false).",
-    "include_core": "Also migrate dsx_connect/.dev.env (true/false).",
+    "include_core": "Also migrate dsx_connect_v1/.dev.env (true/false).",
 })
 def migrate_dev_envs(c, move: bool = True, overwrite: bool = False, include_core: bool = True):
     """
@@ -515,9 +515,9 @@ def migrate_dev_envs(c, move: bool = True, overwrite: bool = False, include_core
         if src.exists():
             sources.append((slug, src))
     if include_core_bool:
-        core_src = PROJECT_ROOT / "dsx_connect" / ".dev.env"
+        core_src = PROJECT_ROOT / "dsx_connect_v1" / ".dev.env"
         if core_src.exists():
-            sources.append(("dsx_connect", core_src))
+            sources.append(("dsx_connect_v1", core_src))
 
     if not sources:
         print("[migrate_dev_envs] No repo-local .dev.env files found.")
@@ -576,7 +576,7 @@ def release_core(c, extra: str = "", dry_run: bool = False):
     code = _run(
         c,
         cmd,
-        cwd=PROJECT_ROOT / "dsx_connect",  # <<< key change
+        cwd=PROJECT_ROOT / "dsx_connect_v1",  # <<< key change
         dry_run=dry_run,
     )
     if code != 0:
@@ -718,7 +718,7 @@ def build_all(
     """
     print("=== Building core (dsx_connect) ===")
     core_cmd = f"invoke build{(' ' + extra_core) if extra_core else ''}"
-    code = _run(c, core_cmd, cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+    code = _run(c, core_cmd, cwd=PROJECT_ROOT / "dsx_connect_v1", dry_run=dry_run)
     if code != 0:
         raise Exit(code)
 
@@ -829,7 +829,7 @@ def deploy_all_local(
     """
     core_version = read_version_file(CORE_VERSION_FILE)
     core_release = f"{release_prefix}dsx-connect" if release_prefix else "dsx-connect"
-    core_chart_dir = PROJECT_ROOT / "dsx_connect" / "deploy" / "helm"
+    core_chart_dir = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "helm"
     _sync_chart_yaml(core_chart_dir / "Chart.yaml", core_version)
     dep_code = _run(c, f"helm dependency build {core_chart_dir}", dry_run=dry_run)
     if dep_code != 0:
@@ -901,10 +901,10 @@ def compose_up_local(
         raise Exit(code)
 
     compose_files = [
-        PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
+        PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
     ]
     if include_dsxa:
-        compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
+        compose_files.append(PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
 
     chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
     raw_env = _compose_env_for_selection(chosen)
@@ -950,7 +950,7 @@ def compose_dsxa_up(
     if code != 0:
         raise Exit(code)
 
-    compose_file = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
+    compose_file = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
     env = _load_env_file(_compose_state_dir("dsx-connect") / ".env.local")
 
     cmd = f"docker compose -f {compose_file} up -d"
@@ -979,10 +979,10 @@ def compose_down_local(
     Stop the local Docker Compose stack built from repo compose files.
     """
     compose_files = [
-        PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
+        PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml",
     ]
     if include_dsxa:
-        compose_files.append(PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
+        compose_files.append(PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsxa.yaml")
 
     chosen = _select_connectors(only=only, skip=skip, include_disabled=False)
     raw_env = _compose_env_for_selection(chosen)
@@ -1020,7 +1020,7 @@ def compose_dsxa_down(
     """
     Stop only the bundled DSXA Docker Compose stack.
     """
-    compose_file = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
+    compose_file = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
     env = _load_env_file(_compose_state_dir("dsx-connect") / ".env.local")
 
     cmd = f"docker compose -f {compose_file} down"
@@ -1053,10 +1053,10 @@ def push_all_dev(
     not official release publication.
     """
     print("=== Building and pushing core (dsx_connect) to dev repo ===")
-    code = _run(c, "invoke build", cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+    code = _run(c, "invoke build", cwd=PROJECT_ROOT / "dsx_connect_v1", dry_run=dry_run)
     if code != 0:
         raise Exit(code)
-    code = _run(c, f"invoke push --repo={repo}", cwd=PROJECT_ROOT / "dsx_connect", dry_run=dry_run)
+    code = _run(c, f"invoke push --repo={repo}", cwd=PROJECT_ROOT / "dsx_connect_v1", dry_run=dry_run)
     if code != 0:
         raise Exit(code)
 
@@ -1116,10 +1116,10 @@ def bundle(c):
         shutil.rmtree(core_bundle)
     core_bundle.mkdir(parents=True, exist_ok=True)
     # Core compose + env sample
-    core_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml"
-    dsxa_compose_src = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
-    env_core = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "sample.core.env"
-    env_dsxa = PROJECT_ROOT / "dsx_connect" / "deploy" / "docker" / "sample.dsxa.env"
+    core_compose_src = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsx-connect-all-services.yaml"
+    dsxa_compose_src = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "docker-compose-dsxa.yaml"
+    env_core = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "sample.core.env"
+    env_dsxa = PROJECT_ROOT / "dsx_connect_v1" / "deploy" / "docker" / "sample.dsxa.env"
     for src in (core_compose_src, dsxa_compose_src, env_core, env_dsxa):
         if src.exists():
             c.run(f"cp -f {src} {core_bundle}/{src.name}")

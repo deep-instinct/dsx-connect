@@ -4,7 +4,7 @@ This page documents environment selection and worker retry policy behavior.
 
 ## Environment selection
 
-The app environment is controlled by `DSXCONNECT_APP_ENV`, which maps to `AppEnv` in `dsx_connect/config.py`.
+The app environment is controlled by `DSXCONNECT_APP_ENV`, which maps to `AppEnv` in `dsx_connect_v1/config.py`.
 This value directly influences behavior across the DSX-Connect core (including worker retry policy defaults and other environment-specific logic).
 
 For connector runtime logging behavior (identifier masking in `stg/prod`), connectors read:
@@ -32,16 +32,16 @@ Recommended intent:
 Defaults:
 
 - If `DSXCONNECT_APP_ENV` is not set, the default is `dev`.
-- Local dev loads `dsx_connect/.dev.env` by default. Set `DSXCONNECT_SKIP_DEVENV=1` to ignore it.
+- Local dev loads `dsx_connect_v1/.dev.env` by default. Set `DSXCONNECT_SKIP_DEVENV=1` to ignore it.
 
 Example:
 ```
-DSXCONNECT_APP_ENV=stg python dsx_connect/dsx-connect-api-start.py
+DSXCONNECT_APP_ENV=stg python dsx_connect_v1/dsx-connect-api-start.py
 ```
 
 ## Worker retry policy
 
-Worker retry policy is defined in `dsx_connect/taskworkers/policy.py`. It is derived from a base policy (configured via env vars) and then overridden based on the selected environment.
+Worker retry policy is defined in `dsx_connect_v1/taskworkers/policy.py`. It is derived from a base policy (configured via env vars) and then overridden based on the selected environment.
 
 Base policy (configurable via `DSXCONNECT_WORKERS__*`):
 

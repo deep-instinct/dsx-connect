@@ -2,7 +2,7 @@
 
 Independent Electron desktop client for DSXA, built on top of `@deep-instinct/dsxa-sdk-js`.
 
-This app is intentionally separate from `dsx_connect_desktop/`. It does not host DSX-Connect and does not share its runtime model.
+This app is intentionally separate from `dsx_connect_v1/desktop/`. It does not host DSX-Connect and does not share its runtime model.
 
 ## Current scaffold
 

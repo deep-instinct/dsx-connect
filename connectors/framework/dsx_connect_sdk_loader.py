@@ -14,10 +14,10 @@ def load_sdk() -> Tuple[Any, Any] | tuple[None, None]:
     except Exception:
         pass
 
-    # Repo layout fallback: dsx_connect_sdk/dsx_connect_sdk
+    # Repo layout fallback when the SDK has not been installed yet.
     try:
-        from dsx_connect_sdk.dsx_connect_sdk.client import DSXConnectClient
-        from dsx_connect_sdk.dsx_connect_sdk.exceptions import DSXConnectCoreApiError
+        from dsx_connect_v1.sdk.dsx_connect_sdk.client import DSXConnectClient
+        from dsx_connect_v1.sdk.dsx_connect_sdk.exceptions import DSXConnectCoreApiError
         return DSXConnectClient, DSXConnectCoreApiError
     except Exception:
         return None, None

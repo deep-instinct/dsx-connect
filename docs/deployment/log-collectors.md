@@ -15,7 +15,7 @@ Install:
 
 ```bash
 helm upgrade --install rsyslog \
-  dsx_connect/deploy/helm/charts/rsyslog
+  dsx_connect_v1/deploy/helm/charts/rsyslog
 ```
 
 Key values:

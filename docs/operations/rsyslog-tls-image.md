@@ -6,7 +6,7 @@ The bundled rsyslog chart forwards scan results to external syslog collectors. I
 
 The Dockerfile lives at:
 
-`dsx_connect/build/rsyslog/Dockerfile`
+`dsx_connect_v1/build/rsyslog/Dockerfile`
 
 Contents:
 
@@ -22,7 +22,7 @@ RUN apt-get update \
 
 ```bash
 docker build -t dsxconnect/rsyslog-gnutls:<tag> \
-  -f dsx_connect/build/rsyslog/Dockerfile .
+  -f dsx_connect_v1/build/rsyslog/Dockerfile .
 docker push dsxconnect/rsyslog-gnutls:<tag>
 ```
 

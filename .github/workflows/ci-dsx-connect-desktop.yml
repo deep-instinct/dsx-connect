@@ -7,19 +7,19 @@ on:
     paths:
       - '.github/workflows/ci-dsx-connect-desktop.yml'
       - '.github/workflows/release-dsx-connect-desktop.yml'
-      - 'dsx_connect_desktop/**'
-      - 'dsx_connect/**'
+      - 'dsx_connect_v1/desktop/**'
+      - 'dsx_connect_v1/**'
       - 'shared/**'
-      - 'dsx_connect_sdk/**'
+      - 'dsx_connect_v1/sdk/**'
       - 'dsxa_sdk_py/**'
   pull_request:
     paths:
       - '.github/workflows/ci-dsx-connect-desktop.yml'
       - '.github/workflows/release-dsx-connect-desktop.yml'
-      - 'dsx_connect_desktop/**'
-      - 'dsx_connect/**'
+      - 'dsx_connect_v1/desktop/**'
+      - 'dsx_connect_v1/**'
       - 'shared/**'
-      - 'dsx_connect_sdk/**'
+      - 'dsx_connect_v1/sdk/**'
       - 'dsxa_sdk_py/**'
 
 permissions:
@@ -47,8 +47,8 @@ jobs:
           import pathlib
 
           repo = pathlib.Path(".")
-          package_json = repo / "dsx_connect_desktop" / "package.json"
-          package_lock = repo / "dsx_connect_desktop" / "package-lock.json"
+          package_json = repo / "dsx_connect_v1/desktop" / "package.json"
+          package_lock = repo / "dsx_connect_v1/desktop" / "package-lock.json"
           github_output = pathlib.Path(__import__("os").environ["GITHUB_OUTPUT"])
 
           package_version = json.loads(package_json.read_text())["version"]
@@ -74,7 +74,7 @@ jobs:
     needs: resolve-version
     defaults:
       run:
-        working-directory: dsx_connect_desktop
+        working-directory: dsx_connect_v1/desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -84,7 +84,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: dsx_connect_desktop/package-lock.json
+          cache-dependency-path: dsx_connect_v1/desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -96,7 +96,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
-          scan-ref: dsx_connect_desktop
+          scan-ref: dsx_connect_v1/desktop
           vuln-type: os,library
           severity: HIGH,CRITICAL
           ignore-unfixed: true
@@ -118,7 +118,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r dsx_connect/requirements.txt
+          python -m pip install -r dsx_connect_v1/requirements.txt
           python -m pip install -e "dsxa_sdk_py[dev]"
 
       - name: Run DSXA SDK import regression tests
@@ -141,7 +141,7 @@ jobs:
       - python-regression-tests
     defaults:
       run:
-        working-directory: dsx_connect_desktop
+        working-directory: dsx_connect_v1/desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -151,7 +151,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: dsx_connect_desktop/package-lock.json
+          cache-dependency-path: dsx_connect_v1/desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -180,28 +180,28 @@ jobs:
       - name: Collect compliance files
         run: |
           mkdir -p dist
-          cp ../LICENSE dist/LICENSE
-          cp ../NOTICE.md dist/NOTICE.md
+          cp ../../LICENSE dist/LICENSE
+          cp ../../NOTICE.md dist/NOTICE.md
 
       - name: Upload macOS workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsx-connect-desktop-macos-${{ matrix.arch }}-no-python
           path: |
-            dsx_connect_desktop/dist/no-python/*.dmg
-            dsx_connect_desktop/dist/no-python/*.zip
-            dsx_connect_desktop/dist/LICENSE
-            dsx_connect_desktop/dist/NOTICE.md
+            dsx_connect_v1/desktop/dist/no-python/*.dmg
+            dsx_connect_v1/desktop/dist/no-python/*.zip
+            dsx_connect_v1/desktop/dist/LICENSE
+            dsx_connect_v1/desktop/dist/NOTICE.md
 
       - name: Upload macOS full workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsx-connect-desktop-macos-${{ matrix.arch }}-full
           path: |
-            dsx_connect_desktop/dist/full/*.dmg
-            dsx_connect_desktop/dist/full/*.zip
-            dsx_connect_desktop/dist/LICENSE
-            dsx_connect_desktop/dist/NOTICE.md
+            dsx_connect_v1/desktop/dist/full/*.dmg
+            dsx_connect_v1/desktop/dist/full/*.zip
+            dsx_connect_v1/desktop/dist/LICENSE
+            dsx_connect_v1/desktop/dist/NOTICE.md
 
   build-linux:
     runs-on: ubuntu-latest
@@ -211,7 +211,7 @@ jobs:
       - python-regression-tests
     defaults:
       run:
-        working-directory: dsx_connect_desktop
+        working-directory: dsx_connect_v1/desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -245,7 +245,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: dsx_connect_desktop/package-lock.json
+          cache-dependency-path: dsx_connect_v1/desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -264,10 +264,10 @@ jobs:
         with:
           name: dsx-connect-desktop-linux
           path: |
-            dsx_connect_desktop/dist/*.AppImage
-            dsx_connect_desktop/dist/*.deb
-            dsx_connect_desktop/dist/LICENSE
-            dsx_connect_desktop/dist/NOTICE.md
+            dsx_connect_v1/desktop/dist/*.AppImage
+            dsx_connect_v1/desktop/dist/*.deb
+            dsx_connect_v1/desktop/dist/LICENSE
+            dsx_connect_v1/desktop/dist/NOTICE.md
 
   build-windows:
     runs-on: windows-latest
@@ -277,7 +277,7 @@ jobs:
       - python-regression-tests
     defaults:
       run:
-        working-directory: dsx_connect_desktop
+        working-directory: dsx_connect_v1/desktop
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -287,7 +287,7 @@ jobs:
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: dsx_connect_desktop/package-lock.json
+          cache-dependency-path: dsx_connect_v1/desktop/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -299,15 +299,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "..\\LICENSE" -Destination "dist\\LICENSE" -Force
-          Copy-Item "..\\NOTICE.md" -Destination "dist\\NOTICE.md" -Force
+          Copy-Item "..\\..\\LICENSE" -Destination "dist\\LICENSE" -Force
+          Copy-Item "..\\..\\NOTICE.md" -Destination "dist\\NOTICE.md" -Force
 
       - name: Upload Windows workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: dsx-connect-desktop-windows
           path: |
-            dsx_connect_desktop/dist/*.exe
-            dsx_connect_desktop/dist/*.msi
-            dsx_connect_desktop/dist/LICENSE
-            dsx_connect_desktop/dist/NOTICE.md
+            dsx_connect_v1/desktop/dist/*.exe
+            dsx_connect_v1/desktop/dist/*.msi
+            dsx_connect_v1/desktop/dist/LICENSE
+            dsx_connect_v1/desktop/dist/NOTICE.md

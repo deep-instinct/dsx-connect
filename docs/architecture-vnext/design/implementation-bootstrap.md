@@ -1,6 +1,6 @@
 # VNext Implementation Bootstrap
 
-This document defines how implementation should begin without coupling the new architecture to the current `dsx_connect` runtime.
+This document defines how implementation should begin without coupling the new architecture to the current `dsx_connect_v1/ runtime.
 
 ## Decision
 
@@ -8,11 +8,11 @@ Implementation starts in a standalone application package:
 
 - `dsx_connect_ng/`
 
-This is not a preview mode inside `dsx_connect`.
+This is not a preview mode inside `dsx_connect_v1/.
 
 ## Why
 
-The current `dsx_connect` application contains useful preview experiments, but those previews are not the long-term architecture boundary.
+The current `dsx_connect_v1/ application contains useful preview experiments, but those previews are not the long-term architecture boundary.
 
 The next-generation app needs:
 

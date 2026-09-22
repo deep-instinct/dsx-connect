@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi.encoders import jsonable_encoder
-from dsx_connect.models.scan_result import ScanResultModel
+from dsx_connect_v1.models.scan_result import ScanResultModel
 
 
 # -------------------------------------------------------------------

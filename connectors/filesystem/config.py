@@ -7,7 +7,7 @@ from pydantic import Field, HttpUrl
 from connectors.framework.base_config import BaseConnectorConfig
 from shared.models.connector_models import ItemActionEnum
 from shared.dev_env import load_devenv
-# from dsx_connect.utils.file_ops import _tokenize_filter
+# from dsx_connect_v1.utils.file_ops import _tokenize_filter
 
 
 class FilesystemConnectorConfig(BaseConnectorConfig):

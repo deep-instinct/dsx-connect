@@ -68,4 +68,4 @@ auth_dsxconnect:
 - **Rotation:** Populate `auth.enrollment.extraTokens` (server) or temporarily expand the Secret to include both old/new tokens. Roll connectors so they pick up the new token, confirm re-registration, then remove the old token.
 - **Local testing:** Keep auth disabled in Compose quickstarts. Flip both blocks on in a dev cluster when you need end-to-end coverage; connectors will show `Connector authentication: enrollment token provided; DSX-HMAC verification enabled.` on boot.
 
-For deeper reference—including curl samples and template internals—see `dsx_connect/deploy/helm/DSX-AUTHENTICATION.md`.
+For deeper reference—including curl samples and template internals—see `dsx_connect_v1/deploy/helm/DSX-AUTHENTICATION.md`.

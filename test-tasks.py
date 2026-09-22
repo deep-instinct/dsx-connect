@@ -92,7 +92,7 @@ def test_auth(
                 "python",
                 "-m",
                 "uvicorn",
-                "dsx_connect.app.dsx_connect_api:app",
+                "dsx_connect_v1.app.dsx_connect_api:app",
                 "--host",
                 "0.0.0.0",
                 "--port",
@@ -145,7 +145,7 @@ def test_auth(
         if not (hkid and hsec):
             try:
                 import redis as _redis
-                from dsx_connect.messaging.connector_keys import ConnectorKeys
+                from dsx_connect_v1.messaging.connector_keys import ConnectorKeys
                 rcli = _redis.Redis.from_url(redis_url, decode_responses=True)
                 hm = rcli.hgetall(ConnectorKeys.config(connector_uuid))
                 hkid = hkid or hm.get("hmac_key_id")
@@ -241,7 +241,7 @@ def test_auth_connector(
             "LOG_LEVEL": "debug",
         }
         api_proc = subprocess.Popen([
-            "python", "-m", "uvicorn", "dsx_connect.app.dsx_connect_api:app",
+            "python", "-m", "uvicorn", "dsx_connect_v1.app.dsx_connect_api:app",
             "--host", "0.0.0.0", "--port", str(api_port)
         ], cwd=str(PROJECT_ROOT), env=api_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 

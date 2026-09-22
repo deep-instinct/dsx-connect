@@ -183,6 +183,7 @@ nav:
 
       - Connectors:
           - connectors/index.md
+      - Build and Release Workflow: developer/build-and-release-workflow.md
 
   - Case Studies / Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
@@ -233,6 +234,7 @@ nav:
       - Development:
           - Local Build and Tests: dsx-connect-2/deployment/development.md
           - Packaging Releases: dsx-connect-2/packaging-releases.md
+          - Build and Release Workflow: dsx-connect-2/build-and-release-workflow.md
       - Operations:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
@@ -241,7 +243,6 @@ nav:
 
   - Development:
       - Overview: developer/index.md
-      - Build and Release Workflow: developer/build-and-release-workflow.md
       - DSXA SDK: developer/dsxa-desktop-and-sdk.md
       - DSXA SDK:
           - Overview: developer/dsxa-sdk.md

@@ -1,4 +1,6 @@
-# DSXA Desktop (Electron)
+# DSXA Desktop (Electron, Archived)
+
+This implementation is archived and is not built or released by GitHub Actions. The active DSXA Desktop implementation is the Tauri app under `dsxa_desktop/`.
 
 Independent Electron desktop client for DSXA, built on top of `@deep-instinct/dsxa-sdk-js`.
 
@@ -15,7 +17,7 @@ This app is intentionally separate from `dsx_connect_v1/desktop/`. It does not h
 ## Install
 
 ```bash
-cd dsxa_desktop_electron
+cd archives/dsxa_desktop_electron
 npm install
 ```
 

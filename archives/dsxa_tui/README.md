@@ -1,11 +1,13 @@
-# DSXA TUI
+# DSXA TUI (Archived)
+
+This package is archived and is not part of the active DSXA desktop or release workflows.
 
 A lightweight terminal UI for DSXA scanner operations, built on top of `dsxa-sdk-py`.
 
 ## Quick start
 
 ```bash
-cd dsxa_tui
+cd archives/dsxa_tui
 pip install -e .
 dsxa-tui
 ```

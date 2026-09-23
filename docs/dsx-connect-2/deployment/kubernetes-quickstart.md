@@ -27,7 +27,7 @@ By the end, you will:
 * A reachable DSXA scanner, or DSXA registration values for the optional scanner step
 * Traefik available as the cluster ingress controller for the ingress path
 
-For local Kubernetes guidance, see [Lightweight K8S Recommendations](../../reference/installations/kubernetes.md). For k3s / Traefik ingress details, see [Reference > Traefik](../../reference/traefik.md).
+For Kubernetes installation guidance, see [Kubernetes Installation](../../reference/installations/kubernetes.md). For k3s / Traefik ingress details, see [Reference > Traefik](../../reference/traefik.md).
 
 ## 1) Set Variables
 

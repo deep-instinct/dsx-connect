@@ -144,6 +144,7 @@ nav:
           - Google Cloud WIF for GKE: reference/google-cloud-wif-gke.md
           - Salesforce Credentials: reference/salesforce-credentials.md
       - Kubernetes:
+          - Install Kubernetes: reference/installations/kubernetes.md
           - Storage: reference/kubernetes-storage.md
           - Traefik: reference/traefik.md
       - UI Display Icons: reference/display-icons.md

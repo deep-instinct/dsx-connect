@@ -27,7 +27,7 @@ By the end, you will:
 * A reachable DSXA scanner, or DSXA registration values for the optional scanner step
 * Traefik available as the cluster ingress controller for the ingress path
 
-For Kubernetes installation guidance, see [Kubernetes Installation](../../reference/installations/kubernetes.md). For k3s / Traefik ingress details, see [Reference > Traefik](../../reference/traefik.md).
+For Kubernetes installation guidance, see [Kubernetes Installation](../../reference/installations/kubernetes.md). For k3s / Traefik ingress details, see [Reference > Kubernetes > Traefik](../../reference/traefik.md).
 
 ## 1) Set Variables
 
@@ -414,7 +414,7 @@ kubectl get pods -n $NAMESPACE
 
 For k3s and Colima labs, Traefik gives you a stable browser URL without keeping a `kubectl port-forward` process open. This is the recommended quickstart path when Traefik is available.
 
-For information on installing, checking, and configuring Traefik, see [Reference > Traefik](../../reference/traefik.md).
+For information on installing, checking, and configuring Traefik, see [Reference > Kubernetes > Traefik](../../reference/traefik.md).
 
 Verify that the chart created the ingress:
 
@@ -435,7 +435,7 @@ If you changed `CLUSTER_HOST_IP`, use:
 echo "http://${DSX_CONNECT_HOST}/"
 ```
 
-For TLS termination or HTTP-to-HTTPS redirects with Traefik, see [Reference > Traefik](../../reference/traefik.md).
+For TLS termination or HTTP-to-HTTPS redirects with Traefik, see [Reference > Kubernetes > Traefik](../../reference/traefik.md).
 
 ### Option B: Port-Forward Fallback
 

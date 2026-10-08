@@ -1,4 +1,4 @@
-# AWS S3 Connector - Helm Deployment
+# AWS S3 Connector
 
 The AWS S3 connector gives DSX-Connect 2 access to Amazon S3 buckets and S3-compatible object stores.
 It discovers buckets, enumerates and reads objects for scanning, applies remediation actions, and can receive S3 event notifications for continuous protection.
@@ -10,7 +10,7 @@ DSX-Connect scan workers read object content through the connector's proxy endpo
 
 ## Prerequisites
 
-* A running DSX-Connect 2 deployment. See [Deploying DSX-Connect 2 (Helm)](../kubernetes.md).
+* A running DSX-Connect 2 deployment. See [Deploying DSX-Connect Core](../kubernetes.md).
 * An AWS IAM user or role with access to the buckets you want to protect.
 * An access key for that identity. The chart reads `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` from a Kubernetes Secret.
 

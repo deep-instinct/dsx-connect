@@ -1,4 +1,4 @@
-# Deploying DSX-Connect 2 (Helm)
+# Deploying DSX-Connect Core
 
 This Helm chart deploys the DSX-Connect 2 control plane:
 

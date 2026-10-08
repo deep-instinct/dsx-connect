@@ -1,4 +1,4 @@
-# DSX-Connect 2 Connector Deployment
+# Deploying Connectors
 
 Connectors register with DSX-Connect 2 and advertise the repository capabilities they support.
 The control plane uses those registrations to show repository connectors, discover assets, apply protection profiles, and dispatch scans.

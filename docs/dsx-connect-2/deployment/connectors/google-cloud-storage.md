@@ -1,4 +1,4 @@
-# Google Cloud Storage Connector - Helm Deployment
+# Google Cloud Storage Connector
 
 {% include-markdown "shared/connectors/google-cloud-storage/_intro.md" %}
 

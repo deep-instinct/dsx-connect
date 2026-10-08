@@ -125,7 +125,7 @@ nav:
 
   - Deployment:
       - Overview: dsx-connect-2/deployment/index.md
-      - DSX-Connect (Helm): dsx-connect-2/deployment/kubernetes.md
+      - DSX-Connect Core: dsx-connect-2/deployment/kubernetes.md
       - PostgreSQL and RabbitMQ: dsx-connect-2/deployment/postgres-rabbitmq.md
       - Connectors:
           - Overview: dsx-connect-2/deployment/connectors/index.md

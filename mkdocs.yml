@@ -132,6 +132,7 @@ nav:
       - Performance Tuning: operations/performance-tuning-job-comparisons.md
       - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
       - Syslog Forwarding: operations/syslog.md
+      - Failed Scans and Dead Letter Queues: operations/dead-letter-queues.md
 
   - Reference:
       - Filter Syntax: reference/filters.md
@@ -176,7 +177,6 @@ nav:
       - Operations:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
-          - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
           - Quarantine and Remediation: operations/quarantine-and-remediation.md
 
   - Development:

@@ -99,7 +99,13 @@ postgresql:
   auth:
     database: dsx_connect_2
     username: dsx
+    # Used only when existingSecret is empty. Rendered as a plain env var.
     password: dsx
+    # Optional Secret holding the password. When set, the chart reads the password
+    # from it and generates DSX_CONNECT_V2_POSTGRES__URL for the API and workers;
+    # any DSX_CONNECT_V2_POSTGRES__URL in env is ignored. Use a URL-safe password.
+    existingSecret: ""
+    existingSecretPasswordKey: password
   service:
     port: 5432
   # Optional PGDATA override. Leave empty to use the image default
@@ -125,7 +131,13 @@ rabbitmq:
     pullPolicy: IfNotPresent
   auth:
     username: dsx
+    # Used only when existingSecret is empty. Rendered as a plain env var.
     password: dsx
+    # Optional Secret holding the password. When set, the chart reads the password
+    # from it and generates DSX_CONNECT_V2_RABBITMQ__URL for the API and workers;
+    # any DSX_CONNECT_V2_RABBITMQ__URL in env is ignored. Use a URL-safe password.
+    existingSecret: ""
+    existingSecretPasswordKey: password
   service:
     amqpPort: 5672
     managementPort: 15672

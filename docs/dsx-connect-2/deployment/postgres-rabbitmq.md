@@ -102,8 +102,9 @@ Do not change `dataDir` on an existing PVC.
 PostgreSQL would initialize an empty database in the new location and the existing data would no longer be used.
 
 **Credentials.**
-The chart renders `postgresql.auth` as plain environment variables on the PostgreSQL Deployment.
-PostgreSQL only uses them when it initializes an empty data directory; changing them later does not change an existing database user.
+By default the chart renders `postgresql.auth.password` as a plain environment variable on the PostgreSQL Deployment.
+To keep it out of values and manifests, read it from a Secret instead; see [Passwords from Secrets](#passwords-from-secrets).
+PostgreSQL only uses the password when it initializes an empty data directory; changing it later does not change an existing database user.
 
 ### External PostgreSQL
 
@@ -175,7 +176,8 @@ The same user and password must appear in `DSX_CONNECT_V2_RABBITMQ__URL`, and th
 RabbitMQ only creates this user when its data directory is empty.
 With persistence enabled, changing `rabbitmq.auth` later has no effect; change the password with `rabbitmqctl change_password` and update the URL.
 
-The values are rendered as plain environment variables, so change the `dsx` / `dsx` defaults for any shared environment.
+By default the password is rendered as a plain environment variable.
+For any shared environment, read it from a Secret instead; see [Passwords from Secrets](#passwords-from-secrets).
 
 **Persistence.**
 With `persistence.enabled: false`, queues live in an `emptyDir`.
@@ -206,12 +208,60 @@ kubectl create secret generic dsx-connect-runtime-env \
 Use `amqps://` and port 5671 for TLS.
 The user needs configure, write, and read permissions on the vhost so workers can declare exchanges and queues.
 
+## Passwords from Secrets
+
+The embedded PostgreSQL and RabbitMQ can read their passwords from existing Kubernetes Secrets instead of from values.
+
+Create the Secrets with URL-safe passwords:
+
+```bash
+kubectl create secret generic dsx-connect-postgres-auth -n dsx-connect \
+  --from-literal=password="$(openssl rand -hex 24)"
+
+kubectl create secret generic dsx-connect-rabbitmq-auth -n dsx-connect \
+  --from-literal=password="$(openssl rand -hex 24)"
+```
+
+Reference them in values:
+
+```yaml
+postgresql:
+  enabled: true
+  auth:
+    username: dsx
+    database: dsx_connect_2
+    existingSecret: dsx-connect-postgres-auth
+    existingSecretPasswordKey: password   # default
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: dsx
+    existingSecret: dsx-connect-rabbitmq-auth
+    existingSecretPasswordKey: password   # default
+```
+
+When `existingSecret` is set for an embedded service, the chart:
+
+1. Passes the password to the PostgreSQL or RabbitMQ container with `secretKeyRef`.
+2. Generates `DSX_CONNECT_V2_POSTGRES__URL` or `DSX_CONNECT_V2_RABBITMQ__URL` for the API and workers from the username, service name, port, and database. The password is substituted at runtime with Kubernetes `$(VAR)` expansion, so it never appears in values or in the rendered Deployment.
+3. Ignores any `DSX_CONNECT_V2_POSTGRES__URL` or `DSX_CONNECT_V2_RABBITMQ__URL` in `env`, so a stale URL cannot override the generated one.
+
+Keep the following in mind:
+
+* **URL-safe passwords.** The generated URL does not URL-encode the password. Use letters and digits, such as the `openssl rand -hex` output above. If a password must contain `@`, `:`, `/`, `?`, or `#`, leave `existingSecret` empty and supply the full URL from a Secret with `envSecretRefs` instead.
+* **Existing data.** Like the plain-value password, the Secret is only used when the service initializes an empty data directory. To rotate the password on a persistent database or broker, change it in the service (`ALTER USER` or `rabbitmqctl change_password`), then update the Secret and restart the DSX-Connect pods.
+* **Unset means unchanged.** With `existingSecret` empty, the chart behaves as before: plain-value passwords, and URLs taken from `env`.
+
+For external services, `existingSecret` does not apply.
+Put the full URLs in a Secret and reference it with `envSecretRefs`, as shown in [External PostgreSQL](#external-postgresql) and [External RabbitMQ](#external-rabbitmq).
+
 ## Lab vs Production
 
 | Setting | Lab | Production |
 | --- | --- | --- |
 | `postgresql.enabled` / `rabbitmq.enabled` | `true` | `false`; use external services |
 | Persistence | Optional | Managed by the external service |
-| Credentials | Chart defaults | Secrets via `envSecretRefs` |
+| Credentials | Chart defaults, or `auth.existingSecret` | Secrets via `envSecretRefs` |
 | `AUTO_APPLY_SCHEMA` | `true` | `true`, or `false` with migrations applied as a release step |
 | Backends | `postgres` / `rabbitmq` explicitly | `postgres` / `rabbitmq` explicitly |

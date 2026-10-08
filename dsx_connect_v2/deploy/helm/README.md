@@ -102,10 +102,20 @@ the target environment.
 OpenShift's `restricted-v2` SCC runs pods with a random UID. Use
 `values-openshift.example.yaml`, which drops privileged settings and sets
 `postgresql.dataDir` so `initdb` creates its own data subdirectory instead of
-trying to `chmod` the volume mount point:
+trying to `chmod` the volume mount point.
+
+The example also reads the embedded PostgreSQL and RabbitMQ passwords from Secrets.
+Create them first with URL-safe passwords:
 
 ```bash
 oc new-project dsx-connect
+oc create secret generic dsx-connect-postgres-auth \
+  --from-literal=password="$(openssl rand -hex 24)"
+oc create secret generic dsx-connect-rabbitmq-auth \
+  --from-literal=password="$(openssl rand -hex 24)"
+```
+
+```bash
 helm upgrade --install dsx-connect dsx_connect_v2/deploy/helm \
   --namespace dsx-connect \
   -f dsx_connect_v2/deploy/helm/values-openshift.example.yaml

@@ -107,13 +107,19 @@ env:
 Keep the following in mind:
 
 * RabbitMQ only creates the default user when its data directory is empty. With `rabbitmq.persistence.enabled: true`, changing `rabbitmq.auth` later does not change the existing user. Change the password with `rabbitmqctl change_password`, then update the URL.
-* The values are rendered as plain environment variables, so anyone who can read the Deployment can read them. Change the defaults for any shared environment, and use an externally managed RabbitMQ for production.
+* By default the password is a plain environment variable that anyone who can read the Deployment can see. Set `rabbitmq.auth.existingSecret` to read it from a Secret instead; see [Passwords from Secrets](../dsx-connect-2/deployment/postgres-rabbitmq.md#passwords-from-secrets).
 
-To read the current user from a running release:
+To read the current login from a running release:
 
 ```bash
 kubectl get deploy -n "$NAMESPACE" dsx-connect-rabbitmq \
   -o jsonpath='{.spec.template.spec.containers[0].env[?(@.name=="RABBITMQ_DEFAULT_USER")].value}'
+```
+
+If the password comes from a Secret, read it from there:
+
+```bash
+kubectl get secret -n "$NAMESPACE" dsx-connect-rabbitmq-auth -o jsonpath='{.data.password}' | base64 -d
 ```
 
 ## Check DLQ Counts

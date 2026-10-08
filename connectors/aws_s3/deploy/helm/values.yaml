@@ -38,7 +38,7 @@ env:
   # DSX-Connect 2 deployments should set REGISTER_WITH_NG_CONTROL_PLANE=true.
   # DSX-Connect 1.x/core deployments should set REGISTER_WITH_CORE=true.
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "false"
 
   # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
   # DSXCONNECTOR_DSX_CONNECT_V2_URL is used for DSX-Connect 2 registration and heartbeats.
@@ -52,11 +52,11 @@ env:
 
   # DSX-Connect 2 platform metadata.
   # PLATFORM is the connector adapter type; for this connector it should remain "s3".
-  DSXCONNECTOR_NG_PLATFORM: "s3"
+  DSXCONNECTOR_PLATFORM: "s3"
   # PLATFORM_KEY is a stable, operator-chosen key for the AWS account, organization,
   # environment, tenant, or lab boundary represented by this connector.
   # Access is controlled by the pod's AWS credentials/IAM role, not by this value.
-  DSXCONNECTOR_NG_PLATFORM_KEY: ""
+  DSXCONNECTOR_PLATFORM_KEY: ""
 
   DSXCONNECTOR_TLS_CERTFILE: "/app/certs/tls.crt"
   DSXCONNECTOR_TLS_KEYFILE: "/app/certs/tls.key"

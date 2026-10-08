@@ -97,6 +97,28 @@ The runtime example assumes these services already exist in the namespace:
 Override `DSX_CONNECT_V2_POSTGRES__URL` and `DSX_CONNECT_V2_RABBITMQ__URL` for
 the target environment.
 
+## OpenShift
+
+OpenShift's `restricted-v2` SCC runs pods with a random UID. Use
+`values-openshift.example.yaml`, which drops privileged settings and sets
+`postgresql.dataDir` so `initdb` creates its own data subdirectory instead of
+trying to `chmod` the volume mount point:
+
+```bash
+oc new-project dsx-connect
+helm upgrade --install dsx-connect dsx_connect_v2/deploy/helm \
+  --namespace dsx-connect \
+  -f dsx_connect_v2/deploy/helm/values-openshift.example.yaml
+```
+
+Set `DSX_CONNECT_V2_SCANNER__BASE_URL` to the in-cluster DSXA REST service.
+The chart does not create an OpenShift Route; use `oc port-forward` or create
+one with `oc create route edge` once authentication is configured.
+
+`postgresql.dataDir` is also needed with persistence on volumes that contain a
+`lost+found` directory, such as GCP persistent disks. Do not change it on an
+existing PVC, or Postgres initializes an empty database in the new location.
+
 ## Packaging
 
 Package the chart locally:

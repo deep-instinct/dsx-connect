@@ -102,6 +102,13 @@ postgresql:
     password: dsx
   service:
     port: 5432
+  # Optional PGDATA override. Leave empty to use the image default
+  # (/var/lib/postgresql/data, the volume mount itself).
+  # Set to a subdirectory such as /var/lib/postgresql/data/pgdata when:
+  #   - running on OpenShift, where the random UID cannot chmod the mount point
+  #   - the PVC has a lost+found directory (e.g. GCP PD), which initdb rejects
+  # Changing this on an existing PVC hides the data in the old location.
+  dataDir: ""
   persistence:
     # false uses emptyDir and loses data when the pod is deleted.
     # Set true and configure storage for durable lab or production use.

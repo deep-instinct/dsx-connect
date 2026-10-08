@@ -1,4 +1,4 @@
-# Filesystem Connector - Kubernetes Deployment
+# Filesystem Connector
 
 The Filesystem connector scans files from a mounted filesystem.
 

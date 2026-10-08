@@ -123,6 +123,17 @@ nav:
       - Application Identity and Attribution: dsx-connect-2/concepts/application-identity-and-attribution.md
       - Gateway Access Control: dsx-connect-2/strategy/gateway-access-control.md
 
+  - Deployment:
+      - Overview: dsx-connect-2/deployment/index.md
+      - DSX-Connect Core: dsx-connect-2/deployment/kubernetes.md
+      - PostgreSQL and RabbitMQ: dsx-connect-2/deployment/postgres-rabbitmq.md
+      - Connectors:
+          - Overview: dsx-connect-2/deployment/connectors/index.md
+          - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
+          - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
+          - AWS S3: dsx-connect-2/deployment/connectors/aws-s3.md
+      - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
+
   - Case Studies / Walkthroughs:
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
       - GKE Cluster Networking Troubleshooting: case-studies/gke-cluster-networking-troubleshooting.md
@@ -132,6 +143,7 @@ nav:
       - Performance Tuning: operations/performance-tuning-job-comparisons.md
       - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
       - Syslog Forwarding: operations/syslog.md
+      - Failed Scans and Dead Letter Queues: operations/dead-letter-queues.md
 
   - Reference:
       - Filter Syntax: reference/filters.md
@@ -162,21 +174,12 @@ nav:
           - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
           - Result Sink Examples: architecture-vnext/design/result-sink-examples.md
           - ADR 011 Result Sink and External Forwarding: architecture-vnext/adr/adr-011-result-sink-and-external-forwarding.md
-      - Deployment:
-          - Overview: dsx-connect-2/deployment/index.md
-          - DSX-Connect: dsx-connect-2/deployment/kubernetes.md
-          - Connectors:
-              - Overview: dsx-connect-2/deployment/connectors/index.md
-              - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
-              - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
-          - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
       - Development:
           - Local Build and Tests: dsx-connect-2/deployment/development.md
           - Packaging Releases: dsx-connect-2/packaging-releases.md
       - Operations:
           - Benchmarking: dsx-connect-2/operations/benchmarking.md
           - Benchmark Results Deck: dsx-connect-2/operations/dsx-connect-2-benchmark-results-deck.md
-          - Dead Letter Queues: dsx-connect-2/operations/dead-letter-queues.md
           - Quarantine and Remediation: operations/quarantine-and-remediation.md
 
   - Development:

@@ -174,7 +174,7 @@ RabbitMQ provides:
 
 RabbitMQ is not the system of record for jobs. A message can be retried or dead-lettered, but the authoritative job-item and stage state remains in PostgreSQL. When a message is permanently failed, operators should inspect the worker error and durable item state before deciding whether to replay or create replacement work.
 
-For queue inspection and dead-letter handling, see [Dead Letter Queues](../dsx-connect-2/operations/dead-letter-queues.md).
+For queue inspection and dead-letter handling, see [Failed Scans and Dead Letter Queues](../operations/dead-letter-queues.md).
 
 ## Worker scaling
 

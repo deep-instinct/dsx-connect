@@ -21,5 +21,5 @@ The scan flow should preserve enough context to answer:
 
 A scan result is not only a detection record. It can drive an operational disposition such as allow, block, quarantine, or remediation. The control plane should retain the relationship between the finding and the action so operators can explain and repeat the decision.
 
-For the v2 operational view, see [Quarantine and Remediation](../dsx-connect-2/operations/quarantine-and-remediation.md).
+For the v2 operational view, see [Quarantine and Remediation](../operations/quarantine-and-remediation.md).
 

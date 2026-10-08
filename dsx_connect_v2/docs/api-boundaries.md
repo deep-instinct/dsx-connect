@@ -27,7 +27,7 @@ Connector runtime registration currently lives here:
 
 Registration creates or links a durable integration record, then upserts a runtime connector-instance lease. It does not let connectors define protected scopes or product policy.
 
-The shared connector framework can opt into this path with `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`.
+The shared connector framework can opt into this path with `DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true`.
 For NG-only registration, `DSXCONNECTOR_INSTANCE_ID` or deployment metadata should provide the connector instance identity; the legacy `connector_uuid.txt` file is only required for 1G compatibility.
 
 Registration auth:

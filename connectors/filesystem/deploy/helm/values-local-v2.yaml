@@ -8,7 +8,7 @@ env:
 
   # Register with DSX-Connect 2, not the legacy/core registration path.
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
 
   # In-cluster DSX-Connect 2 API service.
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
@@ -18,8 +18,8 @@ env:
   DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
 
   # Connector type and operator-visible boundary label.
-  DSXCONNECTOR_NG_PLATFORM: "filesystem"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
+  DSXCONNECTOR_PLATFORM: "filesystem"
+  DSXCONNECTOR_PLATFORM_KEY: "local-kubernetes"
 
   # The connector scans this in-container path.
   # Keep this aligned with scanVolume.mountPath.

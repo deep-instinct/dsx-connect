@@ -38,8 +38,8 @@ def test_dsx_connect_2_example_renders_scan_volume_and_registration_env() -> Non
     assert 'mountPath: "/app/scan_folder"' in rendered
     assert 'name: DSXCONNECTOR_ASSET' in rendered
     assert 'value: "/app/scan_folder"' in rendered
-    assert 'name: DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE' in rendered
-    assert 'name: DSXCONNECTOR_NG_PLATFORM' in rendered
+    assert 'name: DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE' in rendered
+    assert 'name: DSXCONNECTOR_PLATFORM' in rendered
     assert 'value: "filesystem"' in rendered
     assert 'name: DSXCONNECTOR_DSX_CONNECT_V2_URL' in rendered
     assert 'value: "http://dsx-connect-api:8091"' in rendered
@@ -54,8 +54,8 @@ def test_chart_lab_example_renders_scan_volume_and_registration_env() -> None:
     assert 'mountPath: "/app/scan_folder"' in rendered
     assert 'name: DSXCONNECTOR_ASSET' in rendered
     assert 'value: "/app/scan_folder"' in rendered
-    assert 'name: DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE' in rendered
-    assert 'name: DSXCONNECTOR_NG_PLATFORM' in rendered
+    assert 'name: DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE' in rendered
+    assert 'name: DSXCONNECTOR_PLATFORM' in rendered
     assert 'value: "filesystem"' in rendered
     assert 'name: DSXCONNECTOR_DSX_CONNECT_V2_URL' in rendered
     assert 'value: "http://dsx-connect-api:8091"' in rendered

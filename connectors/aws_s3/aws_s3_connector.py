@@ -46,7 +46,7 @@ config.asset_bucket = bucket
 config.asset_prefix_root = prefix
 
 try:
-    config.ng_capabilities = {**(getattr(config, "ng_capabilities", {}) or {}), "write": True}
+    config.capabilities = {**(getattr(config, "capabilities", {}) or {}), "write": True}
 except Exception:
     pass
 

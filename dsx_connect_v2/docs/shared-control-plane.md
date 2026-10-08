@@ -147,20 +147,20 @@ Initial NG support now includes:
 
 Connector-side opt-in settings use the existing `DSXCONNECTOR_` prefix:
 
-- `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`
+- `DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true`
 - `DSXCONNECTOR_DSX_CONNECT_V2_URL=http://dsx-connect-v2:8091`
 - `DSXCONNECTOR_INSTANCE_ID=...` for a deployment-native connector instance ID
-- `DSXCONNECTOR_NG_INTEGRATION_ID=...` when linking to a pre-created integration
-- `DSXCONNECTOR_NG_PLATFORM=...` when the inferred platform name is not specific enough
-- `DSXCONNECTOR_NG_PLATFORM_KEY=...` for the stable tenant/project/account key
-- `DSXCONNECTOR_NG_CONNECTOR_LABELS='{"namespace":"dsx-connect"}'`
-- `DSXCONNECTOR_NG_LEASE_SECONDS=120`
+- `DSXCONNECTOR_INTEGRATION_ID=...` when linking to a pre-created integration
+- `DSXCONNECTOR_PLATFORM=...` when the inferred platform name is not specific enough
+- `DSXCONNECTOR_PLATFORM_KEY=...` for the stable tenant/project/account key
+- `DSXCONNECTOR_CONNECTOR_LABELS='{"namespace":"dsx-connect"}'`
+- `DSXCONNECTOR_LEASE_SECONDS=120`
 
 During migration a connector may register with 1G, NG, both, or neither:
 
 ```text
 1G only: DSXCONNECTOR_REGISTER_WITH_CORE=true
-NG only: DSXCONNECTOR_REGISTER_WITH_CORE=false + DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true
+DSX-Connect 2 only: DSXCONNECTOR_REGISTER_WITH_CORE=false + DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true
 dual:    both true
 local:   both false
 ```

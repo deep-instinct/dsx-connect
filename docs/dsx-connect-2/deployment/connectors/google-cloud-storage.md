@@ -96,12 +96,12 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
       --namespace "$NAMESPACE" \
       --create-namespace \
       --set-string env.DSXCONNECTOR_REGISTER_WITH_CORE=false \
-      --set-string env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true \
+      --set-string env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_V2_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_INSTANCE_ID=gcs-local-1 \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM=gcs \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=demo-project \
+      --set-string env.DSXCONNECTOR_PLATFORM=gcs \
+      --set-string env.DSXCONNECTOR_PLATFORM_KEY=demo-project \
       --set-string env.DSXCONNECTOR_MONITOR=true \
       --set-string env.GCS_PUBSUB_PROJECT_ID=example-gcs-project \
       --set-string env.GCS_PUBSUB_SUBSCRIPTION=gcs-events-dsx-connector \
@@ -135,12 +135,12 @@ kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -
     ```yaml
     env:
       DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-      DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+      DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_INSTANCE_ID: "gcs-local-1"
-      DSXCONNECTOR_NG_PLATFORM: "gcs"
-      DSXCONNECTOR_NG_PLATFORM_KEY: "demo-project"
+      DSXCONNECTOR_PLATFORM: "gcs"
+      DSXCONNECTOR_PLATFORM_KEY: "demo-project"
       DSXCONNECTOR_MONITOR: "true"
       GCS_PUBSUB_PROJECT_ID: "example-gcs-project"
       GCS_PUBSUB_SUBSCRIPTION: "gcs-events-dsx-connector"
@@ -204,12 +204,12 @@ Edit the values for your project, Google service account, DSX-Connect URL, and C
 ```yaml
 env:
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
-  DSXCONNECTOR_NG_PLATFORM: "gcs"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_PLATFORM: "gcs"
+  DSXCONNECTOR_PLATFORM_KEY: "projects/example-gcs-project"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
 
 serviceAccount:
@@ -271,12 +271,12 @@ The **Protected** coverage filter shows only buckets or prefixes that already ha
 
 The GCS connector has two related but separate concepts:
 
-* `DSXCONNECTOR_NG_PLATFORM` identifies the connector adapter type. For this connector, use `gcs`.
-* `DSXCONNECTOR_NG_PLATFORM_KEY` is a stable, operator-chosen key used by DSX-Connect 2 to group and display the platform boundary represented by this connector.
+* `DSXCONNECTOR_PLATFORM` identifies the connector adapter type. For this connector, use `gcs`.
+* `DSXCONNECTOR_PLATFORM_KEY` is a stable, operator-chosen key used by DSX-Connect 2 to group and display the platform boundary represented by this connector.
 * Protected scopes in DSX-Connect 2 identify the GCS buckets or prefixes to protect.
 * `DSXCONNECTOR_ASSET` is an optional configured bucket or bucket/prefix fallback, primarily useful for single-bucket labs, repo checks, and the `configured_asset` discovery source.
 
-`DSXCONNECTOR_NG_PLATFORM_KEY` may be the real GCP project ID if the connector represents a project.
+`DSXCONNECTOR_PLATFORM_KEY` may be the real GCP project ID if the connector represents a project.
 It could also be a folder, organization, tenant, account label, lab name, or other stable boundary that makes sense operationally.
 It is not automatically read from the service-account JSON and does not grant GCS access.
 Actual bucket access comes from the mounted Google Cloud credential and IAM permissions.
@@ -285,12 +285,12 @@ Actual bucket access comes from the mounted Google Cloud credential and IAM perm
 
 | Key | Description |
 | --- | --- |
-| `env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
+| `env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
 | `env.DSXCONNECTOR_REGISTER_WITH_CORE` | Usually `"false"` for DSX-Connect 2-only deployments. |
 | `env.DSXCONNECTOR_DSX_CONNECT_V2_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
 | `env.DSXCONNECTOR_INSTANCE_ID` | Stable identity for this running connector instance. Changing it creates a separate connector record. |
-| `env.DSXCONNECTOR_NG_PLATFORM` | Connector adapter type. Use `"gcs"`. |
-| `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Stable operator-chosen key for the platform boundary shown and routed by DSX-Connect 2. It may match a GCP project, folder, org, tenant, or lab/account label, but it is not the credential source. |
+| `env.DSXCONNECTOR_PLATFORM` | Connector adapter type. Use `"gcs"`. |
+| `env.DSXCONNECTOR_PLATFORM_KEY` | Stable operator-chosen key for the platform boundary shown and routed by DSX-Connect 2. It may match a GCP project, folder, org, tenant, or lab/account label, but it is not the credential source. |
 | `env.DSXCONNECTOR_ASSET` | Optional configured bucket or `bucket/prefix` fallback. In DSX-Connect 2, protected scopes usually provide the actual scan target. |
 | `env.DSXCONNECTOR_FILTER` | Optional rsync-style include/exclude list relative to `DSXCONNECTOR_ASSET` when the configured-asset path is used. |
 | `env.DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE` | Optional Cloud Asset Inventory scope for broad bucket discovery, such as `projects/PROJECT_ID`, `folders/FOLDER_ID`, or `organizations/ORG_ID`. |

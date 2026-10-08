@@ -339,12 +339,12 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
       --set scanVolume.existingClaim=dsxconnect-scan-pvc \
       --set scanVolume.mountPath=/app/scan_folder \
       --set-string env.DSXCONNECTOR_REGISTER_WITH_CORE=false \
-      --set-string env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true \
+      --set-string env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_V2_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_INSTANCE_ID=filesystem-local-1 \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM=filesystem \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=local-kubernetes \
+      --set-string env.DSXCONNECTOR_PLATFORM=filesystem \
+      --set-string env.DSXCONNECTOR_PLATFORM_KEY=local-kubernetes \
       --set-string env.DSXCONNECTOR_ASSET=/app/scan_folder \
       --set-string env.DSXCONNECTOR_ITEM_ACTION=nothing
     ```
@@ -377,12 +377,12 @@ All examples below use the same claim name, `dsxconnect-scan-pvc`, referenced du
     ```yaml
     env:
       DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-      DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+      DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
-      DSXCONNECTOR_NG_PLATFORM: "filesystem"
-      DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
+      DSXCONNECTOR_PLATFORM: "filesystem"
+      DSXCONNECTOR_PLATFORM_KEY: "local-kubernetes"
       DSXCONNECTOR_ASSET: "/app/scan_folder"
       DSXCONNECTOR_ITEM_ACTION: "nothing"
       DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
@@ -503,12 +503,12 @@ Required pattern:
 
 | Key | Description |
 | --- | --- |
-| `env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
+| `env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
 | `env.DSXCONNECTOR_REGISTER_WITH_CORE` | Usually `"false"` for DSX-Connect 2-only deployments. |
 | `env.DSXCONNECTOR_DSX_CONNECT_V2_URL` | DSX-Connect 2 API URL. In-cluster default is `http://dsx-connect-api:8091`. |
 | `env.DSXCONNECTOR_INSTANCE_ID` | Stable connector instance ID. |
-| `env.DSXCONNECTOR_NG_PLATFORM` | Use `"filesystem"`. |
-| `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Host, cluster, tenant, or other boundary represented by this connector. |
+| `env.DSXCONNECTOR_PLATFORM` | Use `"filesystem"`. |
+| `env.DSXCONNECTOR_PLATFORM_KEY` | Host, cluster, tenant, or other boundary represented by this connector. |
 
 ---
 

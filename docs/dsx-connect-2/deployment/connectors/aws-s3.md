@@ -117,11 +117,11 @@ Long-running deployments need a credential that does not expire, or a process th
       --version "$S3_VERSION" \
       --namespace "$NAMESPACE" \
       --set-string env.DSXCONNECTOR_REGISTER_WITH_CORE=false \
-      --set-string env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true \
+      --set-string env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true \
       --set-string env.DSXCONNECTOR_DSX_CONNECT_URL=http://dsx-connect-api:8091 \
       --set-string env.DSXCONNECTOR_INSTANCE_ID=s3-local-1 \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM=s3 \
-      --set-string env.DSXCONNECTOR_NG_PLATFORM_KEY=demo-aws-account \
+      --set-string env.DSXCONNECTOR_PLATFORM=s3 \
+      --set-string env.DSXCONNECTOR_PLATFORM_KEY=demo-aws-account \
       --set secrets.name=aws-credentials
     ```
 
@@ -136,11 +136,11 @@ Long-running deployments need a credential that does not expire, or a process th
     env:
       LOG_LEVEL: "info"
       DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-      DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+      DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
       DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
       DSXCONNECTOR_INSTANCE_ID: "s3-prod-1"
-      DSXCONNECTOR_NG_PLATFORM: "s3"
-      DSXCONNECTOR_NG_PLATFORM_KEY: "aws-123456789012"
+      DSXCONNECTOR_PLATFORM: "s3"
+      DSXCONNECTOR_PLATFORM_KEY: "aws-123456789012"
 
     secrets:
       name: aws-credentials
@@ -155,8 +155,7 @@ Long-running deployments need a credential that does not expire, or a process th
     ```
 
 `DSXCONNECTOR_DSX_CONNECT_URL` is the DSX-Connect API URL used for registration and heartbeats.
-Chart 0.5.60 and earlier can also take a separate `DSXCONNECTOR_DSX_CONNECT_NG_URL`, and later versions `DSXCONNECTOR_DSX_CONNECT_V2_URL`.
-All fall back to `DSXCONNECTOR_DSX_CONNECT_URL` when the separate URL is unset, so setting only that variable works across versions.
+A separate DSX-Connect 2 URL can be set with `DSXCONNECTOR_DSX_CONNECT_V2_URL`; when it is unset, the connector uses `DSXCONNECTOR_DSX_CONNECT_URL`, so setting only that variable works across versions.
 
 `DSXCONNECTOR_ASSET` and `DSXCONNECTOR_FILTER` are intentionally omitted.
 Protected scopes in the control plane decide what gets scanned.
@@ -228,12 +227,12 @@ Control which buckets are monitored by choosing where you add event notification
 
 ## Platform Identity and Repository Scope
 
-* `DSXCONNECTOR_NG_PLATFORM` identifies the connector type. For this connector it is always `s3`.
-* `DSXCONNECTOR_NG_PLATFORM_KEY` is a stable, operator-chosen key for the boundary this connector represents, such as an AWS account ID, organization, environment, or lab name. It groups the connector in DSX-Connect 2. It does not grant access; access comes from the AWS credentials and IAM.
+* `DSXCONNECTOR_PLATFORM` identifies the connector type. For this connector it is always `s3`.
+* `DSXCONNECTOR_PLATFORM_KEY` is a stable, operator-chosen key for the boundary this connector represents, such as an AWS account ID, organization, environment, or lab name. It groups the connector in DSX-Connect 2. It does not grant access; access comes from the AWS credentials and IAM.
 * Protected scopes in DSX-Connect 2 select the buckets or prefixes to protect.
 * `DSXCONNECTOR_ASSET` is an optional `bucket` or `bucket/prefix`. It restricts webhook events to that location and provides the `configured_asset` discovery source, which is useful for single-bucket labs or when `s3:ListAllMyBuckets` is not granted.
 
-Connectors with the same `DSXCONNECTOR_NG_PLATFORM` and `DSXCONNECTOR_NG_PLATFORM_KEY` share one integration in DSX-Connect 2.
+Connectors with the same `DSXCONNECTOR_PLATFORM` and `DSXCONNECTOR_PLATFORM_KEY` share one integration in DSX-Connect 2.
 Give connectors for different AWS accounts different platform keys.
 
 ---
@@ -257,12 +256,12 @@ The credentials Secret holds the service's access key and secret key.
 
 | Key | Description |
 | --- | --- |
-| `env.DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
+| `env.DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE` | Must be `"true"` for DSX-Connect 2 registration. |
 | `env.DSXCONNECTOR_REGISTER_WITH_CORE` | `"false"` for DSX-Connect 2-only deployments. |
 | `env.DSXCONNECTOR_DSX_CONNECT_URL` | DSX-Connect API URL. In-cluster default is `http://dsx-connect-api:8091`. |
 | `env.DSXCONNECTOR_INSTANCE_ID` | Stable identity for this connector instance. Changing it creates a separate connector record. |
-| `env.DSXCONNECTOR_NG_PLATFORM` | Connector type. Use `"s3"`. |
-| `env.DSXCONNECTOR_NG_PLATFORM_KEY` | Stable key for the AWS account or boundary this connector represents. |
+| `env.DSXCONNECTOR_PLATFORM` | Connector type. Use `"s3"`. |
+| `env.DSXCONNECTOR_PLATFORM_KEY` | Stable key for the AWS account or boundary this connector represents. |
 | `env.DSXCONNECTOR_ASSET` | Optional `bucket` or `bucket/prefix`. Restricts webhook events and provides the configured-asset discovery source. |
 | `env.DSXCONNECTOR_FILTER` | Optional rsync-style include/exclude filter relative to `DSXCONNECTOR_ASSET`. |
 | `env.DSXCONNECTOR_S3_ENDPOINT_URL` | Optional endpoint for S3-compatible storage. |
@@ -286,7 +285,7 @@ kubectl get pods -n dsx-connect
 kubectl logs -n dsx-connect deploy/s3-aws-s3-connector-chart
 ```
 
-A healthy start logs `Registered connector with dsx-connect-ng control plane` followed by `Connector is READY`.
+A healthy start logs a `Registered connector with ... control plane` message followed by `Connector is READY`.
 
 In the Operator Console, the connector appears under **Assets > Connectors**.
 Under **Assets > Protected**, set the coverage filter to **All** or **Unprotected** to see discovered buckets, then protect the buckets you want scanned.

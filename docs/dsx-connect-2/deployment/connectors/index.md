@@ -24,6 +24,7 @@ http://dsx-connect-api:8091
 
 * [Google Cloud Storage](google-cloud-storage.md)
 * [Filesystem](filesystem.md)
+* [AWS S3](aws-s3.md)
 
 ## DSX-Connect 2 Registration Settings
 

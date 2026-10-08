@@ -131,6 +131,7 @@ nav:
           - Overview: dsx-connect-2/deployment/connectors/index.md
           - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
           - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
+          - AWS S3: dsx-connect-2/deployment/connectors/aws-s3.md
       - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
 
   - Case Studies / Walkthroughs:

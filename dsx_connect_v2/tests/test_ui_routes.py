@@ -24,6 +24,20 @@ def test_scan_source_labels_gateway_submissions_as_application_submission() -> N
     assert _scan_source_label("file_gateway_api") == "Application submission"
 
 
+def test_dashboard_history_uses_persisted_scans_and_validates_period() -> None:
+    client = TestClient(create_app())
+    assert client.post("/api/v1/ui/demo/seed").status_code == 200
+    for days, buckets in [(1, 24), (7, 7), (30, 30)]:
+        response = client.get(f"/api/v1/ui/dashboard/history?days={days}")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["series"]) == buckets
+        assert data["total_scans"] == 3
+        assert sum(b["benign"] for b in data["series"]) == 1
+        assert sum(b["malicious"] for b in data["series"]) == 1
+    assert client.get("/api/v1/ui/dashboard/history?days=365").status_code == 422
+
+
 def test_operator_console_page_renders() -> None:
     client = TestClient(create_app())
 

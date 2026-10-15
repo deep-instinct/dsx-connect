@@ -41,6 +41,14 @@ from dsx_connect_v2.version import DSX_CONNECT_VERSION
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 
+
+@router.get("/dashboard/history")
+def dashboard_scan_history(days: int = Query(default=7), job_service: JobService = Depends(get_job_service)) -> dict:
+    if days not in {1, 7, 30}:
+        raise HTTPException(status_code=422, detail="days must be 1, 7, or 30")
+    from dsx_connect_v2.jobs.dashboard import dashboard_history
+    return dashboard_history(job_service.repo, days)
+
 _OPERATOR_CONSOLE_PATH = Path(__file__).resolve().parents[2] / "ui" / "operator_console.html"
 
 

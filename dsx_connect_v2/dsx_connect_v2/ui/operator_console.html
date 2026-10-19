@@ -1634,6 +1634,10 @@
     .dashboard-list-row:last-child { border-bottom: 0; }
     .dashboard-wide { grid-column: 1 / -1; }
     .dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .dashboard-chart { position: relative; margin: 8px 0; }
+    .dashboard-chart-tooltip { position: absolute; top: 0; z-index: 2; pointer-events: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 4px 16px #0003; font-size: 12px; white-space: nowrap; }
+    .dashboard-chart-tooltip > div { display: flex; justify-content: space-between; gap: 24px; margin-top: 5px; }
+    #dashboard-error:empty { display: none; }
     #dashboard-error { color: var(--warn); }
     @media(max-width: 1000px) { .dashboard-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media(max-width: 650px) { .dashboard-grid { grid-template-columns: 1fr; } .dashboard-card { padding: 15px; } }
@@ -1720,12 +1724,15 @@
         <main class="main">
 
         <section class="view hidden" id="view-dashboard" aria-label="Operations dashboard">
-          <div class="view-heading"><div><h2>Dashboard</h2><p class="dashboard-muted">Repository protection and file processing at a glance.</p></div></div>
-          <div class="dashboard-actions"><span class="pill" id="dashboard-scanner">Scanner checking</span><span class="dashboard-muted" id="dashboard-updated" aria-live="polite">Loading operational data…</span><button type="button" id="dashboard-refresh">Refresh dashboard</button></div>
+          <div class="view-heading"><h2>Dashboard</h2><div class="dashboard-actions"><label for="dashboard-days">Period</label><select id="dashboard-days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select><label for="dashboard-refresh-interval">Refresh every</label><select id="dashboard-refresh-interval"><option value="1">1 second</option><option value="5">5 seconds</option><option value="15" selected>15 seconds</option><option value="0">Pause</option></select></div></div>
           <p id="dashboard-error" role="status"></p>
           <div class="dashboard-kpis" id="dashboard-kpis"></div>
           <div class="dashboard-grid">
-            <div class="dashboard-card dashboard-wide"><div class="dashboard-actions"><h3 style="margin-right:auto">Total scans over time</h3><label for="dashboard-days">Period</label><select id="dashboard-days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial</p><div id="dashboard-history" aria-live="polite">Loading scan history…</div></div>
+            <div class="dashboard-card dashboard-wide"><div class="dashboard-actions"><h3 style="margin-right:auto">Total scans over time</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial</p><div id="dashboard-history" aria-live="polite">Loading scan history…</div></div>
+            <div class="dashboard-card"><h3>Scan throughput</h3><p class="dashboard-muted">Completed scans per minute · bucket average · current bucket uses elapsed time</p><div id="dashboard-throughput"></div></div>
+            <div class="dashboard-card"><h3>Queue backlog</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog"></div></div>
+            <div class="dashboard-card"><h3>Processing latency</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency"></div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Protection coverage</h3><button type="button" data-dashboard-tab="assets">Review scopes</button></div><p class="dashboard-muted">Configured scopes on enabled integrations · configuration coverage, not file inventory</p><div id="dashboard-coverage"></div></div>
             <div class="dashboard-card"><h3>Quarantined files by reason</h3><p class="dashboard-muted">Successful quarantine actions in the selected period. File-type policy takes precedence when both reasons apply.</p><div id="dashboard-quarantine"></div></div>
             <div class="dashboard-card"><h3>Scanned file types</h3><p class="dashboard-muted">Completed scans in the selected period · top 8 types</p><div id="dashboard-types"></div></div>
             <div class="dashboard-card"><h3>Work in progress</h3><p class="dashboard-muted">Item states across the latest 50 jobs. These are durable job counts, not RabbitMQ queue depths.</p><div id="dashboard-work"></div></div>
@@ -2568,25 +2575,78 @@
     let dashboardLoading = false;
     let dashboardHistoryRequest = 0;
 
+    function renderDashboardMetric(id, data, metrics, summary, format) {
+      const target = document.getElementById(id);
+      const series = data.series;
+      const values = series.flatMap((bucket) => metrics.map(([key]) => bucket[key])).filter((value) => value !== null && value !== undefined);
+      if (!values.length) { target.innerHTML = '<p class="dashboard-muted">No completed items with timing data in this period.</p>'; return; }
+      const max = Math.max(1, ...values);
+      const x = (i) => 48 + i * 350 / Math.max(1, series.length - 1);
+      const y = (n) => 95 - n / max * 75;
+      const lines = metrics.map(([key, label, color]) => {
+        const segments = []; let points = [];
+        series.forEach((bucket, i) => {
+          if (bucket[key] == null) { if (points.length) segments.push(points); points = []; }
+          else points.push([x(i), y(bucket[key])]);
+        });
+        if (points.length) segments.push(points);
+        return segments.map((segment) => segment.length === 1
+          ? `<circle cx="${segment[0][0]}" cy="${segment[0][1]}" r="3" fill="var(--${color})"/>`
+          : `<polyline points="${segment.map((point) => point.join(",")).join(" ")}" fill="none" stroke="var(--${color})" stroke-width="2"/>`).join("");
+      }).join("");
+      const labels = [...new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])].filter((i) => series[i]).map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit",minute:"2-digit",timeZone:"UTC"} : {month:"short",day:"numeric",timeZone:"UTC"}))}</text>`).join("");
+      target.innerHTML = `<strong style="font-size:24px">${escapeHtml(summary)}</strong><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(metrics.map(([,label]) => label).join(", "))} over time in UTC" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${escapeHtml(format(max))}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}</svg></div><div class="dashboard-actions">${metrics.map(([,label,color]) => `<span style="color:var(--${color})">● ${escapeHtml(label)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact values</summary><div class="table-wrap"><table><thead><tr><th>UTC</th>${metrics.map(([,label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${series.map((bucket) => `<tr><td>${escapeHtml(bucket.at)}</td>${metrics.map(([key]) => `<td>${bucket[key] == null ? "—" : escapeHtml(format(bucket[key]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`;
+      const svg = target.querySelector("svg");
+      const tooltip = target.querySelector("[role=tooltip]");
+      svg.addEventListener("pointermove", (event) => {
+        const bounds = svg.getBoundingClientRect();
+        const index = Math.max(0, Math.min(series.length - 1, Math.round(((event.clientX - bounds.left) / bounds.width * 450 - 48) / 350 * (series.length - 1))));
+        const bucket = series[index];
+        tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${metrics.map(([key,label,color]) => `<div><span style="color:var(--${color})">● ${escapeHtml(label)}</span><strong>${bucket[key] == null ? "—" : escapeHtml(format(bucket[key]))}</strong></div>`).join("")}${id === "dashboard-latency" ? `<div>${bucket.samples} completed items</div>` : ""}`;
+        tooltip.hidden = false;
+        tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
+      });
+      svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+    }
+
     async function loadDashboardHistory() {
       const request = ++dashboardHistoryRequest;
       const days = document.getElementById("dashboard-days").value;
       try {
         const data = await fetchJson(`/api/v1/ui/dashboard/history?days=${days}`);
         if (request !== dashboardHistoryRequest) return;
+        const rate = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
+        const seconds = (value) => `${Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})} s`;
+        renderDashboardMetric("dashboard-throughput", data, [["throughput_per_minute", "Scans / min", "accent"]], `${rate(data.throughput_per_minute)} scans/min average`, rate);
+        renderDashboardMetric("dashboard-backlog", data, [["backlog", "Unfinished items", "warn"]], `${data.backlog.toLocaleString()} unfinished now`, (value) => Math.round(value).toLocaleString());
+        renderDashboardMetric("dashboard-latency", data, [["median_seconds", "Median", "accent"], ["p95_seconds", "p95", "warn"]], data.latency.samples ? `${seconds(data.latency.median_seconds)} median · ${seconds(data.latency.p95_seconds)} p95` : "No timing data", seconds);
         const series = data.series;
         const max = Math.max(1, ...series.map((bucket) => bucket.total));
         const colors = {total:"accent", benign:"good", malicious:"danger", suspicious:"warn"};
         const x = (i) => 48 + i * 800 / Math.max(1, series.length - 1);
-        const y = (n) => 175 - n / max * 145;
+        const y = (n) => 95 - n / max * 75;
         const lines = Object.entries(colors).map(([key, color]) => `<polyline fill="none" stroke="var(--${color})" stroke-width="${key === "total" ? 3 : 2}" points="${series.map((bucket, i) => `${x(i)},${y(bucket[key])}`).join(" ")}"/>`).join("");
-        const labels = [0, Math.floor((series.length - 1) / 2), series.length - 1].map((i) => `<text x="${x(i)}" y="207" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit", minute:"2-digit", timeZone:"UTC"} : {month:"short", day:"numeric", timeZone:"UTC"}))}</text>`).join("");
-        document.getElementById("dashboard-history").innerHTML = `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><svg viewBox="0 0 900 220" role="img" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;max-height:260px"><path d="M48 30V175H848" fill="none" stroke="var(--line)"/><text x="38" y="35" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="179" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}</svg><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td>${escapeHtml(b.at)}</td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details>`;
+        const labels = [0, Math.floor((series.length - 1) / 2), series.length - 1].map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit", minute:"2-digit", timeZone:"UTC"} : {month:"short", day:"numeric", timeZone:"UTC"}))}</text>`).join("");
+        document.getElementById("dashboard-history").innerHTML = `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 900 140" preserveAspectRatio="none" role="img" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H848" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td>${escapeHtml(b.at)}</td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details>`;
+        const chart = document.querySelector("#dashboard-history .dashboard-chart");
+        const svg = chart.querySelector("svg");
+        const tooltip = chart.querySelector("[role=tooltip]");
+        svg.addEventListener("pointermove", (event) => {
+          if (!series.length) return;
+          const bounds = svg.getBoundingClientRect();
+          const chartX = (event.clientX - bounds.left) / bounds.width * 900;
+          const index = Math.max(0, Math.min(series.length - 1, Math.round((chartX - 48) / 800 * (series.length - 1))));
+          const bucket = series[index];
+          tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${Object.entries(colors).map(([key, color]) => `<div><span style="color:var(--${color})">● ${key[0].toUpperCase() + key.slice(1)}</span><strong>${Number(bucket[key]).toLocaleString()}</strong></div>`).join("")}`;
+          tooltip.hidden = false;
+          tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
+        });
+        svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
         document.getElementById("dashboard-quarantine").innerHTML = dashboardBars([["Malware", data.quarantined.malicious, "danger"], ["File-type policy", data.quarantined.file_type_policy, "warn"], ["Suspicious", data.quarantined.suspicious, "warn"], ["Other / unknown", data.quarantined.other, "muted"]]) + `<p class="dashboard-muted">${data.file_type_policy_matches.toLocaleString()} file-type policy matches, including outcomes other than quarantine. Pending and failed quarantine actions are excluded above.</p>`;
         document.getElementById("dashboard-types").innerHTML = data.file_types.length ? dashboardBars(data.file_types.slice(0,8).map((row) => [row.type, row.count])) : '<p class="dashboard-muted">No completed scans in this period.</p>';
       } catch (error) {
         if (request !== dashboardHistoryRequest) return;
-        for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types"]) document.getElementById(id).textContent = `Historical data unavailable: ${error.message}`;
+        for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types", "dashboard-throughput", "dashboard-backlog", "dashboard-latency"]) document.getElementById(id).textContent = `Historical data unavailable: ${error.message}`;
       }
     }
 
@@ -2608,6 +2668,11 @@
       const active = jobs.filter((row) => !terminal.has(row.job.state)).length;
       const healthy = (connectors || []).filter((row) => row.health?.status === "healthy").length;
       const scopes = overview?.scopes || [];
+      const enabledIntegrations = new Set((overview?.integrations || []).filter((row) => row.integration.enabled).map((row) => row.integration.integration_id));
+      const covered = scopes.filter((scope) => scope.enabled && enabledIntegrations.has(scope.integration_id));
+      const monitor = covered.filter((scope) => scope.mode === "monitor").length;
+      const fullScan = covered.filter((scope) => scope.mode === "full_scan").length;
+      document.getElementById("dashboard-coverage").innerHTML = overview ? `<strong style="font-size:24px">${covered.length} / ${scopes.length} scopes enabled</strong>${dashboardBars([["Monitoring", monitor, "good"], ["Full scan", fullScan, "accent"], ["Disabled", scopes.length - covered.length, "warn"]])}<p class="dashboard-muted">${scopes.length ? `${Math.round(covered.length / scopes.length * 100)}% enabled. Full-scan scopes require scans to be started; monitoring configuration does not confirm runtime health.` : "No protected scopes configured. Add a scope in Assets to get started."}</p>` : '<p class="dashboard-muted">Scope data unavailable.</p>';
       const kpis = [
         ["Healthy connectors", connectors ? `${healthy} / ${connectors.length}` : "—", "Registered integrations", "assets"],
         ["Enabled protected scopes", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Configured protection, not coverage %", "assets"],
@@ -2628,9 +2693,6 @@
         ["Not scanned", findings.not_scanned, "muted"], ["Unknown", findings.unknown, "muted"],
       ]) + `<p class="dashboard-muted">${results.length} recent jobs returned. Failed processing is shown separately from verdicts.</p>` : '<p class="dashboard-muted">Scan findings unavailable.</p>';
       const scanner = dashboardData.scanner;
-      const scannerNode = document.getElementById("dashboard-scanner");
-      scannerNode.textContent = scanner?.label || "Scanner status unavailable";
-      scannerNode.className = pillClass(scanner?.state || "unknown");
       const attention = [];
       if (!scanner) attention.push(["Scanner health could not be checked", "scan-results"]);
       if (scanner && !["active", "reachable", "healthy", "ready"].includes(scanner.state)) attention.push([scanner.label || "Check scanner configuration", "scan-results"]);
@@ -2653,8 +2715,6 @@
     async function loadDashboard() {
       if (dashboardLoading) return;
       dashboardLoading = true;
-      const button = document.getElementById("dashboard-refresh");
-      button.disabled = true;
       try {
         await loadDashboardHistory();
         const sources = [["overview", endpoints.overview], ["connectors", endpoints.connectors], ["results", `${endpoints.scanResults}?limit=50&item_limit=1&stats_item_limit=100`], ["scanner", endpoints.dsxaStatus]];
@@ -2667,18 +2727,24 @@
         });
         renderDashboard();
         document.getElementById("dashboard-error").textContent = failures.length ? `Some data could not be loaded: ${failures.join(", ")}. Refresh to retry.` : "";
-        document.getElementById("dashboard-updated").textContent = `Last refresh ${new Date().toLocaleTimeString()} · refreshes every 15 seconds while visible · latest 50 jobs`;
-      } finally { dashboardLoading = false; button.disabled = false; }
+      } finally { dashboardLoading = false; }
     }
 
     document.getElementById("view-dashboard").addEventListener("click", (event) => {
       const button = event.target.closest("[data-dashboard-tab]");
       if (button) selectTab(button.dataset.dashboardTab);
     });
-    document.getElementById("dashboard-refresh").addEventListener("click", () => loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; }));
-    setInterval(() => {
-      if (state.activeTab === "dashboard" && !document.hidden) loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
-    }, 15000);
+    let dashboardRefreshTimer;
+    function scheduleDashboardRefresh() {
+      clearInterval(dashboardRefreshTimer);
+      const seconds = Number(document.getElementById("dashboard-refresh-interval").value);
+      if (!seconds) return;
+      dashboardRefreshTimer = setInterval(() => {
+        if (state.activeTab === "dashboard" && !document.hidden) loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
+      }, seconds * 1000);
+    }
+    document.getElementById("dashboard-refresh-interval").addEventListener("change", scheduleDashboardRefresh);
+    scheduleDashboardRefresh();
 
     function selectTab(tabName) {
       state.activeTab = tabName;
@@ -3933,7 +3999,7 @@
       const total = progress.total_items || 0;
       const terminal = isTerminalJobState(state);
       const totalText = total ? `${terminal ? "" : "~"}${total} queued` : `${terminal ? "0 queued" : "~? queued"}`;
-      const percent = total ? ` (${progress.percent_complete ?? 0}%)` : "";
+      const percent = total ? ` (${Math.round(progress.percent_complete ?? 0)}%)` : "";
       return `${done}/${totalText}${percent}`;
     }
 

@@ -33,6 +33,10 @@ def test_dashboard_history_uses_persisted_scans_and_validates_period() -> None:
         data = response.json()
         assert len(data["series"]) == buckets
         assert data["total_scans"] == 3
+        assert data["throughput_per_minute"] >= 0
+        assert data["backlog"] >= 0
+        assert "p95_seconds" in data["latency"]
+        assert all("backlog" in bucket and "median_seconds" in bucket for bucket in data["series"])
         assert sum(b["benign"] for b in data["series"]) == 1
         assert sum(b["malicious"] for b in data["series"]) == 1
     assert client.get("/api/v1/ui/dashboard/history?days=365").status_code == 422

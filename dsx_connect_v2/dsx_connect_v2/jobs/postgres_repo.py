@@ -49,8 +49,8 @@ class PostgresJobRepository(JobRepository):
         with self._connect() as conn, conn.cursor(name="dashboard_history") as cur:
             cur.execute("""
                 SELECT scan_stage_json AS scan_stage, policy_stage_json AS policy_stage,
-                       remediation_stage_json AS remediation_stage
-                FROM cp_job_items WHERE updated_at >= %s
+                       remediation_stage_json AS remediation_stage, created_at, completed_at, state
+                FROM cp_job_items WHERE updated_at >= %s OR completed_at IS NULL
             """, (since,))
             yield from cur
 

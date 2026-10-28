@@ -118,10 +118,11 @@ nav:
       - Overview: core-concepts/index.md
       - DSX-Connect 2 Architecture: core-concepts/architecture.md
       - Connector and Asset Model: core-concepts/connectors-and-assets.md
-      - Repository Monitoring and Scanning: core-concepts/repository-protection.md
-      - Governed File Movement: core-concepts/governed-file-movement.md
       - Application Identity and Attribution: dsx-connect-2/concepts/application-identity-and-attribution.md
-      - Gateway Access Control: dsx-connect-2/strategy/gateway-access-control.md
+      - DSX-Connect File Workflows:
+          - Repository Monitoring: core-concepts/repository-monitoring.md
+          - Full Repository Scan: core-concepts/repository-full-scan.md
+          - Governed File Movement: core-concepts/governed-file-movement.md
 
   - Deployment:
       - Overview: dsx-connect-2/deployment/index.md
@@ -132,9 +133,11 @@ nav:
           - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
           - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
           - AWS S3: dsx-connect-2/deployment/connectors/aws-s3.md
+          - Atlassian Jira: dsx-connect-2/deployment/connectors/jira.md
       - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
 
   - Case Studies / Walkthroughs:
+      - Developer File API and Managed File Transfer: case-studies/developer-file-api-vs-mft.md
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
       - GKE Cluster Networking Troubleshooting: case-studies/gke-cluster-networking-troubleshooting.md
       - BTP Inline Scan Flow: case-studies/btp-inline-scan-diagram.md
@@ -163,14 +166,7 @@ nav:
 
   - DSX-Connect 2:
       - Overview: dsx-connect-2/index.md
-      - Concepts:
-          - Application Identity And Attribution: dsx-connect-2/concepts/application-identity-and-attribution.md
-      - Strategy:
-          - Normalized Enterprise File Gateway: dsx-connect-2/strategy/normalized-enterprise-file-gateway.md
-          - Developer File API Versus MFT: dsx-connect-2/strategy/developer-file-api-vs-mft.md
-          - Gateway Access Control Model: dsx-connect-2/strategy/gateway-access-control.md
       - Architecture:
-          - Tenant Attribution, Metering, And Chargeback: dsx-connect-2/architecture/tenant-attribution-chargeback.md
           - Result Sink Model: architecture-vnext/design/models/result-sink-model.md
           - Result Sink Examples: architecture-vnext/design/result-sink-examples.md
           - ADR 011 Result Sink and External Forwarding: architecture-vnext/adr/adr-011-result-sink-and-external-forwarding.md

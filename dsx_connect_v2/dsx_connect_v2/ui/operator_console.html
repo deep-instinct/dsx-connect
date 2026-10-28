@@ -1620,6 +1620,7 @@
         padding: var(--table-cell-padding-compact);
       }
     }
+    #view-dashboard { overflow-y: auto; overflow-x: hidden; }
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
     .dashboard-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; min-width: 0; }
     .dashboard-card h3 { margin: 0 0 8px; font-size: 16px; }
@@ -1634,6 +1635,12 @@
     .dashboard-list-row:last-child { border-bottom: 0; }
     .dashboard-wide { grid-column: 1 / -1; }
     .dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .dashboard-heading h2 { margin: 0; }
+    .dashboard-controls { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+    .dashboard-controls select { width: auto; min-width: 0; min-height: var(--control-height-sm); padding: 4px 8px; font-size: var(--font-size-sm); }
+    .dashboard-refresh-control { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+    .dashboard-refresh-control svg { width: 16px; height: 16px; flex: none; }
     .dashboard-chart { position: relative; margin: 8px 0; }
     .dashboard-chart-tooltip { position: absolute; top: 0; z-index: 2; pointer-events: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 4px 16px #0003; font-size: 12px; white-space: nowrap; }
     .dashboard-chart-tooltip > div { display: flex; justify-content: space-between; gap: 24px; margin-top: 5px; }
@@ -1724,7 +1731,16 @@
         <main class="main">
 
         <section class="view hidden" id="view-dashboard" aria-label="Operations dashboard">
-          <div class="view-heading"><h2>Dashboard</h2><div class="dashboard-actions"><label for="dashboard-days">Period</label><select id="dashboard-days"><option value="1">1 day</option><option value="7" selected>7 days</option><option value="30">30 days</option></select><label for="dashboard-refresh-interval">Refresh every</label><select id="dashboard-refresh-interval"><option value="1">1 second</option><option value="5">5 seconds</option><option value="15" selected>15 seconds</option><option value="0">Pause</option></select></div></div>
+          <div class="view-heading dashboard-heading">
+            <h2>Dashboard</h2>
+            <div class="dashboard-controls">
+              <select id="dashboard-days" aria-label="Dashboard time range" title="Time range"><option value="1">1d</option><option value="7" selected>7d</option><option value="30">30d</option></select>
+              <div class="dashboard-refresh-control">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg>
+                <select id="dashboard-refresh-interval" aria-label="Dashboard refresh interval" title="Auto-refresh interval"><option value="1">1s</option><option value="5">5s</option><option value="15" selected>15s</option><option value="0">Pause</option></select>
+              </div>
+            </div>
+          </div>
           <p id="dashboard-error" role="status"></p>
           <div class="dashboard-kpis" id="dashboard-kpis"></div>
           <div class="dashboard-grid">
@@ -3214,7 +3230,7 @@
           label: "Actions",
           className: "actions",
           render: (asset) => asset.coverage_state === "protected"
-            ? `<button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}" aria-label="Start Full Scan" title="Start Full Scan">${iconSvg("play")}</button>`
+            ? `<button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}" aria-label="Start Full Scan" title="Start Full Scan">${iconSvg("play")}</button>${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
             : "",
         },
         {
@@ -3429,7 +3445,7 @@
               </span>
             </div>
           `,
-          render: (result) => `${escapeHtml(result.target?.label || "unknown")}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(result.target?.integration_id || "")}</span>${copyButton(result.target?.integration_id || "")}</span>`,
+          render: (result) => renderScanTarget(result),
         },
         {
           key: "state",
@@ -3735,9 +3751,19 @@
       return source.replaceAll("_", " ");
     }
 
+    function renderScanTarget(result) {
+      const target = result.target || {};
+      const name = target.connector_name || target.label || "unknown";
+      const detail = target.scope_name || (target.label !== name && !String(target.label || "").match(/^(scope_|int_)/) ? target.label : "");
+      const ids = [target.integration_id, target.scope_id].filter(Boolean).join(" / ");
+      return `<span title="${escapeHtml(ids)}"><strong>${escapeHtml(name)}</strong>${detail ? `<br><span class="muted">${escapeHtml(detail)}</span>` : ""}</span>`;
+    }
+
     function scanTargetFilterText(result) {
       const target = result.target || {};
       return [
+        target.connector_name,
+        target.scope_name,
         target.label,
         target.integration_id,
         target.scope_id,
@@ -3969,7 +3995,7 @@
         bodyId: "scan-compare-body",
         columns: [
           { key: "job", label: "Job", render: (row) => `<strong>${escapeHtml(scanSourceLabel({ job: row.job, target: row.target }))}</strong><br><span class="mono">${escapeHtml(row.job.job_id)}</span>` },
-          { key: "target", label: "Target", render: (row) => escapeHtml(row.target.label || row.job.integration_id || "unknown") },
+          { key: "target", label: "Target", render: (row) => escapeHtml(row.target.connector_name || row.target.label || row.job.integration_id || "unknown") },
           { key: "state", label: "State", render: (row) => `<span class="${pillClass(row.job.state)}">${escapeHtml(row.job.state)}</span>` },
           { key: "processed", label: "Processed", render: (row) => `${row.processed}${row.total ? ` / ${row.total}` : ""}` },
           { key: "success", label: "Success %", render: (row) => row.successPct === null ? "" : `${formatNumber(row.successPct, 1)}%` },
@@ -4312,7 +4338,7 @@
     function scanResultDetailHtml(result) {
       const latest = (result.latest_items || []).map((item, index) => {
         const itemKey = `${result.job.job_id}:${index}`;
-        const filename = filenameFromIdentity(item.object_identity);
+        const filename = item.file_name || filenameFromIdentity(item.object_identity);
         const hash = itemHash(item);
         const rawPayload = item.scan_result && Object.keys(item.scan_result).length ? item.scan_result : item;
         const raw = state.selectedScanResultItemKey === itemKey
@@ -4908,10 +4934,10 @@
       setProtectionProfilePickerOpen(false);
     }
 
-    async function scanScope(scopeId) {
+    async function scanScope(scopeId, issueKeys = []) {
       const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
         method: "POST",
-        body: JSON.stringify({ reader_strategy: "proxy", limit: 10000 }),
+        body: JSON.stringify({ reader_strategy: "proxy", limit: 10000, issue_keys: issueKeys }),
       });
       await loadScanResults();
       selectTab("scan-results");
@@ -5159,6 +5185,21 @@
         } catch (error) {
           alert(`Protect failed: ${error.message}`);
           prefill.disabled = false;
+        }
+        return;
+      }
+      const issueScan = event.target.closest("[data-action='scan-jira-issues']");
+      if (issueScan && issueScan.dataset.scope) {
+        const entered = prompt("Issue keys to scan (comma separated). Only issues within the protected space and demo allowlist are eligible.", issueScan.dataset.issues || "");
+        if (entered === null || !entered.trim()) return;
+        const keys = entered.split(/[\s,]+/).filter(Boolean).map(key => key.toUpperCase());
+        issueScan.disabled = true;
+        try {
+          await scanScope(issueScan.dataset.scope, keys);
+        } catch (error) {
+          alert(`Scan failed: ${error.message}`);
+        } finally {
+          issueScan.disabled = false;
         }
         return;
       }

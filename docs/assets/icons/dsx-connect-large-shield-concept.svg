@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 430" role="img" aria-labelledby="title desc">
+<title id="title">DSX-Connect: larger shield with opposing arrow cutouts</title>
+<desc id="desc">A broad solid shield with two opposing arrows cut entirely into it. Both shafts and arrowheads are transparent negative space.</desc>
+<defs>
+  <mask id="cutouts" maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
+    <rect width="128" height="128" fill="white"/>
+    <path d="M29 43 53 26V35H98V51H53V60Z M30 70H75V61L99 78 75 95V86H30Z" fill="black"/>
+  </mask>
+  <g id="mark"><path d="M64 5 115 25V61c0 31-19 51-51 66C32 112 13 92 13 61V25Z" fill="currentColor" mask="url(#cutouts)"/></g>
+  <style>text{font-family:Arial,sans-serif;fill:#243b53}.heading{font-size:22px;font-weight:700}.small{font-size:15px;fill:#526779}</style>
+</defs>
+<rect width="840" height="430" rx="22" fill="#f4f7fb"/>
+<text x="30" y="38" class="heading">Bigger shield. Connectivity carved into it.</text>
+<rect x="25" y="65" width="360" height="340" rx="22" fill="#fff" stroke="#dce5ef"/>
+<use href="#mark" transform="translate(88 85) scale(1.8)" color="#4CA7FF"/>
+<text x="205" y="351" text-anchor="middle" class="heading">Solid shield + opposing arrows</text>
+<text x="205" y="376" text-anchor="middle" class="small">Both arrowheads and tails are cut out</text>
+<rect x="410" y="65" width="405" height="195" rx="22" fill="#101f42"/>
+<use href="#mark" transform="translate(440 90) scale(1.1)" color="#fff"/>
+<use href="#mark" transform="translate(634 90) scale(1.1)" color="#DEFF5B"/>
+<rect x="410" y="280" width="405" height="125" rx="22" fill="#fff" stroke="#dce5ef"/>
+<use href="#mark" transform="translate(439 298) scale(.65)" color="#101f42"/>
+<use href="#mark" transform="translate(557 320) scale(.32)" color="#4CA7FF"/>
+<use href="#mark" transform="translate(651 331) scale(.19)" color="#101f42"/>
+<use href="#mark" transform="translate(739 335) scale(.125)" color="#101f42"/>
+</svg>

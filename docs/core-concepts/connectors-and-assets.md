@@ -146,4 +146,4 @@ The same model applies to other platforms:
 - a collaboration connector can expose sites, drives, or mail stores;
 - an object-storage connector can expose buckets and prefixes.
 
-For the broader architecture, see [DSX-Connect 2 Architecture](architecture.md). For the application-facing use case, see [Normalized Enterprise File Gateway](../dsx-connect-2/strategy/normalized-enterprise-file-gateway.md).
+For the broader architecture, see [DSX-Connect 2 Architecture](architecture.md). For the application-facing use case, see [Governed File Movement](governed-file-movement.md).

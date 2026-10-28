@@ -9,7 +9,7 @@ This section describes the v2 model. For the original DSX-Connect architecture a
 - **Connectors** integrate repository and platform boundaries with the control plane.
 - **Assets** identify repository locations and the files that can be governed.
 - **Protected scopes** define which assets are monitored, scanned, or governed.
-- **Applications** are callers of DSX-Connect, not repositories or assets.
+- **Applications** are virtual entities defined in DSX-Connect that map real callers to permitted actions, destinations, and attribution, so their file activity can be managed and tracked.
 - **Jobs and events** carry durable discovery, scanning, and policy state.
 - **Policies and dispositions** determine what happens to a file after evaluation.
 
@@ -17,9 +17,9 @@ This section describes the v2 model. For the original DSX-Connect architecture a
 
 DSX-Connect 2 supports three related operating modes:
 
-1. **Monitor repositories** to discover changes and maintain an inventory.
-2. **Scan repositories** to evaluate existing content and new content against protection policy.
-3. **Govern file movement** between repositories so applications can move files through a controlled interface.
+1. **[Repository monitoring](repository-monitoring.md)** evaluates content as changes are detected.
+2. **[Full repository scans](repository-full-scan.md)** enumerate and evaluate existing content in a protected scope.
+3. **[Governed file movement](governed-file-movement.md)** applies scanning, policy, and delivery controls to application uploads and transfers.
 
-The pages in this section explain the boundaries between these modes and how they fit together. The [DSX-Connect 2 overview](../dsx-connect-2/index.md) provides the broader product and architecture context.
+The **DSX-Connect File Workflows** section contains the three pages above, with diagrams highlighting each path through the architecture. Start with [DSX-Connect 2 Architecture](architecture.md), [Connector and Asset Model](connectors-and-assets.md), and [Application Identity and Attribution](../dsx-connect-2/concepts/application-identity-and-attribution.md) to understand the concepts those workflows use. The [DSX-Connect 2 overview](../dsx-connect-2/index.md) provides the broader product context.
 

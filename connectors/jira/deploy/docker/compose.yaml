@@ -1,0 +1,15 @@
+services:
+  jira-connector:
+    build:
+      context: ../../../..
+      dockerfile: connectors/jira/Dockerfile
+    ports:
+      - "8680:8680"
+    env_file: .env
+    environment:
+      DSXCONNECTOR_JIRA_API_TOKEN_FILE: /run/secrets/jira-token
+    volumes:
+      - ${JIRA_TOKEN_FILE:?Set JIRA_TOKEN_FILE to your token file}:/run/secrets/jira-token:ro
+      - jira-data:/app/data
+volumes:
+  jira-data:

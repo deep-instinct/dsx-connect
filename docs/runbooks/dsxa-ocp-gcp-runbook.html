@@ -1,0 +1,605 @@
+<title>DSX/A on OpenShift (GCP)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+/* Layout: single reading column (runbook), sticky toolbar with copy action; tables and code scroll in place. */
+:root{
+  --bg:#f7f8f9; --paper:#ffffff; --fg:#1d2329; --muted:#5b6670; --rule:#dde2e6;
+  --accent:#0b6e75; --accent-soft:#e3f1f2; --code-bg:#eef1f3; --warn:#8a5a00; --warn-soft:#fdf3dc;
+  --display:"IBM Plex Serif", Georgia, serif;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#13171a; --paper:#1a1f23; --fg:#e3e8eb; --muted:#9aa6af; --rule:#2c343a;
+  --accent:#5cc2c9; --accent-soft:#16312f; --code-bg:#22292e; --warn:#e7b85a; --warn-soft:#2e2717; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#13171a; --paper:#1a1f23; --fg:#e3e8eb; --muted:#9aa6af; --rule:#2c343a;
+  --accent:#5cc2c9; --accent-soft:#16312f; --code-bg:#22292e; --warn:#e7b85a; --warn-soft:#2e2717; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:860px;margin:0 auto;padding-inline:16px;padding-block:0 64px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:2;background:var(--bg);border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding-block:10px}
+.bar p{margin:0;color:var(--muted);font-size:13px}
+.bar .act{display:flex;gap:12px;align-items:center}
+button{font:500 13px var(--body);background:var(--accent);color:var(--paper);border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+#status{font-size:13px;color:var(--accent);min-height:1em}
+article{background:var(--paper);border:1px solid var(--rule);border-radius:6px;margin-top:20px;padding-inline:clamp(16px,4vw,44px);padding-block:28px 40px}
+h1{font:600 clamp(26px,4vw,34px)/1.2 var(--display);margin:0 0 10px;text-wrap:balance}
+h2{font:600 22px/1.3 var(--display);margin:40px 0 10px;padding-top:18px;border-top:1px solid var(--rule);text-wrap:balance}
+h3{font:600 16px/1.4 var(--body);margin:26px 0 6px}
+p,li{max-width:68ch}
+ul,ol{padding-left:22px}
+li{margin:3px 0}
+code{font-family:var(--mono);font-size:.88em;background:var(--code-bg);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+pre{font-family:var(--mono);font-size:13px;line-height:1.5;background:var(--code-bg);border-radius:4px;padding:12px 14px;overflow-x:auto;margin:10px 0 16px}
+pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}
+.tbl{overflow-x:auto;margin:10px 0 18px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;border:1px solid var(--rule);padding:6px 10px}
+th{background:var(--code-bg);font-weight:600}
+.note{background:var(--accent-soft);border-left:3px solid var(--accent);padding:10px 14px;margin:12px 0;border-radius:0 4px 4px 0}
+.warn{background:var(--warn-soft);border-left:3px solid var(--warn);padding:10px 14px;margin:12px 0;border-radius:0 4px 4px 0}
+.note p,.warn p{margin:4px 0}
+a{color:var(--accent)}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <p>Press <strong>Copy document</strong>, then paste into an empty Confluence page.</p>
+    <div class="act"><span id="status" role="status"></span><button id="copy" type="button">Copy document</button></div>
+  </div>
+
+<article id="doc">
+<h1>Recreating the OpenShift/GCP DSX/A Environment</h1>
+<p>This runbook describes how to recreate the DSX/A environment on Red Hat OpenShift running on Google Cloud Platform (GCP), including the DSX/A REST and ICAP scanners. It covers:</p>
+<ol>
+<li>Creating and preparing the GCP project</li>
+<li>Creating the OpenShift cluster</li>
+<li>Creating the OpenShift project</li>
+<li>Choosing an image source and configuring registry access</li>
+<li>Verifying storage</li>
+<li>Creating DSX/A Helm values</li>
+<li>Deploying DSX/A (REST and ICAP)</li>
+<li>Verifying and testing the deployment</li>
+<li>Exposing the scanners, TLS and DNS</li>
+<li>Administrator access (oc, k9s, web console)</li>
+<li>Troubleshooting</li>
+<li>Cleanup</li>
+</ol>
+<p>The repository contains the DSX/A Helm chart. It does not yet contain complete Terraform or Ansible automation for creating the GCP project, IAM, networking, DNS and the OpenShift cluster.</p>
+
+<div class="note">
+<p><strong>What changed in this revision (October 2026, DSX/A 4.3.0.2348 on OCP 4.22)</strong></p>
+<ul>
+<li>Added a single-node (SNO), internal-only cluster variant and the lab's actual values (reference table below).</li>
+<li>Section 4: loading the 4.3 images from the console download into your own registry (the OpenShift internal registry in the lab), so no Deep Instinct registry credentials are needed.</li>
+<li>Section 6: where to get the registration token, the hostname format for <code>management_server_url</code>, and resource sizing for small clusters.</li>
+<li>Section 7: deploying ICAP as a separate pod.</li>
+<li>Section 8: the correct REST, scan-by-path and ICAP endpoints, with test commands and expected results. Note that scan-by-path uses GET. Also REST token auth, which uses an <code>AUTH</code> header, not <code>AUTH_TOKEN</code>.</li>
+<li>Section 9: exposing the REST scanner outside the VPC, restricted to allow-listed IPs.</li>
+<li>New sections 10 and 11: laptop access through an IAP/SOCKS tunnel, and the issues hit during this build.</li>
+<li>Section 12: cleaning up an orphaned cluster whose install directory has been lost.</li>
+</ul>
+</div>
+
+<h2>Architecture choice</h2>
+<p>This runbook assumes self-managed OpenShift Container Platform on GCP, installed with installer-provisioned infrastructure (IPI).</p>
+<p>The chart value <code>GCP-OCP</code> means OpenShift running on GCP, which is not the same as GKE. In this mode the chart creates an OpenShift Route for the REST service and a GCP Persistent Disk storage class for MongoDB.</p>
+<p>Google Cloud also offers managed OpenShift Dedicated. Creating a managed cluster works differently, but the project, namespace, registry and Helm steps that follow cluster creation are similar.</p>
+
+<h3>Reference deployment (SE lab)</h3>
+<div class="tbl"><table>
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>GCP project / region / zone</td><td><code>se-project-388112</code> / <code>us-east1</code> / <code>us-east1-b</code></td></tr>
+<tr><td>VPC / subnet</td><td><code>ocp-sno-net</code> / <code>ocp-sno-us-east1</code> (existing network)</td></tr>
+<tr><td>Admin (bastion) VM</td><td><code>ocp-sno-admin</code>. The installer, <code>oc</code> and Helm run here, from <code>~/ocp422</code>.</td></tr>
+<tr><td>Cluster</td><td>Name <code>dsxa422</code>, infra ID <code>dsxa422-xvmn9</code>. OCP 4.22, single node, 8 vCPU / 32 GB.</td></tr>
+<tr><td>Base domain</td><td><code>ocp-test.deepinstinctweb.com</code> (public Cloud DNS zone <code>ocp-test</code>)</td></tr>
+<tr><td>Publishing</td><td><code>publish: Internal</code>. The API (10.50.0.36) and ingress (10.50.0.39) use internal load balancers.</td></tr>
+<tr><td>Install directory</td><td><code>~/ocp422/install-dsxa422-r4</code></td></tr>
+<tr><td>Management server</td><td><code>cs-test744.customers.deepinstinctweb.com</code>, scanner <em>Logan OpenShift Scanner</em>, ID <code>1</code></td></tr>
+<tr><td>Helm release / namespace</td><td><code>dsxa-430</code> / <code>dsxa-430</code></td></tr>
+<tr><td>Pods</td><td><code>config-1</code>, <code>rest-1</code>, <code>icap-1</code>, <code>mongo-1</code></td></tr>
+<tr><td>REST endpoint</td><td><code>http://34.148.81.137/scan/binary/v2</code> (allow-listed IPs only)</td></tr>
+<tr><td>ICAP endpoint</td><td><code>icap://icap-1.dsxa-430.svc:1344/response</code> (in-cluster)</td></tr>
+<tr><td>Scan-by-path share</td><td>NFS <code>10.50.0.2:/srv/dpa-scan</code></td></tr>
+</table></div>
+
+<p>References:</p>
+<ul>
+<li><a href="https://docs.cloud.google.com/openshift-cluster/create-clusters">Google Cloud: Create an OpenShift cluster</a></li>
+<li><a href="https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html-single/installing_on_google_cloud/index">Red Hat: Installing OpenShift Container Platform on Google Cloud</a></li>
+<li><a href="https://docs.redhat.com/en/documentation/openshift_container_platform/4.16/html/installation_overview/ocp-installation-overview">Red Hat: OpenShift installation overview</a></li>
+<li>DSX for Applications v4.2 Deployment Guide (RevA01). Still applicable to 4.3 except where noted here.</li>
+</ul>
+
+<h2>Prerequisites</h2>
+<p>Obtain or install the following before you begin:</p>
+<ul>
+<li>A Google Cloud account with permission to create projects, IAM resources, networks, DNS records and Compute Engine resources</li>
+<li>A GCP billing account</li>
+<li>A Red Hat OpenShift subscription or Google Cloud Marketplace entitlement</li>
+<li>An OpenShift pull secret</li>
+<li>The <code>gcloud</code>, <code>oc</code> and <code>openshift-install</code> CLIs, and Helm 3 (the lab used OCP 4.22.0 tools and Helm v3.19.0)</li>
+<li>A DNS domain that can be delegated to the OpenShift cluster</li>
+<li>Access to the DSX/A management console, to get the management-server hostname, the registration token, the scanner ID and the Helm chart</li>
+<li>Optional: Artifact Registry credentials for <code>us-docker.pkg.dev/di-dsx-external-artifacts</code>. Not needed if you load the images from the console download into your own registry (section 4).</li>
+<li>Optional, on your laptop: <code>kubectl</code> and <code>k9s</code> for direct cluster access (section 10)</li>
+</ul>
+
+<h2>1. Create the GCP project</h2>
+<p>Set the project and billing variables, replacing all placeholder values:</p>
+<pre><code>export GCP_PROJECT="my-dsxa-ocp"
+export GCP_BILLING_ACCOUNT="000000-000000-000000"
+export GCP_REGION="us-east1"
+export GCP_ZONE="us-east1-b"
+
+gcloud projects create "$GCP_PROJECT"
+gcloud billing projects link "$GCP_PROJECT" --billing-account="$GCP_BILLING_ACCOUNT"
+gcloud config set project "$GCP_PROJECT"</code></pre>
+<p>Enable the APIs needed for the OpenShift installation and DSX/A:</p>
+<pre><code>gcloud services enable \
+  compute.googleapis.com \
+  cloudresourcemanager.googleapis.com \
+  dns.googleapis.com \
+  iam.googleapis.com \
+  iamcredentials.googleapis.com \
+  serviceusage.googleapis.com \
+  artifactregistry.googleapis.com \
+  storage.googleapis.com \
+  iap.googleapis.com</code></pre>
+
+<h3>GCP service account</h3>
+<p>Create a service account for the OpenShift installer:</p>
+<pre><code>gcloud iam service-accounts create openshift-installer \
+  --display-name="OpenShift installer" --project="$GCP_PROJECT"
+export INSTALLER_SA="openshift-installer@${GCP_PROJECT}.iam.gserviceaccount.com"</code></pre>
+<p>Unless your organization has defined custom roles, the installer needs broad permissions. Red Hat documents the required roles in the <a href="https://docs.redhat.com/en/documentation/openshift_container_platform/4.20/html-single/installing_on_google_cloud/index">GCP installation guide</a>. For a temporary lab, an administrator can grant the service account the required project-level access. For production, use the least-privilege roles approved by the cloud-security team.</p>
+<p>Create a JSON key only if your installation method requires one:</p>
+<pre><code>gcloud iam service-accounts keys create openshift-installer.json \
+  --iam-account="$INSTALLER_SA" --project="$GCP_PROJECT"
+export GOOGLE_APPLICATION_CREDENTIALS="$PWD/openshift-installer.json"</code></pre>
+<p>Protect this file, and delete it after the installation if you no longer need it.</p>
+
+<h3>Network and admin VM (internal-cluster variant)</h3>
+<p>The lab cluster runs in an existing VPC and is published internally. All installer, <code>oc</code> and Helm work runs from a small admin VM in the same VPC. SSH to it goes through IAP, because direct SSH on port 22 is firewalled:</p>
+<pre><code>gcloud compute ssh ocp-sno-admin --zone us-east1-b --tunnel-through-iap</code></pre>
+<p>The <code>consider installing NumPy</code> warning that IAP prints is harmless.</p>
+
+<h2>2. Create the OpenShift cluster</h2>
+<p>On the admin VM, download the installer and client for the target release:</p>
+<pre><code>mkdir -p ~/ocp422 &amp;&amp; cd ~/ocp422
+curl -fLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.22.0/openshift-install-linux.tar.gz
+curl -fLO https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/4.22.0/openshift-client-linux.tar.gz
+tar -xzf openshift-install-linux.tar.gz &amp;&amp; tar -xzf openshift-client-linux.tar.gz
+chmod +x openshift-install oc kubectl
+ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N ''</code></pre>
+<p>Create a working directory and generate the installer configuration:</p>
+<pre><code>mkdir -p "$HOME/ocp-install/dsxa-gcp" &amp;&amp; cd "$HOME/ocp-install/dsxa-gcp"
+openshift-install create install-config</code></pre>
+<p>Provide values similar to these. The standard HA layout:</p>
+<pre><code>apiVersion: v1
+baseDomain: ocp.example.com
+metadata:
+  name: dsxa
+platform:
+  gcp:
+    projectID: my-dsxa-ocp
+    region: us-east1
+controlPlane:
+  replicas: 3
+compute:
+  - name: worker
+    replicas: 3
+pullSecret: '&lt;red-hat-pull-secret-json&gt;'
+sshKey: '&lt;ssh-public-key&gt;'</code></pre>
+<p>The lab used a single-node, internal-only layout in an existing VPC. The installer deletes <code>install-config.yaml</code>, so the file below is reconstructed from the running cluster; check the values before reusing them.</p>
+<pre><code>apiVersion: v1
+baseDomain: ocp-test.deepinstinctweb.com
+metadata:
+  name: dsxa422
+controlPlane:
+  name: master
+  replicas: 1                 # single node: control plane and workloads on one VM
+  platform:
+    gcp:
+      type: n2-standard-8     # 8 vCPU / 32 GB
+compute:
+  - name: worker
+    replicas: 0
+platform:
+  gcp:
+    projectID: se-project-388112
+    region: us-east1
+    network: ocp-sno-net
+    controlPlaneSubnet: ocp-sno-us-east1
+    computeSubnet: ocp-sno-us-east1
+publish: Internal             # API and ingress on internal load balancers only
+pullSecret: '&lt;red-hat-pull-secret-json&gt;'
+sshKey: '&lt;ssh-public-key&gt;'</code></pre>
+<div class="warn"><p><strong>Single node leaves little room for DSX/A.</strong> 8 vCPU gives 7.5 allocatable cores, and OpenShift reserves about 3 of them. The DSX/A default resource requests don't fit without the sizing in section 6. Use n2-standard-16 if you want to keep the chart defaults.</p></div>
+<p>Before installing, review the generated <code>install-config.yaml</code> and confirm:</p>
+<ul>
+<li>The GCP project and region are correct.</li>
+<li>The cluster name is correct and isn't already used in the project.</li>
+<li>The base DNS domain is delegated correctly.</li>
+<li>The machine types and replica counts meet the intended capacity.</li>
+<li>The VPC and subnets are correct, if you're using an existing network.</li>
+<li>Private-cluster (<code>publish: Internal</code>), proxy or restricted-network settings are configured if required.</li>
+</ul>
+<p>Keep a copy of the file, because the installer consumes it:</p>
+<pre><code>cp install-config.yaml ../install-config.dsxa.keep</code></pre>
+<p>Install the cluster:</p>
+<pre><code>openshift-install create cluster --dir "$HOME/ocp-install/dsxa-gcp" --log-level=info
+
+# If the session drops, re-attach with:
+openshift-install wait-for bootstrap-complete --dir "$HOME/ocp-install/dsxa-gcp"
+openshift-install wait-for install-complete  --dir "$HOME/ocp-install/dsxa-gcp"</code></pre>
+<p>Save the administrator password (<code>auth/kubeadmin-password</code>) and the API URL. Don't delete the installation directory; you need it for troubleshooting and for destroying the cluster.</p>
+<div class="warn"><p><strong>Use one installation directory per cluster, and never reuse one for a retry.</strong> The directory's <code>metadata.json</code> is the only record of which cluster it owns. In the lab, retries led to a second, orphaned cluster running alongside the real one, with a confusingly similar name. Before running <code>destroy</code> on any directory, confirm its infra ID:</p>
+<pre><code>grep -o '"infraID":"[^"]*"' "$HOME/ocp-install/dsxa-gcp/metadata.json"</code></pre></div>
+<p>Configure the local OpenShift client:</p>
+<pre><code>export KUBECONFIG="$HOME/ocp-install/dsxa-gcp/auth/kubeconfig"
+oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}{"\n"}'   # should match the infraID
+oc get nodes
+oc get clusterversion
+oc get co</code></pre>
+<p>Wait until every cluster operator reports <code>Available=True</code>, <code>Progressing=False</code> and <code>Degraded=False</code>.</p>
+
+<h2>3. Create the OpenShift project</h2>
+<p>Create a dedicated project for DSX/A. The lab named it after the release, <code>dsxa-430</code>, so that several versions can sit side by side.</p>
+<pre><code>oc new-project dsxa \
+  --display-name="DSX/A Scanner" \
+  --description="Deep Instinct DSX/A scanner environment"
+oc get project dsxa</code></pre>
+<p>Don't grant additional security-context permissions. The 4.3.0.2348 chart sets no pod or container security context, and its pods run under the default <code>restricted-v2</code> SCC. MongoDB requests a privileged container only when <code>cloud_provider</code> is <code>LOCAL-OCP</code>. The <code>sysctl: permission denied on key "kernel.core_pattern"</code> line at pod start-up is harmless.</p>
+
+<h2>4. Choose an image source and configure registry access</h2>
+<h3>Option A: Your own registry, from the console download (used in the lab)</h3>
+<p>In the console, <strong>Settings → Deployment → Application Security</strong>, select version 4.3.0.2348 and choose <strong>Download Container Image File</strong>. The package (<code>dpa-rocky9-4.3.0.2348.tgz</code>, about 770 MB) holds three image archives:</p>
+<div class="tbl"><table>
+<tr><th>Archive in the package</th><th>Values key</th><th>Push as</th></tr>
+<tr><td><code>dpa-rocky9-4.3.0.2348-base.tgz</code></td><td><code>images.dpa_repository</code></td><td><code>dpa-rocky9:4.3.0.2348</code></td></tr>
+<tr><td><code>rsync-dpa-4.3.0.2348.tgz</code></td><td><code>images.conf_repository</code></td><td><code>rsync-dpa:4.3.0.2348</code></td></tr>
+<tr><td><code>mongo-dpa-4.3.0.2348.tgz</code></td><td><code>images.mongo_repository</code></td><td><code>mongo-dpa:4.3.0.2348</code></td></tr>
+</table></div>
+<p>Push them to any registry the cluster can pull from. The lab used the OpenShift internal registry in the scanner's own namespace, so no pull secret is needed:</p>
+<pre><code># one-time: expose the internal registry (on a publish: Internal cluster the route is VPC-only)
+oc patch configs.imageregistry.operator.openshift.io/cluster --type merge -p '{"spec":{"defaultRoute":true}}'
+oc create sa image-pusher -n dsxa
+oc policy add-role-to-user registry-editor -z image-pusher -n dsxa
+REG=$(oc get route default-route -n openshift-image-registry -o jsonpath='{.spec.host}')
+TOK=$(oc create token image-pusher -n dsxa --duration=2h)
+
+tar -xzf dpa-rocky9-4.3.0.2348.tgz
+for i in dpa-rocky9:dpa-rocky9-4.3.0.2348-base rsync-dpa:rsync-dpa-4.3.0.2348 mongo-dpa:mongo-dpa-4.3.0.2348; do
+  skopeo copy --dest-tls-verify=false --dest-creds "image-pusher:$TOK" \
+    docker-archive:${i#*:}.tgz docker://$REG/dsxa/${i%%:*}:4.3.0.2348
+done
+oc get imagestreams -n dsxa</code></pre>
+<p>Then set <code>global.image_tag: "4.3.0.2348"</code>, <code>global.registry.enabled: false</code>, and point the three <code>images.*_repository</code> keys at <code>image-registry.openshift-image-registry.svc:5000/dsxa/&lt;name&gt;</code>.</p>
+<div class="note"><p>On a single-node cluster, enabling the registry route triggers a kube-apiserver rollout: the API is unavailable for a few minutes. Pods in another namespace can use these images after <code>oc policy add-role-to-user system:image-puller system:serviceaccount:&lt;ns&gt;:default -n dsxa</code>.</p></div>
+
+<h3>Option B: Deep Instinct Artifact Registry</h3>
+<p>The chart's defaults point to <code>us-docker.pkg.dev/di-dsx-external-artifacts/dsx-docker/</code>. This registry rejects anonymous pulls and ordinary Deep Instinct GCP accounts (401/403), so you need a service-account JSON key authorized to pull from it. Create an image-pull secret:</p>
+<pre><code>oc create secret docker-registry deepinstinct-registry \
+  --docker-server=us-docker.pkg.dev \
+  --docker-username=_json_key \
+  --docker-password="$(cat gcp-registry-reader.json)" \
+  --docker-email="platform@example.com" \
+  --namespace=dsxa</code></pre>
+<p>Then set <code>registry.enabled: true</code>, <code>createSecret: false</code> and <code>secret_name: deepinstinct-registry</code>. Don't put the JSON key in a committed values file.</p>
+
+<h2>5. Verify storage</h2>
+<pre><code>oc get csidrivers
+oc get storageclass</code></pre>
+<p>For <code>GCP-OCP</code> the chart creates its own GCP Persistent Disk CSI storage class for the MongoDB volume (<code>di-ssd-&lt;namespace&gt;-&lt;scanner_id&gt;</code>, 20Gi by default). Confirm that <code>pd.csi.storage.gke.io</code> is listed. The 4.3 chart can use an existing class instead, through <code>mongo.storageClassName</code>.</p>
+<p>Scan-by-path is optional. To enable it, configure an NFS or SMB share. The lab used:</p>
+<pre><code>rest:
+  share:
+    allow_scan_by_path: true
+    protocol: nfs
+    server: 10.50.0.2
+    path: /srv/dpa-scan
+    size: 300Gi</code></pre>
+
+<h2>6. Create DSX/A Helm values</h2>
+<h3>Get the chart and token from the management console</h3>
+<ol>
+<li>Go to <strong>Settings → Deployment → Application Security</strong> (<code>/app/#/settings/deployment-resources/dpa/connected</code>).</li>
+<li>Select the version (<strong>4.3.0.2348</strong>) and the scanner.</li>
+<li>Copy the <strong>Registration Token</strong>. It's a 36-character UUID (<code>xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx</code>), and it belongs to the scanner selected in step 2.</li>
+<li>Under <strong>Cluster</strong>, choose <strong>Download Helm Chart</strong> (<code>dpa-helm-4.3.0.2348.tgz</code>). Its <code>Chart.yaml</code> says version 4.3.0; the image build is set with <code>global.image_tag</code>.</li>
+</ol>
+
+<h3>Values file</h3>
+<p>Create an environment-specific values file outside the chart, or in a secured deployment repository. Don't edit the chart's own <code>values.yaml</code>. This is the working lab file:</p>
+<pre><code>global:
+  cloud_provider: GCP-OCP
+  management_server_url: cs-test744.customers.deepinstinctweb.com   # hostname only; the pod adds the apiv2- prefix itself
+  registration_token: "&lt;registration-token&gt;"
+  scanner_id: 1
+  image_tag: "4.3.0.2348"
+  registry:
+    enabled: false                       # Option A (own registry, same namespace)
+
+images:
+  dpa_repository:   image-registry.openshift-image-registry.svc:5000/dsxa/dpa-rocky9
+  conf_repository:  image-registry.openshift-image-registry.svc:5000/dsxa/rsync-dpa
+  mongo_repository: image-registry.openshift-image-registry.svc:5000/dsxa/mongo-dpa
+
+rest:
+  deployment_enabled: true
+  service:
+    deploy_ingress: true                 # OpenShift Route
+    type: ClusterIP                      # LoadBalancer to expose it outside the VPC (section 9)
+  resources:
+    requests: {cpu: "250m", memory: "2Gi"}
+    limits:   {cpu: "4",    memory: "16Gi"}
+
+icap:
+  deployment_enabled: true               # separate icap-&lt;id&gt; pod
+  service: {type: ClusterIP, port: 1344}
+  resources:
+    requests: {cpu: "500m", memory: "2Gi"}
+    limits:   {cpu: "4",    memory: "16Gi"}
+
+config:
+  resources:
+    requests: {cpu: "100m", memory: "1Gi"}
+    limits:   {cpu: "1",    memory: "2Gi"}
+
+mongo:
+  resources:
+    requests: {cpu: "100m", memory: "512Mi"}
+    limits:   {cpu: "1",    memory: "1Gi"}</code></pre>
+<div class="note">
+<p><strong>Sizing:</strong> the chart defaults request 2 CPU / 8Gi each for REST and ICAP, and every <code>config</code>, <code>rest</code> and <code>icap</code> pod also has a <code>sync</code> sidecar fixed at 1 CPU. On a cluster with spare capacity, remove the <code>resources</code> blocks to use the defaults. The reduced requests above fit a single 8-vCPU node, and the limits still allow bursting.</p>
+<p><strong>Scanner ID:</strong> resource names include it (<code>rest-1</code>, <code>route-rest-1-&lt;ns&gt;</code>, and so on), so changing it renames everything.</p>
+</div>
+<p>The chart path in the repository is <code>dist/dsxa_deployment/dpa/dpa-chart</code>; in the downloaded archive it's <code>dpa/dpa-chart</code>. The base configuration is documented in its <code>values.yaml</code>.</p>
+
+<h2>7. Deploy DSX/A</h2>
+<p>Render the chart first and review the result, then install it:</p>
+<pre><code>export DSXA_NAMESPACE="dsxa"
+export DSXA_CHART="$PWD/dist/dsxa_deployment/dpa/dpa-chart"
+
+helm template dsxa "$DSXA_CHART" -n "$DSXA_NAMESPACE" -f values-gcp-ocp.yaml &gt; rendered.yaml
+
+helm upgrade --install dsxa "$DSXA_CHART" \
+  --namespace "$DSXA_NAMESPACE" --create-namespace \
+  -f values-gcp-ocp.yaml --wait --timeout 15m</code></pre>
+<p>If the current directory isn't the repository root, use an absolute path for <code>DSXA_CHART</code>.</p>
+<p>With <code>icap.deployment_enabled: true</code>, ICAP runs as its own deployment, <code>icap-&lt;scanner_id&gt;</code>, with its own service on port 1344. REST and ICAP share the <code>config</code> and <code>mongo</code> pods. To add ICAP to an existing release, set the flag and run the same <code>helm upgrade</code>.</p>
+<div class="warn"><p><strong>Single node: rolling updates can stall.</strong> A replacement pod needs CPU that its predecessor still holds, so it stays <code>Pending</code> with <code>Insufficient cpu</code>. Delete the old pod, or scale the deployment to 0 and back to 1. Expect a short interruption.</p></div>
+
+<h2>8. Verify and test the deployment</h2>
+<pre><code>helm status dsxa -n dsxa
+oc get pods,deployments,services,routes,pvc -n dsxa
+oc rollout status deployment -n dsxa --timeout=15m</code></pre>
+<p>Confirm that the config pod registered with the management server:</p>
+<pre><code>oc logs -n dsxa deployment/config-1 -c dpa --tail=20
+#   Registration succeeded
+#   Updates downloaded successfully ...
+oc logs -n dsxa deployment/rest-1 -c dpa --tail=20
+#   Classifier initialized. Result: true</code></pre>
+<p>Until registration succeeds, REST answers every scan with <code>"reason": "SYSTEM_INITIALIZING"</code>, and the <code>sync</code> sidecars log <code>failed to connect to config-1 ... Connection refused</code>. Both are expected at that stage. The scanner should also show as connected in the management console.</p>
+
+<h3>REST</h3>
+<p>The REST endpoint is the Route hostname (<code>oc get route -n dsxa</code>); use it as the DSX/A endpoint for DSX-Connect. The scan path is <code>/scan/binary/v2</code>; a bare <code>/scan</code> returns 404.</p>
+<pre><code>curl -X POST http://&lt;route-host-or-ip&gt;/scan/binary/v2 \
+  -H 'Content-Type: application/octet-stream' -H 'X-File-Name: ls' \
+  --data-binary @/bin/ls
+# {"verdict":"Benign", ...}</code></pre>
+<p>An EICAR test file returns <code>"verdict":"Malicious"</code>, <code>"file_type":"EICARType"</code>. The guide also documents <code>/scan/base64/v2</code>, <code>/scan/by_hash</code> and <code>/scan/by_path</code>.</p>
+
+<h3>REST token authentication (optional)</h3>
+<p>By default REST accepts any request. To require a static token (16 to 512 bytes), keep it in a secret, not in the values file:</p>
+<pre><code>python3 -c "import secrets;print(secrets.token_hex(16),end='')" &gt; rest-auth-token.txt   # chmod 600
+kubectl create secret generic auth-token -n dsxa --from-file=AUTH_TOKEN=rest-auth-token.txt</code></pre>
+<pre><code>rest:
+  auth_token_secret: auth-token     # note: under rest:, not rest.secure
+  auth_token_key: AUTH_TOKEN
+  # or inline (not recommended): auth_token: "&lt;token&gt;"</code></pre>
+<p>Run <code>helm upgrade</code>; only the REST pod restarts. Clients then send the token in a header named <strong><code>AUTH</code></strong>:</p>
+<pre><code>curl -X POST http://&lt;route-host-or-ip&gt;/scan/binary/v2 \
+  -H 'Content-Type: application/octet-stream' -H "AUTH: $TOKEN" --data-binary @/bin/ls</code></pre>
+<div class="warn"><p><strong>The header is <code>AUTH</code>, not <code>AUTH_TOKEN</code>.</strong> The 4.1 and 4.2 guides say <code>AUTH_TOKEN</code> (the 4.3 guide is correct), but 4.3.0.2348 rejects that, along with <code>Auth-Token</code>, <code>X-Auth-Token</code> and <code>Authorization: Bearer</code>, returning 401 even with the correct token. The pod's own health check (<code>check_pod_liveness.py</code>) sends <code>AUTH</code>.</p></div>
+<div class="tbl"><table>
+<tr><th>Request (token enabled)</th><th>Result</th></tr>
+<tr><td>No header, or a wrong token</td><td><code>401 {"error":"401 Unauthorized: Invalid authorization"}</code></td></tr>
+<tr><td><code>AUTH: &lt;token&gt;</code> on <code>/scan/binary/v2</code></td><td>200, with normal verdicts (Benign / Malicious)</td></tr>
+<tr><td><code>AUTH: &lt;token&gt;</code> on <code>/scan/by_path</code> and <code>/result/by_path/&lt;guid&gt;</code></td><td>200; both endpoints require the token</td></tr>
+</table></div>
+<p>The token applies to REST only; ICAP is unaffected. To turn it off, remove the two keys and upgrade again.</p>
+
+<h3>Scan by path (REST, asynchronous)</h3>
+<p>Requires <code>rest.share.allow_scan_by_path: true</code> (section 5). The share is mounted in the REST pod at <code>rest.share.scan_path</code>, which defaults to <code>/scan_files</code>. Check the mount and place a test file on it:</p>
+<pre><code>kubectl exec -n dsxa deploy/rest-1 -c dpa -- sh -c "mount | grep scan_files"
+# 10.50.0.2:/srv/dpa-scan on /scan_files type nfs4 (rw,...)
+kubectl exec -n dsxa deploy/rest-1 -c dpa -- sh -c "mkdir -p /scan_files/sbp-test &amp;&amp; cp /usr/bin/bash /scan_files/sbp-test/bash"</code></pre>
+<p>Submit the scan, then fetch the verdict with the returned <code>scan_guid</code>. The <code>Stream-Path</code> header is the path <strong>as the pod sees it</strong> (under <code>/scan_files</code>), not the path on the NFS server.</p>
+<pre><code>curl -X GET http://&lt;route-host-or-ip&gt;/scan/by_path \
+  -H 'Content-Type: application/octet-stream' \
+  -H 'Stream-Path: /scan_files/sbp-test/bash' \
+  -H 'X-Custom-Metadata: sbp-test'
+# {"scan_guid":"c6f13fd5...","verdict":"Scanning","verdict_details":{"event_description":"Stream scanning in progress"}}
+
+curl http://&lt;route-host-or-ip&gt;/result/by_path/&lt;scan_guid&gt;
+# {"verdict":"Benign","file_info":{"file_type":"ELF64FileType","file_size_in_bytes":1389024,...}}</code></pre>
+<div class="warn"><p><strong>Use GET for <code>/scan/by_path</code>.</strong> POST returns <code>405 Method Not Allowed</code>, even though the guide's text describes it as a POST request; its curl example uses <code>-X GET</code>. Until the verdict is ready, <code>/result/by_path</code> keeps returning <code>"Scanning"</code>. Small files finish within seconds; extraction can take up to 25 minutes per GB.</p></div>
+<p>Lab results: EICAR on the share came back <code>Malicious</code> (<code>EICARType</code>), and a 1.4 MB ELF binary came back <code>Benign</code>.</p>
+
+<h3>ICAP</h3>
+<p>The ICAP service URLs are <code>icap://&lt;host&gt;:1344/response</code> (RESPMOD) and <code>/request</code> (REQMOD). Any other path, including <code>/respmod</code> and <code>/</code>, returns <code>ICAP/1.0 404</code>; the 4.2 guide doesn't list these paths. To test from inside the cluster:</p>
+<pre><code>oc exec -i -n dsxa deploy/rest-1 -c dpa -- python3 - &lt;&lt;'EOF'
+import socket
+def icap(req):
+    s=socket.create_connection(("icap-1",1344),timeout=60); s.sendall(req); out=b""
+    while True:
+        d=s.recv(65536)
+        if not d: break
+        out+=d
+        if b"\r\n\r\n" in out: break
+    s.close(); return out.decode(errors="replace")
+print(icap(b"OPTIONS icap://icap-1:1344/response ICAP/1.0\r\nHost: icap-1\r\n\r\n"))
+body=b"hello dsx\n"
+rh=b"HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\nContent-Length: %d\r\n\r\n"%len(body)
+req=(b"RESPMOD icap://icap-1:1344/response ICAP/1.0\r\nHost: icap-1\r\nX-File-Name: clean.txt\r\nAllow: 204\r\n"
+     b"Encapsulated: res-hdr=0, res-body=%d\r\n\r\n"%len(rh)+rh+b"%x\r\n"%len(body)+body+b"\r\n0\r\n\r\n")
+print(icap(req))
+EOF</code></pre>
+<div class="tbl"><table>
+<tr><th>Test</th><th>Expected result</th></tr>
+<tr><td>OPTIONS <code>/response</code></td><td><code>ICAP/1.0 200 OK</code>, <code>Methods: RESPMOD</code>, <code>Server: DeepInstinctICAP/4.3.0.2348p</code></td></tr>
+<tr><td>RESPMOD with EICAR</td><td><code>200 OK</code>, <code>X-Response-Info: Blocked</code>, <code>X-Blocked-Reason: Infected</code>, <code>X-Virus-ID: EICARType</code></td></tr>
+<tr><td>RESPMOD with a clean file</td><td><code>204 No Content</code> (allowed)</td></tr>
+</table></div>
+<p>If registration or readiness fails:</p>
+<pre><code>oc logs -n dsxa deployment/&lt;deployment-name&gt; --all-containers=true
+oc describe pod -n dsxa &lt;pod-name&gt;</code></pre>
+
+<h2>9. Exposing the scanners, TLS and DNS</h2>
+<h3>Route (default)</h3>
+<p>The chart creates an OpenShift Route for REST. With edge termination enabled, TLS terminates at the OpenShift router:</p>
+<pre><code>rest:
+  secure:
+    enable_ssl_on_ocp_route: true</code></pre>
+<p>The Route is only as reachable as the cluster's ingress. On a <code>publish: Internal</code> cluster, it resolves and answers only inside the VPC.</p>
+
+<h3>External load balancer for REST, IP-restricted (used in the lab)</h3>
+<p>To reach REST from outside the VPC without exposing the rest of the cluster, set <code>rest.service.type: LoadBalancer</code> and upgrade. GCP then creates an external TCP load balancer for the REST service only. The chart has no setting for allowed source IPs, so restrict the service straight after the upgrade. Kubernetes turns <code>loadBalancerSourceRanges</code> into the GCP firewall rule <code>k8s-fw-&lt;lb&gt;</code>.</p>
+<pre><code>helm upgrade dsxa "$DSXA_CHART" -n dsxa -f values-gcp-ocp.yaml
+oc patch svc rest-1 -n dsxa --type merge \
+  -p '{"spec":{"loadBalancerSourceRanges":["&lt;allowed-ip&gt;/32"]}}'
+oc get svc rest-1 -n dsxa                       # EXTERNAL-IP
+gcloud compute firewall-rules list --filter='name~k8s-fw' \
+  --format='table(name,sourceRanges.list(),allowed[].map().firewall_rule().list())'</code></pre>
+<ul>
+<li>Normal <code>helm upgrade</code>s keep the patch, but you must reapply it after an uninstall and reinstall. The patch replaces the whole list, so include every allowed IP.</li>
+<li>This serves plain HTTP on port 80. Add TLS (<code>rest.secure</code> and the <code>rest_ssl_secret</code> optional template) before scanning real files over the internet.</li>
+<li>ICAP can be exposed the same way: <code>icap.service.type: LoadBalancer</code>, then the same patch on <code>icap-1</code>.</li>
+</ul>
+
+<h3>Custom hostname and certificates</h3>
+<p>For a custom hostname, add a DNS record pointing at the router or load balancer IP. If you need a custom certificate, follow the organization's approved OpenShift TLS process; don't commit certificate or private-key material to the repository.</p>
+
+<h2>10. Administrator access (oc, k9s, web console)</h2>
+<p>On an internal cluster the API and console can be reached only from the VPC. From a laptop, use a SOCKS tunnel through the admin VM; nothing is exposed publicly.</p>
+<pre><code># 1. Copy the kubeconfig to the laptop
+gcloud compute scp ocp-sno-admin:ocp422/install-dsxa422-r4/auth/kubeconfig ~/.kube/dsxa422.kubeconfig \
+  --zone us-east1-b --tunnel-through-iap
+chmod 600 ~/.kube/dsxa422.kubeconfig
+#    then add this line under clusters[0].cluster, below "server:":
+#      proxy-url: socks5://127.0.0.1:1080
+
+# 2. Start the tunnel (leave it running)
+gcloud compute ssh ocp-sno-admin --zone us-east1-b --tunnel-through-iap -- -N -D 127.0.0.1:1080 -o ServerAliveInterval=30
+
+# 3. CLI tools
+k9s --kubeconfig ~/.kube/dsxa422.kubeconfig
+KUBECONFIG=~/.kube/dsxa422.kubeconfig kubectl get pods -n dsxa
+
+# 4. Web console: open a separate Chrome instance that uses the tunnel
+open -na "Google Chrome" --args --user-data-dir=/tmp/ocp-chrome --proxy-server="socks5://127.0.0.1:1080"
+#    browse to https://console-openshift-console.apps.&lt;cluster&gt;.&lt;baseDomain&gt;
+#    log in as kubeadmin (password: &lt;install-dir&gt;/auth/kubeadmin-password)</code></pre>
+<p>The console uses a self-signed certificate, so expect two warnings (console and OAuth). When you print the password with <code>cat</code>, a trailing <code>%</code> is the shell's no-newline marker, not part of the password.</p>
+
+<h2>11. Troubleshooting</h2>
+<div class="tbl"><table>
+<tr><th>Symptom</th><th>Cause</th><th>Fix</th></tr>
+<tr><td>Config pod: <code>Failed registering product ... status code 409 ... Bad Request</code></td><td>The value used isn't the registration token. The lab hit this with a 16-character password-style string.</td><td>Copy the 36-character UUID from <em>Settings → Deployment → Application Security</em> for the right scanner, then <code>helm upgrade</code>.</td></tr>
+<tr><td>Pod <code>Pending</code>, <code>Insufficient cpu</code></td><td>The chart default requests are too large for the node, or a rolling update needs extra room</td><td>Lower the requests (section 6), or delete the old pod.</td></tr>
+<tr><td><code>ImagePullBackOff</code> / 401 / 403 from <code>us-docker.pkg.dev</code></td><td>No credentials for the Deep Instinct Artifact Registry</td><td>Load the images from the console download into your own registry (section 4, Option A), or use a pull secret (Option B).</td></tr>
+<tr><td>ICAP <code>404 Not Found</code></td><td>Wrong service path</td><td>Use <code>/response</code> (RESPMOD) or <code>/request</code> (REQMOD).</td></tr>
+<tr><td><code>401 Unauthorized: Invalid authorization</code> with the correct token</td><td>The token was sent as <code>AUTH_TOKEN</code> (as in the 4.1/4.2 guides) or another header name</td><td>Send it as <code>AUTH: &lt;token&gt;</code>.</td></tr>
+<tr><td><code>/scan/by_path</code> returns <code>405 Method Not Allowed</code></td><td>The request was sent as POST</td><td>Use <code>-X GET</code> with the <code>Stream-Path</code> header.</td></tr>
+<tr><td>Scan by path: <code>reason 'missing header'</code> or a file-not-found verdict</td><td>No <code>Stream-Path</code> header, or a path given as the NFS server sees it</td><td>Send the in-pod path, for example <code>/scan_files/dir/file</code>.</td></tr>
+<tr><td>REST <code>/scan</code> returns 404</td><td>Wrong path</td><td>Use <code>/scan/binary/v2</code>.</td></tr>
+<tr><td>REST external IP times out</td><td>The client IP isn't in <code>loadBalancerSourceRanges</code></td><td>Re-run the patch in section 9 with the new IP.</td></tr>
+<tr><td><code>gcloud compute ssh</code> times out on port 22</td><td>Direct SSH is firewalled</td><td>Add <code>--tunnel-through-iap</code>.</td></tr>
+<tr><td><code>Reauthentication failed. cannot prompt during non-interactive execution</code></td><td>The gcloud session has expired</td><td>Run <code>gcloud auth login</code>.</td></tr>
+<tr><td>k9s or the console can't connect</td><td>The SOCKS tunnel isn't running</td><td>Start it (section 10).</td></tr>
+<tr><td>Two clusters in one project, or <code>destroy</code> targets the wrong one</td><td>An install directory was reused, or a failed install was left running</td><td>Check <code>infraID</code> (section 2); clean up orphans (section 12).</td></tr>
+</table></div>
+
+<h2>12. Cleanup</h2>
+<p>To remove only the DSX/A application:</p>
+<pre><code>helm uninstall dsxa -n dsxa
+oc delete project dsxa      # also removes the MongoDB PVC; Helm leaves StatefulSet volumes behind</code></pre>
+<p>To destroy the whole installer-provisioned cluster:</p>
+<pre><code>openshift-install destroy cluster --dir "$HOME/ocp-install/dsxa-gcp" --log-level=info</code></pre>
+<p>Afterwards, check the GCP project for orphaned disks, static IP addresses, DNS records, service accounts and registry resources. Don't delete the GCP project unless that's explicitly intended.</p>
+
+<h3>Removing a cluster whose install directory is lost</h3>
+<p><code>destroy</code> needs the original directory. Without it, remove the cluster by hand. Every resource it created has the infra ID in its name or carries the label <code>kubernetes-io-cluster-&lt;infraID&gt;=owned</code>.</p>
+<pre><code>ID=&lt;infraID&gt;
+for r in "compute instances" "compute disks" "compute instance-groups unmanaged" "compute forwarding-rules" \
+         "compute target-pools" "compute target-tcp-proxies" "compute backend-services" "compute health-checks" \
+         "compute firewall-rules" "compute addresses"; do
+  gcloud $r list --filter="name~$ID" --format='value(name)'
+done
+gcloud dns managed-zones list | grep $ID
+gcloud iam service-accounts list | grep $ID
+gcloud storage ls | grep $ID</code></pre>
+<p>Delete in dependency order:</p>
+<ol>
+<li>VMs</li>
+<li>Forwarding rules</li>
+<li>Target TCP proxies and target pools</li>
+<li>Backend services</li>
+<li>Health checks and instance groups</li>
+<li>Addresses and firewall rules</li>
+<li>Public DNS records and the private zone</li>
+<li>Buckets and service accounts</li>
+</ol>
+<p>The public API forwarding rule, backend service and health check are <strong>global</strong>; the internal ones are <strong>regional</strong>. Also remove the ingress load balancer the cluster's router created: a forwarding rule named <code>a&lt;hash&gt;</code> with the description <code>openshift-ingress/router-default</code>, its target pool and its <code>k8s-fw-</code> firewall rules.</p>
+
+<h2>Current automation gap</h2>
+<p>The repository provides the DSX/A Helm chart and deployment configuration, but not a single end-to-end script for:</p>
+<ul>
+<li>GCP project and billing setup</li>
+<li>GCP IAM and service accounts</li>
+<li>VPC, subnet, firewall and DNS creation</li>
+<li>OpenShift cluster creation</li>
+<li>Registry credential provisioning</li>
+<li>OpenShift project bootstrap</li>
+<li>Post-deploy exposure (<code>loadBalancerSourceRanges</code>) and smoke tests (REST and ICAP)</li>
+</ul>
+<p>For repeatable environment recreation, the recommended future structure is:</p>
+<pre><code>infrastructure/
+  terraform/
+    gcp-project/
+    network/
+    dns/
+    openshift/
+  openshift/
+    project.yaml
+    registry-secret-template.yaml
+    values-gcp-ocp.yaml
+    values-gcp-ocp-sno.yaml      # reduced resource requests for single-node clusters
+    deploy-dsxa.sh
+    smoke-test.sh                # REST /scan/binary/v2 and ICAP /response checks</code></pre>
+<p>Credentials, private keys, Red Hat pull secrets and DSX/A registration tokens must stay out of source control.</p>
+</article>
+</div>
+
+<script>
+const btn=document.getElementById('copy'), status=document.getElementById('status'), doc=document.getElementById('doc');
+btn.addEventListener('click', async () => {
+  const html=doc.outerHTML, text=doc.innerText;
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([html],{type:'text/html'}),'text/plain':new Blob([text],{type:'text/plain'})})]);
+    } else { await navigator.clipboard.writeText(text); }
+    status.textContent='Copied. Paste into Confluence.';
+  } catch (e) {
+    const r=document.createRange(); r.selectNodeContents(doc);
+    const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    status.textContent='Selected. Press Cmd+C, then paste into Confluence.';
+  }
+});
+</script>

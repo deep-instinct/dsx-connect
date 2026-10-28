@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" role="img" aria-labelledby="title desc">
+<title id="title">DSX-Connect solid shield icon concepts</title>
+<desc id="desc">Three solid shield concepts with transparent arrow channels: directional gateway, two-way connection, and a contained cutout.</desc>
+<defs>
+  <path id="shield" d="M64 12 105 30v32c0 29-15 47-41 62C38 109 23 91 23 62V30Z"/>
+  <mask id="one"><rect width="128" height="128" fill="white"/><path d="M17 56H72V43L95 64 72 85V72H17Z" fill="black"/></mask>
+  <mask id="two"><rect width="128" height="128" fill="white"/><path d="M17 49H70V39L87 56 70 73V63H17ZM111 80H58V90L41 73 58 56V66H111Z" fill="black"/></mask>
+  <mask id="contained"><rect width="128" height="128" fill="white"/><path d="M38 56H69V43L92 64 69 85V72H38Z" fill="black"/></mask>
+  <g id="a"><use href="#shield" fill="currentColor" mask="url(#one)"/><path d="M111 48 128 64 111 80Z" fill="currentColor"/></g>
+  <g id="b"><use href="#shield" fill="currentColor" mask="url(#two)"/><path d="M15 40 0 56 15 72ZM113 57 128 73 113 89Z" fill="currentColor"/></g>
+  <g id="c"><use href="#shield" fill="currentColor" mask="url(#contained)"/></g>
+  <style>text{font-family:Arial,sans-serif;fill:#243b53}.head{font-size:20px;font-weight:700}.sub{font-size:14px;fill:#526779}</style>
+</defs>
+<rect width="960" height="440" rx="20" fill="#f4f7fb"/>
+<text x="32" y="38" class="head">DSX-Connect · solid shield / negative-space arrow</text>
+<g fill="#fff" stroke="#dce5ef"><rect x="25" y="62" width="290" height="345" rx="18"/><rect x="335" y="62" width="290" height="345" rx="18"/><rect x="645" y="62" width="290" height="345" rx="18"/></g>
+<use href="#a" transform="translate(92 83) scale(1.2)" color="#4CA7FF"/>
+<use href="#b" transform="translate(402 83) scale(1.2)" color="#4CA7FF"/>
+<use href="#c" transform="translate(712 83) scale(1.2)" color="#4CA7FF"/>
+<text x="170" y="264" text-anchor="middle" class="head">A · Gateway</text>
+<text x="480" y="264" text-anchor="middle" class="head">B · Two-way connection</text>
+<text x="790" y="264" text-anchor="middle" class="head">C · Compact shield</text>
+<text x="170" y="287" text-anchor="middle" class="sub">Open arrow tail + outgoing tip</text>
+<text x="480" y="287" text-anchor="middle" class="sub">Two channels + opposing tips</text>
+<text x="790" y="287" text-anchor="middle" class="sub">Contained arrow cutout</text>
+<use href="#a" transform="translate(65 325) scale(.38)" color="#101f42"/><use href="#a" transform="translate(142 340) scale(.19)" color="#4CA7FF"/>
+<use href="#b" transform="translate(375 325) scale(.38)" color="#101f42"/><use href="#b" transform="translate(452 340) scale(.19)" color="#4CA7FF"/>
+<use href="#c" transform="translate(685 325) scale(.38)" color="#101f42"/><use href="#c" transform="translate(762 340) scale(.19)" color="#4CA7FF"/>
+<rect x="200" y="316" width="76" height="76" rx="17" fill="#101f42"/><use href="#a" transform="translate(214 328) scale(.38)" color="#fff"/>
+<rect x="510" y="316" width="76" height="76" rx="17" fill="#101f42"/><use href="#b" transform="translate(524 328) scale(.38)" color="#fff"/>
+<rect x="820" y="316" width="76" height="76" rx="17" fill="#101f42"/><use href="#c" transform="translate(834 328) scale(.38)" color="#fff"/>
+</svg>

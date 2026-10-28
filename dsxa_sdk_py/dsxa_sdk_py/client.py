@@ -84,7 +84,7 @@ class _BaseDSXAClient:
         *,
         protected_entity: Optional[int],
         custom_metadata: Optional[str],
-        password: Optional[str],
+        password: Optional[str] = None,
         base64_flag: bool = False,
     ) -> Dict[str, str]:
         def _normalize_header_value(value: str) -> str:

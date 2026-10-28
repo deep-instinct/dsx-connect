@@ -1,0 +1,22 @@
+fullnameOverride: jira-connector
+image:
+  repository: dsxconnect/jira-connector
+  tag: ""
+  pullPolicy: IfNotPresent
+existingTokenSecret: jira-prototype-token
+persistence:
+  claimName: jira-monitor-data
+  size: 1Gi
+env:
+  DSXCONNECTOR_CONNECTOR_URL: http://jira-connector:8680
+  DSXCONNECTOR_DSX_CONNECT_URL: http://dsx-connect-api:8091
+  DSXCONNECTOR_REGISTER_WITH_CORE: "false"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
+  DSXCONNECTOR_DISPLAY_NAME: atlassian-jira-connector
+  DSXCONNECTOR_JIRA_SITE_URL: https://your-site.atlassian.net
+  DSXCONNECTOR_JIRA_EMAIL: you@example.com
+  DSXCONNECTOR_ASSET: key = TEST-1
+  DSXCONNECTOR_MONITOR: "false"
+  DSXCONNECTOR_JIRA_DISCOVER_SPACES: "false"
+  DSXCONNECTOR_JIRA_DEMO_MODE: "true"
+  DSXCONNECTOR_JIRA_DEMO_ISSUE_KEYS: '["TEST-1"]'

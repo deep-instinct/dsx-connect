@@ -5,6 +5,16 @@ pytest.importorskip("azure.storage.blob")
 from shared.models.connector_models import ScanRequestModel, ItemActionEnum
 
 
+def test_normalize_blob_location_accepts_container_prefixed_identity():
+    import connectors.azure_blob_storage.azure_blob_storage_connector as ac
+
+    ac.config.asset_container = "lg-test-02"
+
+    assert ac._normalize_blob_location("report.pdf") == "report.pdf"
+    assert ac._normalize_blob_location("lg-test-02/report.pdf") == "report.pdf"
+    assert ac._normalize_blob_location("lg-test-02/folder/report.pdf") == "folder/report.pdf"
+
+
 @pytest.mark.asyncio
 async def test_full_scan_filters(monkeypatch):
     import connectors.azure_blob_storage.azure_blob_storage_connector as ac

@@ -1,0 +1,38 @@
+--- a/icap_server/di_icap_server.py
++++ b/icap_server/di_icap_server.py
+@@ -91,7 +91,8 @@
+         return (self.total_data_volume / self.total_ms) / 1024
+ 
+ class ForkingWithAtomicMixIn(socketserver.ForkingMixIn):
+-    max_children = 5000
++    max_children = int(os.environ.get('ICAP_MAX_CHILDREN', '5000'))
++    request_queue_size = int(os.environ.get('ICAP_LISTEN_BACKLOG', '5'))
+     def get_active_children_count(self):
+         if self.active_children is None:
+             return 0
+@@ -151,7 +152,7 @@
+         super().shutdown_request(request)
+         if os.getpid() != self.main_pid:
+             # sleep here to let the event message be sent to the network service before the process terminates
+-            time.sleep(10)
++            time.sleep(float(os.environ.get('ICAP_CHILD_LINGER_SECONDS', '10')))
+ 
+ 
+ class ThreadingSimpleSSLServer(socketserver.ThreadingMixIn, ICAPServer):
+@@ -186,7 +187,7 @@
+         super().shutdown_request(request)
+         if os.getpid() != self.main_pid:
+             # sleep here to let the event message be sent to the network service before the process terminates
+-            time.sleep(10)
++            time.sleep(float(os.environ.get('ICAP_CHILD_LINGER_SECONDS', '10')))
+ 
+ @dataclass
+ class IcapClassifierContext(object):
+@@ -692,6 +693,7 @@
+     else:
+         server = ForkingSimpleServer((local_ip, PORT), ICAPHandler)
+     
++    logger.log(f'queue patch: max_children={server.max_children} backlog={server.request_queue_size} linger={os.environ.get("ICAP_CHILD_LINGER_SECONDS", "10")}', 'INFO')
+     logger.log("Starting Deep Instinct icap server on IP: {} Port: {}".format(local_ip, PORT), 'INFO')
+     try:
+         while 1:

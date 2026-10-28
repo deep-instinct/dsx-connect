@@ -5,7 +5,13 @@ from starlette.responses import StreamingResponse, JSONResponse
 
 from connectors.azure_blob_storage.azure_blob_storage_client import AzureBlobClient
 from connectors.framework.dsx_connector import DSXConnector, _SCAN_ENQ_COUNTER, apply_requested_action_config_update, resolve_item_action_request
-from shared.models.connector_models import ScanRequestModel, ItemActionEnum, ConnectorInstanceModel
+from shared.models.connector_models import (
+    AssetDiscoveryItem,
+    AssetDiscoveryResponse,
+    ScanRequestModel,
+    ItemActionEnum,
+    ConnectorInstanceModel,
+)
 from shared.dsx_logging import dsx_logging
 from shared.models.status_responses import StatusResponse, StatusResponseEnum, ItemActionStatusResponse
 from connectors.azure_blob_storage.config import ConfigManager
@@ -61,6 +67,141 @@ def _azure_runtime_value(key: str) -> str:
 
 def _azure_masked_value(key: str) -> str:
     return "**********" if _azure_runtime_value(key) else ""
+
+
+def _normalize_blob_location(location: str) -> str:
+    """Accept connector-relative keys and DSX-Connect container/key identities."""
+    normalized = str(location or "").lstrip("/")
+    container = str(config.asset_container or "").strip().strip("/")
+    prefix = f"{container}/" if container else ""
+    if prefix and normalized.startswith(prefix):
+        return normalized[len(prefix):]
+    return normalized
+
+
+def _matches_asset_filter(value: str, *, mode: str | None, needle: str | None) -> bool:
+    if not mode or not needle:
+        return True
+    normalized_value = value.lower()
+    normalized_needle = needle.strip().lower()
+    if not normalized_needle:
+        return True
+    normalized_mode = mode.strip().lower().replace("-", "_")
+    if normalized_mode in {"begins_with", "starts_with", "prefix"}:
+        return normalized_value.startswith(normalized_needle)
+    if normalized_mode in {"ends_with", "suffix"}:
+        return normalized_value.endswith(normalized_needle)
+    if normalized_mode in {"contains", "substring"}:
+        return normalized_needle in normalized_value
+    return True
+
+
+@connector.asset_discovery
+async def asset_discovery_handler(
+    asset_type: str = "bucket",
+    source: str = "configured_asset",
+    limit: int = 100,
+    cursor: str | None = None,
+    asset_filter_mode: str | None = None,
+    asset_filter_value: str | None = None,
+) -> AssetDiscoveryResponse:
+    """Discover Azure Blob containers, with the configured container available by default."""
+    normalized_type = (asset_type or "bucket").strip().lower()
+    if ":" in normalized_type:
+        normalized_type, requested_source = normalized_type.split(":", 1)
+    else:
+        requested_source = (source or "configured_asset").strip().lower()
+
+    if normalized_type not in {"bucket", "buckets", "container", "containers"}:
+        return AssetDiscoveryResponse(
+            asset_type=normalized_type,
+            source=requested_source,
+            status="unsupported",
+            assets=[],
+            unsupported=True,
+            message=f"unsupported_asset_type:{normalized_type}",
+        )
+
+    configured_selector = (config.asset or "").strip().strip("/")
+
+    def configured_asset_item() -> AssetDiscoveryItem | None:
+        if not configured_selector:
+            return None
+        if not _matches_asset_filter(
+            configured_selector,
+            mode=asset_filter_mode,
+            needle=asset_filter_value,
+        ):
+            return None
+        container_name = configured_selector.split("/", 1)[0]
+        metadata = {
+            "provider": "azure_blob",
+            "kind": "configured_container",
+            "container": container_name,
+        }
+        if "/" in configured_selector:
+            metadata["prefix"] = configured_selector.split("/", 1)[1]
+            metadata["kind"] = "configured_container_prefix"
+        return AssetDiscoveryItem(
+            id=configured_selector,
+            display_name=configured_selector,
+            selector=configured_selector,
+            metadata=metadata,
+        )
+
+    if requested_source == "configured_asset":
+        item = configured_asset_item()
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="configured_asset",
+            status="success" if item else ("not_configured" if not configured_selector else "success"),
+            assets=[item] if item else [],
+            message="configured_asset_not_set" if not configured_selector else None,
+        )
+
+    try:
+        containers = list(abs_client.containers())
+    except Exception as exc:
+        dsx_logging.warning(f"Azure container discovery failed: {exc}")
+        message = str(exc)
+        return AssetDiscoveryResponse(
+            asset_type="bucket",
+            source="inventory_enumeration",
+            status="permission_denied" if "403" in message or "permission" in message.lower() else "error",
+            assets=[],
+            message=f"asset_discovery_failed:{message}",
+            required_permission="Microsoft.Storage/storageAccounts/blobServices/containers/read",
+        )
+
+    containers = [
+        name for name in containers
+        if _matches_asset_filter(name, mode=asset_filter_mode, needle=asset_filter_value)
+    ]
+    start = max(0, int(cursor or 0)) if str(cursor or "").isdigit() else 0
+    effective_limit = max(1, min(int(limit or 100), 1000))
+    selected = containers[start:start + effective_limit]
+    next_index = start + len(selected)
+    configured_item = configured_asset_item() if requested_source in {"all", "configured_and_inventory", "configured_plus_inventory"} else None
+    assets = [
+        configured_item
+        if configured_item is not None and name == configured_item.selector
+        else AssetDiscoveryItem(
+            id=name,
+            display_name=name,
+            selector=name,
+            metadata={"provider": "azure_blob", "kind": "container", "container": name},
+        )
+        for name in selected
+    ]
+    if configured_item is not None and all(item.selector != configured_item.selector for item in assets):
+        assets.insert(0, configured_item)
+    return AssetDiscoveryResponse(
+        asset_type="bucket",
+        source=requested_source,
+        status="success",
+        assets=assets,
+        next_cursor=str(next_index) if next_index < len(containers) else None,
+    )
 
 
 @connector.startup
@@ -271,7 +412,7 @@ async def item_action_handler(scan_event_queue_info: ScanRequestModel) -> ItemAc
         SimpleResponse: A response indicating that the remediation action was performed successfully,
             or an error if the action is not implemented.
     """
-    file_path = scan_event_queue_info.location
+    file_path = _normalize_blob_location(scan_event_queue_info.location)
     requested_action, target_prefix, target_filename, requested_tags = _resolve_requested_item_action(scan_event_queue_info)
     if not abs_client.key_exists(config.asset_container, file_path):
         return ItemActionStatusResponse(status=StatusResponseEnum.ERROR, item_action=requested_action,
@@ -362,16 +503,17 @@ async def read_file_handler(scan_event_queue_info: ScanRequestModel) -> StatusRe
                 status_code=503,
             )
         started = time.perf_counter()
+        file_path = _normalize_blob_location(scan_event_queue_info.location)
         file_stream, size_bytes = abs_client.get_blob_stream(
             config.asset_container,
-            scan_event_queue_info.location,
+            file_path,
             max_concurrency=getattr(config, "download_max_concurrency", 8),
         )
         prep_elapsed_ms = (time.perf_counter() - started) * 1000.0
         dsx_logging.info(
             "azure.read_file.ready job=%s blob=%s bytes=%s prep_elapsed_ms=%.1f download_max_concurrency=%s",
             getattr(scan_event_queue_info, "scan_job_id", None),
-            scan_event_queue_info.location,
+            file_path,
             size_bytes,
             prep_elapsed_ms,
             getattr(config, "download_max_concurrency", 8),

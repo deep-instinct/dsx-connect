@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import ssl
 import statistics
 from pathlib import Path
@@ -11,7 +12,7 @@ from urllib import request as urllib_request
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from dsx_connect_v2.api.dependencies import get_control_plane_service
 from dsx_connect_v2.api.job_service_dependencies import get_job_service
@@ -88,6 +89,7 @@ class UIIntegrationSummary(BaseModel):
 
 
 class UIJobItemStageSummary(BaseModel):
+    file_name: str | None = None
     job_item_id: str
     object_identity: str
     state: str
@@ -196,6 +198,8 @@ class UIScanResultsStatsSummary(BaseModel):
 
 
 class UIScanResultTargetSummary(BaseModel):
+    connector_name: str | None = None
+    scope_name: str | None = None
     integration_id: str | None = None
     scope_id: str | None = None
     object_identity: str | None = None
@@ -241,6 +245,16 @@ class UIAssetsConnectorsResponse(BaseModel):
 
 
 class UIScopeScanRequest(BaseModel):
+    issue_keys: list[str] = Field(default_factory=list, max_length=50)
+
+    @field_validator("issue_keys")
+    @classmethod
+    def validate_issue_keys(cls, keys):
+        normalized = list(dict.fromkeys(key.strip().upper() for key in keys))
+        if any(not re.fullmatch(r"[A-Z][A-Z0-9_]*-[0-9]+", key) for key in normalized):
+            raise ValueError("Enter Jira issue keys such as RD-28133")
+        return normalized
+
     reader_strategy: str = "proxy"
     path: str | None = None
     limit: int = Field(default=10000, ge=1, le=100000)
@@ -386,6 +400,7 @@ def _summarize_job_item(item: JobItemRecord) -> UIJobItemStageSummary:
     file_info = scan_result.get("file_info") or scan_result.get("fileInfo") or {}
     return UIJobItemStageSummary(
         job_item_id=item.job_item_id,
+        file_name=(item.payload.get("attribution") or {}).get("file_name"),
         object_identity=item.object_identity,
         state=item.state,
         scan=item.scan_stage.state,
@@ -1980,12 +1995,18 @@ async def list_scan_results(
     item_limit: int = Query(default=100, ge=1, le=1000),
     stats_item_limit: int = Query(default=1000, ge=1, le=5000),
     job_service: JobService = Depends(get_job_service),
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> UIScanResultsResponse:
     jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
     results = [
         _summarize_scan_result(job_service, job, item_limit=item_limit, stats_item_limit=stats_item_limit)
         for job in jobs
     ]
+    integration_names = {i.integration_id: i.display_name for i in control_plane.list_integrations()}
+    scope_names = {s.scope_id: s.display_name for s in control_plane.list_scopes()}
+    for result in results:
+        result.target.connector_name = integration_names.get(result.job.integration_id) or result.job.payload.get("connectorName")
+        result.target.scope_name = scope_names.get(result.job.scope_id)
     return UIScanResultsResponse(
         results=results,
         stats=_summarize_scan_results_stats(results),
@@ -2211,12 +2232,19 @@ async def scan_scope_selector(
         integration,
         control_plane.list_connector_instances(integration_id=scope.integration_id),
     )
+    listing_scope = scope.resource_selector
+    if request.issue_keys:
+        if integration.platform.lower() != "jira":
+            raise HTTPException(status_code=400, detail="Issue selection is only supported for Jira")
+        listing_scope = f"({listing_scope}) AND (key in ({','.join(request.issue_keys)}))"
     listed_objects, listing_supported, listing_pages = _fetch_connector_object_listing(
         base_url,
         connector_name,
-        scope=scope.resource_selector,
+        scope=listing_scope,
         max_items=request.limit,
     )
+    if request.issue_keys and (not listing_supported or not listed_objects):
+        raise HTTPException(status_code=400, detail="No eligible attachments on those issues within this protected scope and demo allowlist")
     preview_items: list[str] = []
     if not listed_objects and not listing_supported:
         preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
@@ -2243,6 +2271,12 @@ async def scan_scope_selector(
             )
             if listed.get("size_in_bytes") is not None:
                 payload_item["sizeInBytes"] = listed.get("size_in_bytes")
+            filename = listed.get("display_name") or (listed.get("metadata") or {}).get("filename")
+            if filename:
+                payload_item["metainfo"] = str(filename)
+                payload_item["attribution"] = {
+                    **(payload_item.get("attribution") or {}), "file_name": str(filename),
+                }
         elif preview_items:
             payload_item["path"] = _scope_relative_object_path(scope.resource_selector, object_identity)
         else:

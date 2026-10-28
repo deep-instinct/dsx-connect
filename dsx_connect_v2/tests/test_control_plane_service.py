@@ -142,6 +142,79 @@ def test_register_connector_instance_preserves_existing_reader_config() -> None:
     assert updated.config == {"reader": {"default_strategy": "native"}}
 
 
+def _gcs_registration(instance_id: str, base_url: str) -> ConnectorInstanceRegister:
+    return ConnectorInstanceRegister(
+        connector_instance_id=instance_id,
+        platform="gcs",
+        platform_key="project-a",
+        connector_name="google-cloud-storage-connector",
+        base_url=base_url,
+        capabilities={"discover": True, "read": True, "write": True},
+    )
+
+
+def test_register_connector_instance_refreshes_generated_proxy_config_when_address_changes() -> None:
+    service = build_service()
+    service.register_connector_instance(
+        _gcs_registration("gcs-pod-1", "http://gcs-connector/google-cloud-storage-connector")
+    )
+
+    # Same instance re-registers on a new port (e.g. moved off :80 for a non-root runtime).
+    service.register_connector_instance(
+        _gcs_registration("gcs-pod-1", "http://gcs-connector:8080/google-cloud-storage-connector")
+    )
+
+    config = service.list_integrations()[0].config
+    assert config["reader"]["proxy"]["endpoint_url"] == (
+        "http://gcs-connector:8080/google-cloud-storage-connector/read_file"
+    )
+    assert config["delivery"]["proxy"]["endpoint_url"] == (
+        "http://gcs-connector:8080/google-cloud-storage-connector/write_file"
+    )
+
+
+def test_register_connector_instance_keeps_generated_proxy_config_while_old_address_is_live() -> None:
+    service = build_service()
+    service.register_connector_instance(
+        _gcs_registration("gcs-pod-1", "http://gcs-connector-a/google-cloud-storage-connector")
+    )
+
+    service.register_connector_instance(
+        _gcs_registration("gcs-pod-2", "http://gcs-connector-b/google-cloud-storage-connector")
+    )
+
+    config = service.list_integrations()[0].config
+    assert config["reader"]["proxy"]["base_url"] == "http://gcs-connector-a/google-cloud-storage-connector"
+
+
+def test_register_connector_instance_does_not_refresh_operator_proxy_config() -> None:
+    service = build_service()
+    custom_reader = {
+        "default_strategy": "proxy",
+        "proxy": {
+            "endpoint_url": "http://gcs-connector/google-cloud-storage-connector/read_file",
+            "base_url": "http://gcs-connector/google-cloud-storage-connector",
+            "connector_name": "google-cloud-storage-connector",
+            "timeout_seconds": 90,
+        },
+    }
+    integration = service.create_integration(
+        IntegrationCreate(
+            platform="gcs",
+            platform_key="project-a",
+            display_name="Project A",
+            config={"reader": custom_reader},
+        )
+    )
+
+    service.register_connector_instance(
+        _gcs_registration("gcs-pod-1", "http://gcs-connector:8080/google-cloud-storage-connector")
+    )
+
+    updated = service.get_integration_or_404(integration.integration_id)
+    assert updated.config["reader"] == custom_reader
+
+
 def test_connector_heartbeat_backfills_reader_config_for_existing_empty_integration() -> None:
     service = build_service()
     integration = service.create_integration(

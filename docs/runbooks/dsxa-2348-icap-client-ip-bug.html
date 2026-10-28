@@ -1,0 +1,250 @@
+<title>DSX/A ICAP X-Client-IP Bug</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single-column defect report; a header block with severity/version facts, then numbered report sections; code and tables scroll in place. */
+:root{
+  --bg:#f6f7f8; --paper:#ffffff; --fg:#1c2127; --muted:#5d6772; --rule:#dde1e5;
+  --accent:#9b2c2c; --accent-soft:#fbeaea; --ok:#2f6b3a; --ok-soft:#e7f3e9; --code-bg:#eff1f3;
+  --body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121518; --paper:#191d21; --fg:#e4e8eb; --muted:#9aa4ad; --rule:#2b3238;
+  --accent:#f08a8a; --accent-soft:#3a1f20; --ok:#7fcf8e; --ok-soft:#18301d; --code-bg:#22282d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121518; --paper:#191d21; --fg:#e4e8eb; --muted:#9aa4ad; --rule:#2b3238;
+  --accent:#f08a8a; --accent-soft:#3a1f20; --ok:#7fcf8e; --ok-soft:#18301d; --code-bg:#22282d; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.6}
+.wrap{max-width:880px;margin:0 auto;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0 64px}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:2;background:var(--bg);border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding-block:10px}
+.bar p{margin:0;color:var(--muted);font-size:13px}
+.act{display:flex;gap:12px;align-items:center}
+button{font:500 13px var(--body);background:var(--fg);color:var(--paper);border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#status{font-size:13px;color:var(--muted)}
+article{background:var(--paper);border:1px solid var(--rule);border-radius:6px;margin-top:20px;padding-inline:clamp(16px,4vw,44px);padding-block:28px 40px}
+.eyebrow{font:600 11px/1 var(--body);letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin:0 0 10px}
+h1{font:600 clamp(22px,3.4vw,28px)/1.25 var(--body);margin:0 0 14px;text-wrap:balance}
+h2{font:600 18px/1.35 var(--body);margin:34px 0 8px;padding-top:16px;border-top:1px solid var(--rule)}
+h3{font:600 15px/1.4 var(--body);margin:20px 0 6px}
+p,li{max-width:70ch}
+ul,ol{padding-left:22px} li{margin:3px 0}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:4px;overflow:hidden;margin:6px 0 4px}
+.facts div{background:var(--paper);padding:10px 12px;min-width:0}
+.facts b{display:block;font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:2px}
+.sev{color:var(--accent);font-weight:600}
+code{font-family:var(--mono);font-size:.87em;background:var(--code-bg);padding:1px 5px;border-radius:3px;overflow-wrap:anywhere}
+pre{font-family:var(--mono);font-size:12.5px;line-height:1.5;background:var(--code-bg);border-radius:4px;padding:12px 14px;overflow-x:auto;margin:8px 0 14px}
+pre code{background:none;padding:0;font-size:inherit;overflow-wrap:normal}
+.bad{color:var(--accent);font-weight:600} .good{color:var(--ok);font-weight:600}
+.tbl{overflow-x:auto;margin:8px 0 16px}
+table{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;vertical-align:top;border:1px solid var(--rule);padding:6px 10px}
+th{background:var(--code-bg);font-weight:600}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:10px 14px;border-radius:0 4px 4px 0;margin:12px 0}
+.callout.ok{border-color:var(--ok);background:var(--ok-soft)}
+.callout p{margin:4px 0}
+</style>
+
+<div class="wrap">
+  <div class="bar">
+    <p>Press <strong>Copy report</strong>, then paste it into the ticket or email.</p>
+    <div class="act"><span id="status" role="status"></span><button id="copy" type="button">Copy report</button></div>
+  </div>
+
+<article id="doc">
+<p class="eyebrow">Bug report · DSX for Applications · ICAP</p>
+<h1>ICAP returns 500 "Classification Failed" for every malicious file in disconnected deployments when the request has no X-Client-IP header</h1>
+
+<div class="facts">
+  <div><b>Product / build</b>DSX/A Scanner 4.3.0.2348 (<code>DeepInstinctICAP/4.3.0.2348p</code>)</div>
+  <div><b>Severity</b><span class="sev">High</span>: malicious ICAP detections return a server error and are not logged</div>
+  <div><b>Affects</b>Disconnected (air-gapped) ICAP, RESPMOD and REQMOD</div>
+  <div><b>Workaround</b>Client sends <code>X-Client-IP</code></div>
+</div>
+
+<h2>Summary</h2>
+<p>In a disconnected deployment, the ICAP service answers every <strong>malicious</strong> verdict with <code>ICAP/1.0 500 Internal Server Error</code>, plus an encapsulated <code>HTTP/1.1 500</code> and <code>X-Blocked-Reason: Classification Failed</code>, whenever the ICAP request has no <code>X-Client-IP</code> header. The file is detected, but the response is a server error, no verdict is written to the scanner log, and the end user gets an HTTP 500 instead of the block page.</p>
+<p>Clean files are unaffected. The same image in a connected deployment returns the correct <code>200</code> + <code>HTTP/1.1 403</code> block response. When the client sends <code>X-Client-IP</code>, the disconnected deployment behaves correctly too.</p>
+<p>The root cause is a missing-header default in <code>pyicap.py</code> that sets the client IP to the integer <code>78</code>. That integer crashes the legacy block-page path, which only disconnected deployments use because their default policy package has no <code>P_006</code> block page. Details are in the root-cause section below.</p>
+
+<h2>Environment</h2>
+<div class="tbl"><table>
+<tr><th>Item</th><th>Value</th></tr>
+<tr><td>Scanner image</td><td><code>dpa-rocky9-4.3.0.2348-base</code> from <code>dpa-rocky9-4.3.0.2348-airgap.tgz</code> (Disconnected Environment download); the same image was used for the connected comparison</td></tr>
+<tr><td>Helm chart</td><td><code>dpa-helm-4.3.0.2348.tgz</code>, <code>cloud_provider: GCP-OCP</code>, <code>air_gapped: true</code>, <code>scanner_id: 1</code></td></tr>
+<tr><td>Reputation services</td><td><code>dcloud_rocky9-4.3.0-14102026</code> (local D-Cloud)</td></tr>
+<tr><td>Platform</td><td>OpenShift 4.22 single-node on GCP; the namespace has an egress firewall blocking all internet access (simulated air gap)</td></tr>
+<tr><td>Comparison deployment</td><td>The same 4.3.0.2348 image in connected mode, registered to a DSX console, in another namespace on the same cluster</td></tr>
+</table></div>
+
+<h2>Steps to reproduce</h2>
+<ol>
+<li>Deploy the 4.3.0.2348 chart with <code>global.air_gapped: true</code> and <code>icap.deployment_enabled: true</code>, using the disconnected images and the default (built-in) policy.</li>
+<li>Send an ICAP RESPMOD or REQMOD request containing a malicious file, such as the EICAR test string or a real malicious PDF, <strong>without</strong> an <code>X-Client-IP</code> header.</li>
+</ol>
+<p>With c-icap-client (it sends no X-Client-IP by default):</p>
+<pre><code>c-icap-client -i &lt;scanner&gt; -p 1344 -s response -f eicar.com -v</code></pre>
+<p>Or with a raw request:</p>
+<pre><code>RESPMOD icap://&lt;scanner&gt;:1344/response ICAP/1.0
+Host: &lt;scanner&gt;
+Allow: 204
+Encapsulated: res-hdr=0, res-body=79
+
+HTTP/1.1 200 OK
+Content-Type: application/octet-stream
+Content-Length: 68
+
+44
+X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+0
+</code></pre>
+
+<h2>Expected result</h2>
+<pre><code>ICAP/1.0 200 OK
+X-Response-Info: Blocked
+X-Blocked-Reason: Infected
+X-Virus-ID: EICARType
+X-Client-IP: -
+Encapsulated: res-hdr=0, res-body=...
+
+HTTP/1.1 403 Forbidden
+(block page body)</code></pre>
+<p>The scanner log should contain a <code>"verdict": "Malicious"</code> entry.</p>
+
+<h2>Actual result</h2>
+<p>This came from a real malicious PDF scanned with c-icap-client; EICAR gives the same response:</p>
+<pre><code><span class="bad">ICAP/1.0 500 Internal Server Error</span>
+Service-ID: Deep Instinct Scanner
+X-Violations-Found: 1
+X-Infection-Found: Type=0; Resolution=2; Threat=PDFFileType
+X-Response-Info: Blocked
+X-Blocked-Reason: Infected
+<span class="bad">X-Blocked-Reason: Classification Failed</span>
+X-Virus-ID: PDFFileType
+<span class="bad">X-Client-IP: 78</span>
+X-Server-IP: -
+Server: DeepInstinctICAP/4.3.0.2348p
+Encapsulated: res-hdr=0, null-body=93
+
+<span class="bad">HTTP/1.1 500</span>
+Block-Reason: Malware
+Block-Reason: Classification Failed</code></pre>
+<p>Scanner log (the <code>dpa</code> container of the ICAP pod). No verdict entry is written for the file:</p>
+<pre><code>I p:2075 t:2075 Classifier failed handling file. Error: a bytes-like object is required, not 'int'</code></pre>
+
+<h2>Test matrix</h2>
+<p>All tests used the 4.3.0.2348 image, with the same requests sent to both deployments.</p>
+<div class="tbl"><table>
+<tr><th>Malicious test</th><th>Disconnected, no X-Client-IP</th><th>Disconnected, X-Client-IP sent</th><th>Connected, either</th></tr>
+<tr><td>RESPMOD, EICAR</td><td class="bad">500 / HTTP 500</td><td class="good">200 / HTTP 403</td><td class="good">200 / HTTP 403</td></tr>
+<tr><td>RESPMOD, EICAR in a zip</td><td class="bad">500 / HTTP 500</td><td class="good">200 / HTTP 403</td><td class="good">200 / HTTP 403</td></tr>
+<tr><td>RESPMOD with Preview + ieof, EICAR</td><td class="bad">500 / HTTP 500</td><td class="good">200 / HTTP 403</td><td class="good">200 / HTTP 403</td></tr>
+<tr><td>REQMOD, EICAR upload</td><td class="bad">500 / HTTP 500</td><td class="good">200 / HTTP 403</td><td class="good">200 / HTTP 403</td></tr>
+<tr><td>REQMOD, EICAR in a zip</td><td class="bad">500 / HTTP 500</td><td class="good">200 / HTTP 403</td><td class="good">200 / HTTP 403</td></tr>
+<tr><td>RESPMOD, real malicious PDF</td><td class="bad">500 / HTTP 500</td><td>not tested</td><td>not tested</td></tr>
+</table></div>
+<p>Clean files (text, PDF, DOCX, RTF, Mach-O, HEIC, a zip of clean files, a 2.4 MB text file, an empty file) return <code>204</code> in both deployments, with and without X-Client-IP, in RESPMOD, REQMOD and Preview. REST scanning (<code>/scan/binary/v2</code>, <code>/scan/by_path</code>, <code>/scan/by_hash</code>) is unaffected.</p>
+
+<h2>Root cause</h2>
+<h3>1. Missing X-Client-IP becomes the integer 78</h3>
+<p><code>/bin/perimeter/icap_server/pyicap.py</code>, line 479:</p>
+<pre><code>self.client_ip = self.headers.get(b'x-client-ip', b'No X-Client-IP header')[0]</code></pre>
+<p>Header values are stored as lists, so <code>[0]</code> is meant to take the first value. The fallback for a missing header is a <code>bytes</code> string rather than a list, so <code>[0]</code> returns its first byte: <code>ord('N') == 78</code>. <code>ctx.request_src_ip</code> is then an <code>int</code>. This affects every deployment and shows up as <code>X-Client-IP: 78</code> in the response headers and block pages.</p>
+
+<h3>2. The legacy block page cannot handle an int</h3>
+<p><code>/bin/perimeter/icap_server/icap_result_handler.py</code>, line 185 picks the block page:</p>
+<pre><code>body = self.get_policy_block_page() or self.get_legacy_block_page()</code></pre>
+<p><code>get_policy_block_page()</code> renders policy file <code>P_006</code> and passes every value through <code>normalize_value()</code>, which copes with the int. <code>get_legacy_block_page()</code> (line 66) does a raw bytes replace:</p>
+<pre><code>body = body.replace(b"SOURCE_IP", self.ctx.request_src_ip)   # int -&gt; TypeError</code></pre>
+<p>That raises <code>TypeError: a bytes-like object is required, not 'int'</code>. The exception handler in <code>di_icap_server.py</code> (around line 565) then turns the response into ICAP 500 "Classification Failed".</p>
+
+<h3>3. Why only disconnected deployments fail</h3>
+<p>The policy from a connected console includes <code>P_006</code> (the customizable block page), so the safe policy path is used. The <strong>disconnected default policy package has no <code>P_006</code></strong>: compared with the connected file set, it lacks <code>P_006</code> and <code>DP_001</code>. So <code>get_policy_block_page()</code> returns <code>None</code>, the legacy path runs, and every malicious verdict fails. Clean files never build a block page, so they're unaffected.</p>
+
+<h2>Impact</h2>
+<ul>
+<li><strong>Proxy behavior is undefined.</strong> Many ICAP clients treat a 500 as a scanner failure and either fail open (deliver the malicious file) or fail closed (block all traffic), depending on their settings.</li>
+<li><strong>End users see HTTP 500</strong> on blocked uploads and downloads instead of the 403 block page.</li>
+<li><strong>Contradictory headers:</strong> the response carries both <code>X-Blocked-Reason: Infected</code> and <code>Classification Failed</code>.</li>
+<li><strong>No audit trail:</strong> no <code>"verdict": "Malicious"</code> entry is logged, so malicious ICAP detections are invisible in the scanner logs. In disconnected mode there's no console to fall back on.</li>
+<li><strong>Wrong data in both modes:</strong> <code>X-Client-IP: 78</code> appears in response headers, and in the client-IP field of the block page.</li>
+</ul>
+
+<div class="callout ok">
+<p><strong>Workaround:</strong> configure the ICAP client to send <code>X-Client-IP</code>. Most production proxies do so by default; in Squid, set <code>adaptation_send_client_ip on</code>. With the header present, the disconnected deployment returns the correct 200 / 403 response and logs the verdict.</p>
+</div>
+
+<h2>Suggested fix</h2>
+<ol>
+<li><code>pyicap.py</code>: make the default a list, so <code>[0]</code> returns bytes:
+<pre><code>self.client_ip = self.headers.get(b'x-client-ip', [b'-'])[0]</code></pre></li>
+<li><code>icap_result_handler.get_legacy_block_page()</code>: normalize values before the replace, as the policy page does:
+<pre><code>body = body.replace(b"SOURCE_IP", self.normalize_value(self.ctx.request_src_ip).encode("utf-8"))</code></pre></li>
+<li>Include <code>P_006</code> in the disconnected default policy package, so air-gapped customers get the same customizable block page as connected ones.</li>
+<li>Add a regression test: a malicious RESPMOD and REQMOD with no X-Client-IP, against both the policy and the legacy block-page paths.</li>
+</ol>
+
+<h2>Additional defects found in the same build (load testing, Oct 20)</h2>
+<p>These were found while reproducing a customer ICAP load-test ticket on the connected 4.3.0.2348 build (images built Oct 18), with ICAP over TLS and the customer's own test client. Each is independent of the X-Client-IP bug above.</p>
+
+<h3>2. ICAP forks one process per connection and exceeds the platform's per-pod process limit</h3>
+<p><span class="sev">Severity: High.</span> Under connection churn, the ICAP pod returns ICAP 500s and drops connections instead of throttling or queueing.</p>
+<ul>
+<li><strong>Trigger:</strong> 100 concurrent clients, each opening a new TCP + TLS connection per file (the customer's <code>aggressive_tls_socketing: true</code>), against one ICAP pod.</li>
+<li><strong>Mechanism:</strong> <code>di_icap_server.py</code> uses <code>socketserver.ForkingMixIn</code> (<code>ForkingWithAtomicMixIn</code>, <code>max_children = 5000</code>), so every connection forks. The classifier forks again (<code>ClassifierPython.cpp:268</code>). The pod reached about 4,050 processes within seconds. OpenShift's default <code>podPidsLimit</code> is 4096, so further forks failed with <code>EAGAIN</code>.</li>
+<li><strong>Symptoms:</strong> <code>Failed to fork, errno: 11</code>, <code>BlockingIOError: [Errno 11] Resource temporarily unavailable</code>, and <code>Classifier failed handling file. Error: Resource temporarily unavailable</code>, giving ICAP 500 "Classification Failed". Clients saw TCP resets and broken pipes. In a 120 s run: 107 × ICAP 500, 301 broken pipes and 180 resets. Reputation lookups also failed with curl result 6 (could not resolve host) while processes were exhausted.</li>
+<li><strong>Hidden by CPU limits:</strong> with the default 4-core limit the pod saturates CPU first. Requests then queue for up to 56 s and some hit client read timeouts. Raising the limit to 8 cores exposed the process exhaustion.</li>
+<li><strong>Mitigations that worked:</strong> three replicas (no errors, 206 files/s, peak 2,724 processes per pod), or clients reusing connections.</li>
+</ul>
+<p><strong>Suggested fix:</strong> derive the child cap from the container's effective process limit (cgroup <code>pids.max</code> of the pod), and make it well below it. When the cap is reached, queue the request or answer ICAP 503 instead of failing mid-request. Consider a bounded worker pool, or threads for TLS handling, instead of fork-per-connection, and reap exited children promptly. Document per-pod concurrency sizing and recommend HPA for ICAP.</p>
+
+<h3>3. The REST liveness probe fails when the default protected application has token binding</h3>
+<p><span class="sev">Severity: High.</span> The REST pod restarts in a loop, and scanning stops during each restart.</p>
+<ul>
+<li><strong>Trigger:</strong> in the console, the scanner's default protected application has a protected-application token configured.</li>
+<li><strong>Mechanism:</strong> <code>Utils/check_pod_liveness.py</code> <code>test_rest()</code> posts a test file to <code>localhost:5000/scan/binary/v2</code>. It sends <code>AUTH</code> when an auth token is set, plus <code>Test-File: dpa-test</code>, but no <code>protected_entity</code> and no <code>Protected-Application-Token</code>. The request falls to the token-bound default entity and gets 401 (<code>bad res in test_rest: &lt;Response [401]&gt;</code>), so the kubelet kills the <code>dpa</code> container.</li>
+<li><strong>Observed:</strong> 96 restarts over about 4 days; the loop stopped as soon as the token was removed from the default protected application.</li>
+</ul>
+<p><strong>Suggested fix:</strong> exempt the internal health check from token binding (it already sends a <code>Test-File</code> marker), or give the probe a dedicated health endpoint that doesn't go through protected-application checks.</p>
+
+<h3>4. Cloud reputation lookups time out under moderate load</h3>
+<p><span class="sev">Severity: Medium.</span> Under load, scans silently go without the reputation result.</p>
+<ul>
+<li><strong>Observed:</strong> <code>KnownThreats.cpp:432: Failed to get an answer from DCloud, made 3 attempts using this hash … last error: REQUEST_CURLE_TIMEOUT</code> for most scans of two ELF samples, at 94–206 files/s: 1,550 to 3,328 failures per 120 s run, with persistent and per-file TLS alike, on one pod or three.</li>
+<li><strong>Not load-free behavior:</strong> the same files scanned singly return in 0.10–0.15 s with no lookup errors.</li>
+<li><strong>Impact:</strong> verdicts are still returned, but without the reputation result; each failed lookup also adds latency.</li>
+</ul>
+<p><strong>Suggested fix:</strong> cache lookups per hash and collapse concurrent lookups for the same hash into one request. Review the curl timeout and retry budget under concurrency, and expose a metric or log summary for skipped reputation checks.</p>
+
+<h2>Appendix: other findings during the same validation</h2>
+<p>These are separate from the bug above and are mostly documentation gaps against 4.3.0.234x. They're listed so they can be tracked individually.</p>
+<div class="tbl"><table>
+<tr><th>Area</th><th>Observed</th><th>Documentation says</th></tr>
+<tr><td>REST auth token header</td><td>Clients must send <code>AUTH: &lt;token&gt;</code>; <code>AUTH_TOKEN</code>, <code>Auth-Token</code> and <code>Authorization: Bearer</code> all return 401</td><td><code>AUTH_TOKEN</code> header (v4.1 and v4.2 guides)</td></tr>
+<tr><td>Protected-application token header</td><td>REST reads <code>Protected-Application-Token</code>; ICAP reads <code>X-Protected-Application-Token</code>. The names differ, and the raw token is expected, not a hash</td><td>Not documented</td></tr>
+<tr><td>ICAP protected-entity header</td><td><code>X-Protected-Entity</code></td><td>Not documented</td></tr>
+<tr><td>ICAP service paths</td><td><code>/response</code> (RESPMOD), <code>/request</code> (REQMOD), <code>/classify</code>; any other path returns 404</td><td>Not documented</td></tr>
+<tr><td><code>/scan/by_path</code> method</td><td>GET only; POST returns 405</td><td>The text says "POST request"; the example uses <code>-X GET</code></td></tr>
+<tr><td>Hash-scan endpoint (<code>/scan/by_hash</code>)</td><td>Unknown hashes return <code>Benign</code>, not an "unknown" verdict</td><td>Not stated; easy to mistake for a clean verdict</td></tr>
+</table></div>
+</article>
+</div>
+
+<script>
+const btn=document.getElementById('copy'), status=document.getElementById('status'), doc=document.getElementById('doc');
+btn.addEventListener('click', async () => {
+  try {
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+      await navigator.clipboard.write([new ClipboardItem({'text/html':new Blob([doc.outerHTML],{type:'text/html'}),'text/plain':new Blob([doc.innerText],{type:'text/plain'})})]);
+    } else { await navigator.clipboard.writeText(doc.innerText); }
+    status.textContent='Copied.';
+  } catch (e) {
+    const r=document.createRange(); r.selectNodeContents(doc);
+    const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    status.textContent='Selected. Press Cmd+C to copy.';
+  }
+});
+</script>

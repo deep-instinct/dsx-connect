@@ -51,7 +51,11 @@ spec:
             - name: POSTGRES_USER
               value: {{ .Values.postgresql.auth.username | quote }}
             - name: POSTGRES_PASSWORD
-              value: {{ .Values.postgresql.auth.password | quote }}
+              {{- include "dsx-connect.serviceSecretPassword" .Values.postgresql | trim | nindent 14 }}
+            {{- with .Values.postgresql.dataDir }}
+            - name: PGDATA
+              value: {{ . | quote }}
+            {{- end }}
           readinessProbe:
             exec:
               command:

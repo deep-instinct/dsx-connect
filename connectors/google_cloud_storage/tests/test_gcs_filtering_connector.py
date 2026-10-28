@@ -266,7 +266,7 @@ async def test_repo_check_allows_ng_only_without_configured_asset(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 
     monkeypatch.setattr(gc.config, "register_with_core", False)
-    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", True)
+    monkeypatch.setattr(gc.config, "register_with_control_plane", True)
     monkeypatch.setattr(gc.config, "asset", "")
     monkeypatch.setattr(gc.config, "asset_bucket", "")
 
@@ -286,7 +286,7 @@ async def test_repo_check_treats_placeholder_asset_as_unconfigured_for_ng(monkey
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 
     monkeypatch.setattr(gc.config, "register_with_core", False)
-    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", True)
+    monkeypatch.setattr(gc.config, "register_with_control_plane", True)
     monkeypatch.setattr(gc.config, "asset", "YOUR_BUCKET_OR_BUCKET_PREFIX")
     monkeypatch.setattr(gc.config, "asset_bucket", "YOUR_BUCKET_OR_BUCKET_PREFIX")
 
@@ -306,7 +306,7 @@ async def test_repo_check_requires_asset_for_core_only(monkeypatch):
     import connectors.google_cloud_storage.google_cloud_storage_connector as gc
 
     monkeypatch.setattr(gc.config, "register_with_core", True)
-    monkeypatch.setattr(gc.config, "register_with_ng_control_plane", False)
+    monkeypatch.setattr(gc.config, "register_with_control_plane", False)
     monkeypatch.setattr(gc.config, "asset", "")
     monkeypatch.setattr(gc.config, "asset_bucket", "")
 

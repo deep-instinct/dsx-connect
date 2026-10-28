@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 420" role="img" aria-labelledby="title desc">
+<title id="title">DSX-Connect network-arrow concept</title>
+<desc id="desc">Interwoven network lines inspired by the supplied Deep Instinct mark, with a left-facing arrowhead on the upper line and a right-facing arrowhead on the lower line.</desc>
+<defs>
+  <g id="network" fill="none" stroke="currentColor" stroke-width="9" stroke-linecap="butt">
+    <path d="M17 22H39C60 22 59 76 82 76H112"/>
+    <path d="M17 50H41C62 50 63 22 85 22H112"/>
+    <path d="M17 78H39C57 78 57 50 81 50H112"/>
+    <path d="M25 9 8 22 25 35 M103 63 120 76 103 89" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <style>text{font-family:Arial,sans-serif;fill:#243b53}.head{font-size:22px;font-weight:700}.sub{font-size:15px;fill:#526779}</style>
+</defs>
+<rect width="900" height="420" rx="22" fill="#f4f7fb"/>
+<text x="30" y="38" class="head">Connectivity woven into the network</text>
+<rect x="25" y="65" width="390" height="330" rx="22" fill="#fff" stroke="#dce5ef"/>
+<use href="#network" transform="translate(61 97) scale(2.5)" color="#101f42"/>
+<text x="220" y="344" text-anchor="middle" class="head">Network + opposing arrows</text>
+<text x="220" y="370" text-anchor="middle" class="sub">Top: left · bottom: right</text>
+<rect x="440" y="65" width="435" height="195" rx="22" fill="#101f42"/>
+<use href="#network" transform="translate(470 100) scale(1.25)" color="#fff"/>
+<use href="#network" transform="translate(690 100) scale(1.25)" color="#DEFF5B"/>
+<rect x="440" y="280" width="435" height="115" rx="22" fill="#fff" stroke="#dce5ef"/>
+<use href="#network" transform="translate(469 300) scale(.7)" color="#4CA7FF"/>
+<use href="#network" transform="translate(605 317) scale(.38)" color="#101f42"/>
+<use href="#network" transform="translate(714 325) scale(.25)" color="#4CA7FF"/>
+<use href="#network" transform="translate(806 330) scale(.16)" color="#101f42"/>
+</svg>

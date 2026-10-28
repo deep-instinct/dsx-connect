@@ -6,7 +6,7 @@ env:
   # For DSX-Connect 1.x/core deployments, set REGISTER_WITH_CORE=true and
   # REGISTER_WITH_NG_CONTROL_PLANE=false.
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
 
   # For in-cluster DSX-Connect 2 installs, keep both URLs pointed at the API service.
   # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
@@ -20,11 +20,11 @@ env:
 
   # DSX-Connect 2 platform metadata.
   # PLATFORM is the connector adapter type; for this connector it should remain "s3".
-  DSXCONNECTOR_NG_PLATFORM: "s3"
+  DSXCONNECTOR_PLATFORM: "s3"
   # PLATFORM_KEY is a stable, operator-chosen key for the AWS account, organization,
   # environment, tenant, or lab boundary represented by this connector.
   # Access is controlled by the pod's AWS credentials/IAM role, not by this value.
-  DSXCONNECTOR_NG_PLATFORM_KEY: "demo-aws-account"
+  DSXCONNECTOR_PLATFORM_KEY: "demo-aws-account"
 
   # Optional configured bucket or bucket/prefix.
   # In DSX-Connect 2, discovered/protected scopes normally identify the bucket to scan.

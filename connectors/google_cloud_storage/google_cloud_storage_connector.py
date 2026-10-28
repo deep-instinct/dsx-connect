@@ -42,7 +42,7 @@ def _normalize_configured_asset(value: str | None) -> str:
 
 
 def _ng_only_registration_enabled() -> bool:
-    return bool(getattr(config, "register_with_ng_control_plane", False)) and not bool(
+    return bool(getattr(config, "register_with_control_plane", False)) and not bool(
         getattr(config, "register_with_core", True)
     )
 
@@ -63,7 +63,7 @@ except Exception:
     config.asset_prefix_root = ""
 
 try:
-    config.ng_capabilities = {**(getattr(config, "ng_capabilities", {}) or {}), "write": True}
+    config.capabilities = {**(getattr(config, "capabilities", {}) or {}), "write": True}
 except Exception:
     pass
 

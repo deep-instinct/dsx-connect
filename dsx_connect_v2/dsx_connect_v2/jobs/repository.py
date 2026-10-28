@@ -25,6 +25,10 @@ def utcnow() -> datetime:
 
 
 class JobRepository(ABC):
+    def dashboard_stages(self, since: datetime):
+        """Yield persisted stages for historical dashboard aggregation."""
+        raise NotImplementedError
+
     @abstractmethod
     def list_jobs(
         self,
@@ -193,6 +197,16 @@ class JobRepository(ABC):
 
 
 class InMemoryJobRepository(JobRepository):
+    def dashboard_stages(self, since: datetime):
+        for item in self._job_items.values():
+            if item.updated_at >= since or item.completed_at is None:
+                yield {
+                    **{name: getattr(item, name).model_dump(mode="json") for name in ("scan_stage", "policy_stage", "remediation_stage")},
+                    "created_at": item.created_at.isoformat(),
+                    "completed_at": item.completed_at.isoformat() if item.completed_at else None,
+                    "state": item.state,
+                }
+
     def __init__(self) -> None:
         self._jobs: dict[str, JobRecord] = {}
         self._job_items: dict[str, JobItemRecord] = {}

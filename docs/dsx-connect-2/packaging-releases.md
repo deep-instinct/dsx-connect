@@ -291,3 +291,16 @@ Recommended rules:
 
 Before publishing release artifacts, validate the local path with the workflows in [Development deployment](deployment/development.md).
 Use the Operator Console to confirm connector registration, asset inventory, and scan dispatch before cutting a release.
+
+
+## October 28, 2026 release
+
+- DSX Connect core/chart: **2.0.36** — readable scan targets, original attachment filenames,
+  issue-targeted Jira scans, and dashboard updates.
+- Jira connector image/chart: **2.0.0** — standalone runtime, accessible-space discovery,
+  demo issue allowlisting, read-only downloads, and durable polling checkpoints.
+- Azure Blob connector image/chart: **2.0.2** — updated scope and filtering behavior.
+- DSXA Python SDK source: **0.2.7** — optional password-header argument compatibility fix.
+
+The lab uses released images instead of the temporary Jira source bundle and API/UI
+ConfigMap overrides. Jira token Secrets and monitoring checkpoints are retained.

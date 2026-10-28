@@ -24,6 +24,24 @@ def test_scan_source_labels_gateway_submissions_as_application_submission() -> N
     assert _scan_source_label("file_gateway_api") == "Application submission"
 
 
+def test_dashboard_history_uses_persisted_scans_and_validates_period() -> None:
+    client = TestClient(create_app())
+    assert client.post("/api/v1/ui/demo/seed").status_code == 200
+    for days, buckets in [(1, 24), (7, 7), (30, 30)]:
+        response = client.get(f"/api/v1/ui/dashboard/history?days={days}")
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data["series"]) == buckets
+        assert data["total_scans"] == 3
+        assert data["throughput_per_minute"] >= 0
+        assert data["backlog"] >= 0
+        assert "p95_seconds" in data["latency"]
+        assert all("backlog" in bucket and "median_seconds" in bucket for bucket in data["series"])
+        assert sum(b["benign"] for b in data["series"]) == 1
+        assert sum(b["malicious"] for b in data["series"]) == 1
+    assert client.get("/api/v1/ui/dashboard/history?days=365").status_code == 422
+
+
 def test_operator_console_page_renders() -> None:
     client = TestClient(create_app())
 
@@ -510,7 +528,7 @@ def test_ui_scope_scan_uses_connector_object_listing(monkeypatch) -> None:
         "_fetch_connector_object_listing",
         lambda base_url, connector_name, *, scope, max_items: (
             [
-                {"identity": "bucket-a/one.pdf", "location": "one.pdf", "size_in_bytes": 123},
+                {"identity": "bucket-a/one.pdf", "location": "one.pdf", "size_in_bytes": 123, "display_name": "Original filename.pdf"},
                 {"identity": "bucket-a/nested/two.docx", "location": "nested/two.docx"},
             ],
             True,
@@ -532,6 +550,11 @@ def test_ui_scope_scan_uses_connector_object_listing(monkeypatch) -> None:
     assert [item["object_identity"] for item in items] == ["bucket-a/one.pdf", "bucket-a/nested/two.docx"]
     assert [item["payload"]["path"] for item in items] == ["one.pdf", "nested/two.docx"]
     assert items[0]["payload"]["sizeInBytes"] == 123
+    assert items[0]["payload"]["metainfo"] == "Original filename.pdf"
+    assert items[0]["payload"]["attribution"]["file_name"] == "Original filename.pdf"
+    from dsx_connect_v2.api.routes.ui import _summarize_job_item
+    from dsx_connect_v2.jobs.models import JobItemRecord
+    assert _summarize_job_item(JobItemRecord.model_validate(items[0])).file_name == "Original filename.pdf"
 
 
 def test_ui_asset_discovery_reconciles_protected_scopes(monkeypatch) -> None:
@@ -1539,3 +1562,48 @@ def test_ui_demo_seed_rejects_non_dev_environment(monkeypatch: pytest.MonkeyPatc
 
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "demo_seed_disabled"
+
+
+def test_jira_issue_scan_intersects_scope_and_validates_keys(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from pydantic import ValidationError
+    from dsx_connect_v2.api.routes import ui
+
+    with pytest.raises(ValidationError):
+        ui.UIScopeScanRequest(issue_keys=['RD-1) OR project = OTHER'])
+    assert ui.UIScopeScanRequest(issue_keys=[' rd-1 ', 'RD-1']).issue_keys == ['RD-1']
+    scope = SimpleNamespace(integration_id='jira', resource_selector='project = RD', scope_id='rd')
+    cp = SimpleNamespace(get_scope_or_404=lambda _: scope,
+                         get_integration_or_404=lambda _: SimpleNamespace(platform='jira'),
+                         list_connector_instances=lambda **kwargs: [])
+    monkeypatch.setattr(ui, '_connector_asset_endpoint', lambda *args: ('http://jira', 'jira'))
+    def listing(*args, **kwargs):
+        assert kwargs['scope'] == '(project = RD) AND (key in (RD-1))'
+        return [{'identity': 'jira/1', 'location': '1', 'display_name': 'original.txt'}], True, 1
+    monkeypatch.setattr(ui, '_fetch_connector_object_listing', listing)
+    service = SimpleNamespace(submit_batch_job=AsyncMock(return_value='submitted'))
+    result = asyncio.run(ui.scan_scope_selector('rd', ui.UIScopeScanRequest(issue_keys=['RD-1']), cp, service))
+    assert result == 'submitted'
+    submitted = service.submit_batch_job.call_args.args[0]
+    assert submitted.scope_id == 'rd'
+    assert submitted.items[0].payload['path'] == '1'
+    monkeypatch.setattr(ui, '_fetch_connector_object_listing', lambda *args, **kwargs: ([], True, 1))
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException, match='No eligible attachments'):
+        asyncio.run(ui.scan_scope_selector('rd', ui.UIScopeScanRequest(issue_keys=['RD-2']), cp, service))
+    assert service.submit_batch_job.call_count == 1
+
+
+def test_scan_results_resolve_human_readable_target_names():
+    app = create_app()
+    client = TestClient(app)
+    assert client.post('/api/v1/ui/demo/seed').status_code == 200
+    integrations = {i.integration_id: i.display_name for i in app.state.control_plane_service.list_integrations()}
+    scopes = {s.scope_id: s.display_name for s in app.state.control_plane_service.list_scopes()}
+    results = client.get('/api/v1/ui/scan-results').json()['results']
+    assert results
+    for row in results:
+        target = row['target']
+        assert target['connector_name'] == integrations.get(row['job']['integration_id'])
+        assert target['scope_name'] == scopes.get(row['job']['scope_id'])

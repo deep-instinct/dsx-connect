@@ -10,46 +10,45 @@
 </p>
 
 <p style="text-align:center; max-width: 820px; margin: 0 auto 24px auto;">
-  DSX-Connect is the repository and file-governance layer for
+  DSX-Connect provides repository protection and a File Gateway for
   <strong>Deep Instinct’s <a href="https://www.deepinstinct.com/dsx/dsx-applications">DSX for Applications</a></strong>.
   It connects cloud, SaaS, on-premises, and application-owned repositories to consistent scanning, policy, and remediation workflows.
 </p>
 
 <p style="text-align:center; max-width: 820px; margin: 0 auto 28px auto;">
-  Use it to monitor repositories, scan repository contents, or govern file movement between approved repositories.
+  Use it to monitor new and changed files, run full repository scans, or let applications upload through the File Gateway.
 </p>
 
-<p style="text-align:center;">
-  <img src="assets/dsx-connect-design.svg" alt="DSX-Connect Architecture" style="max-width: 100%; height: auto;" />
-</p>
+![DSX-Connect connects repositories and applications to enterprise-controlled scanning, policy, and file handling](assets/diagrams/homepage-concept.svg#only-light)
+![DSX-Connect connects repositories and applications to enterprise-controlled scanning, policy, and file handling](assets/diagrams/homepage-concept-dark.svg#only-dark)
 <hr style="margin: 32px 0 24px 0; border: none; border-top: 1px solid rgba(0,0,0,0.1);" />
 
 ## Three Ways To Use DSX-Connect
 
-### 1. Monitor Repositories
+### 1. Monitoring
 
 Continuously watch repositories for new and changed files, while using baseline or full scans to establish coverage. Connectors handle repository-specific events, enumeration, credentials, and state so protection can converge over time.
 
-Start with the [Connector Model](concepts/connectors.md), then see the [Filesystem monitoring guidance](deployment/kubernetes/filesystem.md#monitoring-settings-kubernetes).
+Start with [Repository Monitoring](core-concepts/repository-monitoring.md) and the [Connector and Asset Model](core-concepts/connectors-and-assets.md). For deployment settings, see the [v2 connector guides](dsx-connect-2/deployment/connectors/index.md).
 
-### 2. Scan Repositories
+### 2. Full Scans
 
 Run on-demand, scheduled, event-driven, or full-repository scans across cloud storage, SaaS platforms, fileshares, and mounted filesystems. DSX-Connect dispatches work to DSXA and exposes durable job state, results, retries, and operational metrics.
 
-Start with the [Docker Compose Quickstart](getting-started/docker-quickstart.md) or [Kubernetes (Helm) Quickstart](getting-started/kubernetes-quickstart.md).
+Start with [Full Repository Scan](core-concepts/repository-full-scan.md) or deploy the v2 core using the [Getting Started guide](dsx-connect-2/deployment/kubernetes-quickstart.md).
 
-### 3. Govern File Movement Between Repositories
+### 3. File Gateway
 
-Give applications one controlled way to move files into, out of, and between approved repositories. DSX-Connect centralizes repository access, scanning, policy decisions, remediation, audit context, and delivery instead of making each application implement its own file-security workflow.
+Give applications one API to discover approved destinations and upload files through enterprise controls. DSX-Connect coordinates scanning, policy, and delivery while repository credentials stay with IT / DevOps and file-handling decisions stay with Security.
 
-Read the [Normalized Enterprise File Gateway strategy](dsx-connect-2/strategy/normalized-enterprise-file-gateway.md) and [Gateway Access Control Model](dsx-connect-2/strategy/gateway-access-control.md).
+Read [Governed File Movement](core-concepts/governed-file-movement.md) and [Application Identity and Attribution](dsx-connect-2/concepts/application-identity-and-attribution.md).
 
 ## What DSX-Connect Provides
 
 * A reusable, event-driven scanning core built for predictable scale
 * Pluggable connectors for cloud storage, SaaS platforms, and filesystems
 * Repository monitoring, on-demand scans, and full-scan workflows
-* Governed file movement for application workflows
+* A File Gateway for application uploads and controlled repository delivery
 * Fault-tolerant execution with durable queues and retry handling
 * Portable deployment via Docker Compose or Kubernetes (Helm)
 * Seamless integration with DSX for Applications’ deep-learning malware detection
@@ -78,13 +77,13 @@ If you are new to DSX-Connect:
 
 If you are deploying:
 
-* Use **Deployment** for Docker Compose or Kubernetes (Helm).
-* See **Choosing Your Deployment** to understand the trade-offs.
+* Use [Deployment](dsx-connect-2/deployment/index.md) for the v2 core and connectors.
+* See [DSX-Connect Core](dsx-connect-2/deployment/kubernetes.md) and [PostgreSQL and RabbitMQ](dsx-connect-2/deployment/postgres-rabbitmq.md) for runtime settings.
 
 If you are operating at scale:
 
 * Use **Operations** for performance tuning, logging, monitoring, and upgrades.
-* Refer to **Scaling & Performance (Kubernetes)** for infrastructure-level scaling.
+* Refer to [Worker Scaling](core-concepts/architecture.md#worker-scaling) for the v2 execution model.
 
 If you need configuration details:
 
@@ -105,27 +104,27 @@ So you can quickly find what you need.
 
 ### 🚀 Getting Started
 
-* [Overview](getting-started/index.md)
-* [Docker Compose Quickstart](getting-started/docker-quickstart.md)
-* [Kubernetes (Helm) Quickstart](getting-started/kubernetes-quickstart.md)
+* [V2 Quickstart](dsx-connect-2/deployment/kubernetes-quickstart.md)
+* [Deployment Overview](dsx-connect-2/deployment/index.md)
 
 ### 🧠 Core Concepts
 
-* [Architecture Overview](concepts/architecture.md)
-* [Connector Model](concepts/connectors.md)
-* [Performance & Throughput](concepts/performance.md)
-* [Choosing Your Deployment](concepts/deployment-models.md)
+* [Architecture Overview](core-concepts/architecture.md)
+* [Connector and Asset Model](core-concepts/connectors-and-assets.md)
+* [Application Identity and Attribution](dsx-connect-2/concepts/application-identity-and-attribution.md)
+* [File Gateway](core-concepts/governed-file-movement.md)
 
 ### ⚙️ Deployment
 
-* [Docker Compose Overview](deployment/docker/index.md)
-* [Kubernetes (Helm) Deployment](deployment/kubernetes/dsx-connect.md)
-* [Scaling & Performance (Kubernetes)](deployment/kubernetes/scaling.md)
+* [DSX-Connect Core](dsx-connect-2/deployment/kubernetes.md)
+* [Connectors](dsx-connect-2/deployment/connectors/index.md)
+* [PostgreSQL and RabbitMQ](dsx-connect-2/deployment/postgres-rabbitmq.md)
 
 ### 🔧 Operations
 
 * [Performance Tuning](operations/performance-tuning-job-comparisons.md)
 * [Quarantine and Remediation](operations/quarantine-and-remediation.md)
+* [Failed Scans and Dead Letter Queues](operations/dead-letter-queues.md)
 * [Syslog Forwarding](operations/syslog.md)
 
 ### 👩‍💻 Developer's Guide
@@ -135,12 +134,12 @@ So you can quickly find what you need.
 
 ### 📚 Reference
 
-* [Configuration Reference](deployment/kubernetes/configuration-reference.md)
-* [Environment Variables](deployment/kubernetes/configuration-reference.md#global-settings)
+* [Core Runtime Settings](dsx-connect-2/deployment/kubernetes.md)
+* [Connector Settings](dsx-connect-2/deployment/connectors/index.md)
 * [Filters Reference](reference/filters.md)
 
 ### 📦 Releases
 
-* [Docker Compose Bundles](https://github.com/deep-instinct/dsx-connect/releases)
+* [GitHub Releases](https://github.com/deep-instinct/dsx-connect/releases)
 * [Docker Hub Images](https://hub.docker.com/repositories/dsxconnect)
 * [GitHub Repository](https://github.com/deep-instinct/dsx-connect)

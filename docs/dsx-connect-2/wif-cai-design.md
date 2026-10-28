@@ -112,8 +112,8 @@ The connector should support a broad inventory scope:
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM: "gcs"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "organizations/1234567890"
+  DSXCONNECTOR_PLATFORM: "gcs"
+  DSXCONNECTOR_PLATFORM_KEY: "organizations/1234567890"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "organizations/1234567890"
 ```
 
@@ -125,19 +125,19 @@ Examples:
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_PLATFORM_KEY: "projects/example-gcs-project"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "projects/example-gcs-project"
 ```
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM_KEY: "folders/1234567890"
+  DSXCONNECTOR_PLATFORM_KEY: "folders/1234567890"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "folders/1234567890"
 ```
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM_KEY: "organizations/1234567890"
+  DSXCONNECTOR_PLATFORM_KEY: "organizations/1234567890"
   DSXCONNECTOR_GCS_ASSET_INVENTORY_SCOPE: "organizations/1234567890"
 ```
 

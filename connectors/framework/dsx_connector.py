@@ -234,7 +234,7 @@ class DSXConnector:
         self.connector_config = connector_config
 
         self.register_with_core = bool(getattr(connector_config, "register_with_core", True))
-        self.register_with_ng_control_plane = bool(getattr(connector_config, "register_with_ng_control_plane", False))
+        self.register_with_control_plane = bool(getattr(connector_config, "register_with_control_plane", False))
         self.connector_version = self._resolve_connector_version()
 
         # Ensure per-connector default data dir for UUID persistence in local/dev.
@@ -282,8 +282,8 @@ class DSXConnector:
         if not self.register_with_core:
             dsx_logging.info("Connector registration with 1g dsx-connect is disabled for this runtime.")
         self.dsx_connect_v2_url = str(getattr(connector_config, "dsx_connect_v2_url", None) or self.dsx_connect_url).rstrip("/")
-        self._ng_registered_integration_id = str(getattr(connector_config, "ng_integration_id", "") or "").strip() or None
-        if self.register_with_ng_control_plane:
+        self._ng_registered_integration_id = str(getattr(connector_config, "integration_id", "") or "").strip() or None
+        if self.register_with_control_plane:
             dsx_logging.info("Connector registration with dsx-connect-v2 control plane is enabled.")
 
         self.connector_running_model = ConnectorInstanceModel(
@@ -387,7 +387,7 @@ class DSXConnector:
                     if repo_ok:
                         self.connector_running_model.status = ConnectorStatusEnum.READY
                         dsx_logging.info("Connector is READY (registration + repo check OK).")
-                        if self.register_with_ng_control_plane:
+                        if self.register_with_control_plane:
                             await self.heartbeat_ng_control_plane()
                         # Ensure heartbeat loop is running to refresh presence TTL in dsx-connect
                         self._start_heartbeat()
@@ -502,7 +502,7 @@ class DSXConnector:
     # ----------------- helpers -----------------
 
     def _has_enabled_control_plane_registration(self) -> bool:
-        return self.register_with_core or self.register_with_ng_control_plane
+        return self.register_with_core or self.register_with_control_plane
 
     def _resolve_legacy_connector_uuid(self) -> str:
         if self.register_with_core:
@@ -660,7 +660,7 @@ class DSXConnector:
     # ----------------- outward calls -----------------
 
     def _ng_platform(self) -> str:
-        explicit = str(getattr(self.connector_config, "ng_platform", "") or "").strip()
+        explicit = str(getattr(self.connector_config, "platform", "") or "").strip()
         if explicit:
             return explicit
         known = {
@@ -676,7 +676,7 @@ class DSXConnector:
         return known.get(self.connector_id, self.connector_id.removesuffix("-connector"))
 
     def _ng_platform_key(self) -> str:
-        explicit = str(getattr(self.connector_config, "ng_platform_key", "") or "").strip()
+        explicit = str(getattr(self.connector_config, "platform_key", "") or "").strip()
         if explicit:
             return explicit
         asset = str(getattr(self.connector_config, "asset", "") or "").strip()
@@ -693,7 +693,7 @@ class DSXConnector:
         capabilities["enumerate"] = capabilities["discover"]
         capabilities["monitor"] = bool(getattr(self.connector_config, "monitor", False))
         capabilities["events"] = capabilities["monitor"]
-        explicit = getattr(self.connector_config, "ng_capabilities", {}) or {}
+        explicit = getattr(self.connector_config, "capabilities", {}) or {}
         if isinstance(explicit, dict):
             for key, value in explicit.items():
                 capabilities[str(key)] = bool(value)
@@ -738,7 +738,7 @@ class DSXConnector:
         }
 
     def _ng_registration_payload(self) -> dict[str, Any]:
-        integration_id = str(getattr(self.connector_config, "ng_integration_id", "") or "").strip() or None
+        integration_id = str(getattr(self.connector_config, "integration_id", "") or "").strip() or None
         payload: dict[str, Any] = {
             "connector_instance_id": self.connector_instance_id,
             "integration_id": integration_id,
@@ -750,8 +750,8 @@ class DSXConnector:
             "base_url": self.connector_running_model.url,
             "capabilities": self._ng_capabilities(),
             "health": self._ng_health(),
-            "labels": getattr(self.connector_config, "ng_connector_labels", {}) or {},
-            "lease_seconds": int(getattr(self.connector_config, "ng_lease_seconds", 120) or 120),
+            "labels": getattr(self.connector_config, "connector_labels", {}) or {},
+            "lease_seconds": int(getattr(self.connector_config, "lease_seconds", 120) or 120),
         }
         return {key: value for key, value in payload.items() if value is not None}
 
@@ -760,8 +760,8 @@ class DSXConnector:
             "health": self._ng_health(),
             "connector_version": self.connector_version,
             "capabilities": self._ng_capabilities(),
-            "labels": getattr(self.connector_config, "ng_connector_labels", {}) or {},
-            "lease_seconds": int(getattr(self.connector_config, "ng_lease_seconds", 120) or 120),
+            "labels": getattr(self.connector_config, "connector_labels", {}) or {},
+            "lease_seconds": int(getattr(self.connector_config, "lease_seconds", 120) or 120),
         }
 
     async def register_enabled_control_planes(self, *, heartbeat: bool = False) -> StatusResponse:
@@ -778,7 +778,7 @@ class DSXConnector:
             if one_g.status != StatusResponseEnum.SUCCESS:
                 failures.append(f"1g: {one_g.message}")
 
-        if self.register_with_ng_control_plane:
+        if self.register_with_control_plane:
             ng = await self.heartbeat_ng_control_plane() if heartbeat else await self.register_ng_control_plane()
             if ng.status != StatusResponseEnum.SUCCESS:
                 failures.append(f"ng: {ng.message}")
@@ -796,11 +796,11 @@ class DSXConnector:
         )
 
     async def register_ng_control_plane(self) -> StatusResponse:
-        if not self.register_with_ng_control_plane:
+        if not self.register_with_control_plane:
             return StatusResponse(
                 status=StatusResponseEnum.SUCCESS,
                 message="NG registration disabled",
-                description="register_with_ng_control_plane=false",
+                description="register_with_control_plane=false",
             )
         url = service_url(self.dsx_connect_v2_url, NG_API_PREFIX_V1, "control-plane", "connectors", "register")
         headers = {"X-Enrollment-Token": self._enrollment_token} if self._enrollment_token else None
@@ -827,11 +827,11 @@ class DSXConnector:
             return StatusResponse(status=StatusResponseEnum.ERROR, message="NG registration failed", description=str(e))
 
     async def heartbeat_ng_control_plane(self) -> StatusResponse:
-        if not self.register_with_ng_control_plane:
+        if not self.register_with_control_plane:
             return StatusResponse(
                 status=StatusResponseEnum.SUCCESS,
                 message="NG heartbeat disabled",
-                description="register_with_ng_control_plane=false",
+                description="register_with_control_plane=false",
             )
         instance_id = self.connector_instance_id
         url = service_url(
@@ -1125,7 +1125,7 @@ class DSXConnector:
             )
 
     def _should_enqueue_scans_with_ng(self) -> bool:
-        return self.register_with_ng_control_plane and not self.register_with_core
+        return self.register_with_control_plane and not self.register_with_core
 
     def _ng_scan_batch_payload(self, scan_requests: list[ScanRequestModel]) -> dict[str, Any]:
         integration_id = self._ng_registered_integration_id
@@ -1284,7 +1284,7 @@ class DSXConnector:
                 if reg.status == StatusResponseEnum.SUCCESS and repo_ok:
                     # ensure heartbeat is running if the first attempt failed earlier
                     self.connector_running_model.status = ConnectorStatusEnum.READY
-                    if self.register_with_ng_control_plane:
+                    if self.register_with_control_plane:
                         await self.heartbeat_ng_control_plane()
                     self._start_heartbeat()
                     dsx_logging.info(f"Connector READY after {attempt} attempt(s).")

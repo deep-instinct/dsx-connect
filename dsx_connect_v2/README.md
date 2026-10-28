@@ -41,7 +41,7 @@ Current scaffold now includes:
 
 - control-plane CRUD for `integrations`
 - connector-instance registration and heartbeat lease tracking
-- opt-in connector framework registration via `DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE=true`
+- opt-in connector framework registration via `DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE=true`
 - enrollment-token auth for v2 connector registration via `DSX_CONNECT_V2__CONNECTOR_ENROLLMENT_TOKENS`
 - deployment-native NG instance identity via `DSXCONNECTOR_INSTANCE_ID`
 - control-plane CRUD for `protected_scopes`

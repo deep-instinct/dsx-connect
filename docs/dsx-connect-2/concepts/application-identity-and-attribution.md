@@ -1,94 +1,82 @@
-# Application Identity And Attribution
+# Application Identity and Attribution
 
-## Concept
+An **Application** is a virtual entity registered in DSX-Connect. It represents a real application, service, or other caller and brings together identity bindings, access grants, and attribution defaults. Registering an Application establishes how that caller can use DSX-Connect and how its file activity is attributed.
 
-DSX-Connect should not treat application scan requests as anonymous file uploads.
+**File Gateway** names the overall capability: applications discover permitted destinations, submit files, and receive outcomes while DSX-Connect coordinates scanning, policy, repository access, and delivery. Authentication and authorization are steps within that workflow.
 
-In the enterprise file gateway model, an application is onboarded as a known caller.
-That caller receives an identity through an enterprise identity provider such as Entra ID, Okta, or another OAuth2/OIDC provider.
-At runtime, the application uses that identity to obtain a short-lived access token and sends the token to DSX-Connect.
+![Application identity, access grants, and attribution through file processing](../../assets/diagrams/dsx-connect-2-application-identity.svg#only-light)
+![Application identity, access grants, and attribution through file processing](../../assets/diagrams/dsx-connect-2-application-identity-dark.svg#only-dark)
 
-DSX-Connect validates the token, maps it to an onboarded application record, and uses that record to populate attribution, authorization, policy, and chargeback context.
+## Operational Boundaries
 
-The token proves who is calling.
-DSX-Connect decides what that caller can do and what metadata should follow the file.
+Application developers receive gateway credentials bound to an Application. They discover allowed destinations and submit files through DSX-Connect. Repository credentials remain with the connectors, operated by internal IT / DevOps.
 
-## Applications Are Not Assets
+Enterprise Security defines file-handling policy: scanning, permitted movement, and available dispositions such as quarantine or deletion. Developers handle submission and status in their business applications; the enterprise owns accepted files' processing and disposition. Gateway acceptance and successful repository delivery are separate outcomes.
 
-Applications should be modeled as callers, not as protected assets.
+These boundaries also apply to third-party callers. Their grants determine which operations they may request, while enterprise policy controls file handling. See [Governed File Movement](../../core-concepts/governed-file-movement.md#separation-of-duties-and-operational-boundaries).
 
-An asset is a repository resource DSX-Connect can protect, such as a bucket, prefix, filesystem path, folder, or other connector-visible storage target.
-Assets answer the question:
+## Registering an Application
 
-> What file location is governed?
+Operators manage Application records in the **Applications** surface of the Operator Console.
 
-An application answers a different question:
+Register the real application by creating its DSX-Connect Application record, adding an identity binding, and assigning grants and attribution defaults. This follows the familiar application-registration pattern used in cloud and identity integrations: a platform-side record represents the software that will call the service. The DSX-Connect registration supplies the file-access and attribution settings used by its workflows.
 
-> Who is allowed to use the file gateway, and what attribution should follow that work?
+| Configuration | Purpose |
+| --- | --- |
+| Application ID and display name | Identify the real caller in jobs and results |
+| Enabled status | Control whether the Application may be used |
+| Identity bindings | Map a caller credential to the Application |
+| Grants | Specify allowed destinations, actions, and path prefixes |
+| Attribution defaults | Associate activity with a tenant, customer, business unit, cost center, or billing code |
+| Default DSXA protected entity | Supply a scanner reporting identity |
+| Operator metadata | Record additional administrative context |
 
-That means Applications deserve their own operator-console surface.
-They are not rows under `Assets > Connectors` or `Assets > Protected`.
+One Application can have access to several destinations, and a destination can serve several Applications. Connector repository permissions must also allow the requested operation.
 
-The relationship is:
+The current implementation supports static bearer-token bindings. Enterprise identity-provider integration using Entra, Okta, or other OAuth2/OIDC providers is planned.
 
-```text
-Application
-    -> identity binding
-    -> destination grants
-    -> attribution defaults
-    -> default DSXA protected entity
+## From Credential to File Job
 
-Asset / Destination
-    -> connector
-    -> protected scope
-    -> repository path, bucket, prefix, or folder
-    -> protection profile
-```
+1. The real caller presents a credential to the File Gateway.
+2. DSX-Connect resolves it to an enabled Application record.
+3. The gateway checks destination, action, and path grants for the request.
+4. The gateway attaches attribution to the accepted job and its file items.
+5. Workers scan and process the files, preserving that context in results.
 
-In practice, an application may be granted access to one or more protected assets or gateway destinations.
-The same asset can be used by multiple applications, and the same application can use multiple destinations.
+The caller can use `GET /api/v1/files/destinations` to discover permitted destinations and `POST /api/v1/files/transfers` to upload files. An upload without a destination creates scan-only work.
 
-This separation keeps repository governance, caller authorization, and usage attribution independent.
+## Attribution and Reporting
 
-```mermaid
-flowchart TD
-    A["Platform / Security Team"] --> B["Configure DSX-Connect trust with IdP"]
-    B --> C["Onboard application in DSX-Connect"]
-    C --> D["Create or link IdP app registration"]
-    D --> E["Assign destinations, policies, quotas, and attribution defaults"]
-    E --> F["Application obtains short-lived token"]
-    F --> G["Application calls DSX-Connect File Gateway API"]
-    G --> H["DSX-Connect validates token"]
-    H --> I["DSX-Connect resolves application record"]
-    I --> J["DSX-Connect attaches attribution and policy context"]
-    J --> K["Scan worker sends DSXA protected entity and custom metadata"]
-```
+Attribution connects a file's processing history to its organizational owner and submitting Application. It helps operators investigate failures, understand usage, and correlate scanner results with enterprise activity.
 
-## Current MVP
+| Context | What it identifies |
+| --- | --- |
+| Application ID and name | The Application associated with the request |
+| Tenant and customer | Organizational ownership |
+| Business unit | The responsible business function |
+| Cost center | Internal accounting ownership |
+| Billing code | A project, contract, or other allocation category |
+| Submitting principal and authentication method | Who initiated the work and how they authenticated |
+| Destination, integration, and scope | Where the requested file operation applies |
+| Transfer, job, and item IDs | Correlation across submission and processing |
+| File name, size, and hash | The content being evaluated |
 
-The current implementation supports first-class DSX-Connect gateway application records.
-Each application can define:
+Cost-center and billing fields provide allocation context. Their presence does not imply an implemented billing engine, chargeback report, or quota-enforcement service.
 
-- application id and display name
-- enabled or disabled status
-- identity bindings
-- tenant, customer, business unit, cost-center, and billing metadata
-- default DSXA protected entity id
-- allowed destinations, actions, and path prefixes
-- operator metadata
+### DSXA Context
 
-For local and demo use, identity bindings can use static bearer tokens.
-That keeps the onboarding and attribution model real while avoiding external IdP setup.
+DSX-Connect uses two channels to carry context into scanning:
 
-The older static JSON token mapping remains as a compatibility and bootstrap fallback, but the intended MVP model is:
+- **Protected entity ID:** a DSXA reporting dimension. An Application can specify a default ID referring to a valid protected entity in the management environment.
+- **Custom metadata:** richer context such as Application, organizational ownership, destination, and job identifiers accompanies the scan request.
 
-```text
-static bearer token
-    -> DSX-Connect gateway application record
-    -> grants, attribution defaults, protected entity default
-```
+A protected entity ID is distinct from the scanner ID. Use an ID valid for the DSXA management environment receiving the scan.
 
-Example control-plane application record:
+The gateway derives attribution from the resolved principal, submitted metadata, and destination context. Principal-owned identity and organizational defaults take precedence over caller-supplied values where defined. For the protected entity, the gateway currently checks the principal default first, then submitted metadata, then destination policy. Inspect the resolved job attribution when diagnosing a mapping; the earlier proposed tenant/connector precedence chain is not an implemented contract.
+
+## Example Application Record
+
+This example uses a static binding for a development environment. Production credentials should be managed through an appropriate secret workflow.
 
 ```json
 {
@@ -96,13 +84,9 @@ Example control-plane application record:
   "display_name": "Claims Upload Service",
   "enabled": true,
   "identity_bindings": [
-    {
-      "provider": "static_bearer",
-      "token": "claims-demo-token"
-    }
+    {"provider": "static_bearer", "token": "<caller-token>"}
   ],
   "tenant_id": "claims-business-unit",
-  "customer_id": "enterprise-internal",
   "business_unit": "Claims",
   "cost_center": "CC-1042",
   "billing_code": "CLAIMS-UPLOAD-PROD",
@@ -117,236 +101,14 @@ Example control-plane application record:
 }
 ```
 
-## What Is Still Missing
+Replace the destination and protected entity IDs with values configured in your environment.
 
-The production model needs an onboarding step that establishes communication between DSX-Connect and the customer identity provider.
+## Planned Extensions
 
-At minimum, DSX-Connect needs:
-
-- trusted issuer URL
-- token audience
-- JWKS or certificate discovery endpoint
-- accepted signing algorithms
-- claim mapping rules
-- application identity claim, such as `client_id`, `appid`, `azp`, or `sub`
-- optional tenant claim mapping
-- optional group or role claim mapping
-
-Conceptually:
-
-```text
-IdP token validation settings
-    +
-DSX-Connect application registry
-    =
-trusted application identity and attribution context
-```
-
-## Product Backlog
-
-The application onboarding model should track these near-term design and implementation items:
-
-### Entra Integration
-
-Add a first-class Microsoft Entra ID integration path for gateway application authentication.
-The initial goal is not to replace the DSX-Connect application registry.
-The goal is to let DSX-Connect trust Entra-issued tokens, map token claims to onboarded applications, and continue using the DSX-Connect application record for grants, attribution, protected entity binding, and usage metering.
-
-Open design points:
-
-- tenant-specific versus multi-tenant Entra app registration
-- expected audience for DSX-Connect gateway API tokens
-- claim mapping for application identity, such as `appid`, `azp`, `client_id`, or `sub`
-- JWKS discovery and key rotation behavior
-- handling disabled applications or revoked credentials
-- how the Operator Console guides setup without becoming a full IAM product
-
-### Application Quotas
-
-Add quota controls to gateway application records.
-An application should be limitable by scan count, byte count, request count, or concurrency over a defined time period.
-
-Examples:
-
-- no more than 10,000 file scans per day
-- no more than 100 GB processed per month
-- no more than 5 concurrent transfer jobs
-- burst and sustained rate limits for API submissions
-
-Quotas should be enforced before job creation and should produce clear denial responses.
-Quota events should also become usage records so operators can see when an application is approaching or exceeding its allowance.
-
-### Destination-Less Submissions
-
-Support scan-only gateway submissions where the application needs verdicts and audit records, but does not want DSX-Connect to deliver the file to a protected destination.
-
-This is different from a governed transfer.
-The application submits file content, DSX-Connect scans it, applies policy, records attribution, and returns or exposes the verdict.
-No repository destination is required.
-
-Open design points:
-
-- API shape, for example `POST /files/scans` versus a transfer request with no destination
-- whether destination grants are replaced by an explicit `scan` action grant
-- how path-prefix authorization applies when there is no repository path
-- whether policy is attached to the application, request, or a named scan profile
-- result retention and whether uploaded content is deleted immediately after scanning
-
-## Onboarding Workflow
-
-Application onboarding has two related tracks.
-
-First, the platform integrates DSX-Connect with the identity provider.
-This is usually owned by the platform, IAM, or security team.
-
-Second, each application is onboarded into DSX-Connect.
-This creates the DSX-Connect-side policy, authorization, and attribution record.
-
-```mermaid
-sequenceDiagram
-    participant Operator as Platform Operator
-    participant IdP as Entra / Okta / IdP
-    participant DSXC as DSX-Connect
-    participant App as Application Team
-
-    Operator->>IdP: Create or identify DSX-Connect API audience
-    Operator->>DSXC: Configure trusted issuer, audience, and JWKS
-    App->>IdP: Register application or service principal
-    Operator->>DSXC: Create DSX-Connect application record
-    Operator->>DSXC: Map IdP client_id or subject to application_id
-    Operator->>DSXC: Assign destinations, policy, protected entity, billing metadata
-    IdP-->>App: Client credentials / runtime token capability
-    App->>IdP: Request short-lived access token
-    IdP-->>App: Access token
-    App->>DSXC: Submit file with Authorization bearer token
-```
-
-## Runtime Workflow
-
-At runtime, the application does not send every attribution field manually.
-The application sends a token.
-DSX-Connect resolves the token into an application record and uses that record to enrich the request.
-
-```mermaid
-flowchart LR
-    Token["Bearer token claims<br/>client_id / appid / sub"] --> Validate["Validate token<br/>issuer, audience, signature, expiry"]
-    Validate --> Lookup["Lookup DSX-Connect application record"]
-    Lookup --> Authz["Check destination and action grants"]
-    Lookup --> Attribution["Resolve attribution defaults"]
-    Lookup --> Policy["Resolve policy defaults"]
-    Lookup --> PE["Resolve DSXA protected entity"]
-    Authz --> Job["Create attributed job"]
-    Attribution --> Job
-    Policy --> Job
-    PE --> Job
-    Job --> Scan["Scan worker"]
-    Scan --> DSXA["DSXA request<br/>protected entity + X-Custom-Metadata"]
-```
-
-Example token claim:
-
-```json
-{
-  "iss": "https://login.microsoftonline.com/tenant/v2.0",
-  "aud": "api://dsx-connect-file-gateway",
-  "appid": "4f7f9b89-0000-0000-0000-111111111111",
-  "azp": "4f7f9b89-0000-0000-0000-111111111111",
-  "sub": "service-principal-subject",
-  "exp": 1790000000
-}
-```
-
-Example DSX-Connect application mapping:
-
-```json
-{
-  "application_id": "claims-upload-service",
-  "display_name": "Claims Upload Service",
-  "identity": {
-    "issuer": "https://login.microsoftonline.com/tenant/v2.0",
-    "client_id": "4f7f9b89-0000-0000-0000-111111111111"
-  },
-  "tenant_id": "claims-business-unit",
-  "customer_id": "enterprise-internal",
-  "business_unit": "Claims",
-  "cost_center": "CC-1042",
-  "billing_code": "CLAIMS-UPLOAD-PROD",
-  "default_protected_entity_id": 65,
-  "allowed_destinations": [
-    "gcs-claims-intake"
-  ],
-  "allowed_actions": [
-    "discover",
-    "submit",
-    "status"
-  ]
-}
-```
-
-Resolved scan metadata:
-
-```text
-application-id:claims-upload-service
-tenant-id:claims-business-unit
-customer-id:enterprise-internal
-business-unit:Claims
-cost-center:CC-1042
-billing-code:CLAIMS-UPLOAD-PROD
-protected-entity-id:65
-destination-id:gcs-claims-intake
-```
-
-## Separation Of Responsibilities
-
-The identity provider answers:
-
-- who is calling
-- whether the token is valid
-- when the token expires
-- which tenant issued it
-- which client, service principal, user, or workload identity is represented
-
-DSX-Connect answers:
-
-- whether that caller is onboarded
-- which destinations the caller can use
-- which actions the caller can perform
-- which policy applies
-- which DSXA protected entity should be used
-- which tenant, customer, business unit, application, cost center, and billing code should be recorded
-- which usage and audit records should be emitted
-
-This separation matters because IdP claims usually should not be treated as the complete security policy.
-The IdP establishes identity.
-DSX-Connect owns file gateway authorization, repository grants, scan policy, attribution enrichment, and usage metering.
-
-## Demo Mode
-
-The current lab can use static token mapping:
-
-```text
-demo-gateway-token
-    -> demo-developer-mvp
-    -> Demo Tenant
-    -> DSX-Connect File Gateway Developer MVP
-    -> demo-cost-center
-    -> demo-chargeback
-```
-
-This is intentionally a demo identity provider.
-It lets the demo prove the end-to-end behavior:
-
-- app submits file
-- token maps to an application identity
-- destination grants are enforced
-- attribution is written into the job
-- scan worker passes attribution in DSXA custom metadata
-- result records preserve the same context
-
-The production implementation should replace static token mapping with OIDC/JWT validation and a DSX-Connect application registry.
+Enterprise token validation and claim mapping, Application quotas, and richer usage reporting are planned extensions. They build on the same Application record and attribution model; the current static-token implementation and stored billing metadata should not be read as confirmation that those extensions are available.
 
 ## Related Concepts
 
-- [Tenant Attribution, Metering, And Chargeback](../architecture/tenant-attribution-chargeback.md)
-- [Gateway Access Control Model](../strategy/gateway-access-control.md)
-- [Normalized Enterprise File Gateway](../strategy/normalized-enterprise-file-gateway.md)
+- [Connector and Asset Model](../../core-concepts/connectors-and-assets.md)
+- [Governed File Movement](../../core-concepts/governed-file-movement.md)
+- [Developer File API and Managed File Transfer](../../case-studies/developer-file-api-vs-mft.md)

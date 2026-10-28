@@ -47,3 +47,9 @@ shared/deploy/certs/*.key
 
 # Local workspace settings
 /.vscode/
+.claude/settings.local.json
+
+# Generated documentation and local deployment scratch files
+/site/
+/.tmp-*.yaml
+/connectors/jira/data/

@@ -1,0 +1,88 @@
+# Standalone Jira lab deployment; requires the existing token Secret.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jira-connector
+  namespace: dsx-connect
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+    rollingUpdate: null
+  selector:
+    matchLabels:
+      app: jira-connector
+  template:
+    metadata:
+      labels:
+        app: jira-connector
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: jira-connector
+          image: dsxconnect/jira-connector:2.0.0
+          command: ["python", "-m", "connectors.jira.start"]
+          ports:
+            - name: http
+              containerPort: 8680
+          env:
+            - {name: PYTHONUNBUFFERED, value: "1"}
+            - {name: DSXCONNECTOR_JIRA_SITE_URL, value: "https://di-jira.atlassian.net"}
+            - {name: DSXCONNECTOR_JIRA_EMAIL, value: "logang@deepinstinct.com"}
+            - {name: DSXCONNECTOR_JIRA_API_TOKEN_FILE, value: "/run/secrets/jira/token"}
+            - {name: DSXCONNECTOR_ASSET, value: ""}
+            - {name: DSXCONNECTOR_MONITOR, value: "true"}
+            - {name: DSXCONNECTOR_JIRA_POLL_INTERVAL_SECONDS, value: "30"}
+            - {name: DSXCONNECTOR_JIRA_CHECKPOINT_FILE, value: "/app/data/jira-monitor.sqlite3"}
+            - {name: DSXCONNECTOR_JIRA_DISCOVER_SPACES, value: "true"}
+            - {name: DSXCONNECTOR_JIRA_DEMO_MODE, value: "true"}
+            - {name: DSXCONNECTOR_JIRA_DEMO_ISSUE_KEYS, value: '["RD-28133"]'}
+            - {name: DSXCONNECTOR_CONNECTOR_URL, value: "http://jira-connector:8680"}
+            - {name: DSXCONNECTOR_DSX_CONNECT_URL, value: "http://dsx-connect-api:8091"}
+            - {name: DSXCONNECTOR_REGISTER_WITH_CORE, value: "false"}
+            - {name: DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE, value: "true"}
+            - {name: DSXCONNECTOR_INSTANCE_ID, value: "jira-di-prototype"}
+            - {name: DSXCONNECTOR_PLATFORM_KEY, value: "di-jira.atlassian.net"}
+            - {name: DSXCONNECTOR_DISPLAY_NAME, value: "atlassian-jira-connector"}
+          volumeMounts:
+            - {name: token, mountPath: /run/secrets/jira, readOnly: true}
+            - {name: data, mountPath: /app/data}
+          readinessProbe:
+            httpGet: {path: /jira-connector/readyz, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /jira-connector/healthz, port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {cpu: "1", memory: 512Mi}
+      volumes:
+        - name: token
+          secret: {secretName: jira-prototype-token}
+        - name: data
+          persistentVolumeClaim: {claimName: jira-monitor-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jira-connector
+  namespace: dsx-connect
+spec:
+  selector: {app: jira-connector}
+  ports:
+    - {name: http, port: 8680, targetPort: http}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jira-monitor-data
+  namespace: dsx-connect
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

@@ -99,9 +99,22 @@ postgresql:
   auth:
     database: dsx_connect_2
     username: dsx
+    # Used only when existingSecret is empty. Rendered as a plain env var.
     password: dsx
+    # Optional Secret holding the password. When set, the chart reads the password
+    # from it and generates DSX_CONNECT_V2_POSTGRES__URL for the API and workers;
+    # any DSX_CONNECT_V2_POSTGRES__URL in env is ignored. Use a URL-safe password.
+    existingSecret: ""
+    existingSecretPasswordKey: password
   service:
     port: 5432
+  # Optional PGDATA override. Leave empty to use the image default
+  # (/var/lib/postgresql/data, the volume mount itself).
+  # Set to a subdirectory such as /var/lib/postgresql/data/pgdata when:
+  #   - running on OpenShift, where the random UID cannot chmod the mount point
+  #   - the PVC has a lost+found directory (e.g. GCP PD), which initdb rejects
+  # Changing this on an existing PVC hides the data in the old location.
+  dataDir: ""
   persistence:
     # false uses emptyDir and loses data when the pod is deleted.
     # Set true and configure storage for durable lab or production use.
@@ -118,7 +131,13 @@ rabbitmq:
     pullPolicy: IfNotPresent
   auth:
     username: dsx
+    # Used only when existingSecret is empty. Rendered as a plain env var.
     password: dsx
+    # Optional Secret holding the password. When set, the chart reads the password
+    # from it and generates DSX_CONNECT_V2_RABBITMQ__URL for the API and workers;
+    # any DSX_CONNECT_V2_RABBITMQ__URL in env is ignored. Use a URL-safe password.
+    existingSecret: ""
+    existingSecretPasswordKey: password
   service:
     amqpPort: 5672
     managementPort: 15672

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 400" role="img" aria-labelledby="title desc">
+<title id="title">DSX-Connect: v1 arrows revisited</title>
+<desc id="desc">The original offset opposing arrows, a solid shield with opposing arrow cutouts and protruding heads, and a shield with contained opposing arrows.</desc>
+<defs>
+<path id="shield" d="M64 10 103 28V60c0 30-15 48-39 63C40 108 25 90 25 60V28Z"/>
+<g id="arrows"><path d="M4 40 43 19V30H76V50H43V61Z M52 75H85V64L124 85 85 106V95H52Z" fill="currentColor"/></g>
+<mask id="channels"><rect width="128" height="128" fill="white"/><path d="M0 39H78V57H0Z M50 73H128V91H50Z" fill="black"/></mask>
+<mask id="inside"><rect width="128" height="128" fill="white"/><path d="M36 46 56 30V38H85V54H56V62Z M43 75H72V67L92 83 72 99V91H43Z" fill="black"/></mask>
+<g id="hybrid"><use href="#shield" fill="currentColor" mask="url(#channels)"/><path d="M2 48 23 32V64Z M105 66 126 82 105 98Z" fill="currentColor"/></g>
+<g id="compact"><use href="#shield" fill="currentColor" mask="url(#inside)"/></g>
+<style>text{font-family:Arial,sans-serif;fill:#243b53}.head{font-size:20px;font-weight:700}.sub{font-size:14px;fill:#526779}</style>
+</defs>
+<rect width="960" height="400" rx="20" fill="#f4f7fb"/>
+<text x="32" y="38" class="head">Bring back the v1 arrow language</text>
+<g fill="#fff" stroke="#dce5ef"><rect x="25" y="62" width="290" height="315" rx="18"/><rect x="335" y="62" width="290" height="315" rx="18"/><rect x="645" y="62" width="290" height="315" rx="18"/></g>
+<use href="#arrows" transform="translate(93 79) scale(1.2)" color="#4CA7FF"/>
+<use href="#hybrid" transform="translate(403 79) scale(1.2)" color="#4CA7FF"/>
+<use href="#compact" transform="translate(713 79) scale(1.2)" color="#4CA7FF"/>
+<text x="170" y="255" text-anchor="middle" class="head">A · Arrows first</text>
+<text x="480" y="255" text-anchor="middle" class="head">B · Solid shield + arrows</text>
+<text x="790" y="255" text-anchor="middle" class="head">C · Arrows inside shield</text>
+<text x="170" y="278" text-anchor="middle" class="sub">V1 geometry, simplified</text>
+<text x="480" y="278" text-anchor="middle" class="sub">Negative-space tails, visible heads</text>
+<text x="790" y="278" text-anchor="middle" class="sub">A quieter, compact mark</text>
+<use href="#arrows" transform="translate(65 306) scale(.4)" color="#101f42"/><use href="#arrows" transform="translate(144 320) scale(.2)" color="#4CA7FF"/>
+<use href="#hybrid" transform="translate(375 306) scale(.4)" color="#101f42"/><use href="#hybrid" transform="translate(454 320) scale(.2)" color="#4CA7FF"/>
+<use href="#compact" transform="translate(685 306) scale(.4)" color="#101f42"/><use href="#compact" transform="translate(764 320) scale(.2)" color="#4CA7FF"/>
+<rect x="200" y="300" width="65" height="65" rx="16" fill="#101f42"/><use href="#arrows" transform="translate(208 305) scale(.4)" color="#DEFF5B"/>
+<rect x="510" y="300" width="65" height="65" rx="16" fill="#101f42"/><use href="#hybrid" transform="translate(518 305) scale(.4)" color="#DEFF5B"/>
+<rect x="820" y="300" width="65" height="65" rx="16" fill="#101f42"/><use href="#compact" transform="translate(828 305) scale(.4)" color="#DEFF5B"/>
+</svg>

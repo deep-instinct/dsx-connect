@@ -1,0 +1,6 @@
+apiVersion: v2
+name: jira-connector-chart
+description: Read-only Jira Cloud attachment scanning connector
+type: application
+version: 2.0.0
+appVersion: "2.0.0"

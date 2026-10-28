@@ -2,9 +2,10 @@
 
 DSX-Connect 2 is a durable control plane for protecting files across repositories. It separates repository access, job state, asynchronous work, scanning, policy, remediation, and result delivery so that a connector or worker can restart without losing accepted work.
 
-The high-level artwork remains useful as a conceptual view of the platform:
+![DSX-Connect 2 architecture and scan flow](../assets/diagrams/dsx-connect-2-architecture.svg#only-light)
+![DSX-Connect 2 architecture and scan flow](../assets/diagrams/dsx-connect-2-architecture-dark.svg#only-dark)
 
-![DSX-Connect Architecture](../assets/dsx-connect-design.svg)
+*DSX-Connect 2 components, runtime boundaries, and scan flow.*
 
 ## Architectural overview
 
@@ -21,80 +22,11 @@ The v2 platform is composed of:
 
 At deployment time, these components can run in one Helm release for a lab or be distributed across separately managed services and worker pools for production.
 
-```mermaid
-flowchart LR
-    Apps["Applications and operators"] --> API["DSX-Connect API and Operator Console"]
-
-    subgraph Repositories["External repositories"]
-        Repo1["Cloud storage"]
-        Repo2["SaaS and collaboration"]
-        Repo3["Filesystems and shares"]
-    end
-
-    subgraph Integrations["Connector platform boundary"]
-        Connectors["Connectors\nregistration, discovery, reads, monitoring, remediation"]
-    end
-
-    subgraph ControlPlane["DSX-Connect 2 control plane"]
-        API
-        Postgres[("PostgreSQL\ndurable state")]
-        Outbox["Job and event outbox"]
-        Relay["Relay worker"]
-        Rabbit[("RabbitMQ\nwork queues and DLQs")]
-        Workers["Scan, policy, remediation,\nresult-sink, and DIANNA workers"]
-    end
-
-    DSXA["DSXA scanning engine"]
-
-    Repo1 <--> Connectors
-    Repo2 <--> Connectors
-    Repo3 <--> Connectors
-    Connectors <--> API
-    API <--> Postgres
-    API --> Outbox
-    Outbox --> Relay
-    Relay --> Rabbit
-    Rabbit --> Workers
-    Workers <--> Connectors
-    Workers <--> DSXA
-    Workers --> Postgres
-```
-
-*Figure 1: DSX-Connect 2 deployment and runtime boundaries*
+The **DSX-Connect File Workflows** section shows the highlighted paths for [Repository Monitoring](repository-monitoring.md), [Full Repository Scan](repository-full-scan.md), and [Governed File Movement](governed-file-movement.md).
 
 ## Core scan flow
 
 The control plane accepts a request and records it before work is dispatched. The relay then turns durable outbox records into RabbitMQ messages. Workers advance the job item through explicit stages and persist each stage transition in PostgreSQL.
-
-```mermaid
-flowchart TB
-    Request["Scan, monitoring, or file-flow request"] --> API["API validates identity, scope, and policy"]
-    API --> Job["Create job and job items"]
-    Job --> DB[("PostgreSQL\njobs, items, stages, findings")]
-    Job --> Outbox["Write pending outbox events"]
-    Outbox --> Relay["Relay worker"]
-    Relay --> Rabbit[("RabbitMQ")]
-
-    Rabbit --> Scan["Scan worker"]
-    Scan --> Read["Read through connector proxy\nor approved native reader"]
-    Read --> Connector["Connector"]
-    Connector --> Repository["Repository content"]
-    Scan --> DSXA["DSXA verdict"]
-    DSXA --> ScanComplete["Persist scan stage"]
-
-    ScanComplete --> Policy["Policy worker"]
-    Policy --> Decision{"Disposition?"}
-    Decision -->|allow| Result["Result-sink worker"]
-    Decision -->|quarantine or delete| Remediation["Remediation worker"]
-    Decision -->|request follow-up| Dianna["DIANNA worker"]
-    Remediation --> ConnectorAction["Connector action"]
-    ConnectorAction --> Result
-    Dianna --> Result
-    Result --> DB
-    Result --> Final["Completed job item and external result"]
-```
-
-*Figure 2: Durable v2 scan and disposition flow*
 
 ## Component responsibilities
 
@@ -174,7 +106,7 @@ RabbitMQ provides:
 
 RabbitMQ is not the system of record for jobs. A message can be retried or dead-lettered, but the authoritative job-item and stage state remains in PostgreSQL. When a message is permanently failed, operators should inspect the worker error and durable item state before deciding whether to replay or create replacement work.
 
-For queue inspection and dead-letter handling, see [Dead Letter Queues](../dsx-connect-2/operations/dead-letter-queues.md).
+For queue inspection and dead-letter handling, see [Failed Scans and Dead Letter Queues](../operations/dead-letter-queues.md).
 
 ## Worker scaling
 

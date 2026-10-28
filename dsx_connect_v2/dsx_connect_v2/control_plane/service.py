@@ -21,6 +21,7 @@ from dsx_connect_v2.control_plane.models import (
     ProtectedScopeCreate,
     ProtectedScopeRecord,
     ProtectedScopeUpdate,
+    utcnow,
 )
 from dsx_connect_v2.control_plane.repository import ControlPlaneRepository
 
@@ -225,16 +226,59 @@ class ControlPlaneService:
         runtime = parse_integration_runtime_config(integration.config)
         has_reader = runtime.reader is not None or runtime.reader_strategy is not None
         has_delivery = runtime.delivery is not None
-        if (not needs_reader or has_reader) and (not needs_delivery or has_delivery):
-            return integration
 
         config = deepcopy(integration.config)
-        if needs_reader and not has_reader:
+        changed = False
+        if needs_reader and (
+            not has_reader
+            or self._stale_registration_proxy_config(integration, config.get("reader"), "read_file", payload)
+        ):
             config["reader"] = self._default_reader_config_for_connector(payload)
-        if needs_delivery and not has_delivery:
+            changed = True
+        if needs_delivery and (
+            not has_delivery
+            or self._stale_registration_proxy_config(integration, config.get("delivery"), "write_file", payload)
+        ):
             config["delivery"] = self._default_delivery_config_for_connector(payload)
+            changed = True
+        if not changed:
+            return integration
         self._validate_integration_config(config)
         return self.update_integration(integration.integration_id, IntegrationUpdate(config=config))
+
+    def _stale_registration_proxy_config(
+        self,
+        integration: IntegrationRecord,
+        section: object,
+        action: str,
+        payload: ConnectorInstanceRegister,
+    ) -> bool:
+        """True when a registration-generated proxy config points at an address no live instance serves.
+
+        Only configs in the exact shape produced by _default_*_config_for_connector are refreshed, so
+        operator-authored proxy settings (custom endpoints, auth, timeouts) are never overwritten.
+        """
+        if not isinstance(section, dict):
+            return False
+        proxy = section.get("proxy")
+        if not isinstance(proxy, dict) or set(proxy) != {"endpoint_url", "base_url", "connector_name"}:
+            return False
+        extra_keys = set(section) - {"proxy", "default_strategy"}
+        if extra_keys or section.get("default_strategy", "proxy") != "proxy":
+            return False
+        stored_base_url = str(proxy["base_url"]).rstrip("/")
+        if proxy["connector_name"] != payload.connector_name or proxy["endpoint_url"] != f"{stored_base_url}/{action}":
+            return False
+        new_base_url = normalize_registered_connector_base_url(payload.base_url).rstrip("/")
+        if stored_base_url == new_base_url:
+            return False
+        now = utcnow()
+        for instance in self.repo.list_connector_instances(integration_id=integration.integration_id):
+            if instance.connector_instance_id == payload.connector_instance_id or instance.expires_at <= now:
+                continue
+            if normalize_registered_connector_base_url(instance.base_url).rstrip("/") == stored_base_url:
+                return False
+        return True
 
     def _integration_for_connector_registration(self, payload: ConnectorInstanceRegister) -> IntegrationRecord:
         if payload.integration_id:

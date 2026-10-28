@@ -39,7 +39,7 @@ env:
   # DSX-Connect 2 deployments should set REGISTER_WITH_NG_CONTROL_PLANE=true.
   # DSX-Connect 1.x/core deployments should set REGISTER_WITH_CORE=true.
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "false"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "false"
 
   # DSXCONNECTOR_DSX_CONNECT_URL is kept for connector compatibility and 1.x/core use.
   # DSXCONNECTOR_DSX_CONNECT_V2_URL is used for DSX-Connect 2 registration and heartbeats.
@@ -53,11 +53,11 @@ env:
 
   # DSX-Connect 2 platform metadata.
   # PLATFORM is the connector adapter type; for this connector it should remain "filesystem".
-  DSXCONNECTOR_NG_PLATFORM: "filesystem"
+  DSXCONNECTOR_PLATFORM: "filesystem"
   # PLATFORM_KEY is a stable, operator-chosen key for the filesystem boundary this connector
   # represents in the DSX-Connect 2 console/API. It can be a cluster, site, share, or lab label.
   # Access is controlled by the Kubernetes volume mounted into the pod, not by this value.
-  DSXCONNECTOR_NG_PLATFORM_KEY: ""
+  DSXCONNECTOR_PLATFORM_KEY: ""
 
   # Filesystem monitoring watches the mounted scan path for changes.
   # Leave disabled for connector-only smoke tests and enable after the volume path is stable.

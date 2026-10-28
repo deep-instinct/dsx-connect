@@ -172,10 +172,10 @@ def test_ng_registration_payload_uses_runtime_identity_and_capabilities() -> Non
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
+            register_with_control_plane=True,
             instance_id="gcs-pod-1",
-            ng_platform_key="project-a",
-            ng_connector_labels={"namespace": "dsx-connect"},
+            platform_key="project-a",
+            connector_labels={"namespace": "dsx-connect"},
         )
     )
 
@@ -208,10 +208,10 @@ def test_ng_registration_payload_honors_explicit_capabilities() -> None:
             connector_url="http://s3:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
+            register_with_control_plane=True,
             instance_id="s3-pod-1",
-            ng_platform_key="account-a",
-            ng_capabilities={"write": True},
+            platform_key="account-a",
+            capabilities={"write": True},
         )
     )
 
@@ -269,9 +269,9 @@ def test_ng_heartbeat_falls_back_to_register_when_instance_is_missing(monkeypatc
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
+            register_with_control_plane=True,
             instance_id="gcs-pod-1",
-            ng_platform_key="project-a",
+            platform_key="project-a",
         )
     )
 
@@ -320,8 +320,8 @@ def test_ng_only_scan_request_uses_execution_batch_endpoint(monkeypatch: pytest.
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
-            ng_integration_id="int_gcs",
+            register_with_control_plane=True,
+            integration_id="int_gcs",
             instance_id="gcs-pod-1",
         )
     )
@@ -393,7 +393,7 @@ def test_ng_registration_response_sets_scan_integration_id(monkeypatch: pytest.M
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
+            register_with_control_plane=True,
             instance_id="gcs-pod-1",
         )
     )
@@ -446,8 +446,8 @@ def test_ng_only_batch_scan_request_uses_execution_batch_endpoint(monkeypatch: p
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
-            ng_integration_id="int_gcs",
+            register_with_control_plane=True,
+            integration_id="int_gcs",
             instance_id="gcs-pod-1",
         )
     )
@@ -508,8 +508,8 @@ def test_ng_only_batch_scan_request_preserves_scan_source_hint(monkeypatch: pyte
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
-            ng_integration_id="int_gcs",
+            register_with_control_plane=True,
+            integration_id="int_gcs",
             instance_id="gcs-pod-1",
         )
     )
@@ -540,9 +540,9 @@ def test_ng_only_connector_does_not_create_legacy_uuid_file(tmp_path, monkeypatc
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect-v2:8091",
             register_with_core=False,
-            register_with_ng_control_plane=True,
+            register_with_control_plane=True,
             instance_id="gcs-pod-1",
-            ng_platform_key="project-a",
+            platform_key="project-a",
         )
     )
 
@@ -559,7 +559,7 @@ def test_legacy_registration_still_creates_stable_uuid_file(tmp_path, monkeypatc
             connector_url="http://gcs:80",
             dsx_connect_url="http://dsx-connect:8586",
             register_with_core=True,
-            register_with_ng_control_plane=False,
+            register_with_control_plane=False,
         )
     )
 

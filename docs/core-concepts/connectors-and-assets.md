@@ -39,8 +39,8 @@ The connector registers with DSX-Connect 2 using a platform type and a stable pl
 
 ```yaml
 env:
-  DSXCONNECTOR_NG_PLATFORM: "gcs"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "projects/example-gcs-project"
+  DSXCONNECTOR_PLATFORM: "gcs"
+  DSXCONNECTOR_PLATFORM_KEY: "projects/example-gcs-project"
   DSXCONNECTOR_INSTANCE_ID: "gcs-prod-project-1"
 ```
 
@@ -48,8 +48,8 @@ These values have different meanings:
 
 | Setting | Meaning |
 | --- | --- |
-| `DSXCONNECTOR_NG_PLATFORM` | The connector adapter type. For Google Cloud Storage, use `gcs`. |
-| `DSXCONNECTOR_NG_PLATFORM_KEY` | A stable operator-chosen label for the platform boundary, such as a project, folder, organization, or account. It does not grant access. |
+| `DSXCONNECTOR_PLATFORM` | The connector adapter type. For Google Cloud Storage, use `gcs`. |
+| `DSXCONNECTOR_PLATFORM_KEY` | A stable operator-chosen label for the platform boundary, such as a project, folder, organization, or account. It does not grant access. |
 | `DSXCONNECTOR_INSTANCE_ID` | The identity of this running connector instance. Changing it creates a separate connector record. |
 
 The platform key is useful for grouping and operating the integration. It is not automatically read from the service-account JSON and is not a substitute for IAM.
@@ -146,4 +146,4 @@ The same model applies to other platforms:
 - a collaboration connector can expose sites, drives, or mail stores;
 - an object-storage connector can expose buckets and prefixes.
 
-For the broader architecture, see [DSX-Connect 2 Architecture](architecture.md). For the application-facing use case, see [Normalized Enterprise File Gateway](../dsx-connect-2/strategy/normalized-enterprise-file-gateway.md).
+For the broader architecture, see [DSX-Connect 2 Architecture](architecture.md). For the application-facing use case, see [Governed File Movement](governed-file-movement.md).

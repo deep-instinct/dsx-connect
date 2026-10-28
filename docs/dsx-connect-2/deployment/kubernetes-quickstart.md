@@ -355,12 +355,12 @@ env:
   LOG_LEVEL: "debug"
   DSXCONNECTOR_APP_ENV: "dev"
   DSXCONNECTOR_REGISTER_WITH_CORE: "false"
-  DSXCONNECTOR_REGISTER_WITH_NG_CONTROL_PLANE: "true"
+  DSXCONNECTOR_REGISTER_WITH_CONTROL_PLANE: "true"
   DSXCONNECTOR_DSX_CONNECT_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_DSX_CONNECT_V2_URL: "http://dsx-connect-api:8091"
   DSXCONNECTOR_INSTANCE_ID: "filesystem-local-1"
-  DSXCONNECTOR_NG_PLATFORM: "filesystem"
-  DSXCONNECTOR_NG_PLATFORM_KEY: "local-kubernetes"
+  DSXCONNECTOR_PLATFORM: "filesystem"
+  DSXCONNECTOR_PLATFORM_KEY: "local-kubernetes"
   DSXCONNECTOR_ASSET: "/app/scan_folder"
   DSXCONNECTOR_ITEM_ACTION: "nothing"
   DSXCONNECTOR_ITEM_ACTION_MOVE_METAINFO: "/app/quarantine"
@@ -471,7 +471,7 @@ In the Operator Console:
 This quickstart uses DSXA scanner mode, so scan results come from the configured DSXA scanner.
 For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_V2_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.
 
-If scan work exhausts retries and lands in a dead letter queue, see [Dead Letter Queues](../operations/dead-letter-queues.md) for the current RabbitMQ inspection and scan restart flow.
+If scan work exhausts retries and lands in a dead letter queue, see [Failed Scans and Dead Letter Queues](../../operations/dead-letter-queues.md) for the current RabbitMQ inspection and scan restart flow.
 
 ## Cleanup
 

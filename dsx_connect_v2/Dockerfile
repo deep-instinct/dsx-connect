@@ -10,7 +10,10 @@ WORKDIR /app
 RUN python -m pip install --no-cache-dir --upgrade pip
 
 COPY shared/ shared/
-COPY dsxa_sdk_py/ dsxa_sdk_py/
+# Copy SDK source explicitly; never package local upload corpora or build output.
+COPY dsxa_sdk_py/pyproject.toml dsxa_sdk_py/README.md dsxa_sdk_py/LICENSE dsxa_sdk_py/NOTICE.md dsxa_sdk_py/
+COPY dsxa_sdk_py/dsxa_sdk_py/ dsxa_sdk_py/dsxa_sdk_py/
+COPY dsxa_sdk_py/examples/ dsxa_sdk_py/examples/
 COPY dsx_connect_v2/ dsx_connect_v2/
 
 RUN python -m pip install --no-cache-dir -e "./dsxa_sdk_py" -e "./dsx_connect_v2[workers,gcs]"

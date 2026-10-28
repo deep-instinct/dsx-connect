@@ -38,3 +38,11 @@ connectors/google_cloud_storage/*-sa.json
 # Local deployment scratch files and assistant state
 .tmp-*.yaml
 .claude/
+
+# Local upload corpora and development caches must never enter release images
+**/.demo_uploads
+**/.demo_uploads/**
+**/.pytest_cache
+**/*.egg-info
+**/build
+.venv*

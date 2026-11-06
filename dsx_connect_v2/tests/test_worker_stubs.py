@@ -2484,3 +2484,50 @@ def test_execute_scan_via_dsxa_skips_oversize_after_read(monkeypatch, tmp_path) 
     assert exc.value.code == "content_too_large"
     assert exc.value.details["enforcement"] == "read_result"
     assert not artifact.exists()
+
+
+def test_gcs_remediation_preserves_bucket_and_original_read_path() -> None:
+    from dsx_connect_v2.jobs.contracts import RemediationRequested
+
+    request = RemediationRequested(
+        job_id="job-1",
+        job_item_id="item-1",
+        object_identity="dpa-storage/prefix/eicar.com",
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={"action": "quarantine"},
+    )
+    payload = build_legacy_connector_action_payload(
+        request,
+        connector_action=request.as_connector_action_request(),
+        connector_url="http://gcs",
+        source_path="prefix/eicar.com",
+    )
+    assert payload["location"] == "prefix/eicar.com"
+    assert payload["metainfo"] == "dpa-storage/prefix/eicar.com"
+
+
+def test_terminal_remediation_failure_finishes_item_and_job() -> None:
+    from dsx_connect_v2.jobs.contracts import RemediationRequested
+    from dsx_connect_v2.workers.remediation_worker import mark_remediation_failed
+
+    repo = InMemoryJobRepository()
+    bus = InMemoryJobBus()
+    service = JobService(repo=repo, bus=bus)
+    created = asyncio.run(service.submit_batch_job(BatchJobSubmitRequest(items=[{"object_identity": "file"}])))
+    item = service.list_job_items(job_id=created.job.job_id)[0]
+    asyncio.run(process_scan_message(service, bus.snapshot()[0], execute_scan=_fake_scan))
+    policy = next(message for message in bus.snapshot() if message.message_type == "policy_evaluation_requested")
+    asyncio.run(process_policy_message(service, policy, evaluate_policy=_fake_policy_engine_without_dianna))
+    request = RemediationRequested(
+        job_id=item.job_id,
+        job_item_id=item.job_item_id,
+        object_identity=item.object_identity,
+        scan_result={"verdict": "Malicious"},
+        remediation_plan={"action": "quarantine"},
+    )
+    asyncio.run(mark_remediation_failed(service, request.as_envelope(), TerminalScanError("missing", "Object missing"), {}))
+    updated = service.get_job_item_or_404(item.job_item_id)
+    assert updated.scan_stage.state == "completed"
+    assert updated.remediation_stage.error["code"] == "missing"
+    assert updated.state == "failed"
+    assert service.get_job_or_404(item.job_id).state == "failed"

@@ -3873,7 +3873,7 @@
           label: "Processed",
           render: (result) => {
             const progress = result.progress || {};
-            return escapeHtml(formatProgress(progress, result.job.state));
+            return escapeHtml(formatProgress(progress, result.job.state, result.remediation));
           },
         },
         {
@@ -4442,13 +4442,17 @@
       });
     }
 
-    function formatProgress(progress = {}, state = "") {
+    function formatProgress(progress = {}, state = "", remediation = {}) {
       const done = progress.terminal_items || 0;
       const total = progress.total_items || 0;
       const terminal = isTerminalJobState(state);
-      const totalText = total ? `${terminal ? "" : "~"}${total} queued` : `${terminal ? "0 queued" : "~? queued"}`;
+      const totalText = total || (terminal ? "0" : "?");
+      const remediating = (remediation.running || 0) + (remediation.pending || 0);
+      if (!terminal && remediation.running) {
+        return `${done}/${totalText} finished · remediation ${remediating}`;
+      }
       const percent = total ? ` (${Math.round(progress.percent_complete ?? 0)}%)` : "";
-      return `${done}/${totalText}${percent}`;
+      return `${done}/${totalText} finished${percent}`;
     }
 
     function isTerminalJobState(state) {

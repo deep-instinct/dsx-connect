@@ -38,6 +38,29 @@ async def process_remediation_message(
     )
 
 
+async def mark_remediation_failed(
+    service: JobService,
+    envelope: MessageEnvelope,
+    exc: Exception,
+    headers: dict,
+) -> None:
+    request = RemediationRequested.from_envelope(envelope)
+    error = exc.as_error_payload() if isinstance(exc, TerminalScanError) else {
+        "code": "remediation_execution_failed",
+        "message": str(exc),
+        "retryable": True,
+        "reason": "retry_attempts_exhausted",
+        "retryAttempts": headers.get("x-dsx-retry-attempt"),
+    }
+    current = service.get_job_item_or_404(request.job_item_id)
+    if current.state in {"completed", "failed", "cancelled"}:
+        return
+    service.update_remediation_stage(
+        request.job_item_id,
+        RemediationStageUpdateRequest(state="failed", error=error).as_stage_update_request(),
+    )
+
+
 async def stub_remediation_executor(request: RemediationRequested) -> RemediationResult:
     plan = request.remediation_plan.remediation_plan
     connector_action = request.as_connector_action_request()
@@ -70,7 +93,12 @@ def build_remediation_executor(service: JobService) -> RemediationExecutor:
         if request.integration_id is None or control_plane is None:
             return await stub_remediation_executor(request)
         try:
-            return await execute_connector_item_action(request, control_plane=control_plane)
+            item = service.repo.get_job_item(request.job_item_id)
+            source_path = item.payload.get("path") if item else None
+            return await execute_connector_item_action(
+                request, control_plane=control_plane,
+                source_path=source_path if isinstance(source_path, str) else None,
+            )
         except TerminalScanError:
             raise
         except Exception:
@@ -97,12 +125,16 @@ async def main() -> None:
     async def handle(envelope: MessageEnvelope) -> None:
         await process_remediation_message(service, envelope, execute_remediation=executor)
 
+    async def handle_terminal_failure(envelope: MessageEnvelope, exc: Exception, headers: dict) -> None:
+        await mark_remediation_failed(service, envelope, exc, headers)
+
     await consume_queue(
         amqp_url=settings.rabbitmq.url,
         exchange_name=settings.rabbitmq.job_exchange,
         queue_name=args.queue,
         routing_keys=[args.routing_key],
         handler=handle,
+        terminal_failure_handler=handle_terminal_failure,
         prefetch_count=args.prefetch_count,
         retry_exchange_name=settings.rabbitmq.retry_exchange,
         dead_letter_exchange_name=settings.rabbitmq.dead_letter_exchange,

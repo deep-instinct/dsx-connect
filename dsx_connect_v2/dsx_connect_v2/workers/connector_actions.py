@@ -111,11 +111,18 @@ def build_legacy_connector_action_payload(
     *,
     connector_action: ConnectorActionRequest,
     connector_url: str,
+    source_path: str | None = None,
 ) -> dict[str, Any]:
     plan = request.remediation_plan.remediation_plan
     normalized_request = request.as_connector_remediation_request()
     location = request.content_source.locator or request.object_identity
     metainfo = request.object_identity
+    if source_path and not request.content_source.locator:
+        # GCS uses metainfo as the bucket-qualified identity when location is
+        # the relative key. Reuse the exact path that was used for the read.
+        bucket, _, key = metainfo.partition("/")
+        if bucket and key == source_path:
+            location = source_path
     payload: dict[str, Any] = {
         "location": str(location),
         "metainfo": str(metainfo),
@@ -204,12 +211,15 @@ def _connector_item_action_sync(
     request: RemediationRequested,
     *,
     control_plane: ControlPlaneService | None,
+    source_path: str | None = None,
 ) -> RemediationResult:
     config = resolve_connector_action_runtime_config(request, control_plane=control_plane)
     normalized_request = request.as_connector_remediation_request()
     connector_action = request.as_connector_action_request()
+    platform = ""
     if control_plane is not None and request.integration_id:
         integration = control_plane.get_integration_or_404(request.integration_id)
+        platform = integration.platform
         capabilities = resolve_remediation_capabilities(
             integration.config,
             default_enabled=bool(integration.capability_remediate),
@@ -228,6 +238,7 @@ def _connector_item_action_sync(
         request,
         connector_action=connector_action,
         connector_url=config.connector_url,
+        source_path=source_path if platform.lower() == "gcs" else None,
     )
     body = __import__("json").dumps(payload).encode("utf-8")
     headers = {
@@ -289,5 +300,8 @@ async def execute_connector_item_action(
     request: RemediationRequested,
     *,
     control_plane: ControlPlaneService | None,
+    source_path: str | None = None,
 ) -> RemediationResult:
-    return await asyncio.to_thread(_connector_item_action_sync, request, control_plane=control_plane)
+    return await asyncio.to_thread(
+        _connector_item_action_sync, request, control_plane=control_plane, source_path=source_path,
+    )

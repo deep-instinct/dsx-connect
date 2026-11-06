@@ -379,11 +379,9 @@
 
     .table-selection-control { display: flex; align-items: center; gap: 2px; }
     .table-selection-control input[type="checkbox"] { margin: 0 !important; }
-    #start-selected-scans { white-space: nowrap; }
+    #selected-scan-menu { position: fixed; inset: auto; margin: 0; padding: 6px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); }
+    #selected-scan-menu:popover-open { display: grid; gap: 4px; }
 
-    .bulk-outcomes { max-height: 240px; overflow: auto; margin-top: 10px; }
-    .bulk-operation-panel { max-height: 180px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; }
-    .bulk-operation-panel:empty { display: none; }
     .protection-profile-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
     .asset-protection-indicator { display: inline-flex; align-items: center; flex: 0 0 auto; }
     .asset-protection-indicator svg { width: 18px; height: 18px; stroke-width: 2; }
@@ -407,12 +405,9 @@
     }
 
     .scope-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .scope-scan-buttons { display: inline-flex; flex-wrap: nowrap; gap: 6px; }
     .scope-scan-actions .scan-status { flex-basis: 100%; width: fit-content; }
 
-    #scan-results-context:empty { display: none; }
-    .scan-context-chip { display: inline-flex; align-items: center; gap: 6px; }
-    .scan-context-chip button { display: inline-grid; place-items: center; width: 22px; height: 22px; min-height: 22px; padding: 0; background: transparent; border-color: transparent; color: inherit; }
-    .scan-context-chip button svg { width: 14px; height: 14px; }
 
     .scan-action {
       border-color: var(--good);
@@ -706,10 +701,6 @@
       white-space: nowrap;
     }
 
-    .table-actions .spacer {
-      flex: 1 1 auto;
-    }
-
     .table-actions .poll-control {
       display: inline-flex;
       align-items: center;
@@ -834,6 +825,15 @@
       text-transform: none;
     }
 
+    .table-loading {
+      position: sticky;
+      left: 0;
+      padding: 8px 12px;
+      color: var(--ink);
+      background: var(--surface-3);
+      border-left: 3px solid var(--accent);
+    }
+
     .column-filter {
       display: flex;
       gap: var(--space-4);
@@ -860,6 +860,12 @@
       outline: 0;
     }
 
+    .column-filter .filter-active,
+    .table-actions .filter-active {
+      border-color: var(--accent);
+      color: var(--ink);
+    }
+
     .filter-input-wrap {
       position: relative;
       flex: 1 1 auto;
@@ -880,6 +886,10 @@
 
     .filter-input-wrap:focus-within {
       border-color: var(--line-strong);
+    }
+
+    .filter-input-wrap:has(> input.filter-active) {
+      border-color: var(--accent);
     }
 
     .filter-icon {
@@ -1842,7 +1852,6 @@
               <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
             </div>
             <div class="table-actions">
-              <span class="spacer" aria-hidden="true"></span>
               <button class="icon-button" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
@@ -1862,8 +1871,18 @@
 
           <div class="asset-pane hidden" id="asset-pane-protected">
             <div class="asset-context" id="protected-context" aria-label="Protected assets navigation"></div>
-            <div id="bulk-operation-panel" class="bulk-operation-panel"></div>
+            <div class="table-actions">
+              <button type="button" id="clear-protected-filters" class="icon-button" disabled aria-label="Clear filters" title="Clear filters">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 10h10M10 15h2m3 0 5 5m0-5-5 5"/></svg>
+              </button>
+              <button type="button" id="selected-scan-actions" class="hidden" popovertarget="selected-scan-menu" aria-expanded="false">Actions ▾</button>
+              <div id="selected-scan-menu" popover="auto">
+                <button type="button" id="start-selected-scans">Start Scans</button>
+                <button type="button" id="stop-selected-scans">Stop Scans</button>
+              </div>
+            </div>
             <div class="table-wrap protected-assets">
+              <div id="protected-assets-table-loading" class="table-loading hidden" role="status">Loading data…</div>
               <table id="protected-assets-table">
                 <thead></thead>
                 <tbody id="protected-assets-body"></tbody>
@@ -1908,7 +1927,9 @@
               </svg>
               <span class="icon-badge hidden" id="scan-compare-count">0</span>
             </button>
-            <div id="scan-results-context" aria-live="polite"></div>
+            <button type="button" id="clear-scan-filters" class="icon-button" disabled aria-label="Clear filters" title="Clear filters">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 10h10M10 15h2m3 0 5 5m0-5-5 5"/></svg>
+            </button>
           </div>
           <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
             <div class="scan-compare-header">
@@ -1929,6 +1950,7 @@
             </div>
           </div>
           <div class="table-wrap">
+            <div id="scan-results-table-loading" class="table-loading hidden" role="status">Loading data…</div>
             <table id="scan-results-table">
               <thead></thead>
               <tbody id="scan-results-body"></tbody>
@@ -1957,7 +1979,6 @@
                 <path d="M6 21v-4h4"></path>
               </svg>
             </button>
-            <span class="spacer" aria-hidden="true"></span>
             <button class="primary" id="create-application" type="button">Onboard Application</button>
           </div>
           <div class="table-wrap">
@@ -1979,7 +2000,6 @@
               <select id="policy-filter-integration"></select>
             </label>
             <button class="primary" id="apply-policy-filter" type="button">Apply</button>
-            <span class="spacer" aria-hidden="true"></span>
             <button class="icon-button" id="refresh-policies" type="button" aria-label="Refresh protection profiles" title="Refresh protection profiles">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
@@ -2279,6 +2299,20 @@
       <div class="modal-actions">
         <button type="submit" value="cancel" autofocus>Cancel</button>
         <button type="submit" value="apply" id="bulk-protection-apply" class="primary">Start Scan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="scan-confirm-dialog" id="full-scan-confirm" aria-labelledby="full-scan-confirm-title" aria-describedby="full-scan-confirm-description">
+    <form method="dialog">
+      <h2 id="full-scan-confirm-title">Start full scan now?</h2>
+      <p>Target: <strong id="full-scan-confirm-target"></strong></p>
+      <p id="full-scan-confirm-count" role="status">Checking object count…</p>
+      <p id="full-scan-confirm-description">Large scans can take a long time and use significant network and scanner resources. Duration depends on file count, file size, and available capacity.</p>
+      <p>The assigned protection profile applies, including any configured remediation actions.</p>
+      <div class="modal-actions">
+        <button type="submit" value="cancel" autofocus>Cancel</button>
+        <button type="submit" value="start" class="primary">Start scan now</button>
       </div>
     </form>
   </dialog>
@@ -3403,30 +3437,17 @@
         page.disabled = state.bulkBusy || !state.protectedAssets.length;
       }
       document.querySelectorAll("[data-action='bulk-select-asset']").forEach((checkbox) => { checkbox.disabled = state.bulkBusy; });
-      const actions = document.getElementById('start-selected-scans');
-      if (actions) {
-        actions.disabled = state.bulkBusy || !count;
-        actions.textContent = `Start Scan${count ? ` (${count})` : ""}`;
-        actions.title = `Start scans for ${count} selected assets`;
-      }
-    }
-
-    function showBulkOperation(operation) {
-      const panel = document.getElementById("bulk-operation-panel");
-      const p = operation.progress;
-      panel.innerHTML = `<strong>Scan submission: ${escapeHtml(operation.state)}</strong>
-        <p role="status">${p.completed} scans submitted · ${p.skipped} skipped · ${p.failed} failed · ${p.pending} pending / ${operation.total} assets</p>
-        ${operation.stalled ? '<p>Progress has stopped. This operation will not automatically restart. Inspect outcomes before submitting another operation.</p>' : ""}
-        <p class="mono">${escapeHtml(operation.operation_id)}</p>
-        <a href="/api/v1/ui/assets/bulk-protection/${encodeURIComponent(operation.operation_id)}?include_outcomes=true" target="_blank" rel="noopener">Open full audit (JSON)</a>
-        <details><summary>Asset outcomes (first ${operation.outcomes.length} of ${operation.total})</summary><div class="bulk-outcomes">${operation.outcomes.map((item) => `<p><strong>${escapeHtml(item.display_name || item.selector)}</strong>: ${escapeHtml(item.outcome)}${item.error?.message || item.reason ? ` — ${escapeHtml(item.error?.message || item.reason)}` : ""}${item.scan_job_id ? ` · Scan ${escapeHtml(item.scan_job_id)}` : ""}</p>`).join("")}</div></details>`;
+      const actions = document.getElementById("selected-scan-actions");
+      actions.classList.toggle("hidden", !count);
+      actions.disabled = state.bulkBusy;
+      actions.setAttribute("aria-label", `Actions for ${count} selected assets`);
+      if (!count || state.bulkBusy) document.getElementById("selected-scan-menu").hidePopover();
     }
 
     async function confirmSelectedScans() {
       if (state.bulkBusy || !Object.keys(state.bulkSelected).length) return;
       state.bulkBusy = true;
       updateScanSelection();
-      const panel = document.getElementById("bulk-operation-panel");
       try {
         const targets = Object.values(state.bulkSelected).map((asset) => ({
           integration_id: asset.integration_id, selector: asset.selector, display_name: asset.display_name,
@@ -3453,7 +3474,7 @@
         renderProtectedAssets();
         await refreshBulkOperation();
       } catch (error) {
-        panel.textContent = `Scan submission unavailable: ${error.message}. No automatic retries. If submission was interrupted, inspect the operation audit and current asset/scan state before trying again.`;
+        alert(`Scan submission unavailable: ${error.message}`);
       } finally { state.bulkBusy = false; updateScanSelection(); }
     }
 
@@ -3462,18 +3483,103 @@
       state.bulkPolling = true;
       try {
         const operation = await fetchJson(`/api/v1/ui/assets/bulk-protection/${encodeURIComponent(state.bulkOperationId)}`);
-        showBulkOperation(operation);
         if (["completed", "failed"].includes(operation.state)) {
           state.bulkOperationId = null;
           updateScanSelection();
           await loadOverview();
           await loadProtectedAssets();
+          if (operation.progress.failed) {
+            alert(`Unable to submit scans for ${operation.progress.failed} of ${operation.total} assets.`);
+          }
         }
       } finally { state.bulkPolling = false; }
     }
 
-    document.getElementById("protected-assets-table").addEventListener("click", (event) => {
-      if (event.target.closest("#start-selected-scans")) confirmSelectedScans();
+    async function stopSelectedScans() {
+      if (state.bulkBusy) return;
+      const jobs = new Map();
+      const terminalStates = ["completed", "failed", "cancelled"];
+      for (const asset of Object.values(state.bulkSelected)) {
+        const scopeId = asset.matching_scope_id;
+        const current = state.protectedAssets.find((row) => bulkAssetKey(row) === bulkAssetKey(asset)) || asset;
+        const last = current.last_scan;
+        const tracked = state.scopeScanSubmissions[scopeId];
+        const trackedIsActive = tracked?.job_id && !terminalStates.includes(tracked.state);
+        const scan = trackedIsActive || tracked?.job_id === last?.job_id ? tracked : last;
+        if (scopeId && scan?.job_id && !scan.cancelling && !terminalStates.includes(scan.state)) {
+          jobs.set(scan.job_id, scopeId);
+        }
+      }
+      if (!jobs.size) {
+        alert("No active scans found for the selected assets.");
+        return;
+      }
+      if (!window.confirm(`Stop ${jobs.size} active ${jobs.size === 1 ? "scan" : "scans"}? Files already being processed may finish.`)) return;
+      state.bulkBusy = true;
+      updateScanSelection();
+      const failures = [];
+      try {
+        for (const [jobId, scopeId] of jobs) {
+          try {
+            const {job} = await requestScanCancellation(jobId);
+            const tracked = state.scopeScanSubmissions[scopeId];
+            if (!tracked || tracked.job_id === jobId) {
+              state.scopeScanSubmissions[scopeId] = {job_id: jobId, state: job.state};
+            }
+          } catch (error) {
+            failures.push(`${jobId}: ${error.message}`);
+          }
+        }
+        await loadProtectedAssets().catch(showProtectedAssetsError);
+        if (failures.length) alert(`Unable to stop ${failures.length} of ${jobs.size} scans. ${failures.join("\n")}`);
+      } finally {
+        state.bulkBusy = false;
+        updateScanSelection();
+      }
+    }
+
+    const selectedScanMenu = document.getElementById("selected-scan-menu");
+    const selectedScanActions = document.getElementById("selected-scan-actions");
+    selectedScanMenu.addEventListener("beforetoggle", (event) => {
+      const open = event.newState === "open";
+      selectedScanActions.setAttribute("aria-expanded", String(open));
+      if (open) {
+        const rect = selectedScanActions.getBoundingClientRect();
+        selectedScanMenu.style.top = `${rect.bottom + 4}px`;
+        selectedScanMenu.style.right = `${window.innerWidth - rect.right}px`;
+      }
+    });
+    document.getElementById("start-selected-scans").addEventListener("click", () => {
+      selectedScanMenu.hidePopover();
+      confirmSelectedScans();
+    });
+    document.getElementById("stop-selected-scans").addEventListener("click", () => {
+      selectedScanMenu.hidePopover();
+      stopSelectedScans();
+    });
+    async function withTableLoading(tableId, load) {
+      const table = document.getElementById(tableId);
+      const indicator = document.getElementById(`${tableId}-loading`);
+      table.setAttribute("aria-busy", "true");
+      indicator.classList.remove("hidden");
+      try {
+        await load();
+      } finally {
+        table.removeAttribute("aria-busy");
+        indicator.classList.add("hidden");
+      }
+    }
+
+    document.getElementById("clear-protected-filters").addEventListener("click", async () => {
+      state.protectedIntegrationFilters = [];
+      document.getElementById("connector-filter-panel").hidePopover();
+      const asset = document.getElementById("protected-filter-asset-value");
+      const coverage = document.getElementById("protected-filter-coverage");
+      const connector = document.getElementById("protected-filter-integration");
+      if (asset) { asset.value = ""; updateFilterClearButton(asset); }
+      if (coverage) coverage.value = "";
+      if (connector) connector.textContent = connectorFilterLabel() + " ▾";
+      await withTableLoading("protected-assets-table", reloadProtectedAssetsFromFilters);
     });
     document.getElementById("protected-assets-table").addEventListener("change", (event) => {
       if (event.target.id === "bulk-select-page") {
@@ -3510,7 +3616,7 @@
         {
           key: "selection", label: "", className: "select-cell",
           headerAttributes: {class: "select-cell"},
-          headerHtml: '<span class="table-selection-control"><input type="checkbox" id="bulk-select-page" aria-label="Select assets on this page"><button type="button" id="start-selected-scans" disabled>Start Scan</button></span>',
+          headerHtml: '<span class="table-selection-control"><input type="checkbox" id="bulk-select-page" aria-label="Select assets on this page"></span>',
           render: (asset) => `<input type="checkbox" data-action="bulk-select-asset" data-key="${escapeHtml(bulkAssetKey(asset))}" aria-label="Select ${escapeHtml(asset.display_name || asset.selector)}" ${state.bulkSelected[bulkAssetKey(asset)] ? "checked" : ""} ${state.bulkBusy ? "disabled" : ""}>`,
         },
         {
@@ -3618,6 +3724,7 @@
         emptyMessage: "No assets returned for this filter.",
       });
       bindProtectedTableFilters(previousFilters, activeFilter);
+      updateProtectedFilterIndicators();
       updateScanSelection();
     }
 
@@ -3670,21 +3777,33 @@
       }
     }
 
+    document.getElementById("clear-scan-filters").addEventListener("click", async (event) => {
+      event.currentTarget.disabled = true;
+      state.scanCompletedStart = "";
+      state.scanCompletedEnd = "";
+      state.scanExactJobId = "";
+      state.scanJobTypeFilter = "";
+      state.scanJobIdFilter = "";
+      state.scanTargetFilter = "";
+      state.scanJobIdFilterFocused = false;
+      state.scanTargetFilterFocused = false;
+      const url = new URL(window.location.href);
+      ["completed_start", "completed_end", "job_id"].forEach((key) => url.searchParams.delete(key));
+      window.history.replaceState(null, "", url);
+      try {
+        await withTableLoading("scan-results-table", loadScanResults);
+      } catch (error) {
+        document.getElementById("clear-scan-filters").disabled = false;
+        alert(`Results unavailable: ${error.message}`);
+      }
+    });
+
     function renderScanResults() {
-      const context = document.getElementById("scan-results-context");
-      const filtered = state.scanCompletedStart || state.scanCompletedEnd || state.scanExactJobId;
-      const label = [state.scanExactJobId ? "Selected scan" : "", state.scanCompletedStart ? "Time range" : ""].filter(Boolean).join(" · ");
-      const detail = [state.scanExactJobId, state.scanCompletedStart && `${state.scanCompletedStart} – ${state.scanCompletedEnd} (end exclusive)`].filter(Boolean).join(" · ");
-      context.innerHTML = filtered ? `<span class="pill scan-context-chip" title="${escapeHtml(detail)}">${escapeHtml(label)}<button type="button" id="clear-scan-interval" aria-label="Clear scan filter" title="Clear scan filter">${iconSvg("x")}</button></span>` : "";
-      if (filtered) document.getElementById("clear-scan-interval").onclick = async () => {
-        state.scanCompletedStart = "";
-        state.scanCompletedEnd = "";
-        state.scanExactJobId = "";
-        const url = new URL(window.location.href);
-        ["completed_start", "completed_end", "job_id"].forEach(key => url.searchParams.delete(key));
-        window.history.replaceState(null, "", url);
-        try { await loadScanResults(); } catch (error) { context.textContent = `Results unavailable: ${error.message}`; }
-      };
+      const clear = document.getElementById("clear-scan-filters");
+      const timeRange = state.scanCompletedStart || state.scanCompletedEnd;
+      clear.disabled = !(timeRange || state.scanExactJobId || state.scanJobTypeFilter
+        || state.scanJobIdFilter.trim() || state.scanTargetFilter.trim());
+      clear.title = timeRange ? `Clear filters (time range: ${state.scanCompletedStart || "any start"} to ${state.scanCompletedEnd || "any end"})` : "Clear filters";
       const rows = filteredScanResults();
       const compareColumn = {
           key: "compare",
@@ -3712,8 +3831,8 @@
               </select>
               <span class="filter-input-wrap">
                 ${containsFilterIcon("Job id contains filter")}
-                <input id="scan-results-filter-job-id" type="text" value="${escapeHtml(state.scanJobIdFilter)}" aria-label="Job id contains filter" title="Job id contains filter">
-                ${clearFilterButton("scan-results-filter-job-id", state.scanJobIdFilter)}
+                <input id="scan-results-filter-job-id" type="text" value="${escapeHtml(state.scanExactJobId || state.scanJobIdFilter)}" ${state.scanExactJobId ? 'readonly aria-label="Exact job ID filter"' : 'aria-label="Job ID contains filter"'} title="${escapeHtml(state.scanExactJobId || "Job ID contains filter")}">
+                ${state.scanExactJobId ? "" : clearFilterButton("scan-results-filter-job-id", state.scanJobIdFilter)}
               </span>
             </div>
           `,
@@ -3805,6 +3924,7 @@
       const targetInput = document.getElementById("scan-results-filter-target");
       if (jobType) {
         jobType.value = state.scanJobTypeFilter;
+        jobType.classList.toggle("filter-active", Boolean(jobType.value));
         jobType.addEventListener("change", () => {
           state.scanJobTypeFilter = jobType.value;
           state.scanJobIdFilterFocused = false;
@@ -3814,6 +3934,8 @@
       }
       const bindTextFilter = (input, config) => {
         if (!input) return;
+        input.classList.toggle("filter-active", Boolean(input.value.trim()));
+        if (input.readOnly) return;
         updateFilterClearButton(input);
         input.addEventListener("input", (event) => {
           state[config.value] = event.target.value;
@@ -4082,7 +4204,7 @@
 
     function scanResultMatchesFilters(result) {
       const targetFilter = state.scanTargetFilter.trim().toLowerCase();
-      const jobIdFilter = state.scanJobIdFilter.trim().toLowerCase();
+      const jobIdFilter = state.scanExactJobId ? "" : state.scanJobIdFilter.trim().toLowerCase();
       const jobTypeFilter = state.scanJobTypeFilter;
       if (targetFilter && !scanTargetFilterText(result).includes(targetFilter)) return false;
       if (jobIdFilter && !String(result.job?.job_id || "").toLowerCase().includes(jobIdFilter)) return false;
@@ -4824,7 +4946,17 @@
       };
     }
 
+    function updateProtectedFilterIndicators() {
+      const {assetValue, coverage} = protectedFilterValues();
+      const connector = state.protectedIntegrationFilters.length > 0;
+      document.getElementById("protected-filter-integration")?.classList.toggle("filter-active", connector);
+      document.getElementById("protected-filter-coverage")?.classList.toggle("filter-active", Boolean(coverage));
+      document.getElementById("protected-filter-asset-value")?.classList.toggle("filter-active", Boolean(assetValue.trim()));
+      document.getElementById("clear-protected-filters").disabled = !(connector || coverage || assetValue.trim());
+    }
+
     function reloadProtectedAssetsFromFilters({ debounce = false } = {}) {
+      updateProtectedFilterIndicators();
       clearBulkSelection();
       resetProtectedPagination();
       if (protectedFilterReloadTimer) {
@@ -4835,7 +4967,7 @@
       if (debounce) {
         protectedFilterReloadTimer = setTimeout(run, 250);
       } else {
-        run();
+        return run();
       }
     }
 
@@ -5352,12 +5484,15 @@
       if (active) {
         return `<div class="scope-scan-actions">
           <span class="pill scan-status" role="status">${submission?.cancelling ? "Cancelling…" : "Scan in progress"}</span>
-          ${view}
-          <button type="button" class="icon-button danger" data-action="cancel-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="Cancel Full Scan" title="Stop future scan work. Files already being processed may finish." ${submission?.cancelling ? 'disabled aria-busy="true"' : ""}>${iconSvg("x")}</button>
+          <span class="scope-scan-buttons">${view}<button type="button" class="icon-button danger" data-action="cancel-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="Cancel Full Scan" title="Stop future scan work. Files already being processed may finish." ${submission?.cancelling ? 'disabled aria-busy="true"' : ""}>${iconSvg("x")}</button></span>
         </div>`;
       }
       const status = last?.job_id && last.state !== "completed" ? `<span class="pill scan-status" role="status">${last.state === "failed" ? "Scan failed" : "Scan cancelled"}</span>` : "";
-      return `<div class="scope-scan-actions">${status}${view}</div>`;
+      return `<div class="scope-scan-actions">${status}<span class="scope-scan-buttons"><button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-target="${escapeHtml(asset.display_name || asset.selector)}" data-scope="${escapeHtml(scopeId)}" aria-label="Start Full Scan" title="Start Full Scan — review scope and resource impact">${iconSvg("play")}</button>${view}</span></div>`;
+    }
+
+    function requestScanCancellation(jobId) {
+      return fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
     }
 
     async function cancelScopeScan(scopeId, jobId) {
@@ -5367,7 +5502,7 @@
       scan.cancelling = true;
       renderProtectedAssets();
       try {
-        const batch = await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+        const batch = await requestScanCancellation(jobId);
         scan.state = batch.job.state;
       } catch (error) {
         alert(`Cancel failed: ${error.message}`);
@@ -5375,6 +5510,42 @@
         scan.cancelling = false;
         renderProtectedAssets();
       }
+    }
+
+    function confirmFullScan(target, scopeId) {
+      const dialog = document.getElementById("full-scan-confirm");
+      if (dialog.open) return Promise.resolve(false);
+      document.getElementById("full-scan-confirm-target").textContent = target;
+      const countNode = document.getElementById("full-scan-confirm-count");
+      const warning = document.getElementById("full-scan-confirm-description");
+      countNode.textContent = "Checking object count…";
+      warning.classList.remove("hidden");
+      // A late response from a dismissed dialog must not update a newer preview.
+      const previewToken = {};
+      dialog.previewToken = previewToken;
+      fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan-preview`).then((preview) => {
+        if (!dialog.open || dialog.previewToken !== previewToken) return;
+        const count = preview.count;
+        warning.classList.toggle("hidden", preview.exact && count != null && count <= 1_000_000);
+        if (count == null) {
+          countNode.textContent = "Object count unavailable for this scope.";
+          return;
+        }
+        const formattedCount = Number(count).toLocaleString();
+        countNode.textContent = preview.exact
+          ? `${formattedCount} objects in this scope.`
+          : `At least ${formattedCount} objects in this scope. The total is unknown.`;
+        if (count > preview.scan_limit) {
+          countNode.textContent += ` Only the first ${Number(preview.scan_limit).toLocaleString()} will be submitted.`;
+        }
+      }).catch(() => {
+        if (dialog.open && dialog.previewToken === previewToken) countNode.textContent = "Object count unavailable. You can still start the scan.";
+      });
+      dialog.returnValue = "cancel";
+      return new Promise((resolve) => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue === "start"), { once: true });
+        dialog.showModal();
+      });
     }
 
     async function scanScope(scopeId, issueKeys = []) {
@@ -5633,6 +5804,19 @@
     });
 
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
+      const scan = event.target.closest("[data-action='scan-asset-scope']");
+      if (scan && scan.dataset.scope) {
+        if (!await confirmFullScan(scan.dataset.target || scan.dataset.scope, scan.dataset.scope)) return;
+        scan.disabled = true;
+        try {
+          await scanScope(scan.dataset.scope);
+        } catch (error) {
+          alert(`Scan failed: ${error.message}`);
+        } finally {
+          scan.disabled = false;
+        }
+        return;
+      }
       const cancelScan = event.target.closest("[data-action='cancel-scope-scan']");
       if (cancelScan) {
         await cancelScopeScan(cancelScan.dataset.scope, cancelScan.dataset.job);
@@ -5644,6 +5828,11 @@
           try {
             state.scanCompletedStart = "";
             state.scanCompletedEnd = "";
+            state.scanJobTypeFilter = "";
+            state.scanJobIdFilter = "";
+            state.scanTargetFilter = "";
+            state.scanJobIdFilterFocused = false;
+            state.scanTargetFilterFocused = false;
             state.scanExactJobId = viewScan.dataset.job;
             await loadScanResults();
             selectTab("scan-results");

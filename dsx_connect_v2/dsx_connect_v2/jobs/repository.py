@@ -79,6 +79,10 @@ class JobRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def has_pending_publish_error(self, job_id: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
     def get_job_item(self, job_item_id: str) -> JobItemRecord | None:
         raise NotImplementedError
 
@@ -314,6 +318,12 @@ class InMemoryJobRepository(JobRepository):
             rows = [row for row in rows if row.state == state]
         rows.sort(key=lambda row: row.item_index)
         return rows[:limit]
+
+    def has_pending_publish_error(self, job_id: str) -> bool:
+        return any(
+            item.job_id == job_id and item.state == "publish_pending" and bool(item.error)
+            for item in self._job_items.values()
+        )
 
     def get_job_item(self, job_item_id: str) -> JobItemRecord | None:
         return self._job_items.get(job_item_id)

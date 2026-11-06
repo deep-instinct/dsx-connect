@@ -2198,3 +2198,25 @@ def test_policy_completion_can_request_dianna_and_wait_for_delivery() -> None:
     assert updated.state == "deliver_pending"
     assert bus.snapshot()[-1].message_type == "result_sink_emit_requested"
     assert bus.snapshot()[-1].payload["final_result"]["dianna"]["analysisId"] == "d2"
+
+
+def test_parent_reports_publish_error_beyond_first_thousand_items() -> None:
+    repo = InMemoryJobRepository()
+    service = JobService(repo=repo, bus=InMemoryJobBus())
+    job = repo.create_job(JobCreate(job_type="scan.batch", state="publish_pending"))
+    for index in range(1001):
+        item = repo.create_job_item(
+            JobItemCreate(
+                job_id=job.job_id,
+                item_index=index,
+                object_identity=f"file-{index}",
+                state="publish_pending",
+            )
+        )
+
+    service._refresh_parent_job_state(job.job_id)
+    assert service.get_job_or_404(job.job_id).error == {"code": "batch_publish_pending"}
+
+    repo.update_job_item_state(item.job_item_id, state="publish_pending", error={"code": "broker_down"})
+    service._refresh_parent_job_state(job.job_id)
+    assert service.get_job_or_404(job.job_id).error == {"code": "batch_publish_partial_failure"}

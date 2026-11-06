@@ -465,8 +465,11 @@ class JobService:
         if summary.total == 0:
             return
         if summary.publish_pending > 0:
-            pending_items = [item for item in self.repo.list_job_items(job_id=job_id) if item.state == "publish_pending"]
-            error_code = "batch_publish_partial_failure" if any(item.error for item in pending_items) else "batch_publish_pending"
+            error_code = (
+                "batch_publish_partial_failure"
+                if self.repo.has_pending_publish_error(job_id)
+                else "batch_publish_pending"
+            )
             self.repo.update_job_state(job_id, state="publish_pending", error={"code": error_code})
             return
         if summary.scanning > 0 or summary.remediating > 0 or summary.delivering_result > 0:

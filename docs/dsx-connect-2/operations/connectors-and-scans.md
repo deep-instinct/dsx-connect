@@ -33,13 +33,15 @@ Discovery makes content locations visible. It does not automatically protect the
 
 ## Start a full scan
 
-Select protected assets in the table, then choose **Start Scan**. Review shows how many eligible scans can start and how many selections will be skipped. Full scans can use significant storage, network, and scanner resources.
+Use the play button on a protected asset to scan its scope. To scan multiple assets, select their rows and choose **Actions → Start Scans** above the table. The confirmation shows how many scans can start and how many selections will be skipped. Full scans can use significant storage, network, and scanner resources.
 
-The console submits up to **10,000 objects per scan request**. For larger repositories, review the job's enumeration and item outcomes to determine how much was scanned. After confirming, the operation panel shows scan submission progress, and the asset table refreshes when submission finishes.
+The console submits up to **10,000 objects per scan request**. For larger repositories, review the job's enumeration and item outcomes to determine how much was scanned. The asset table refreshes when submission finishes.
 
 ## View results and cancel
 
-Use the blue **View** eye icon to inspect progress, findings, item failures, and remediation outcomes. The toolbar shows a compact **Selected scan** or **Time range** chip when a server-side filter is active. Use its **Clear scan filter** X to return to recent results. There is no automatic-navigation return button or repeated job-summary paragraph.
+Select rows and choose **Actions → Stop Scans** to request cancellation for their active scans. The clear-filters button beside **Actions** resets the asset name, coverage, and connector filters.
+
+Use the blue **View** eye icon to inspect progress, findings, item failures, and remediation outcomes. Use **Clear filters** in the Scan Results toolbar to reset the preselected job and return to recent results.
 
 The **Cancel** X icon matches the Scan Results cancellation control. It requests cooperative cancellation and shows **Cancelling…** while the request is pending. Cancellation stops future work; files already claimed by a worker may finish. A cancelled status is not proof that every in-flight repository action stopped immediately. Cancellation does not undo completed remediation.
 

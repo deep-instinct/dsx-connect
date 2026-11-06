@@ -251,6 +251,21 @@ class PostgresJobRepository(JobRepository):
             cur.execute(query, tuple(params))
             return [JobItemRecord.model_validate(row) for row in cur.fetchall()]
 
+    def has_pending_publish_error(self, job_id: str) -> bool:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT EXISTS (
+                    SELECT 1 FROM cp_job_items
+                    WHERE job_id = %s AND state = 'publish_pending'
+                      AND error_json IS NOT NULL
+                      AND error_json NOT IN ('null'::jsonb, '{}'::jsonb)
+                ) AS has_error
+                """,
+                (job_id,),
+            )
+            return bool(cur.fetchone()["has_error"])
+
     def get_job_item(self, job_item_id: str) -> JobItemRecord | None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(

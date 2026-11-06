@@ -69,8 +69,11 @@ def test_operator_console_page_renders() -> None:
     assert 'id="protected-filter-asset-mode"' not in response.text
     assert "function protectedConnectorFilterOptions" in response.text
     assert """'<option value="">all</option>'""" in response.text
-    assert 'id="start-selected-scans" disabled>Start Scan' in response.text
-    assert 'data-action="scan-asset-scope"' not in response.text
+    assert 'popovertarget="selected-scan-menu"' in response.text
+    assert 'id="start-selected-scans">Start Scans' in response.text
+    assert 'id="stop-selected-scans">Stop Scans' in response.text
+    assert 'id="clear-protected-filters"' in response.text
+    assert 'data-action="scan-asset-scope"' in response.text
     assert "Cancel Full Scan" in response.text
     assert "Default Protected Entity" in response.text
     assert "Protected Entity" in response.text

@@ -1,5 +1,15 @@
 # Customizing Connector Display Icons
 
+## DSX-Connect v2
+
+The Assets > Connectors list and protected asset views display icons beside connector names. Built-in icons are selected from the integration platform, with a generic fallback for unknown platforms.
+
+To override an icon, set `display_icon` in the integration's `config` through the control-plane integration API. It accepts an image data URI or raw SVG, up to 8 KB. SVG is rendered as an image rather than inserted into the page. External image URLs are not supported.
+
+The v1 `DSXCONNECTOR_DISPLAY_ICON` environment setting is not automatically propagated into the v2 integration config.
+
+## DSX-Connect v1
+
 Several connectors support a `DSXCONNECTOR_DISPLAY_ICON` setting that lets you surface a custom icon on the dsx-connect UI card. The value must be a data URI containing an SVG that passes the frontend sanitizer (`<svg>` only — no scripts or external references).
 
 ## 1. Prepare your SVG

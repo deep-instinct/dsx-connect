@@ -14,6 +14,8 @@ A full scan evaluates existing content within a selected protected scope. An ope
 5. Policy workers evaluate each verdict. Remediation and optional DIANNA stages run when required; result-sink workers publish outcomes.
 6. Stage transitions and item outcomes are persisted for job progress, reporting, and recovery.
 
+For console confirmation, object-count previews, submission limits, and cancellation, see [Operating connectors and scans](../dsx-connect-2/operations/connectors-and-scans.md).
+
 ## Scope and completion
 
 A full scan covers the selected scope and filters, subject to repository access and enumeration success. Review item failures and pending stages before treating a job as complete. Repository content may change during enumeration or scanning, so a completed scan is not an immutable snapshot of the repository.

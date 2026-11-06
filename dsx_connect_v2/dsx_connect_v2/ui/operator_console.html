@@ -96,6 +96,15 @@
       overflow: hidden;
     }
 
+    a, a:visited { color: var(--accent-soft-ink); text-decoration: underline; text-underline-offset: 3px; }
+    a:hover { color: var(--ink); text-decoration-thickness: 2px; }
+    a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 2px; }
+    .breadcrumbs { margin-bottom: 16px; font-size: 13px; color: var(--muted); }
+    .breadcrumbs ol { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; padding: 0; list-style: none; }
+    .breadcrumbs li { display: inline-flex; gap: 8px; align-items: center; min-width: 0; overflow-wrap: anywhere; }
+    .breadcrumbs li + li::before { content: "›"; color: var(--muted); }
+    .breadcrumbs [aria-current="page"] { color: var(--ink); }
+
     button, input, select, textarea {
       font: inherit;
     }
@@ -274,6 +283,9 @@
       gap: var(--space-3);
     }
 
+    .connector-name { display: inline-flex; align-items: center; gap: 8px; }
+    .connector-icon { width: 24px; height: 24px; flex: 0 0 24px; object-fit: contain; }
+
     .info-icon {
       position: relative;
       display: inline-grid;
@@ -354,16 +366,36 @@
       padding-bottom: var(--space-3);
     }
 
-    .coverage-cell {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-4);
-    }
+    #connector-filter-panel { position: fixed; inset: auto; margin: 0; padding: 14px; width: min(400px, calc(100vw - 16px)); max-height: calc(100vh - 24px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+    #connector-filter-panel:popover-open { display: grid; grid-template-rows: repeat(6, auto) minmax(0, 1fr) auto; gap: 8px; }
+    #connector-filter-options { min-height: 0; overflow: auto; }
+    .connector-filter-option { display: flex; align-items: center; gap: 8px; padding: 6px 0; margin: 0; text-align: left; }
+    .connector-filter-option[hidden] { display: none; }
+    .connector-filter-option input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; margin: 0; flex: 0 0 16px; }
+    .connector-filter-option span { min-width: 0; overflow-wrap: anywhere; }
+    .connector-filter-option small { display: block; color: var(--muted); }
+    .connector-filter-tools { display: flex; flex-wrap: wrap; gap: 6px; }
+    #protected-filter-integration { text-align: left; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+
+    .table-selection-control { display: flex; align-items: center; gap: 2px; }
+    .table-selection-control input[type="checkbox"] { margin: 0 !important; }
+    #start-selected-scans { white-space: nowrap; }
+
+    .bulk-outcomes { max-height: 240px; overflow: auto; margin-top: 10px; }
+    .bulk-operation-panel { max-height: 180px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 12px; }
+    .bulk-operation-panel:empty { display: none; }
+    .protection-profile-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+    .asset-protection-indicator { display: inline-flex; align-items: center; flex: 0 0 auto; }
+    .asset-protection-indicator svg { width: 18px; height: 18px; stroke-width: 2; }
+    .asset-protection-indicator.protected { color: var(--good); }
+    .asset-protection-indicator.unprotected,
+    .asset-protection-indicator.disabled { color: var(--warn); }
+    .asset-protection-indicator.unknown { color: var(--muted); }
 
     .coverage-action-select {
-      width: 84px;
-      min-width: 84px;
-      max-width: 84px;
+      width: 100%;
+      min-width: 200px;
+      max-width: 320px;
     }
 
     .table-actions button,
@@ -373,6 +405,14 @@
       padding-top: var(--space-3);
       padding-bottom: var(--space-3);
     }
+
+    .scope-scan-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .scope-scan-actions .scan-status { flex-basis: 100%; width: fit-content; }
+
+    #scan-results-context:empty { display: none; }
+    .scan-context-chip { display: inline-flex; align-items: center; gap: 6px; }
+    .scan-context-chip button { display: inline-grid; place-items: center; width: 22px; height: 22px; min-height: 22px; padding: 0; background: transparent; border-color: transparent; color: inherit; }
+    .scan-context-chip button svg { width: 14px; height: 14px; }
 
     .scan-action {
       border-color: var(--good);
@@ -489,6 +529,11 @@
       color: var(--accent-soft-ink);
     }
 
+    .assets-subnav { display: grid; gap: 4px; margin: 4px 0 8px 22px; padding-left: 12px; border-left: 1px solid var(--line); }
+    .assets-nav-item { text-align: left; background: transparent; border-color: transparent; white-space: nowrap; padding: 8px 10px; }
+    .assets-nav-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent-soft-ink); border-color: var(--accent); }
+    .assets-subnav.flyout { position: fixed; left: calc(var(--rail-width-collapsed) + 8px); top: var(--assets-menu-top); z-index: 60; margin: 0; padding: 8px; min-width: 190px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+
     .rail-icon {
       width: var(--control-height-sm);
       height: var(--control-height-sm);
@@ -534,6 +579,7 @@
     .main {
       min-width: 0;
       display: grid;
+      grid-template-rows: minmax(0, 1fr);
       min-height: 0;
       overflow: hidden;
     }
@@ -562,7 +608,7 @@
 
     #asset-pane-connectors:not(.hidden) {
       display: grid;
-      grid-template-rows: auto auto auto minmax(0, 1fr);
+      grid-template-rows: auto auto minmax(0, 1fr);
     }
 
     #asset-pane-protected:not(.hidden) {
@@ -689,6 +735,8 @@
       display: inline-grid;
       place-items: center;
     }
+
+    .view-scan-action { border-color: #2563eb; background: #2563eb; color: #fff; }
 
     .icon-button svg {
       width: 16px;
@@ -1044,14 +1092,6 @@
       color: var(--muted);
     }
 
-    .protected-summary {
-      padding: 0 var(--space-8) var(--space-6);
-    }
-
-    .protected-summary .metric-row {
-      padding: 0;
-    }
-
     .scan-stats-row {
       display: flex;
       flex-wrap: wrap;
@@ -1102,6 +1142,15 @@
     .select-cell {
       width: 36px;
       text-align: center;
+    }
+
+    #protected-assets-table .header-label-row th { vertical-align: middle; }
+    #protected-assets-table .select-cell input[type="checkbox"] {
+      display: block;
+      box-sizing: border-box;
+      min-height: 16px;
+      margin: 0 auto;
+      padding: 0;
     }
 
     .select-cell input[type="checkbox"] {
@@ -1500,6 +1549,19 @@
       grid-template-rows: auto minmax(0, 1fr) auto;
     }
 
+    .scan-confirm-dialog {
+      width: min(480px, calc(100vw - 32px));
+      padding: var(--space-7);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .scan-confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+    .scan-confirm-dialog p { line-height: 1.5; }
+    .scan-confirm-dialog strong { overflow-wrap: anywhere; }
+
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -1633,6 +1695,8 @@
     .dashboard-bar span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
     .dashboard-list-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 0; border-bottom: 1px solid var(--line); }
     .dashboard-list-row:last-child { border-bottom: 0; }
+    [data-scan-bucket]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    rect[data-scan-bucket]:hover, rect[data-scan-bucket]:focus-visible { fill: var(--accent); fill-opacity: 0.12; }
     .dashboard-wide { grid-column: 1 / -1; }
     .dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -1683,7 +1747,8 @@
             <span class="rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="11" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="18" width="7" height="3" rx="1"/></svg></span>
             <span class="rail-label">Dashboard</span>
           </button>
-          <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets">
+          <div class="assets-nav-group">
+          <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets" id="assets-nav-toggle" aria-expanded="false" aria-controls="assets-subnav">
             <span class="rail-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z"></path>
@@ -1693,6 +1758,11 @@
             </span>
             <span class="rail-label">Assets</span>
           </button>
+            <div id="assets-subnav" class="assets-subnav hidden" aria-label="Assets views">
+              <button type="button" class="assets-nav-item" data-assets-view="connectors">Connectors</button>
+              <button type="button" class="assets-nav-item" data-assets-view="protected">Protected Assets</button>
+            </div>
+          </div>
           <button class="rail-item" type="button" data-tab="scan-results" aria-selected="false" title="Scan Results">
             <span class="rail-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -1744,7 +1814,7 @@
           <p id="dashboard-error" role="status"></p>
           <div class="dashboard-kpis" id="dashboard-kpis"></div>
           <div class="dashboard-grid">
-            <div class="dashboard-card dashboard-wide"><div class="dashboard-actions"><h3 style="margin-right:auto">Total scans over time</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial</p><div id="dashboard-history" aria-live="polite">Loading scan history…</div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Total scans over time</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" aria-live="polite">Loading scan history…</div></div>
             <div class="dashboard-card"><h3>Scan throughput</h3><p class="dashboard-muted">Completed scans per minute · bucket average · current bucket uses elapsed time</p><div id="dashboard-throughput"></div></div>
             <div class="dashboard-card"><h3>Queue backlog</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog"></div></div>
             <div class="dashboard-card"><h3>Processing latency</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency"></div></div>
@@ -1761,7 +1831,7 @@
 
         <section class="view" id="view-assets">
           <div class="view-heading">
-            <h2>Assets</h2>
+            <h2 id="assets-view-title">Assets &gt; Connectors</h2>
           </div>
 
           <div class="asset-pane" id="asset-pane-connectors">
@@ -1771,14 +1841,7 @@
               <div class="metric"><span>Enabled</span><strong id="metric-enabled">0</strong></div>
               <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
             </div>
-            <nav class="subtabs asset-tabs" aria-label="Assets views">
-              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
-              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
-            </nav>
             <div class="table-actions">
-              <div class="poll-control">Poll for connector changes
-                <label class="switch"><input type="checkbox" id="connectors-poll"><span></span></label>
-              </div>
               <span class="spacer" aria-hidden="true"></span>
               <button class="icon-button" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -1799,18 +1862,7 @@
 
           <div class="asset-pane hidden" id="asset-pane-protected">
             <div class="asset-context" id="protected-context" aria-label="Protected assets navigation"></div>
-            <div class="protected-summary">
-              <div class="metric-row">
-                <div class="metric"><span>Assets</span><strong id="metric-assets">0</strong></div>
-                <div class="metric"><span>Protected</span><strong id="metric-protected">0</strong></div>
-                <div class="metric"><span>Unprotected</span><strong id="metric-unprotected">0</strong></div>
-                <div class="metric"><span>Unsupported</span><strong id="metric-unsupported">0</strong></div>
-              </div>
-            </div>
-            <nav class="subtabs asset-tabs" aria-label="Assets views">
-              <button class="subtab" type="button" data-assets-tab="connectors" aria-selected="true">Connectors</button>
-              <button class="subtab" type="button" data-assets-tab="protected" aria-selected="false">Protected</button>
-            </nav>
+            <div id="bulk-operation-panel" class="bulk-operation-panel"></div>
             <div class="table-wrap protected-assets">
               <table id="protected-assets-table">
                 <thead></thead>
@@ -1856,6 +1908,7 @@
               </svg>
               <span class="icon-badge hidden" id="scan-compare-count">0</span>
             </button>
+            <div id="scan-results-context" aria-live="polite"></div>
           </div>
           <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
             <div class="scan-compare-header">
@@ -2206,8 +2259,51 @@
     </aside>
   </div>
 
+  <div popover="auto" id="connector-filter-panel" role="dialog" aria-label="Filter connectors">
+    <strong>Connectors</strong>
+    <input type="search" id="connector-filter-search" aria-label="Search connectors" placeholder="Search name, platform, account or project…">
+    <label class="connector-filter-option"><input type="checkbox" id="connector-filter-all">All connectors</label>
+    <div class="connector-filter-tools"><button type="button" id="connector-filter-select-shown">Select search results</button><button type="button" id="connector-filter-clear">Clear selection</button></div>
+    <label class="connector-filter-option"><input type="checkbox" id="connector-filter-selected-only">Show selected only</label>
+    <span id="connector-filter-count" role="status"></span>
+    <div id="connector-filter-options"></div>
+    <div class="modal-actions"><button type="button" id="connector-filter-cancel">Cancel</button><button type="button" id="connector-filter-apply" class="primary">Apply filters</button></div>
+  </div>
+
+  <dialog class="scan-confirm-dialog" id="bulk-protection-confirm" aria-labelledby="bulk-protection-title">
+    <form method="dialog">
+      <h2 id="bulk-protection-title">Start scans for selected assets?</h2>
+      <p id="bulk-protection-review"></p>
+      <p>Each scan submits up to 10,000 objects and uses the assigned protection profile, including any configured remediation.</p>
+      <p>The reviewed selection is fixed. Assets or scopes changed after review can fail and will be reported individually.</p>
+      <div class="modal-actions">
+        <button type="submit" value="cancel" autofocus>Cancel</button>
+        <button type="submit" value="apply" id="bulk-protection-apply" class="primary">Start Scan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="scan-confirm-dialog" id="protection-change-confirm" aria-labelledby="protection-change-title" aria-describedby="protection-change-description">
+    <form method="dialog">
+      <h2 id="protection-change-title">Change asset protection?</h2>
+      <p>Asset: <strong id="protection-change-target"></strong></p>
+      <p>From: <strong id="protection-change-from"></strong><br>To: <strong id="protection-change-to"></strong></p>
+      <p id="protection-change-description"></p>
+      <div class="modal-actions">
+        <button type="submit" value="cancel" autofocus>Cancel</button>
+        <button type="submit" value="apply" id="protection-change-apply" class="primary">Apply protection</button>
+      </div>
+    </form>
+  </dialog>
+
+
   <script>
+    const consoleParams = new URLSearchParams(window.location.search);
     const state = {
+      scanMatchingJobs: null,
+      scanCompletedStart: consoleParams.get("completed_start") || "",
+      scanCompletedEnd: consoleParams.get("completed_end") || "",
+      scanExactJobId: consoleParams.get("job_id") || "",
       integrations: [],
       scopes: [],
       connectorRows: [],
@@ -2217,7 +2313,9 @@
       protectedPageLimit: 15,
       protectedPageCursors: [""],
       protectedNextCursor: null,
-      protectedIntegrationFilter: "",
+      protectedIntegrationFilters: [],
+      protectedDiscoveryFailures: [],
+      protectedPageSizes: [],
       scanResults: [],
       applications: [],
       policies: [],
@@ -2230,7 +2328,7 @@
       policyEditorMode: "edit",
       policyEditorBaseId: "policy-1",
       activeTab: "assets",
-      activeAssetsTab: "connectors",
+      activeAssetsTab: consoleParams.get("assets_tab") === "protected" ? "protected" : "connectors",
       applicationEditorMode: "create",
       editingApplicationId: "",
       selectedScanResult: null,
@@ -2249,8 +2347,12 @@
       scanResultsPolling: true,
       scanResultsPollingInFlight: false,
       scanResultsNextPollAt: null,
-      connectorsPolling: false,
       connectorsPollingInFlight: false,
+      bulkSelected: {},
+      bulkBusy: false,
+      bulkOperationId: null,
+      bulkPolling: false,
+      scopeScanSubmissions: {},
       defaultScannerProtectedEntity: null,
     };
     let protectedFilterReloadTimer = null;
@@ -2464,6 +2566,9 @@
     }
 
     function iconSvg(name) {
+      if (name === "eye") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+      }
       if (name === "play") {
         return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 8-14 8V4Z"></path></svg>';
       }
@@ -2625,6 +2730,33 @@
       svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
     }
 
+    function scanResultsUrl(start, end, jobId = "") {
+      const url = new URL(window.location.href);
+      url.search = new URLSearchParams({tab:"scan-results", completed_start:start, completed_end:end});
+      url.searchParams.set("dashboard_days", document.getElementById("dashboard-days").value);
+      if (jobId) url.searchParams.set("job_id", jobId);
+      url.hash = "";
+      return url.href;
+    }
+
+    let dashboardScanDetailsRequest = 0;
+    async function showDashboardScans(start, end) {
+      const request = ++dashboardScanDetailsRequest;
+      const target = document.getElementById("dashboard-scan-details");
+      target.textContent = "Loading scan sample…";
+      try {
+        const params = new URLSearchParams({start, end, limit:"5"});
+        const data = await fetchJson(`/api/v1/ui/dashboard/scans?${params}`);
+        if (request !== dashboardScanDetailsRequest || !target.isConnected) return;
+        const resultsUrl = escapeHtml(scanResultsUrl(start, end));
+        target.innerHTML = `<h4>${escapeHtml(new Date(start).toLocaleString([], {timeZone:"UTC"}))} UTC</h4><p class="dashboard-muted">Showing ${data.scans.length} of ${data.total.toLocaleString()} scans in this interval</p><div class="dashboard-actions"><a href="${resultsUrl}">Open Scan Results</a><a href="${resultsUrl}" target="_blank" rel="noopener">Open in new tab ↗</a><button type="button" data-close-scans>Close sample</button></div><div class="table-wrap"><table><thead><tr><th>File / object</th><th>Verdict</th><th>Job</th></tr></thead><tbody>${data.scans.map(row => `<tr><td>${escapeHtml(row.object_identity || row.job_item_id || "Unknown")}</td><td>${escapeHtml(row.verdict)}</td><td>${row.job_id ? `<a href="${escapeHtml(scanResultsUrl(start, end, row.job_id))}">${escapeHtml(row.job_id)}</a>` : "—"}</td></tr>`).join("") || '<tr><td colspan="3">No completed scans in this interval.</td></tr>'}</tbody></table></div>`;
+        target.querySelector("[data-close-scans]").onclick = () => { target.innerHTML = ""; ++dashboardScanDetailsRequest; };
+      } catch (error) {
+        if (request === dashboardScanDetailsRequest && target.isConnected) target.textContent = `Scans unavailable: ${error.message}`;
+      }
+    }
+
+    let dashboardReturnSampleShown = false;
     async function loadDashboardHistory() {
       const request = ++dashboardHistoryRequest;
       const days = document.getElementById("dashboard-days").value;
@@ -2639,27 +2771,49 @@
         const series = data.series;
         const max = Math.max(1, ...series.map((bucket) => bucket.total));
         const colors = {total:"accent", benign:"good", malicious:"danger", suspicious:"warn"};
-        const x = (i) => 48 + i * 800 / Math.max(1, series.length - 1);
+        const x = (i) => 48 + i * 350 / Math.max(1, series.length - 1);
         const y = (n) => 95 - n / max * 75;
         const lines = Object.entries(colors).map(([key, color]) => `<polyline fill="none" stroke="var(--${color})" stroke-width="${key === "total" ? 3 : 2}" points="${series.map((bucket, i) => `${x(i)},${y(bucket[key])}`).join(" ")}"/>`).join("");
+        const targets = series.map((bucket, i) => {
+          const left = i ? (x(i - 1) + x(i)) / 2 : 48;
+          const right = i < series.length - 1 ? (x(i) + x(i + 1)) / 2 : 398;
+          return `<rect x="${left}" y="15" width="${right - left}" height="90" fill="transparent" tabindex="0" role="button" data-scan-bucket="${i}" aria-label="View ${bucket.total} scans at ${escapeHtml(bucket.at)}" style="cursor:pointer"><title>View scans at ${escapeHtml(bucket.at)}</title></rect>`;
+        }).join("");
         const labels = [0, Math.floor((series.length - 1) / 2), series.length - 1].map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit", minute:"2-digit", timeZone:"UTC"} : {month:"short", day:"numeric", timeZone:"UTC"}))}</text>`).join("");
-        document.getElementById("dashboard-history").innerHTML = `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 900 140" preserveAspectRatio="none" role="img" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H848" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td>${escapeHtml(b.at)}</td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details>`;
+        document.getElementById("dashboard-history").innerHTML = `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="group" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}${targets}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td><button type="button" data-scan-bucket="${series.indexOf(b)}">${escapeHtml(b.at)}</button></td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details><div id="dashboard-scan-details" aria-live="polite"></div>`;
+        const history = document.getElementById("dashboard-history");
+        const openBucket = (event) => {
+          const target = event.target.closest("[data-scan-bucket]");
+          if (!target) return;
+          if (event.type === "keydown" && !["Enter", " "].includes(event.key)) return;
+          if (event.type === "keydown") event.preventDefault();
+          const bucket = series[Number(target.dataset.scanBucket)];
+          const end = new Date(new Date(bucket.at).getTime() + (data.bucket === "hour" ? 3600000 : 86400000)).toISOString();
+          showDashboardScans(bucket.at, end);
+        };
+        history.onclick = openBucket;
+        history.onkeydown = (event) => { if (event.target.tagName.toLowerCase() === "rect") openBucket(event); };
         const chart = document.querySelector("#dashboard-history .dashboard-chart");
         const svg = chart.querySelector("svg");
         const tooltip = chart.querySelector("[role=tooltip]");
         svg.addEventListener("pointermove", (event) => {
           if (!series.length) return;
           const bounds = svg.getBoundingClientRect();
-          const chartX = (event.clientX - bounds.left) / bounds.width * 900;
-          const index = Math.max(0, Math.min(series.length - 1, Math.round((chartX - 48) / 800 * (series.length - 1))));
+          const chartX = (event.clientX - bounds.left) / bounds.width * 450;
+          const index = Math.max(0, Math.min(series.length - 1, Math.round((chartX - 48) / 350 * (series.length - 1))));
           const bucket = series[index];
           tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${Object.entries(colors).map(([key, color]) => `<div><span style="color:var(--${color})">● ${key[0].toUpperCase() + key.slice(1)}</span><strong>${Number(bucket[key]).toLocaleString()}</strong></div>`).join("")}`;
+          tooltip.innerHTML += "<p>Click to view scans</p>";
           tooltip.hidden = false;
           tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
         });
         svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
         document.getElementById("dashboard-quarantine").innerHTML = dashboardBars([["Malware", data.quarantined.malicious, "danger"], ["File-type policy", data.quarantined.file_type_policy, "warn"], ["Suspicious", data.quarantined.suspicious, "warn"], ["Other / unknown", data.quarantined.other, "muted"]]) + `<p class="dashboard-muted">${data.file_type_policy_matches.toLocaleString()} file-type policy matches, including outcomes other than quarantine. Pending and failed quarantine actions are excluded above.</p>`;
         document.getElementById("dashboard-types").innerHTML = data.file_types.length ? dashboardBars(data.file_types.slice(0,8).map((row) => [row.type, row.count])) : '<p class="dashboard-muted">No completed scans in this period.</p>';
+        if (!dashboardReturnSampleShown && consoleParams.get("bucket_start") && consoleParams.get("bucket_end")) {
+          dashboardReturnSampleShown = true;
+          showDashboardScans(consoleParams.get("bucket_start"), consoleParams.get("bucket_end"));
+        }
       } catch (error) {
         if (request !== dashboardHistoryRequest) return;
         for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types", "dashboard-throughput", "dashboard-backlog", "dashboard-latency"]) document.getElementById(id).textContent = `Historical data unavailable: ${error.message}`;
@@ -2764,6 +2918,8 @@
 
     function selectTab(tabName) {
       state.activeTab = tabName;
+      syncAssetsNav();
+      setAssetsMenuOpen(tabName === "assets" && !document.querySelector(".app").classList.contains("nav-collapsed"));
       document.querySelectorAll(".rail-item").forEach((button) => {
         button.setAttribute("aria-selected", String(button.dataset.tab === tabName));
       });
@@ -2776,15 +2932,32 @@
       if (tabName === "dashboard") loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
     }
 
+    function syncAssetsNav() {
+      document.querySelectorAll("[data-assets-view]").forEach((button) => {
+        if (state.activeTab === "assets" && button.dataset.assetsView === state.activeAssetsTab) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      document.getElementById("assets-view-title").textContent = state.activeAssetsTab === "protected" ? "Assets > Protected Assets" : "Assets > Connectors";
+    }
+
+    function setAssetsMenuOpen(open) {
+      const menu = document.getElementById("assets-subnav");
+      const parent = document.getElementById("assets-nav-toggle");
+      const collapsed = document.querySelector(".app").classList.contains("nav-collapsed");
+      menu.classList.toggle("flyout", collapsed);
+      menu.style.setProperty("--assets-menu-top", `${parent.getBoundingClientRect().top}px`);
+      menu.classList.toggle("hidden", !open);
+      parent.setAttribute("aria-expanded", String(open));
+    }
+
     function selectAssetsTab(tabName, { forceReload = false } = {}) {
       state.activeAssetsTab = tabName;
-      document.querySelectorAll(".subtab").forEach((button) => {
-        button.setAttribute("aria-selected", String(button.dataset.assetsTab === tabName));
-      });
+      syncAssetsNav();
       document.querySelectorAll(".asset-pane").forEach((pane) => {
         pane.classList.toggle("hidden", pane.id !== `asset-pane-${tabName}`);
       });
       document.getElementById("protected-assets-pager").classList.toggle("hidden", tabName !== "protected");
+      if (forceReload) { clearBulkSelection(); resetProtectedPagination(); }
       if (tabName === "protected" && (forceReload || !state.protectedAssetsLoaded)) {
         loadProtectedAssets().catch(showProtectedAssetsError);
       }
@@ -2798,6 +2971,7 @@
       toggle.title = collapsed ? "Expand navigation" : "Collapse navigation";
       toggle.textContent = collapsed ? ">>" : "<<";
       toggle.setAttribute("aria-label", toggle.title);
+      setAssetsMenuOpen(!collapsed && state.activeTab === "assets");
     }
 
     function initNav() {
@@ -2854,6 +3028,43 @@
       }
     }
 
+    function renderConnectorName(integration) {
+      const key = String(integration.platform || integration.display_name || "").toLowerCase();
+      const custom = integration.config?.display_icon;
+      let src = "";
+      if (typeof custom === "string" && custom.length <= 8192) {
+        const value = custom.trim();
+        if (/^data:image\/(?:svg\+xml|png|jpeg|gif|webp)(?:;|,)/i.test(value)) src = value;
+        else if (/^<svg[\s>]/i.test(value)) src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(value)}`;
+      }
+      // Custom SVG markup stays inside an image, never in the document DOM.
+      let icon;
+      if (src) {
+        icon = `<img class="connector-icon" src="${escapeHtml(src)}" alt="" aria-hidden="true">`;
+      } else {
+        let color = "#64748b";
+        let paths = '<rect x="3" y="3" width="18" height="18" rx="4"/><path d="M7 9h10M7 15h10" stroke="white" stroke-width="2"/>';
+        if (/filesystem|file.system/.test(key)) {
+          color = "#d9a322"; paths = '<path d="M2 6h7l2 3h11v12H2Z"/>';
+        } else if (/sharepoint/.test(key)) {
+          color = "#038779"; paths = '<circle cx="15" cy="8" r="6"/><circle cx="17" cy="16" r="5" opacity=".65"/><rect x="1" y="6" width="12" height="12" rx="2"/><path d="M9 9H6a1.5 1.5 0 0 0 0 3h1a1.5 1.5 0 0 1 0 3H4" fill="none" stroke="white" stroke-width="1.5"/>';
+        } else if (/mail|outlook/.test(key)) {
+          color = "#1877f2"; paths = '<rect x="2" y="5" width="20" height="15" rx="2"/><path d="m3 7 9 7 9-7" fill="none" stroke="white" stroke-width="2"/>';
+        } else if (/azure|abs/.test(key)) {
+          color = "#0875d1"; paths = '<path d="m14 2 8 20H3l5-5h9L11 3Zm-5 2L2 17h5l5-13Z"/>';
+        } else if (/aws|s3/.test(key)) {
+          color = "#ed941b"; paths = '<path d="m12 2 9 5-9 5-9-5Zm-9 7 8 4v9l-8-5Zm10 4 8-4v8l-8 5Z"/>';
+        } else if (/google|gcs|onedrive|salesforce/.test(key)) {
+          color = /google|gcs/.test(key) ? "#4285f4" : /salesforce/.test(key) ? "#00a1e0" : "#1672d4";
+          paths = '<path d="M6 20a5 5 0 0 1-1-10 7 7 0 0 1 13-2 6 6 0 0 1 0 12Z"/>';
+        } else if (/jira/.test(key)) {
+          color = "#2684ff"; paths = '<path d="m12 1 11 11-11 11L1 12Zm0 7-4 4 4 4 4-4Z" fill-rule="evenodd"/>';
+        }
+        icon = `<svg class="connector-icon" viewBox="0 0 24 24" fill="${color}" aria-hidden="true">${paths}</svg>`;
+      }
+      return `<span class="connector-name">${icon}<strong>${escapeHtml(integration.display_name)}</strong></span>`;
+    }
+
     function renderConnectors() {
       const columns = [
         {
@@ -2862,7 +3073,7 @@
           render: (row) => {
             const integration = row.integration;
             return `
-              <strong>${escapeHtml(integration.display_name)}</strong><br>
+              ${renderConnectorName(integration)}<br>
               <span class="copy-line"><span class="mono copy-value">${escapeHtml(integration.integration_id)}</span>${copyButton(integration.integration_id)}</span>
             `;
           },
@@ -2950,15 +3161,6 @@
             return `<span class="copy-line"><span class="mono copy-value">${escapeHtml(endpoint)}</span>${copyButton(endpoint)}</span>`;
           },
         },
-        {
-          key: "actions",
-          label: "",
-          className: "actions",
-          render: (row) => {
-            const integration = row.integration;
-            return `<button type="button" data-action="toggle-integration" data-id="${escapeHtml(integration.integration_id)}" data-enabled="${integration.enabled ? "false" : "true"}">${integration.enabled ? "Disable" : "Enable"}</button>`;
-          },
-        },
       ];
       renderDataTable({
         tableId: "connectors-table",
@@ -2969,7 +3171,7 @@
         rowAttributes: (row) => ({
           "data-action": "open-protected-assets",
           "data-integration": row.integration.integration_id,
-          class: `clickable-row${row.integration.integration_id === state.protectedIntegrationFilter ? " is-selected" : ""}`,
+          class: `clickable-row${state.protectedIntegrationFilters.includes(row.integration.integration_id) ? " is-selected" : ""}`,
           role: "button",
           tabindex: "0",
           title: `View protected assets for ${row.integration.display_name}`,
@@ -2979,7 +3181,7 @@
     }
 
     function selectedProtectedConnectorRow() {
-      return state.connectorRows.find((row) => row.integration.integration_id === state.protectedIntegrationFilter) || null;
+      return state.protectedIntegrationFilters.length === 1 ? state.connectorRows.find((row) => state.protectedIntegrationFilters.includes(row.integration.integration_id)) || null : null;
     }
 
     function renderProtectedContext() {
@@ -2987,15 +3189,11 @@
       if (!node) return;
       const connector = selectedProtectedConnectorRow();
       const connectorLabel = connector
-        ? escapeHtml(connector.integration.display_name)
-        : '<span class="asset-context-muted">all connectors</span>';
-      node.innerHTML = `
-        <button class="asset-context-link" type="button" data-action="go-connectors">Connectors</button>
-        <span class="asset-context-sep" aria-hidden="true">/</span>
-        <span class="asset-context-current">${connectorLabel}</span>
-        <span class="asset-context-sep" aria-hidden="true">/</span>
-        <span class="asset-context-current">Protected</span>
-      `;
+        ? renderConnectorName(connector.integration)
+        : `<span class="asset-context-muted">${state.protectedIntegrationFilters.length ? `${state.protectedIntegrationFilters.length} selected connectors` : "All connectors"}</span>`;
+      const failedNames = state.protectedDiscoveryFailures.map((id) => state.connectorRows.find((row) => row.integration.integration_id === id)?.integration.display_name || id);
+      const warning = failedNames.length ? `<span role="status" class="muted">Discovery unavailable: ${escapeHtml(failedNames.slice(0, 3).join(", "))}${failedNames.length > 3 ? ` and ${failedNames.length - 3} more` : ""}. Results may be incomplete.</span>` : "";
+      node.innerHTML = `<span class="asset-context-muted">Connector:</span><span class="asset-context-current">${connectorLabel}</span>${state.protectedIntegrationFilters.length ? '<button class="asset-context-link" type="button" data-action="show-all-connectors">Show all connectors</button>' : ""}${warning}`;
     }
 
     function destinationLabel(scope) {
@@ -3188,23 +3386,133 @@
       }
     }
 
-    function renderProtectedAssets(payload = null) {
+    function bulkAssetKey(asset) { return JSON.stringify([asset.integration_id, asset.selector]); }
+
+    function clearBulkSelection() {
+      state.bulkSelected = {};
+      updateScanSelection();
+    }
+
+    function updateScanSelection() {
+      const count = Object.keys(state.bulkSelected).length;
+      const page = document.getElementById("bulk-select-page");
+      const selected = state.protectedAssets.filter((asset) => state.bulkSelected[bulkAssetKey(asset)]).length;
+      if (page) {
+        page.checked = state.protectedAssets.length > 0 && selected === state.protectedAssets.length;
+        page.indeterminate = selected > 0 && selected < state.protectedAssets.length;
+        page.disabled = state.bulkBusy || !state.protectedAssets.length;
+      }
+      document.querySelectorAll("[data-action='bulk-select-asset']").forEach((checkbox) => { checkbox.disabled = state.bulkBusy; });
+      const actions = document.getElementById('start-selected-scans');
+      if (actions) {
+        actions.disabled = state.bulkBusy || !count;
+        actions.textContent = `Start Scan${count ? ` (${count})` : ""}`;
+        actions.title = `Start scans for ${count} selected assets`;
+      }
+    }
+
+    function showBulkOperation(operation) {
+      const panel = document.getElementById("bulk-operation-panel");
+      const p = operation.progress;
+      panel.innerHTML = `<strong>Scan submission: ${escapeHtml(operation.state)}</strong>
+        <p role="status">${p.completed} scans submitted · ${p.skipped} skipped · ${p.failed} failed · ${p.pending} pending / ${operation.total} assets</p>
+        ${operation.stalled ? '<p>Progress has stopped. This operation will not automatically restart. Inspect outcomes before submitting another operation.</p>' : ""}
+        <p class="mono">${escapeHtml(operation.operation_id)}</p>
+        <a href="/api/v1/ui/assets/bulk-protection/${encodeURIComponent(operation.operation_id)}?include_outcomes=true" target="_blank" rel="noopener">Open full audit (JSON)</a>
+        <details><summary>Asset outcomes (first ${operation.outcomes.length} of ${operation.total})</summary><div class="bulk-outcomes">${operation.outcomes.map((item) => `<p><strong>${escapeHtml(item.display_name || item.selector)}</strong>: ${escapeHtml(item.outcome)}${item.error?.message || item.reason ? ` — ${escapeHtml(item.error?.message || item.reason)}` : ""}${item.scan_job_id ? ` · Scan ${escapeHtml(item.scan_job_id)}` : ""}</p>`).join("")}</div></details>`;
+    }
+
+    async function confirmSelectedScans() {
+      if (state.bulkBusy || !Object.keys(state.bulkSelected).length) return;
+      state.bulkBusy = true;
+      updateScanSelection();
+      const panel = document.getElementById("bulk-operation-panel");
+      try {
+        const targets = Object.values(state.bulkSelected).map((asset) => ({
+          integration_id: asset.integration_id, selector: asset.selector, display_name: asset.display_name,
+        }));
+        const operation = await fetchJson('/api/v1/ui/assets/bulk-protection/preview', {
+          method: "POST", body: JSON.stringify({action: "scan", targets}),
+        });
+        const {scan = 0, skip} = operation.review;
+        const dialog = document.getElementById("bulk-protection-confirm");
+        document.getElementById("bulk-protection-review").textContent =
+          `${operation.total} assets selected. ${scan} scans ready to start, ${skip} skipped.`;
+        const apply = document.getElementById("bulk-protection-apply");
+        apply.textContent = `Start ${scan} ${scan === 1 ? "scan" : "scans"}`;
+        apply.disabled = !scan;
+        dialog.returnValue = "cancel";
+        const confirmed = await new Promise((resolve) => {
+          dialog.addEventListener("close", () => resolve(dialog.returnValue === "apply"), {once:true});
+          dialog.showModal();
+        });
+        if (!confirmed) return;
+        await fetchJson(`/api/v1/ui/assets/bulk-protection/${encodeURIComponent(operation.operation_id)}/apply`, {method:"POST"});
+        state.bulkOperationId = operation.operation_id;
+        state.bulkSelected = {};
+        renderProtectedAssets();
+        await refreshBulkOperation();
+      } catch (error) {
+        panel.textContent = `Scan submission unavailable: ${error.message}. No automatic retries. If submission was interrupted, inspect the operation audit and current asset/scan state before trying again.`;
+      } finally { state.bulkBusy = false; updateScanSelection(); }
+    }
+
+    async function refreshBulkOperation() {
+      if (!state.bulkOperationId || state.bulkPolling) return;
+      state.bulkPolling = true;
+      try {
+        const operation = await fetchJson(`/api/v1/ui/assets/bulk-protection/${encodeURIComponent(state.bulkOperationId)}`);
+        showBulkOperation(operation);
+        if (["completed", "failed"].includes(operation.state)) {
+          state.bulkOperationId = null;
+          updateScanSelection();
+          await loadOverview();
+          await loadProtectedAssets();
+        }
+      } finally { state.bulkPolling = false; }
+    }
+
+    document.getElementById("protected-assets-table").addEventListener("click", (event) => {
+      if (event.target.closest("#start-selected-scans")) confirmSelectedScans();
+    });
+    document.getElementById("protected-assets-table").addEventListener("change", (event) => {
+      if (event.target.id === "bulk-select-page") {
+        state.protectedAssets.forEach((asset) => {
+          if (event.target.checked) state.bulkSelected[bulkAssetKey(asset)] = asset;
+          else delete state.bulkSelected[bulkAssetKey(asset)];
+        });
+        renderProtectedAssets();
+      }
+      const checkbox = event.target.closest("[data-action='bulk-select-asset']");
+      if (checkbox) {
+        const asset = state.protectedAssets.find((item) => bulkAssetKey(item) === checkbox.dataset.key);
+        if (!asset) return;
+        if (checkbox.checked) state.bulkSelected[checkbox.dataset.key] = asset;
+        else delete state.bulkSelected[checkbox.dataset.key];
+        updateScanSelection();
+      }
+    });
+    window.setInterval(() => {
+      if (!state.bulkBusy && !document.hidden && state.activeTab === "assets" && state.activeAssetsTab === "protected") refreshBulkOperation().catch(console.error);
+    }, 3000);
+
+    function renderProtectedAssets() {
       const previousFilters = protectedFilterValues();
       const activeFilter = protectedActiveFilterState();
       const assets = state.protectedAssets;
       renderProtectedContext();
-      const protectedCount = assets.filter((asset) => asset.coverage_state === "protected").length;
-      const unprotectedCount = assets.filter((asset) => asset.coverage_state === "unprotected").length;
-      document.getElementById("metric-assets").textContent = String(assets.length);
-      document.getElementById("metric-protected").textContent = String(protectedCount);
-      document.getElementById("metric-unprotected").textContent = String(unprotectedCount);
-      document.getElementById("metric-unsupported").textContent = String((payload?.unsupported_integrations || []).length);
-      const pageStart = assets.length ? state.protectedPageIndex * state.protectedPageLimit + 1 : 0;
+      const pageStart = assets.length ? state.protectedPageSizes.slice(0, state.protectedPageIndex).reduce((total, size) => total + (size || 0), 0) + 1 : 0;
       const pageEnd = assets.length ? pageStart + assets.length - 1 : 0;
       document.getElementById("protected-page-range").innerHTML = `<strong>${pageStart}-${pageEnd}</strong>`;
       document.getElementById("protected-page-prev").disabled = state.protectedPageIndex <= 0;
       document.getElementById("protected-page-next").disabled = !state.protectedNextCursor;
       const columns = [
+        {
+          key: "selection", label: "", className: "select-cell",
+          headerAttributes: {class: "select-cell"},
+          headerHtml: '<span class="table-selection-control"><input type="checkbox" id="bulk-select-page" aria-label="Select assets on this page"><button type="button" id="start-selected-scans" disabled>Start Scan</button></span>',
+          render: (asset) => `<input type="checkbox" data-action="bulk-select-asset" data-key="${escapeHtml(bulkAssetKey(asset))}" aria-label="Select ${escapeHtml(asset.display_name || asset.selector)}" ${state.bulkSelected[bulkAssetKey(asset)] ? "checked" : ""} ${state.bulkBusy ? "disabled" : ""}>`,
+        },
         {
           key: "asset",
           label: "Asset",
@@ -3222,7 +3530,7 @@
             const selectorDetail = asset.selector && asset.selector !== assetName
               ? `<br><span class="mono">${escapeHtml(asset.selector)}</span>`
               : "";
-            return `<span class="copy-line"><strong class="copy-value">${escapeHtml(assetName)}</strong>${copyButton(assetName)}</span>${selectorDetail}`;
+            return `<span class="copy-line">${renderAssetProtectionIndicator(asset)}<strong class="copy-value">${escapeHtml(assetName)}</strong>${copyButton(assetName)}</span>${selectorDetail}`;
           },
         },
         {
@@ -3230,25 +3538,12 @@
           label: "Actions",
           className: "actions",
           render: (asset) => asset.coverage_state === "protected"
-            ? `<button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-scope="${escapeHtml(asset.matching_scope_id || "")}" aria-label="Start Full Scan" title="Start Full Scan">${iconSvg("play")}</button>${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
+            ? `${renderScopeScanAction(asset)}${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
             : "",
         },
         {
-          key: "connector",
-          label: "Connector",
-          filterHtml: `
-            <div class="column-filter">
-              <select id="protected-filter-integration" aria-label="Connector filter">
-                ${protectedConnectorFilterOptions()}
-              </select>
-            </div>
-          `,
-          render: (asset) => `${escapeHtml(asset.integration_display_name)}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
-        },
-        { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
-        {
-          key: "coverage",
-          label: "Coverage",
+          key: "policy",
+          label: "Protection Profile",
           filterHtml: `
             <div class="column-filter">
               <select id="protected-filter-coverage" aria-label="Coverage filter">
@@ -3260,26 +3555,19 @@
               </select>
             </div>
           `,
-          render: (asset) => {
-            return `
-              <div class="coverage-cell">
-                <span class="${pillClass(asset.coverage_state)}">${escapeHtml(asset.coverage_state)}</span>
-                ${renderProtectedAssetActionSelect(asset)}
-              </div>
-            `;
-          },
+          render: (asset) => renderProtectedAssetActionSelect(asset),
         },
         {
-          key: "policy",
-          label: "Protection Profile",
-          render: (asset) => {
-            const label = protectedAssetPolicyLabel(asset);
-            const policyId = asset.policy?.policy_id;
-            return policyId && policyId !== label
-              ? `${escapeHtml(label)}<br><span class="mono">${escapeHtml(policyId)}</span>`
-              : escapeHtml(label);
-          },
+          key: "connector",
+          label: "Connector",
+          filterHtml: `
+            <div class="column-filter">
+              <button type="button" id="protected-filter-integration" aria-label="Connector filter" aria-controls="connector-filter-panel" aria-haspopup="dialog" aria-expanded="false">${escapeHtml(connectorFilterLabel())} ▾</button>
+            </div>
+          `,
+          render: (asset) => `${renderConnectorName(state.connectorRows.find((row) => row.integration.integration_id === asset.integration_id)?.integration || {display_name: asset.integration_display_name})}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
         },
+        { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
         {
           key: "protected_entity",
           label: "Protected Entity",
@@ -3330,6 +3618,7 @@
         emptyMessage: "No assets returned for this filter.",
       });
       bindProtectedTableFilters(previousFilters, activeFilter);
+      updateScanSelection();
     }
 
     function protectedActiveFilterState() {
@@ -3351,13 +3640,7 @@
       const integration = document.getElementById("protected-filter-integration");
       const coverage = document.getElementById("protected-filter-coverage");
       const assetValue = document.getElementById("protected-filter-asset-value");
-      if (integration) {
-        integration.value = state.protectedIntegrationFilter;
-        integration.addEventListener("change", () => {
-          state.protectedIntegrationFilter = integration.value;
-          reloadProtectedAssetsFromFilters();
-        });
-      }
+      if (integration) integration.addEventListener("click", openConnectorFilter);
       if (coverage) {
         coverage.value = values.coverage || "";
         coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
@@ -3388,6 +3671,20 @@
     }
 
     function renderScanResults() {
+      const context = document.getElementById("scan-results-context");
+      const filtered = state.scanCompletedStart || state.scanCompletedEnd || state.scanExactJobId;
+      const label = [state.scanExactJobId ? "Selected scan" : "", state.scanCompletedStart ? "Time range" : ""].filter(Boolean).join(" · ");
+      const detail = [state.scanExactJobId, state.scanCompletedStart && `${state.scanCompletedStart} – ${state.scanCompletedEnd} (end exclusive)`].filter(Boolean).join(" · ");
+      context.innerHTML = filtered ? `<span class="pill scan-context-chip" title="${escapeHtml(detail)}">${escapeHtml(label)}<button type="button" id="clear-scan-interval" aria-label="Clear scan filter" title="Clear scan filter">${iconSvg("x")}</button></span>` : "";
+      if (filtered) document.getElementById("clear-scan-interval").onclick = async () => {
+        state.scanCompletedStart = "";
+        state.scanCompletedEnd = "";
+        state.scanExactJobId = "";
+        const url = new URL(window.location.href);
+        ["completed_start", "completed_end", "job_id"].forEach(key => url.searchParams.delete(key));
+        window.history.replaceState(null, "", url);
+        try { await loadScanResults(); } catch (error) { context.textContent = `Results unavailable: ${error.message}`; }
+      };
       const rows = filteredScanResults();
       const compareColumn = {
           key: "compare",
@@ -3701,10 +3998,14 @@
     }
 
     function renderProtectedAssetActionSelect(asset) {
-      const defaultProfile = defaultProfileForIntegration(asset.integration_id);
-      const defaultName = policyDisplayName(defaultProfile);
+      const protectedNow = asset.coverage_state === "protected";
+      const known = ["protected", "unprotected", "disabled"].includes(asset.coverage_state);
+      const currentLabel = protectedNow ? protectedAssetPolicyLabel(asset) : known ? "Unprotected" : "Protection unknown";
+      const previous = asset.coverage_state === "disabled" ? `Protection disabled; previous profile: ${protectedAssetPolicyLabel(asset)}` : currentLabel;
       const attrs = `
         class="coverage-action-select"
+        aria-label="Protection profile for ${escapeHtml(asset.display_name || asset.selector)}"
+        title="${escapeHtml(previous)}"
         data-action="protected-asset-action"
         data-integration="${escapeHtml(asset.integration_id)}"
         data-selector="${escapeHtml(asset.selector)}"
@@ -3712,31 +4013,30 @@
         data-scope="${escapeHtml(asset.matching_scope_id || "")}"
         data-scope-type="path"
       `;
-      const enableOptions = `
-        <option value="">Action</option>
-        <option value="protect-default">Enable protect (default: ${escapeHtml(defaultName)})</option>
-        <option value="protect-choose">Enable protect...</option>
-      `;
-      if (asset.coverage_state === "unprotected") {
-        return `<select ${attrs}>${enableOptions}</select>`;
-      }
-      if (asset.coverage_state === "disabled") {
-        return `<select ${attrs}>${enableOptions}<option value="enable-existing">Enable existing protection</option></select>`;
-      }
-      if (asset.coverage_state === "protected") {
-        return `<select ${attrs}><option value="">Action</option><option value="protect-choose">Change profile...</option><option value="disable">Disable</option></select>`;
-      }
-      return "";
+      const profiles = state.policyCatalog.filter((profile) => !protectedNow || profile.policy_id !== asset.policy?.policy_id)
+        .map((profile) => `<option value="profile:${escapeHtml(profile.policy_id)}">${escapeHtml(policyDisplayName(profile))}</option>`).join("");
+      const resume = asset.coverage_state === "disabled" && asset.matching_scope_id
+        ? `<option value="enable-existing">Resume ${escapeHtml(protectedAssetPolicyLabel(asset))}</option>` : "";
+      const disable = protectedNow ? '<option value="disable">Unprotected — disable protection</option>' : "";
+      return `<select ${attrs} ${known ? "" : "disabled"}><option value="" selected>${escapeHtml(currentLabel)}</option>${known ? resume + profiles + disable : ""}</select>`;
+    }
+
+    function renderAssetProtectionIndicator(asset) {
+      const coverage = ["protected", "unprotected", "disabled"].includes(asset.coverage_state) ? asset.coverage_state : "unknown";
+      const label = {protected: "Protected: protection is configured; not a scan verdict", unprotected: "Unprotected: no protection assigned", disabled: "Protection disabled", unknown: "Protection status unknown"}[coverage];
+      const mark = coverage === "protected" ? '<path d="m7 12 3 3 7-7"/>' : coverage === "unknown" ? '<path d="M10 9a2 2 0 1 1 3 1.73c-1 .58-1 1.27-1 2.27M12 16h.01"/>' : '<path d="M8 12h8"/>';
+      return `<span class="asset-protection-indicator ${coverage}" role="img" aria-label="${label}" title="${label}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/>${mark}</svg></span>`;
     }
 
     function protectedAssetPolicyLabel(asset) {
+      if (asset.coverage_state === "unprotected") return "None";
       const policy = asset.policy || {};
       const label = policy.display_name || policy.name || policy.policy_name || policy.policy_id || policy.malicious_verdict?.action;
       if (label) return label;
       if (asset.coverage_state === "protected" || asset.coverage_state === "disabled") {
         return policyDisplayName(defaultProfileForIntegration(asset.integration_id)) || "Default Protection Profile";
       }
-      return "none";
+      return "None";
     }
 
     function scanSourceLabel(result) {
@@ -4379,24 +4679,85 @@
       const integrationOptions = ['<option value="">all</option>'].concat(
         state.integrations.map((row) => `<option value="${escapeHtml(row.integration.integration_id)}">${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.integration_id)})</option>`)
       ).join("");
-      if (
-        state.protectedIntegrationFilter
-        && !state.connectorRows.some((row) => row.integration.integration_id === state.protectedIntegrationFilter)
-      ) {
-        state.protectedIntegrationFilter = "";
-      }
+      state.protectedIntegrationFilters = state.protectedIntegrationFilters.filter((id) => state.connectorRows.some((row) => row.integration.integration_id === id));
       document.getElementById("policy-filter-integration").innerHTML = integrationOptions;
       populateApplicationDestinations(selectedApplicationDestinationIds(state.applications.find((app) => app.application_id === state.editingApplicationId) || {}));
     }
 
-    function protectedConnectorFilterOptions() {
-      return ['<option value="">all</option>'].concat(state.connectorRows
-        .map((row) => {
-          const selected = row.integration.integration_id === state.protectedIntegrationFilter ? " selected" : "";
-          return `<option value="${escapeHtml(row.integration.integration_id)}"${selected}>${escapeHtml(row.integration.display_name)} (${escapeHtml(row.integration.platform_key)})</option>`;
-        }))
-        .join("");
+    function connectorFilterLabel() {
+      if (!state.protectedIntegrationFilters.length) return "All connectors";
+      if (state.protectedIntegrationFilters.length > 1) return `${state.protectedIntegrationFilters.length} connectors selected`;
+      const integration = state.connectorRows.find((row) => state.protectedIntegrationFilters.includes(row.integration.integration_id))?.integration;
+      return integration ? `${integration.display_name} (${integration.platform_key})` : "1 connector selected";
     }
+
+    function protectedConnectorFilterOptions() {
+      const all = !state.protectedIntegrationFilters.length;
+      return state.connectorRows.map(({integration}) => `<label class="connector-filter-option" data-search="${escapeHtml(`${integration.display_name} ${integration.platform} ${integration.platform_key}`.toLowerCase())}"><input type="checkbox" value="${escapeHtml(integration.integration_id)}" ${all || state.protectedIntegrationFilters.includes(integration.integration_id) ? "checked" : ""}><span>${escapeHtml(integration.display_name)}<small>${escapeHtml(integration.platform)} · ${escapeHtml(integration.platform_key)}</small></span></label>`).join("");
+    }
+
+    function updateConnectorFilterSelection() {
+      const inputs = Array.from(document.querySelectorAll('#connector-filter-options input'));
+      const selected = inputs.filter((input) => input.checked).length;
+      const visible = inputs.filter((input) => !input.closest('label').hidden).length;
+      document.getElementById('connector-filter-count').textContent = `${selected} of ${inputs.length} selected · ${visible} shown`;
+      const all = document.getElementById('connector-filter-all');
+      all.checked = inputs.length > 0 && selected === inputs.length;
+      all.indeterminate = selected > 0 && selected < inputs.length;
+      document.getElementById('connector-filter-apply').disabled = selected === 0;
+    }
+
+    function openConnectorFilter() {
+      const panel = document.getElementById('connector-filter-panel');
+      document.getElementById('connector-filter-search').value = '';
+      document.getElementById('connector-filter-selected-only').checked = false;
+      document.getElementById('connector-filter-options').innerHTML = protectedConnectorFilterOptions();
+      updateConnectorFilterSelection();
+      const button = document.getElementById('protected-filter-integration');
+      const rect = button.getBoundingClientRect();
+      panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 420))}px`;
+      const height = Math.min(560, window.innerHeight - 16);
+      panel.style.height = `${height}px`;
+      panel.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - height - 8))}px`;
+      panel.showPopover();
+      button.setAttribute('aria-expanded','true');
+      document.getElementById('connector-filter-search').focus();
+    }
+
+    document.getElementById('connector-filter-search').addEventListener('input', (event) => {
+      const query = event.target.value.toLowerCase().trim();
+      const selectedOnly = document.getElementById('connector-filter-selected-only').checked;
+      document.querySelectorAll('#connector-filter-options .connector-filter-option').forEach((label) => {
+        label.hidden = !label.dataset.search.includes(query) || (selectedOnly && !label.querySelector('input').checked);
+      });
+      updateConnectorFilterSelection();
+    });
+    document.getElementById('connector-filter-selected-only').addEventListener('change', () => document.getElementById('connector-filter-search').dispatchEvent(new Event('input')));
+    document.getElementById('connector-filter-options').addEventListener('change', () => document.getElementById('connector-filter-search').dispatchEvent(new Event('input')));
+    document.getElementById('connector-filter-all').addEventListener('change', (event) => {
+      document.querySelectorAll('#connector-filter-options input').forEach((input) => { input.checked = event.target.checked; });
+      document.getElementById('connector-filter-search').dispatchEvent(new Event('input'));
+    });
+    document.getElementById('connector-filter-select-shown').addEventListener('click', () => {
+      document.querySelectorAll('#connector-filter-options input').forEach((input) => { input.checked = !input.closest('label').hidden; });
+      updateConnectorFilterSelection();
+    });
+    document.getElementById('connector-filter-clear').addEventListener('click', () => {
+      document.querySelectorAll('#connector-filter-options input').forEach((input) => { input.checked = false; });
+      document.getElementById('connector-filter-search').dispatchEvent(new Event('input'));
+    });
+    document.getElementById('connector-filter-cancel').addEventListener('click', () => document.getElementById('connector-filter-panel').hidePopover());
+    document.getElementById('connector-filter-apply').addEventListener('click', () => {
+      const selected = Array.from(document.querySelectorAll('#connector-filter-options input:checked')).map((input) => input.value);
+      if (!selected.length) return;
+      state.protectedIntegrationFilters = selected.length === state.connectorRows.length ? [] : selected;
+      document.getElementById('connector-filter-panel').hidePopover();
+      document.getElementById('protected-filter-integration').textContent = connectorFilterLabel() + ' ▾';
+      reloadProtectedAssetsFromFilters();
+    });
+    document.getElementById('connector-filter-panel').addEventListener('toggle', (event) => {
+      document.getElementById('protected-filter-integration')?.setAttribute('aria-expanded', String(event.newState === 'open'));
+    });
 
     async function loadOverview() {
       const overview = await fetchJson(endpoints.overview);
@@ -4417,7 +4778,7 @@
 
     async function pollConnectors() {
       if (
-        !state.connectorsPolling
+        document.hidden
         || state.activeTab !== "assets"
         || state.activeAssetsTab !== "connectors"
         || state.connectorsPollingInFlight
@@ -4435,11 +4796,12 @@
     }
 
     function updateConnectorsPolling() {
-      const shouldPoll = state.connectorsPolling && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
+      const shouldPoll = !document.hidden && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
       if (shouldPoll && !connectorsPollTimer) {
+        pollConnectors();
         connectorsPollTimer = window.setInterval(() => {
           pollConnectors();
-        }, 5000);
+        }, 30000);
       } else if (!shouldPoll && connectorsPollTimer) {
         window.clearInterval(connectorsPollTimer);
         connectorsPollTimer = null;
@@ -4447,6 +4809,8 @@
     }
 
     function resetProtectedPagination() {
+      state.protectedDiscoveryFailures = [];
+      state.protectedPageSizes = [];
       state.protectedPageIndex = 0;
       state.protectedPageCursors = [""];
       state.protectedNextCursor = null;
@@ -4461,6 +4825,7 @@
     }
 
     function reloadProtectedAssetsFromFilters({ debounce = false } = {}) {
+      clearBulkSelection();
       resetProtectedPagination();
       if (protectedFilterReloadTimer) {
         clearTimeout(protectedFilterReloadTimer);
@@ -4489,25 +4854,28 @@
 
     async function loadProtectedAssets() {
       const params = new URLSearchParams();
-      const integrationId = state.protectedIntegrationFilter;
+      const integrationIds = state.protectedIntegrationFilters;
       const filters = protectedFilterValues();
       const coverage = filters.coverage;
       const assetFilterMode = filters.assetMode;
       const assetFilterValue = filters.assetValue.trim();
       const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
-      if (integrationId) params.set("integration_id", integrationId);
+      integrationIds.forEach((id) => params.append("integration_ids", id));
       if (coverage) params.set("coverage_state", coverage);
       params.set("limit", String(state.protectedPageLimit));
-      if (cursor) params.set("cursor", cursor);
+      params.set("cursors", cursor || "{}");
       if (assetFilterValue) {
         params.set("asset_filter_mode", assetFilterMode);
         params.set("asset_filter_value", assetFilterValue);
       }
       const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
       state.protectedAssets = payload.assets || [];
-      state.protectedNextCursor = integrationId ? ((payload.next_cursors || {})[integrationId] || null) : null;
+      state.protectedDiscoveryFailures = [...new Set([...state.protectedDiscoveryFailures, ...(payload.failed_integrations || []).map((item) => item.integration_id)])];
+      const cursors = payload.next_cursors || {};
+      state.protectedNextCursor = Object.values(cursors).some((cursor) => cursor !== null) ? JSON.stringify(cursors) : null;
+      state.protectedPageSizes[state.protectedPageIndex] = state.protectedAssets.length;
       state.protectedAssetsLoaded = true;
-      renderProtectedAssets(payload);
+      renderProtectedAssets();
     }
 
     function showProtectedAssetsError(error) {
@@ -4518,12 +4886,19 @@
     async function fetchScanResultsPayload() {
       const params = new URLSearchParams();
       params.set("item_limit", "100");
+      if (state.scanCompletedStart || state.scanCompletedEnd) {
+        params.set("completed_start", state.scanCompletedStart);
+        params.set("completed_end", state.scanCompletedEnd);
+        params.set("limit", "200");
+      }
+      if (state.scanExactJobId) params.set("job_id", state.scanExactJobId);
       return fetchJson(`${endpoints.scanResults}?${params.toString()}`);
     }
 
     async function loadScanResults({ resetSelection = true } = {}) {
       const payload = await fetchScanResultsPayload();
       state.scanResults = payload.results || [];
+      state.scanMatchingJobs = payload.matching_jobs;
       if (resetSelection) {
         state.selectedScanResult = null;
         state.selectedScanResultItemKey = null;
@@ -4607,6 +4982,7 @@
           ? nextResults.find((result) => result.job.job_id === openJobId)
           : null;
         state.scanResults = nextResults;
+        state.scanMatchingJobs = payload.matching_jobs;
         if (openJobId && !nextOpen) {
           state.selectedScanResult = null;
           state.selectedScanResultItemKey = null;
@@ -4883,8 +5259,32 @@
       setPolicyEditorOpen(false);
     }
 
+    function confirmProtectionChange(asset, nextProfile, disabling = false) {
+      const dialog = document.getElementById("protection-change-confirm");
+      if (dialog.open) return Promise.resolve(false);
+      const current = state.protectedAssets.find((row) => asset.matchingScopeId
+        ? row.matching_scope_id === asset.matchingScopeId
+        : row.integration_id === asset.integrationId && row.selector === asset.selector);
+      document.getElementById("protection-change-target").textContent = asset.name || asset.selector;
+      document.getElementById("protection-change-from").textContent = current?.coverage_state === "protected" ? protectedAssetPolicyLabel(current) : "Unprotected";
+      document.getElementById("protection-change-to").textContent = nextProfile;
+      document.getElementById("protection-change-title").textContent = disabling ? "Disable asset protection?" : "Apply protection profile?";
+      document.getElementById("protection-change-description").textContent = disabling
+        ? "This disables the protected scope and retains its saved profile. It does not cancel scans already submitted."
+        : "This enables protection using the selected profile, including any configured remediation actions. It does not start a full scan or enable connector monitoring.";
+      const apply = document.getElementById("protection-change-apply");
+      apply.textContent = disabling ? "Disable protection" : "Apply protection";
+      apply.className = disabling ? "danger" : "primary";
+      dialog.returnValue = "cancel";
+      return new Promise((resolve) => {
+        dialog.addEventListener("close", () => resolve(dialog.returnValue === "apply"), {once: true});
+        dialog.showModal();
+      });
+    }
+
     async function protectAsset(asset) {
       const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
+      if (!await confirmProtectionChange(asset, policyDisplayName(policyEntry))) return;
       const policy = cloneValue(policyEntry.definition || currentDefaultPolicy());
       const scopeType = asset.scopeType === "identity" ? "identity" : "path";
       if (asset.matchingScopeId) {
@@ -4934,38 +5334,119 @@
       setProtectionProfilePickerOpen(false);
     }
 
-    async function scanScope(scopeId, issueKeys = []) {
-      const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
-        method: "POST",
-        body: JSON.stringify({ reader_strategy: "proxy", limit: 10000, issue_keys: issueKeys }),
-      });
-      await loadScanResults();
-      selectTab("scan-results");
+    function renderScopeScanAction(asset) {
+      const scopeId = asset.matching_scope_id || "";
+      const tracked = state.scopeScanSubmissions[scopeId];
+      const terminalStates = ["completed", "failed", "cancelled"];
+      if (asset.last_scan?.job_id && !terminalStates.includes(asset.last_scan.state)
+          && (!tracked || (tracked.job_id !== asset.last_scan.job_id && terminalStates.includes(tracked.state)))) {
+        state.scopeScanSubmissions[scopeId] = {job_id: asset.last_scan.job_id, state: asset.last_scan.state};
+      }
+      const submission = state.scopeScanSubmissions[scopeId];
+      const last = submission || asset.last_scan;
+      if (submission?.starting) {
+        return `<button type="button" class="scan-action" disabled aria-busy="true">Starting scan…</button>`;
+      }
+      const active = last && !["completed", "failed", "cancelled"].includes(last.state);
+      const view = last?.job_id ? `<button type="button" class="icon-button view-scan-action" data-action="view-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="View scan results" title="View scan results">${iconSvg("eye")}</button>` : "";
+      if (active) {
+        return `<div class="scope-scan-actions">
+          <span class="pill scan-status" role="status">${submission?.cancelling ? "Cancelling…" : "Scan in progress"}</span>
+          ${view}
+          <button type="button" class="icon-button danger" data-action="cancel-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="Cancel Full Scan" title="Stop future scan work. Files already being processed may finish." ${submission?.cancelling ? 'disabled aria-busy="true"' : ""}>${iconSvg("x")}</button>
+        </div>`;
+      }
+      const status = last?.job_id && last.state !== "completed" ? `<span class="pill scan-status" role="status">${last.state === "failed" ? "Scan failed" : "Scan cancelled"}</span>` : "";
+      return `<div class="scope-scan-actions">${status}${view}</div>`;
     }
 
+    async function cancelScopeScan(scopeId, jobId) {
+      const scan = state.scopeScanSubmissions[scopeId] || {job_id: jobId, state: "running"};
+      if (scan.cancelling) return;
+      state.scopeScanSubmissions[scopeId] = scan;
+      scan.cancelling = true;
+      renderProtectedAssets();
+      try {
+        const batch = await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+        scan.state = batch.job.state;
+      } catch (error) {
+        alert(`Cancel failed: ${error.message}`);
+      } finally {
+        scan.cancelling = false;
+        renderProtectedAssets();
+      }
+    }
+
+    async function scanScope(scopeId, issueKeys = []) {
+      if (state.scopeScanSubmissions[scopeId]?.starting) return;
+      state.scopeScanSubmissions[scopeId] = { starting: true };
+      renderProtectedAssets();
+      try {
+        const batch = await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(scopeId)}/scan`, {
+          method: "POST",
+          body: JSON.stringify({ reader_strategy: "proxy", limit: 10000, issue_keys: issueKeys }),
+        });
+        state.scopeScanSubmissions[scopeId] = {job_id: batch.job.job_id, state: batch.job.state};
+      } catch (error) {
+        delete state.scopeScanSubmissions[scopeId];
+        throw error;
+      } finally {
+        renderProtectedAssets();
+      }
+    }
+
+    // Refresh only tracked jobs, without rediscovering storage or changing pages.
+    window.setInterval(async () => {
+      if (document.hidden || state.activeTab !== "assets" || state.activeAssetsTab !== "protected") return;
+      for (const [scopeId, scan] of Object.entries(state.scopeScanSubmissions)) {
+        if (!scan.job_id || scan.checking || scan.cancelling || ["completed", "failed", "cancelled"].includes(scan.state)) continue;
+        scan.checking = true;
+        try {
+          const job = await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(scan.job_id)}`);
+          if (scan.cancelling || ["completed", "failed", "cancelled"].includes(scan.state)) continue;
+          scan.state = job.state;
+          if (["completed", "failed", "cancelled"].includes(job.state)) renderProtectedAssets();
+        } catch (error) { console.warn("Scan status refresh failed", error); }
+        finally { scan.checking = false; }
+      }
+    }, 10000);
+
     document.querySelectorAll(".rail-item").forEach((button) => {
-      button.addEventListener("click", () => selectTab(button.dataset.tab));
+      button.addEventListener("click", () => {
+        if (button.dataset.tab === "assets") {
+          setAssetsMenuOpen(button.getAttribute("aria-expanded") !== "true");
+          return;
+        }
+        selectTab(button.dataset.tab);
+      });
     });
 
+    document.querySelectorAll("[data-assets-view]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const view = button.dataset.assetsView;
+        selectTab("assets");
+        if (view === "protected") state.protectedIntegrationFilters = [];
+        selectAssetsTab(view, {forceReload: view === "protected"});
+        if (document.querySelector(".app").classList.contains("nav-collapsed")) setAssetsMenuOpen(false);
+      });
+    });
+    document.addEventListener("click", (event) => {
+      if (document.querySelector(".app").classList.contains("nav-collapsed") && !event.target.closest(".assets-nav-group")) setAssetsMenuOpen(false);
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && document.querySelector(".app").classList.contains("nav-collapsed") && document.getElementById("assets-nav-toggle").getAttribute("aria-expanded") === "true") {
+        setAssetsMenuOpen(false);
+        document.getElementById("assets-nav-toggle").focus();
+      }
+    });
     document.getElementById("nav-toggle").addEventListener("click", () => {
       setNavCollapsed(!document.querySelector(".app").classList.contains("nav-collapsed"));
     });
 
-    document.querySelectorAll(".subtab").forEach((button) => {
-      button.addEventListener("click", () => {
-        if (button.dataset.assetsTab === "protected") {
-          state.protectedIntegrationFilter = "";
-          selectAssetsTab("protected", { forceReload: true });
-          return;
-        }
-        selectAssetsTab(button.dataset.assetsTab);
-      });
-    });
-
     document.getElementById("protected-context").addEventListener("click", (event) => {
-      const button = event.target.closest("[data-action='go-connectors']");
-      if (!button) return;
-      selectAssetsTab("connectors");
+      if (!event.target.closest("[data-action='show-all-connectors']")) return;
+      state.protectedIntegrationFilters = [];
+      selectAssetsTab("protected", {forceReload: true});
     });
 
     document.getElementById("refresh-all").addEventListener("click", (event) => {
@@ -4986,13 +5467,7 @@
         }
       });
     });
-    document.getElementById("connectors-poll").addEventListener("change", (event) => {
-      state.connectorsPolling = event.target.checked;
-      updateConnectorsPolling();
-      if (state.connectorsPolling) {
-        pollConnectors();
-      }
-    });
+    document.addEventListener("visibilitychange", updateConnectorsPolling);
     document.getElementById("open-add-connector")?.addEventListener("click", () => setConnectorDrawerOpen(true));
     document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
@@ -5119,25 +5594,10 @@
     });
 
     document.getElementById("connectors-body").addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-action='toggle-integration']");
-      if (button) {
-        button.disabled = true;
-        try {
-          await fetchJson(`/api/v1/ui/integrations/${encodeURIComponent(button.dataset.id)}/enabled`, {
-            method: "POST",
-            body: JSON.stringify({ enabled: button.dataset.enabled === "true" }),
-          });
-          await loadConnectors();
-        } catch (error) {
-          alert(`Connector update failed: ${error.message}`);
-          button.disabled = false;
-        }
-        return;
-      }
       if (event.target.closest("button, input, select, textarea, a, label, [contenteditable='true']")) return;
       const row = event.target.closest("tr[data-action='open-protected-assets']");
       if (!row?.dataset.integration) return;
-      state.protectedIntegrationFilter = row.dataset.integration;
+      state.protectedIntegrationFilters = [row.dataset.integration];
       selectAssetsTab("protected", { forceReload: true });
     });
 
@@ -5147,7 +5607,7 @@
       const row = event.target.closest("tr[data-action='open-protected-assets']");
       if (!row?.dataset.integration) return;
       event.preventDefault();
-      state.protectedIntegrationFilter = row.dataset.integration;
+      state.protectedIntegrationFilters = [row.dataset.integration];
       selectAssetsTab("protected", { forceReload: true });
     });
 
@@ -5173,6 +5633,25 @@
     });
 
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
+      const cancelScan = event.target.closest("[data-action='cancel-scope-scan']");
+      if (cancelScan) {
+        await cancelScopeScan(cancelScan.dataset.scope, cancelScan.dataset.job);
+        return;
+      }
+      const viewScan = event.target.closest("[data-action='view-scope-scan']");
+      if (viewScan) {
+        await withBusyButton(viewScan, async () => {
+          try {
+            state.scanCompletedStart = "";
+            state.scanCompletedEnd = "";
+            state.scanExactJobId = viewScan.dataset.job;
+            await loadScanResults();
+            selectTab("scan-results");
+            renderScanResultDetail(viewScan.dataset.job);
+          } catch (error) { alert(`Unable to load scan results: ${error.message}`); }
+        });
+        return;
+      }
       const prefill = event.target.closest("[data-action='prefill-scope']");
       if (prefill) {
         prefill.disabled = true;
@@ -5200,18 +5679,6 @@
           alert(`Scan failed: ${error.message}`);
         } finally {
           issueScan.disabled = false;
-        }
-        return;
-      }
-      const scan = event.target.closest("[data-action='scan-asset-scope']");
-      if (scan && scan.dataset.scope) {
-        scan.disabled = true;
-        try {
-          await scanScope(scan.dataset.scope);
-        } catch (error) {
-          alert(`Scan failed: ${error.message}`);
-        } finally {
-          scan.disabled = false;
         }
         return;
       }
@@ -5243,6 +5710,7 @@
       const select = event.target.closest("[data-action='protected-asset-action']");
       if (!select) return;
       const action = select.value;
+      select.value = "";
       const asset = {
         integrationId: select.dataset.integration,
         selector: select.dataset.selector,
@@ -5252,13 +5720,17 @@
       };
       select.disabled = true;
       try {
-        if (action === "protect-default") {
-          await protectAsset(asset);
+        if (action.startsWith("profile:")) {
+          const policyEntry = state.policyCatalog.find((profile) => profile.policy_id === action.slice("profile:".length));
+          if (!policyEntry) throw new Error("Protection profile is no longer available. Refresh and try again.");
+          await protectAsset({...asset, policyEntry});
         } else if (action === "protect-choose") {
           openProtectionProfilePicker(asset);
           select.disabled = false;
           select.value = "";
         } else if (action === "enable-existing" && select.dataset.scope) {
+          const existing = state.protectedAssets.find((row) => row.matching_scope_id === asset.matchingScopeId);
+          if (!await confirmProtectionChange(asset, protectedAssetPolicyLabel(existing || {}))) return;
           await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
             method: "POST",
             body: JSON.stringify({ enabled: true }),
@@ -5266,6 +5738,7 @@
           await loadOverview();
           await loadProtectedAssets();
         } else if (action === "disable" && select.dataset.scope) {
+          if (!await confirmProtectionChange(asset, "Unprotected", true)) return;
           await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
             method: "POST",
             body: JSON.stringify({ enabled: false }),
@@ -5278,6 +5751,7 @@
         }
       } catch (error) {
         alert(`Protection update failed: ${error.message}`);
+      } finally {
         select.disabled = false;
         select.value = "";
       }
@@ -5384,8 +5858,11 @@
       }
     });
 
+    const dashboardDays = consoleParams.get("dashboard_days");
+    if (["1", "7", "30"].includes(dashboardDays)) document.getElementById("dashboard-days").value = dashboardDays;
     initNav();
-    selectTab("dashboard");
+    selectTab(["dashboard", "assets", "scan-results", "applications", "policy"].includes(consoleParams.get("tab")) ? consoleParams.get("tab") : "dashboard");
+    if (state.activeTab === "assets") selectAssetsTab(state.activeAssetsTab);
     loadPolicyCatalog();
     loadDefaultProfiles();
     renderPolicyBaseOptions();

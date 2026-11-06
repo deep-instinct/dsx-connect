@@ -499,7 +499,7 @@ class ControlPlaneService:
         )
         return self.repo.create_scope(payload, normalized_selector=normalized_selector)
 
-    def update_scope(self, scope_id: str, payload: ProtectedScopeUpdate) -> ProtectedScopeRecord:
+    def update_scope(self, scope_id: str, payload: ProtectedScopeUpdate, *, expected_updated_at: str | None = None) -> ProtectedScopeRecord:
         current = self.get_scope_or_404(scope_id)
         if payload.post_scan_policy is not None:
             self._validate_scope_policy(payload.post_scan_policy)
@@ -509,7 +509,10 @@ class ControlPlaneService:
             normalized_selector=current.normalized_selector,
             exclude_scope_id=scope_id,
         )
-        row = self.repo.update_scope(scope_id, payload, normalized_selector=current.normalized_selector)
+        kwargs = {"expected_updated_at": expected_updated_at} if expected_updated_at is not None else {}
+        row = self.repo.update_scope(scope_id, payload, normalized_selector=current.normalized_selector, **kwargs)
+        if row is None and expected_updated_at is not None:
+            raise HTTPException(status_code=409, detail="Scope changed after review; refresh and review again")
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="scope_not_found")
         return row

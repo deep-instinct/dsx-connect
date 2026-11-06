@@ -309,3 +309,7 @@ helm uninstall s3 -n dsx-connect
 | Connector appears offline | Heartbeats stopped or the lease expired | Check pod status and logs |
 
 For failed scan items and dead letter queues, see [Failed Scans and Dead Letter Queues](../../../operations/dead-letter-queues.md).
+
+## Operate protected assets
+
+After deployment, follow [Operating connectors and scans](../../operations/connectors-and-scans.md) for discovery, protection profiles, object-count previews, the console submission limit, and View/Cancel controls. Connector lifecycle and monitoring settings remain managed through Helm/GitOps.

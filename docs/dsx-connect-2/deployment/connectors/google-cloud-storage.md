@@ -378,3 +378,7 @@ helm uninstall gcs -n dsx-connect
 | Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_V2_URL` and API service |
 | Connector registers but asset reads fail | Repository credentials or asset settings are wrong | Check connector logs and repository-specific secret values |
 | Connector appears offline | Heartbeats stopped or lease expired | Check connector pod status and logs |
+
+## Operate protected assets
+
+After deployment, follow [Operating connectors and scans](../../operations/connectors-and-scans.md) for discovery, protection profiles, object-count previews, the console submission limit, and View/Cancel controls. Connector lifecycle and monitoring settings remain managed through Helm/GitOps.

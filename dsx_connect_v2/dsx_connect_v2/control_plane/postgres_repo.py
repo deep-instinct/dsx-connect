@@ -518,6 +518,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
         scope_id: str,
         payload: ProtectedScopeUpdate,
         normalized_selector: str | None = None,
+        expected_updated_at: str | None = None,
     ) -> ProtectedScopeRecord | None:
         current = self.get_scope(scope_id)
         if current is None:
@@ -535,7 +536,7 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
                     filter_expression = %s,
                     post_scan_policy_json = %s::jsonb,
                     updated_at = NOW()
-                WHERE scope_id = %s
+                WHERE scope_id = %s AND (%s::timestamptz IS NULL OR updated_at = %s::timestamptz)
                 RETURNING scope_id, integration_id, scope_type, resource_selector, normalized_selector,
                           display_name, mode, enabled, filter_expression,
                           post_scan_policy_json AS post_scan_policy, created_at, updated_at
@@ -548,6 +549,8 @@ class PostgresControlPlaneRepository(ControlPlaneRepository):
                     merged.filter_expression,
                     psycopg.types.json.Json(merged.post_scan_policy),
                     scope_id,
+                    expected_updated_at,
+                    expected_updated_at,
                 ),
             )
             row = cur.fetchone()

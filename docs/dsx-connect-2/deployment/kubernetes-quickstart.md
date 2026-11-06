@@ -465,8 +465,10 @@ In the Operator Console:
 2. Select the Filesystem connector.
 3. Find the filesystem asset.
 4. Enable protection with the default protection profile.
-5. Click **Scan**.
-6. Open **Scan Results** and monitor progress.
+5. Choose **Start Full Scan**, review the target and resource warning, and confirm **Start scan now**. The console submits up to 10,000 objects per request.
+6. Stay on the asset row to see submission status; choose the blue **View** eye icon to open that job in **Scan Results**. Use the **Cancel** X icon to request cooperative cancellation.
+
+See [Operating connectors and scans](../operations/connectors-and-scans.md) for counts, limits, cancellation, and monitoring behavior.
 
 This quickstart uses DSXA scanner mode, so scan results come from the configured DSXA scanner.
 For control-plane-only smoke tests without DSXA, set `DSX_CONNECT_V2_SCANNER__MODE` back to `"stub"` in `/tmp/dsx-connect-2-values.yaml`.

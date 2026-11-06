@@ -7,6 +7,8 @@ import threading
 from typing import Any
 import uuid
 
+from fastapi import HTTPException
+
 import psycopg
 from psycopg.rows import dict_row
 
@@ -49,8 +51,10 @@ class PostgresJobRepository(JobRepository):
         with self._connect() as conn, conn.cursor(name="dashboard_history") as cur:
             cur.execute("""
                 SELECT scan_stage_json AS scan_stage, policy_stage_json AS policy_stage,
-                       remediation_stage_json AS remediation_stage, created_at, completed_at, state
-                FROM cp_job_items WHERE updated_at >= %s OR completed_at IS NULL
+                       remediation_stage_json AS remediation_stage, created_at, completed_at, state,
+                       job_id, job_item_id, object_identity
+                FROM cp_job_items WHERE (updated_at >= %s OR completed_at IS NULL)
+                AND job_id IN (SELECT job_id FROM cp_jobs WHERE job_type <> 'protection.bulk')
             """, (since,))
             yield from cur
 
@@ -80,6 +84,34 @@ class PostgresJobRepository(JobRepository):
 
     def _notify_outbox_changed(self, cur, *, job_id: str) -> None:
         cur.execute("SELECT pg_notify(%s, %s)", (OUTBOX_NOTIFY_CHANNEL, job_id))
+
+    def has_active_scope_scan(self, scope_id: str) -> bool:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT EXISTS (SELECT 1 FROM cp_jobs WHERE scope_id = %s AND job_type LIKE 'scan%%' AND state NOT IN ('completed','failed','cancelled')) AS active", (scope_id,))
+            return bool(cur.fetchone()["active"])
+
+    @contextmanager
+    def scope_scan_guard(self, scope_id: str):
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS locked", ("scope-scan:" + scope_id,))
+                locked = bool(cur.fetchone()["locked"])
+            if not locked:
+                raise HTTPException(409, {"code": "scope_scan_active", "message": "A scan is already starting for this scope"})
+            try:
+                if self.has_active_scope_scan(scope_id):
+                    raise HTTPException(409, {"code": "scope_scan_active", "message": "A scan is already active for this scope"})
+                yield
+            finally:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(hashtextextended(%s, 0))", ("scope-scan:" + scope_id,))
+
+    def claim_protection_job(self, job_id: str, expected: str, state: str) -> bool:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("UPDATE cp_jobs SET state = %s, updated_at = NOW() WHERE job_id = %s AND state = %s AND job_type = 'protection.bulk' RETURNING job_id", (state, job_id, expected))
+            claimed = cur.fetchone() is not None
+            conn.commit()
+            return claimed
 
     def list_jobs(
         self,

@@ -580,3 +580,7 @@ helm uninstall filesystem -n dsx-connect
 | Connector starts but does not register | Control plane URL is wrong or API is unavailable | Check `DSXCONNECTOR_DSX_CONNECT_V2_URL` and API service |
 | Connector registers but reads fail | Mounted path and `DSXCONNECTOR_ASSET` do not align | Check `scanVolume.mountPath` and `env.DSXCONNECTOR_ASSET` |
 | Monitoring misses changes | Filesystem events do not propagate through the mount | Enable `DSXCONNECTOR_MONITOR_FORCE_POLLING` |
+
+## Operate protected assets
+
+After deployment, follow [Operating connectors and scans](../../operations/connectors-and-scans.md) for discovery, protection profiles, object-count previews, the console submission limit, and View/Cancel controls. Connector lifecycle and monitoring settings remain managed through Helm/GitOps.

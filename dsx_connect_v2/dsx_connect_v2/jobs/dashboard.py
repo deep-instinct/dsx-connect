@@ -88,3 +88,29 @@ def dashboard_history(repo, days: int, now: datetime | None = None) -> dict:
             "total_scans": sum(b["total"] for b in buckets), "quarantined": quarantine,
             "file_type_policy_matches": blocked,
             "file_types": [{"type": key, "count": value} for key, value in sorted(types.items(), key=lambda pair: (-pair[1], pair[0]))]}
+
+
+def _completed_scans(repo, start: datetime, end: datetime):
+    """Yield completed scans in a half-open interval, including older jobs."""
+    for row in repo.dashboard_stages(start):
+        scan = row.get("scan_stage") or {}
+        raw = scan.get("completed_at")
+        if scan.get("state") != "completed" or not raw:
+            continue
+        at = raw if isinstance(raw, datetime) else datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if not start <= at < end:
+            continue
+        result = scan.get("result") or {}
+        yield {"job_id": row.get("job_id"), "job_item_id": row.get("job_item_id"),
+                     "object_identity": row.get("object_identity"), "completed_at": at.isoformat(),
+                     "verdict": result.get("verdict") or "Unknown"}
+
+
+def dashboard_scan_job_ids(repo, start: datetime, end: datetime) -> list[str]:
+    return sorted({row["job_id"] for row in _completed_scans(repo, start, end) if row["job_id"]})
+
+
+def dashboard_scans(repo, start: datetime, end: datetime, offset: int = 0, limit: int = 100) -> dict:
+    rows = list(_completed_scans(repo, start, end))
+    rows.sort(key=lambda row: (row["completed_at"], row["job_item_id"] or ""), reverse=True)
+    return {"total": len(rows), "offset": offset, "limit": limit, "scans": rows[offset:offset + limit]}

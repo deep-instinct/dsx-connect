@@ -69,7 +69,8 @@ def test_operator_console_page_renders() -> None:
     assert 'id="protected-filter-asset-mode"' not in response.text
     assert "function protectedConnectorFilterOptions" in response.text
     assert """'<option value="">all</option>'""" in response.text
-    assert "Start Full Scan" in response.text
+    assert 'id="start-selected-scans" disabled>Start Scan' in response.text
+    assert 'data-action="scan-asset-scope"' not in response.text
     assert "Cancel Full Scan" in response.text
     assert "Default Protected Entity" in response.text
     assert "Protected Entity" in response.text
@@ -1565,6 +1566,7 @@ def test_ui_demo_seed_rejects_non_dev_environment(monkeypatch: pytest.MonkeyPatc
 
 
 def test_jira_issue_scan_intersects_scope_and_validates_keys(monkeypatch):
+    from contextlib import nullcontext
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
     from pydantic import ValidationError
@@ -1573,7 +1575,7 @@ def test_jira_issue_scan_intersects_scope_and_validates_keys(monkeypatch):
     with pytest.raises(ValidationError):
         ui.UIScopeScanRequest(issue_keys=['RD-1) OR project = OTHER'])
     assert ui.UIScopeScanRequest(issue_keys=[' rd-1 ', 'RD-1']).issue_keys == ['RD-1']
-    scope = SimpleNamespace(integration_id='jira', resource_selector='project = RD', scope_id='rd')
+    scope = SimpleNamespace(integration_id='jira', resource_selector='project = RD', scope_id='rd', enabled=True)
     cp = SimpleNamespace(get_scope_or_404=lambda _: scope,
                          get_integration_or_404=lambda _: SimpleNamespace(platform='jira'),
                          list_connector_instances=lambda **kwargs: [])
@@ -1582,7 +1584,10 @@ def test_jira_issue_scan_intersects_scope_and_validates_keys(monkeypatch):
         assert kwargs['scope'] == '(project = RD) AND (key in (RD-1))'
         return [{'identity': 'jira/1', 'location': '1', 'display_name': 'original.txt'}], True, 1
     monkeypatch.setattr(ui, '_fetch_connector_object_listing', listing)
-    service = SimpleNamespace(submit_batch_job=AsyncMock(return_value='submitted'))
+    service = SimpleNamespace(
+        repo=SimpleNamespace(scope_scan_guard=lambda _: nullcontext()),
+        submit_batch_job=AsyncMock(return_value='submitted'),
+    )
     result = asyncio.run(ui.scan_scope_selector('rd', ui.UIScopeScanRequest(issue_keys=['RD-1']), cp, service))
     assert result == 'submitted'
     submitted = service.submit_batch_job.call_args.args[0]
@@ -1607,3 +1612,93 @@ def test_scan_results_resolve_human_readable_target_names():
         target = row['target']
         assert target['connector_name'] == integrations.get(row['job']['integration_id'])
         assert target['scope_name'] == scopes.get(row['job']['scope_id'])
+
+
+def test_dashboard_scan_drilldown_returns_bucket_scans_and_validates_interval() -> None:
+    from datetime import datetime, timedelta
+
+    client = TestClient(create_app())
+    assert client.post("/api/v1/ui/demo/seed").status_code == 200
+    history = client.get("/api/v1/ui/dashboard/history?days=7").json()
+    bucket = next(bucket for bucket in history["series"] if bucket["total"])
+    start = datetime.fromisoformat(bucket["at"])
+    params = {"start": start.isoformat(), "end": (start + timedelta(days=1)).isoformat(), "limit": 1}
+    data = client.get("/api/v1/ui/dashboard/scans", params=params).json()
+    assert data["total"] == bucket["total"]
+    assert len(data["scans"]) == 1
+    assert data["scans"][0]["job_id"]
+    assert data["scans"][0]["object_identity"]
+    params["end"] = start.isoformat()
+    assert client.get("/api/v1/ui/dashboard/scans", params=params).status_code == 422
+    params["end"] = (start + timedelta(days=2)).isoformat()
+    assert client.get("/api/v1/ui/dashboard/scans", params=params).status_code == 422
+    params.update(start="2026-10-30T00:00:00", end="2026-10-31T00:00:00")
+    assert client.get("/api/v1/ui/dashboard/scans", params=params).status_code == 422
+
+
+def test_scan_results_time_link_finds_matching_jobs_beyond_recent_list(monkeypatch) -> None:
+    from datetime import datetime, timedelta
+
+    app = create_app()
+    client = TestClient(app)
+    assert client.post("/api/v1/ui/demo/seed").status_code == 200
+    history = client.get("/api/v1/ui/dashboard/history?days=7").json()
+    bucket = next(bucket for bucket in history["series"] if bucket["total"])
+    start = datetime.fromisoformat(bucket["at"])
+    params = {"completed_start": start.isoformat(), "completed_end": (start + timedelta(days=1)).isoformat()}
+    details = client.get("/api/v1/ui/dashboard/scans", params={"start": params["completed_start"], "end": params["completed_end"]}).json()
+    expected = {row["job_id"] for row in details["scans"]}
+    # The interval lookup must use persisted scans, not the recent-jobs list.
+    monkeypatch.setattr(app.state.job_service, "list_jobs", lambda **kwargs: [])
+    response = client.get("/api/v1/ui/scan-results", params=params)
+    assert response.status_code == 200
+    payload = response.json()
+    assert {result["job"]["job_id"] for result in payload["results"]} == expected
+    assert payload["matching_jobs"] == len(expected)
+    job_id = next(iter(expected))
+    result = client.get("/api/v1/ui/scan-results", params={**params, "job_id": job_id}).json()
+    assert [row["job"]["job_id"] for row in result["results"]] == [job_id]
+    assert client.get("/api/v1/ui/scan-results", params={"job_id": job_id}).json()["results"][0]["job"]["job_id"] == job_id
+    assert client.get("/api/v1/ui/scan-results", params={"completed_start": params["completed_start"]}).status_code == 422
+    assert client.get("/api/v1/ui/scan-results", params={**params, "completed_end": params["completed_start"]}).status_code == 422
+    future = start + timedelta(days=10)
+    assert client.get("/api/v1/ui/scan-results", params={"completed_start": future.isoformat(), "completed_end": (future + timedelta(days=1)).isoformat()}).json()["results"] == []
+
+
+@pytest.mark.parametrize(
+    "page,expected",
+    [
+        ({"objects": [{"identity": "bucket/a"}, {"identity": "bucket/b"}]}, {"count": 2, "exact": True}),
+        ({"objects": [], "next_cursor": "more"}, {"count": 0, "exact": False}),
+        ({"objects": []}, {"count": 0, "exact": True}),
+        ({"unsupported": True}, {"count": None, "exact": False}),
+        (None, {"count": None, "exact": False}),
+        ({"status": "error"}, {"count": None, "exact": False}),
+    ],
+)
+def test_scan_preview_is_bounded_and_does_not_submit_jobs(monkeypatch, page, expected) -> None:
+    from dsx_connect_v2.api.routes import ui as ui_routes
+
+    app = create_app()
+    service = app.state.control_plane_service
+    service.create_integration(IntegrationCreate(
+        integration_id="preview-gcs", platform="gcs", platform_key="preview", display_name="Preview",
+    ))
+    service.create_scope(ProtectedScopeCreate(
+        scope_id="preview-scope", integration_id="preview-gcs", scope_type="path",
+        resource_selector="bucket", display_name="Bucket", mode="full_scan",
+    ))
+    calls = []
+
+    def listing(base_url, connector_name, *, scope, limit, cursor):
+        calls.append((scope, limit, cursor))
+        return page
+
+    monkeypatch.setattr(ui_routes, "_fetch_connector_objects_page", listing)
+    client = TestClient(app)
+    before = client.get("/api/v1/ui/scan-results").json()
+    response = client.get("/api/v1/ui/scopes/preview-scope/scan-preview")
+    assert response.status_code == 200
+    assert response.json() == {**expected, "scan_limit": 10000}
+    assert calls == [("bucket", 1000, None)]
+    assert client.get("/api/v1/ui/scan-results").json() == before

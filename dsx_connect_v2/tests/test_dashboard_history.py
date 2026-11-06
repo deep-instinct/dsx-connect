@@ -110,3 +110,20 @@ def test_repository_history_keeps_stale_unfinished_work():
     result = dashboard_history(repo, 1, NOW)
     assert result["backlog"] == 1
     assert all(bucket["backlog"] == 1 for bucket in result["series"])
+
+
+def test_scan_drilldown_matches_history_bucket_and_paginates():
+    from dsx_connect_v2.jobs.dashboard import dashboard_scans
+
+    start = NOW.replace(hour=0, minute=0)
+    rows = [dict(row(verdict), job_id=f"job-{i}", job_item_id=f"item-{i}", object_identity=f"file-{i}")
+            for i, verdict in enumerate(["Benign", "Malicious", "Suspicious"])]
+    rows += [row(age=1), {"scan_stage": {"state": "pending"}}]
+    repo = HistoryRepo(rows)
+    first = dashboard_scans(repo, start, start + timedelta(days=1), limit=2)
+    second = dashboard_scans(repo, start, start + timedelta(days=1), offset=2, limit=2)
+    assert first["total"] == dashboard_history(repo, 7, NOW)["series"][-1]["total"] == 3
+    assert len(first["scans"]) == 2
+    assert len(second["scans"]) == 1
+    assert {r["job_item_id"] for r in first["scans"] + second["scans"]} == {"item-0", "item-1", "item-2"}
+    assert dashboard_scans(repo, NOW - timedelta(hours=1), NOW)["total"] == 0

@@ -4,6 +4,9 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
 import uuid
+import threading
+from contextlib import contextmanager
+from fastapi import HTTPException
 
 from dsx_connect_v2.jobs.models import (
     ContentSource,
@@ -27,6 +30,15 @@ def utcnow() -> datetime:
 class JobRepository(ABC):
     def dashboard_stages(self, since: datetime):
         """Yield persisted stages for historical dashboard aggregation."""
+        raise NotImplementedError
+
+    def has_active_scope_scan(self, scope_id: str) -> bool:
+        raise NotImplementedError
+
+    def scope_scan_guard(self, scope_id: str):
+        raise NotImplementedError
+
+    def claim_protection_job(self, job_id: str, expected: str, state: str) -> bool:
         raise NotImplementedError
 
     @abstractmethod
@@ -199,19 +211,50 @@ class JobRepository(ABC):
 class InMemoryJobRepository(JobRepository):
     def dashboard_stages(self, since: datetime):
         for item in self._job_items.values():
+            if (job := self._jobs.get(item.job_id)) is not None and job.job_type == "protection.bulk":
+                continue
             if item.updated_at >= since or item.completed_at is None:
                 yield {
                     **{name: getattr(item, name).model_dump(mode="json") for name in ("scan_stage", "policy_stage", "remediation_stage")},
+                    "job_id": item.job_id,
+                    "job_item_id": item.job_item_id,
+                    "object_identity": item.object_identity,
                     "created_at": item.created_at.isoformat(),
                     "completed_at": item.completed_at.isoformat() if item.completed_at else None,
                     "state": item.state,
                 }
 
     def __init__(self) -> None:
+        self._protection_lock = threading.Lock()
+        self._scope_scan_locks = {}
         self._jobs: dict[str, JobRecord] = {}
         self._job_items: dict[str, JobItemRecord] = {}
         self._outbox: dict[str, OutboxRecord] = {}
         self._scan_leases: dict[str, tuple[str, datetime]] = {}
+
+    def has_active_scope_scan(self, scope_id: str) -> bool:
+        return any(job.scope_id == scope_id and job.job_type.startswith("scan") and job.state not in {"completed", "failed", "cancelled"} for job in self._jobs.values())
+
+    @contextmanager
+    def scope_scan_guard(self, scope_id: str):
+        with self._protection_lock:
+            lock = self._scope_scan_locks.setdefault(scope_id, threading.Lock())
+        if not lock.acquire(blocking=False):
+            raise HTTPException(409, {"code": "scope_scan_active", "message": "A scan is already starting for this scope"})
+        try:
+            if self.has_active_scope_scan(scope_id):
+                raise HTTPException(409, {"code": "scope_scan_active", "message": "A scan is already active for this scope"})
+            yield
+        finally:
+            lock.release()
+
+    def claim_protection_job(self, job_id: str, expected: str, state: str) -> bool:
+        with self._protection_lock:
+            job = self.get_job(job_id)
+            if not job or job.job_type != "protection.bulk" or job.state != expected:
+                return False
+            self.update_job_state(job_id, state=state)
+            return True
 
     def list_jobs(
         self,
@@ -402,7 +445,9 @@ class InMemoryJobRepository(JobRepository):
 
     def summarize_job_items(self, job_id: str) -> JobItemSummary:
         summary = JobItemSummary()
-        for row in self.list_job_items(job_id=job_id):
+        for row in self._job_items.values():
+            if row.job_id != job_id:
+                continue
             summary.total += 1
             if row.state == "accepted":
                 summary.accepted += 1

@@ -295,7 +295,8 @@ Use the Operator Console to confirm connector registration, asset inventory, and
 
 ## October 28, 2026 release
 
-- DSX Connect core/chart: **2.0.36** — readable scan targets, original attachment filenames,
+- DSX Connect core/chart: **2.0.37** — simplified asset controls, selected asset scans, and connector filters.
+- Previous core/chart: **2.0.36** — readable scan targets, original attachment filenames,
   issue-targeted Jira scans, and dashboard updates.
 - Jira connector image/chart: **2.0.0** — standalone runtime, accessible-space discovery,
   demo issue allowlisting, read-only downloads, and durable polling checkpoints.

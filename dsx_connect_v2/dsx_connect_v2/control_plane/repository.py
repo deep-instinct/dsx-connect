@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta, timezone
 import uuid
+import threading
 
 from dsx_connect_v2.control_plane.models import (
     ConnectorInstanceHeartbeat,
@@ -104,12 +105,14 @@ class ControlPlaneRepository(ABC):
         scope_id: str,
         payload: ProtectedScopeUpdate,
         normalized_selector: str | None = None,
+        expected_updated_at: str | None = None,
     ) -> ProtectedScopeRecord | None:
         raise NotImplementedError
 
 
 class InMemoryControlPlaneRepository(ControlPlaneRepository):
     def __init__(self) -> None:
+        self._scope_lock = threading.RLock()
         self._integrations: dict[str, IntegrationRecord] = {}
         self._connector_instances: dict[str, ConnectorInstanceRecord] = {}
         self._gateway_applications: dict[str, GatewayApplicationRecord] = {}
@@ -266,16 +269,18 @@ class InMemoryControlPlaneRepository(ControlPlaneRepository):
         scope_id: str,
         payload: ProtectedScopeUpdate,
         normalized_selector: str | None = None,
+        expected_updated_at: str | None = None,
     ) -> ProtectedScopeRecord | None:
-        current = self._scopes.get(scope_id)
-        if current is None:
-            return None
-        update = {
-            **payload.model_dump(exclude_none=True),
-            "updated_at": utcnow(),
-        }
-        if normalized_selector is not None:
-            update["normalized_selector"] = normalized_selector
-        merged = current.model_copy(update=update)
-        self._scopes[scope_id] = merged
-        return merged
+        with self._scope_lock:
+            current = self._scopes.get(scope_id)
+            if current is None or (expected_updated_at is not None and current.updated_at.isoformat() != expected_updated_at):
+                return None
+            update = {
+                **payload.model_dump(exclude_none=True),
+                "updated_at": utcnow(),
+            }
+            if normalized_selector is not None:
+                update["normalized_selector"] = normalized_selector
+            merged = current.model_copy(update=update)
+            self._scopes[scope_id] = merged
+            return merged

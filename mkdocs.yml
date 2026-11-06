@@ -133,16 +133,17 @@ nav:
           - Google Cloud Storage: dsx-connect-2/deployment/connectors/google-cloud-storage.md
           - Filesystem: dsx-connect-2/deployment/connectors/filesystem.md
           - AWS S3: dsx-connect-2/deployment/connectors/aws-s3.md
+          - Azure Blob Storage: dsx-connect-2/deployment/connectors/azure-blob-storage.md
           - Atlassian Jira: dsx-connect-2/deployment/connectors/jira.md
       - Static Kubernetes Manifests: dsx-connect-2/deployment/static-manifests.md
 
   - Case Studies / Walkthroughs:
       - Developer File API and Managed File Transfer: case-studies/developer-file-api-vs-mft.md
       - Scanning Windows Fileshares: case-studies/windows-fileshares.md
-      - GKE Cluster Networking Troubleshooting: case-studies/gke-cluster-networking-troubleshooting.md
       - BTP Inline Scan Flow: case-studies/btp-inline-scan-diagram.md
 
   - Operations:
+      - Operating Connectors and Scans: dsx-connect-2/operations/connectors-and-scans.md
       - Performance Tuning: operations/performance-tuning-job-comparisons.md
       - Connector Batch Benchmarks: operations/connector-batch-benchmark-summary.md
       - Syslog Forwarding: operations/syslog.md

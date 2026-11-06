@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import ssl
 import statistics
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import BackgroundTasks, APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,6 +31,7 @@ from dsx_connect_v2.control_plane.models import (
     utcnow,
 )
 from dsx_connect_v2.control_plane.service import ControlPlaneService
+from dsx_connect_v2.control_plane import bulk_protection
 from dsx_connect_v2.jobs.models import (
     BatchJobRecord,
     BatchJobSubmitRequest,
@@ -49,6 +52,23 @@ def dashboard_scan_history(days: int = Query(default=7), job_service: JobService
         raise HTTPException(status_code=422, detail="days must be 1, 7, or 30")
     from dsx_connect_v2.jobs.dashboard import dashboard_history
     return dashboard_history(job_service.repo, days)
+
+def _validate_scan_interval(start: datetime, end: datetime) -> None:
+    if start.utcoffset() is None or end.utcoffset() is None or not timedelta(0) < end - start <= timedelta(days=1):
+        raise HTTPException(status_code=422, detail="Use timezone-aware start/end spanning at most one day")
+
+
+@router.get("/dashboard/scans")
+def dashboard_scan_details(
+    start: datetime, end: datetime,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    _validate_scan_interval(start, end)
+    from dsx_connect_v2.jobs.dashboard import dashboard_scans
+    return dashboard_scans(job_service.repo, start, end, offset, limit)
+
 
 _OPERATOR_CONSOLE_PATH = Path(__file__).resolve().parents[2] / "ui" / "operator_console.html"
 
@@ -229,6 +249,7 @@ class UIScanResultSummary(BaseModel):
 
 
 class UIScanResultsResponse(BaseModel):
+    matching_jobs: int | None = None
     results: list[UIScanResultSummary] = Field(default_factory=list)
     stats: UIScanResultsStatsSummary = Field(default_factory=UIScanResultsStatsSummary)
 
@@ -334,6 +355,24 @@ class UIAssetsProtectedResponse(BaseModel):
     unsupported_integrations: list[str] = Field(default_factory=list)
     failed_integrations: list[dict[str, Any]] = Field(default_factory=list)
     next_cursors: dict[str, str | None] = Field(default_factory=dict)
+
+
+class UIBulkAssetTarget(BaseModel):
+    integration_id: str = Field(min_length=1)
+    selector: str = Field(min_length=1)
+    display_name: str | None = None
+
+
+class UIBulkProtectionRequest(BaseModel):
+    action: str = "apply"
+    targets: list[UIBulkAssetTarget] = Field(default_factory=list, max_length=10000)
+    all_matching: bool = False
+    integration_ids: list[str] = Field(default_factory=list, max_length=1000)
+    integration_id: str | None = None
+    coverage_state: str | None = None
+    asset_filter_value: str | None = None
+    policy: dict[str, Any] = Field(default_factory=dict)
+    replace_existing: bool = False
 
 
 class UIPolicyAssignmentSummary(BaseModel):
@@ -1971,7 +2010,7 @@ async def get_ui_overview(
 ) -> UIOverview:
     summaries = _list_ui_integration_summaries(control_plane)
     scopes = control_plane.list_scopes()
-    jobs = job_service.list_jobs(limit=50)
+    jobs = [job for job in job_service.list_jobs(limit=50) if job.job_type != bulk_protection.JOB_TYPE]
     job_summaries = [_summarize_job(job_service, job) for job in jobs]
     return UIOverview(integrations=summaries, scopes=scopes, jobs=jobs, job_summaries=job_summaries)
 
@@ -1989,6 +2028,9 @@ async def list_ui_jobs(
 
 @router.get("/scan-results", response_model=UIScanResultsResponse)
 async def list_scan_results(
+    completed_start: datetime | None = None,
+    completed_end: datetime | None = None,
+    job_id: str | None = None,
     integration_id: str | None = None,
     state: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
@@ -1997,7 +2039,26 @@ async def list_scan_results(
     job_service: JobService = Depends(get_job_service),
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
 ) -> UIScanResultsResponse:
-    jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
+    matching_jobs = None
+    if (completed_start is None) != (completed_end is None):
+        raise HTTPException(status_code=422, detail="completed_start and completed_end must be provided together")
+    if completed_start is not None:
+        _validate_scan_interval(completed_start, completed_end)
+        from dsx_connect_v2.jobs.dashboard import dashboard_scan_job_ids
+        ids = dashboard_scan_job_ids(job_service.repo, completed_start, completed_end)
+        jobs = [job for key in ids if (job_id is None or key == job_id)
+                if (job := job_service.repo.get_job(key)) is not None]
+        jobs = [job for job in jobs if (integration_id is None or job.integration_id == integration_id)
+                and (state is None or job.state == state)]
+        jobs.sort(key=lambda job: (job.created_at, job.job_id), reverse=True)
+        matching_jobs = len(jobs)
+        jobs = jobs[:limit]
+    elif job_id is not None:
+        job = job_service.repo.get_job(job_id)
+        jobs = [job] if job and (integration_id is None or job.integration_id == integration_id) and (state is None or job.state == state) else []
+    else:
+        jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
+    jobs = [job for job in jobs if job.job_type != bulk_protection.JOB_TYPE]
     results = [
         _summarize_scan_result(job_service, job, item_limit=item_limit, stats_item_limit=stats_item_limit)
         for job in jobs
@@ -2008,6 +2069,7 @@ async def list_scan_results(
         result.target.connector_name = integration_names.get(result.job.integration_id) or result.job.payload.get("connectorName")
         result.target.scope_name = scope_names.get(result.job.scope_id)
     return UIScanResultsResponse(
+        matching_jobs=matching_jobs,
         results=results,
         stats=_summarize_scan_results_stats(results),
     )
@@ -2063,6 +2125,8 @@ async def discover_integration_assets(
 async def list_protected_assets(
     connector_type: str | None = Query(default=None),
     integration_id: str | None = Query(default=None),
+    integration_ids: list[str] = Query(default=[]),
+    cursors: str | None = Query(default=None),
     asset_type: str = Query(default="auto", alias="type"),
     source: str = Query(default="all"),
     coverage_state: str | None = Query(default=None),
@@ -2074,7 +2138,19 @@ async def list_protected_assets(
     job_service: JobService = Depends(get_job_service),
 ) -> UIAssetsProtectedResponse:
     normalized_filter_mode = _normalize_asset_filter_mode(asset_filter_mode)
+    cursor_map = None
+    if cursors is not None:
+        try:
+            cursor_map = json.loads(cursors)
+        except (ValueError, TypeError):
+            raise HTTPException(422, "Invalid connector cursors")
+        if not isinstance(cursor_map, dict) or len(cursor_map) > 1000 or any(not isinstance(k, str) or (v is not None and not isinstance(v, str)) for k, v in cursor_map.items()):
+            raise HTTPException(422, "Connector cursors must map connector IDs to strings or null")
+    if len(integration_ids) > 1000:
+        raise HTTPException(422, "Select at most 1,000 connectors")
     integrations = control_plane.list_integrations()
+    if integration_ids:
+        integrations = [integration for integration in integrations if integration.integration_id in integration_ids]
     if integration_id is not None:
         integrations = [integration for integration in integrations if integration.integration_id == integration_id]
     if connector_type is not None:
@@ -2082,48 +2158,58 @@ async def list_protected_assets(
 
     scopes = control_plane.list_scopes()
     scopes_by_id = {scope.scope_id: scope for scope in scopes}
-    latest_jobs = _latest_jobs_by_scope(
-        job_service,
-        integration_ids={integration.integration_id for integration in integrations},
-    )
+    latest_jobs = {}
     assets: list[UIProtectedAssetSummary] = []
     unsupported_integrations: list[str] = []
     failed_integrations: list[dict[str, Any]] = []
-    next_cursors: dict[str, str | None] = {}
+    # An empty map begins a bounded multi-connector page. Null marks an exhausted connector.
+    paged = cursor_map is not None
+    if cursor_map == {}:
+        cursor_map = {integration.integration_id: "" for integration in integrations}
+    next_cursors: dict[str, str | None] = {integration.integration_id: cursor_map.get(integration.integration_id) for integration in integrations} if paged else {}
     normalized_coverage_state = str(coverage_state or "").strip().lower() or None
     if normalized_coverage_state == "all":
         normalized_coverage_state = None
 
     for integration in integrations:
+        if paged and len(assets) >= limit:
+            break
+        if cursor_map is not None and cursor_map.get(integration.integration_id) is None:
+            next_cursors[integration.integration_id] = None
+            continue
+        latest_jobs.update(_latest_jobs_by_scope(job_service, integration_ids={integration.integration_id}))
+        integration_scopes = [scope for scope in scopes if scope.integration_id == integration.integration_id]
         effective_asset_type = _effective_asset_type(asset_type, integration)
+        connector_cursor = cursor_map[integration.integration_id] if paged else cursor
+        scope_offset = int(connector_cursor.split(":", 1)[1]) if connector_cursor and connector_cursor.startswith("scopes:") and connector_cursor.split(":", 1)[1].isdigit() else 0
         base_url, connector_name = _connector_asset_endpoint(
             integration,
             control_plane.list_connector_instances(integration_id=integration.integration_id),
         )
         try:
-            asset_payload = _fetch_connector_assets(
+            asset_payload = {"unsupported": True, "asset_type": effective_asset_type, "assets": []} if scope_offset else _fetch_connector_assets(
                 base_url,
                 connector_name,
                 asset_type=effective_asset_type,
                 source=source,
-                limit=limit,
-                cursor=cursor,
+                limit=max(1, limit - len(assets)) if paged else limit,
+                cursor=connector_cursor or None,
                 asset_filter_mode=normalized_filter_mode,
                 asset_filter_value=asset_filter_value,
             )
         except HTTPException as exc:
             failed_integrations.append({"integration_id": integration.integration_id, "detail": exc.detail})
+            next_cursors[integration.integration_id] = None
             continue
 
         asset_response = _summarize_assets(
             integration_id=integration.integration_id,
             asset_payload=asset_payload,
-            scopes=control_plane.list_scopes(integration_id=integration.integration_id),
+            scopes=integration_scopes,
             requested_type=effective_asset_type,
             requested_source=source,
         )
         next_cursors[integration.integration_id] = asset_response.next_cursor
-        integration_scopes = control_plane.list_scopes(integration_id=integration.integration_id)
         if asset_response.unsupported:
             unsupported_integrations.append(integration.integration_id)
         if asset_response.unsupported and not asset_response.assets:
@@ -2153,6 +2239,12 @@ async def list_protected_assets(
                 for asset in integration_assets
                 if _asset_matches_filter(asset, mode=normalized_filter_mode, value=asset_filter_value)
             ]
+        if paged and asset_response.unsupported and not asset_response.assets:
+            remaining = limit - len(assets)
+            total_scopes = len(integration_assets)
+            integration_assets = integration_assets[scope_offset:scope_offset + remaining]
+            following = scope_offset + len(integration_assets)
+            next_cursors[integration.integration_id] = f"scopes:{following}" if following < total_scopes else None
         assets.extend(integration_assets)
 
     return UIAssetsProtectedResponse(
@@ -2161,6 +2253,85 @@ async def list_protected_assets(
         failed_integrations=failed_integrations,
         next_cursors=next_cursors,
     )
+
+
+@router.post("/assets/bulk-protection/preview")
+def preview_bulk_protection(
+    payload: UIBulkProtectionRequest,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    if payload.action not in {"apply", "disable", "scan"}:
+        raise HTTPException(422, "Action must be apply, disable, or scan")
+    targets = [target.model_dump() for target in payload.targets]
+    if payload.all_matching:
+        selected_ids = list(dict.fromkeys(payload.integration_ids or ([payload.integration_id] if payload.integration_id else [])))
+        if not selected_ids or targets:
+            raise HTTPException(422, "Choose connectors for all matching assets; do not supply explicit targets")
+        for selected_id in selected_ids:
+            integration = control_plane.get_integration_or_404(selected_id)
+            scopes = control_plane.list_scopes(integration_id=integration.integration_id)
+            base_url, name = _connector_asset_endpoint(integration, control_plane.list_connector_instances(integration_id=integration.integration_id))
+            cursor, seen, pages = None, set(), 0
+            while True:
+                pages += 1
+                if pages > 100:
+                    raise HTTPException(422, "Discovery exceeded 100 pages; narrow the filters")
+                page = _fetch_connector_assets(base_url, name, asset_type=_effective_asset_type("auto", integration),
+                    source="all", limit=1000, cursor=cursor,
+                    asset_filter_mode="contains" if payload.asset_filter_value else None,
+                    asset_filter_value=payload.asset_filter_value)
+                response = _summarize_assets(integration_id=integration.integration_id, asset_payload=page,
+                    scopes=scopes, requested_type=_effective_asset_type("auto", integration), requested_source="all")
+                if response.unsupported or response.status != "success":
+                    raise HTTPException(409, f"Complete discovery is unavailable for {integration.display_name}; select explicit assets or exclude this connector")
+                for asset in response.assets:
+                    if payload.coverage_state and asset.coverage_state != payload.coverage_state:
+                        continue
+                    if payload.asset_filter_value and payload.asset_filter_value.casefold() not in (asset.display_name or asset.selector).casefold() and payload.asset_filter_value.casefold() not in asset.selector.casefold():
+                        continue
+                    targets.append({"integration_id": integration.integration_id, "selector": asset.selector, "display_name": asset.display_name})
+                if len(targets) > bulk_protection.MAX_TARGETS:
+                    raise HTTPException(422, "More than 10,000 matches; narrow the filters")
+                cursor = response.next_cursor
+                if not cursor:
+                    break
+                if cursor in seen:
+                    raise HTTPException(409, "Discovery repeated a page; selection was not completed")
+                seen.add(cursor)
+    return bulk_protection.prepare(control_plane, job_service, targets, action=payload.action,
+        policy=payload.policy, replace_existing=payload.replace_existing)
+
+
+@router.post("/assets/bulk-protection/{operation_id}/apply", status_code=202)
+def apply_bulk_protection(
+    operation_id: str,
+    background_tasks: BackgroundTasks,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    job = job_service.get_job_or_404(operation_id)
+    if job.job_type != bulk_protection.JOB_TYPE:
+        raise HTTPException(404, "Bulk operation not found")
+    if utcnow() - job.created_at > timedelta(minutes=30):
+        raise HTTPException(409, "Review expired; create a fresh selection")
+    if not job_service.repo.claim_protection_job(operation_id, "planned", "queued"):
+        raise HTTPException(409, "This operation is already submitted or no longer available")
+    def start_scan(scope_id):
+        return asyncio.run(scan_scope_selector(scope_id, UIScopeScanRequest(payload={"deferPublish": True}), control_plane, job_service))
+    background_tasks.add_task(bulk_protection.execute, control_plane, job_service, operation_id, start_scan)
+    return {"operation_id": operation_id, "state": "queued"}
+
+
+@router.get("/assets/bulk-protection")
+def recent_bulk_protection(job_service: JobService = Depends(get_job_service)) -> dict:
+    return {"operations": [bulk_protection.describe(job_service, job.job_id) for job in job_service.list_jobs(limit=500)
+        if job.job_type == bulk_protection.JOB_TYPE and job.state != "preparing"][:10]}
+
+
+@router.get("/assets/bulk-protection/{operation_id}")
+def get_bulk_protection(operation_id: str, include_outcomes: bool = False, job_service: JobService = Depends(get_job_service)) -> dict:
+    return bulk_protection.describe(job_service, operation_id, include_outcomes=include_outcomes)
 
 
 @router.post("/assets/protected", response_model=ProtectedScopeRecord)
@@ -2218,6 +2389,33 @@ async def update_scope_policy(
     return control_plane.update_scope(scope_id, ProtectedScopeUpdate(post_scan_policy=payload.policy))
 
 
+@router.get("/scopes/{scope_id}/scan-preview")
+def preview_scope_scan(
+    scope_id: str,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> dict[str, Any]:
+    scope = control_plane.get_scope_or_404(scope_id)
+    integration = control_plane.get_integration_or_404(scope.integration_id)
+    base_url, connector_name = _connector_asset_endpoint(
+        integration, control_plane.list_connector_instances(integration_id=scope.integration_id),
+    )
+    try:
+        page = _fetch_connector_objects_page(
+            base_url, connector_name, scope=scope.resource_selector, limit=1000, cursor=None,
+        )
+    except HTTPException:
+        page = None
+    if not page or page.get("unsupported") or str(page.get("status") or "success").lower() != "success":
+        return {"count": None, "exact": False, "scan_limit": 10000}
+    objects = page.get("objects") or []
+    count = sum(1 for item in objects if isinstance(item, dict) and str(item.get("identity") or "").strip())
+    return {
+        "count": count,
+        "exact": not bool(page.get("next_cursor") or page.get("nextCursor")),
+        "scan_limit": 10000,
+    }
+
+
 @router.post("/scopes/{scope_id}/scan", response_model=BatchJobRecord)
 async def scan_scope_selector(
     scope_id: str,
@@ -2225,78 +2423,82 @@ async def scan_scope_selector(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
     job_service: JobService = Depends(get_job_service),
 ) -> BatchJobRecord:
-    request = payload or UIScopeScanRequest()
-    scope = control_plane.get_scope_or_404(scope_id)
-    integration = control_plane.get_integration_or_404(scope.integration_id)
-    base_url, connector_name = _connector_asset_endpoint(
-        integration,
-        control_plane.list_connector_instances(integration_id=scope.integration_id),
-    )
-    listing_scope = scope.resource_selector
-    if request.issue_keys:
-        if integration.platform.lower() != "jira":
-            raise HTTPException(status_code=400, detail="Issue selection is only supported for Jira")
-        listing_scope = f"({listing_scope}) AND (key in ({','.join(request.issue_keys)}))"
-    listed_objects, listing_supported, listing_pages = _fetch_connector_object_listing(
-        base_url,
-        connector_name,
-        scope=listing_scope,
-        max_items=request.limit,
-    )
-    if request.issue_keys and (not listing_supported or not listed_objects):
-        raise HTTPException(status_code=400, detail="No eligible attachments on those issues within this protected scope and demo allowlist")
-    preview_items: list[str] = []
-    if not listed_objects and not listing_supported:
-        preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
-    if listed_objects:
-        object_identities = [str(item.get("identity") or "").strip() for item in listed_objects]
-        object_identities = [item for item in object_identities if item]
-    elif preview_items:
-        object_identities = preview_items
-    elif listing_supported:
-        object_identities = []
-    else:
-        object_identities = [request.path or scope.resource_selector]
-    items = []
-    for index, object_identity in enumerate(object_identities):
-        payload_item = {
-            "readerStrategy": request.reader_strategy,
-            **request.payload,
-        }
-        if listed_objects:
-            listed = listed_objects[index]
-            payload_item["path"] = str(listed.get("location") or "").strip() or _scope_relative_object_path(
-                scope.resource_selector,
-                object_identity,
-            )
-            if listed.get("size_in_bytes") is not None:
-                payload_item["sizeInBytes"] = listed.get("size_in_bytes")
-            filename = listed.get("display_name") or (listed.get("metadata") or {}).get("filename")
-            if filename:
-                payload_item["metainfo"] = str(filename)
-                payload_item["attribution"] = {
-                    **(payload_item.get("attribution") or {}), "file_name": str(filename),
-                }
-        elif preview_items:
-            payload_item["path"] = _scope_relative_object_path(scope.resource_selector, object_identity)
-        else:
-            payload_item["path"] = object_identity
-        items.append({"object_identity": object_identity, "payload": payload_item})
-    enumeration_mode = "connector_object_listing" if listing_supported else "connector_preview" if preview_items else "selector_only"
-    return await job_service.submit_batch_job(
-        BatchJobSubmitRequest(
-            job_type="scan.batch",
-            integration_id=scope.integration_id,
-            scope_id=scope.scope_id,
-            payload={
-                "source": "ui_scope_scan",
-                "scopeSelector": scope.resource_selector,
-                "enumerationMode": enumeration_mode,
-                "itemCount": len(items),
-                "enumerationLimit": request.limit,
-                "enumerationPages": listing_pages if listing_supported else 0,
-                "enumerationComplete": (len(items) < request.limit) if listing_supported else None,
-            },
-            items=items,
+    with job_service.repo.scope_scan_guard(scope_id):
+        request = payload or UIScopeScanRequest()
+        scope = control_plane.get_scope_or_404(scope_id)
+        if not scope.enabled:
+            raise HTTPException(409, "Scope protection is disabled")
+        integration = control_plane.get_integration_or_404(scope.integration_id)
+        base_url, connector_name = _connector_asset_endpoint(
+            integration,
+            control_plane.list_connector_instances(integration_id=scope.integration_id),
         )
-    )
+        listing_scope = scope.resource_selector
+        if request.issue_keys:
+            if integration.platform.lower() != "jira":
+                raise HTTPException(status_code=400, detail="Issue selection is only supported for Jira")
+            listing_scope = f"({listing_scope}) AND (key in ({','.join(request.issue_keys)}))"
+        listed_objects, listing_supported, listing_pages = _fetch_connector_object_listing(
+            base_url,
+            connector_name,
+            scope=listing_scope,
+            max_items=request.limit,
+        )
+        if request.issue_keys and (not listing_supported or not listed_objects):
+            raise HTTPException(status_code=400, detail="No eligible attachments on those issues within this protected scope and demo allowlist")
+        preview_items: list[str] = []
+        if not listed_objects and not listing_supported:
+            preview_items = _fetch_connector_preview(base_url, connector_name, limit=request.limit)
+        if listed_objects:
+            object_identities = [str(item.get("identity") or "").strip() for item in listed_objects]
+            object_identities = [item for item in object_identities if item]
+        elif preview_items:
+            object_identities = preview_items
+        elif listing_supported:
+            object_identities = []
+        else:
+            object_identities = [request.path or scope.resource_selector]
+        items = []
+        for index, object_identity in enumerate(object_identities):
+            payload_item = {
+                "readerStrategy": request.reader_strategy,
+                **request.payload,
+            }
+            if listed_objects:
+                listed = listed_objects[index]
+                payload_item["path"] = str(listed.get("location") or "").strip() or _scope_relative_object_path(
+                    scope.resource_selector,
+                    object_identity,
+                )
+                if listed.get("size_in_bytes") is not None:
+                    payload_item["sizeInBytes"] = listed.get("size_in_bytes")
+                filename = listed.get("display_name") or (listed.get("metadata") or {}).get("filename")
+                if filename:
+                    payload_item["metainfo"] = str(filename)
+                    payload_item["attribution"] = {
+                        **(payload_item.get("attribution") or {}), "file_name": str(filename),
+                    }
+            elif preview_items:
+                payload_item["path"] = _scope_relative_object_path(scope.resource_selector, object_identity)
+            else:
+                payload_item["path"] = object_identity
+            items.append({"object_identity": object_identity, "payload": payload_item})
+        enumeration_mode = "connector_object_listing" if listing_supported else "connector_preview" if preview_items else "selector_only"
+        return await job_service.submit_batch_job(
+            BatchJobSubmitRequest(
+                job_type="scan.batch",
+                integration_id=scope.integration_id,
+                scope_id=scope.scope_id,
+                payload={
+                    "source": "ui_scope_scan",
+                    **({"deferPublish": True} if request.payload.get("deferPublish") is True else {}),
+                    "scopeSelector": scope.resource_selector,
+                    "enumerationMode": enumeration_mode,
+                    "itemCount": len(items),
+                    "enumerationLimit": request.limit,
+                    "enumerationPages": listing_pages if listing_supported else 0,
+                    "enumerationComplete": (len(items) < request.limit) if listing_supported else None,
+                },
+                items=items,
+            )
+        )

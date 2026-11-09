@@ -148,6 +148,13 @@ rabbitmq:
     size: 8Gi
 
 workers:
+  scheduler:
+    # Requires the PostgreSQL control plane and RabbitMQ worker stack.
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_v2.workers.scheduler"]
+    args: []
+
   relay:
     # Relay is disabled by default because memory mode does not use RabbitMQ.
     enabled: false

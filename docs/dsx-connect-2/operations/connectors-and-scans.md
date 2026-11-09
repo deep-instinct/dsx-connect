@@ -51,6 +51,10 @@ The asset row refreshes tracked active job states every 10 seconds while the pro
 
 Repository monitoring is configured in each connector deployment. Depending on the adapter, it consumes provider notifications, watches filesystem events, or polls the repository. It is independent of the console's table refresh.
 
-Scheduled scans are not currently implemented. Scan submission starts work now; the console has no future-time or recurring-schedule control. There is no scheduler catch-up feature that starts missed scans after recovery.
+With the scheduler enabled, open **Schedule** on a protected asset to set a daily or weekly full scan. Choose a local time and an IANA time zone, such as `America/Chicago`. The dialog shows the next run and the outcome of the most recent occurrence. Clear **Enable scheduled scans** to pause the schedule.
+
+The scheduler submits the same full scan as the asset's play button, using the protection profile assigned when the scan runs. Scheduled jobs appear in Scan Results as **Scheduled scan**. A run is skipped if protection is disabled, a scan for that scope is already active, or its start window was missed by more than five minutes. For daylight saving changes, the scheduler runs once during a repeated hour and moves a nonexistent time forward by the size of the time change.
+
+Enable the scheduler in Helm with `workers.scheduler.enabled=true` on a deployment that uses PostgreSQL, RabbitMQ, and the existing relay and scan workers. It runs independently of the console. Outside Helm, start `python -m dsx_connect_v2.workers.scheduler` and set `DSX_CONNECT_V2__SCAN_SCHEDULER_ENABLED=true` on the API to expose the schedule controls.
 
 Existing job/item stages may retry according to the execution pipeline. This is separate from automatically restarting a whole full scan. Review failures and existing jobs before choosing a manual rerun. See [Failed Scans and Dead Letter Queues](../../operations/dead-letter-queues.md).

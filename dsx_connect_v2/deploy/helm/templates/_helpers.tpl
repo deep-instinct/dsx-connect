@@ -43,6 +43,8 @@ requires the password variable to be defined before the URL. A matching URL in
 {{- $mqManaged := include "dsx-connect.rabbitmqSecretManaged" . -}}
 - name: PYTHONUNBUFFERED
   value: "1"
+- name: DSX_CONNECT_V2__SCAN_SCHEDULER_ENABLED
+  value: {{ ((.Values.workers.scheduler | default dict).enabled | default false) | quote }}
 - name: DSX_CONNECT_V2_RUNTIME__SCAN_WORKER_REPLICAS
   value: {{ .Values.workers.scan.replicaCount | quote }}
 {{- if $pgManaged }}

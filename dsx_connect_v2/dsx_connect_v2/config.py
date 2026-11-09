@@ -154,6 +154,7 @@ class AppSettings(BaseSettings):
     api_prefix: str = "/api/v1"
     control_plane_backend: ControlPlaneBackend = "auto"
     job_bus_backend: JobBusBackend = "memory"
+    scan_scheduler_enabled: bool = False
     connector_registration_auth_enabled: bool = False
     connector_enrollment_tokens: str = Field(
         default="",

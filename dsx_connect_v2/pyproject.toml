@@ -1,6 +1,6 @@
 [project]
 name = "dsx-connect-v2"
-version = "2.0.39"
+version = "2.0.40"
 description = "Standalone next-generation control-plane and worker architecture for DSX-Connect"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -17,6 +17,7 @@ dependencies = [
   "python-multipart>=0.0.20",
   "starlette>=0.41.0,<0.42.0",
   "typer>=0.12.0",
+  "tzdata",
   "uvicorn>=0.32.0",
 ]
 

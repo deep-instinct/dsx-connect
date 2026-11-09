@@ -31,6 +31,7 @@ from dsx_connect_v2.control_plane.models import (
     utcnow,
 )
 from dsx_connect_v2.control_plane.service import ControlPlaneService
+from dsx_connect_v2.control_plane.scan_schedules import ScanSchedule, ScanScheduleSettings, ScanScheduleStore
 from dsx_connect_v2.control_plane import bulk_protection
 from dsx_connect_v2.jobs.models import (
     BatchJobRecord,
@@ -255,6 +256,7 @@ class UIScanResultsResponse(BaseModel):
 
 
 class UIOverview(BaseModel):
+    scan_scheduler_enabled: bool = False
     integrations: list[UIIntegrationSummary] = Field(default_factory=list)
     scopes: list[ProtectedScopeRecord] = Field(default_factory=list)
     jobs: list[JobRecord] = Field(default_factory=list)
@@ -2012,7 +2014,10 @@ async def get_ui_overview(
     scopes = control_plane.list_scopes()
     jobs = [job for job in job_service.list_jobs(limit=50) if job.job_type != bulk_protection.JOB_TYPE]
     job_summaries = [_summarize_job(job_service, job) for job in jobs]
-    return UIOverview(integrations=summaries, scopes=scopes, jobs=jobs, job_summaries=job_summaries)
+    return UIOverview(
+        integrations=summaries, scopes=scopes, jobs=jobs, job_summaries=job_summaries,
+        scan_scheduler_enabled=settings.scan_scheduler_enabled,
+    )
 
 
 @router.get("/jobs", response_model=list[UIJobSummary])
@@ -2416,6 +2421,39 @@ def preview_scope_scan(
     }
 
 
+def _scan_schedule_store(job_service: JobService) -> ScanScheduleStore:
+    from dsx_connect_v2.jobs.postgres_repo import PostgresJobRepository
+
+    if not settings.scan_scheduler_enabled:
+        raise HTTPException(503, "Scan scheduling is disabled.")
+    if not isinstance(job_service.repo, PostgresJobRepository):
+        raise HTTPException(503, "Scan schedules require PostgreSQL.")
+    return ScanScheduleStore(job_service.repo.db_url)
+
+
+@router.get("/scopes/{scope_id}/scan-schedule", response_model=ScanSchedule | None)
+def get_scan_schedule(
+    scope_id: str,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> ScanSchedule | None:
+    control_plane.get_scope_or_404(scope_id)
+    return _scan_schedule_store(job_service).get(scope_id)
+
+
+@router.put("/scopes/{scope_id}/scan-schedule", response_model=ScanSchedule)
+def save_scan_schedule(
+    scope_id: str,
+    payload: ScanScheduleSettings,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+    job_service: JobService = Depends(get_job_service),
+) -> ScanSchedule:
+    scope = control_plane.get_scope_or_404(scope_id)
+    if payload.enabled and not scope.enabled:
+        raise HTTPException(409, "Enable protection before enabling a scan schedule.")
+    return _scan_schedule_store(job_service).save(scope_id, payload)
+
+
 @router.post("/scopes/{scope_id}/scan", response_model=BatchJobRecord)
 async def scan_scope_selector(
     scope_id: str,
@@ -2423,8 +2461,18 @@ async def scan_scope_selector(
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
     job_service: JobService = Depends(get_job_service),
 ) -> BatchJobRecord:
+    return await submit_scope_scan(scope_id, payload or UIScopeScanRequest(), control_plane, job_service)
+
+
+async def submit_scope_scan(
+    scope_id: str,
+    request: UIScopeScanRequest,
+    control_plane: ControlPlaneService,
+    job_service: JobService,
+    *,
+    idempotency_key: str | None = None,
+) -> BatchJobRecord:
     with job_service.repo.scope_scan_guard(scope_id):
-        request = payload or UIScopeScanRequest()
         scope = control_plane.get_scope_or_404(scope_id)
         if not scope.enabled:
             raise HTTPException(409, "Scope protection is disabled")
@@ -2489,8 +2537,9 @@ async def scan_scope_selector(
                 job_type="scan.batch",
                 integration_id=scope.integration_id,
                 scope_id=scope.scope_id,
+                idempotency_key=idempotency_key,
                 payload={
-                    "source": "ui_scope_scan",
+                    "source": "scheduled_scope_scan" if idempotency_key else "ui_scope_scan",
                     **({"deferPublish": True} if request.payload.get("deferPublish") is True else {}),
                     "scopeSelector": scope.resource_selector,
                     "enumerationMode": enumeration_mode,

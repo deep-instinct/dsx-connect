@@ -1571,6 +1571,9 @@
     .scan-confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
     .scan-confirm-dialog p { line-height: 1.5; }
     .scan-confirm-dialog strong { overflow-wrap: anywhere; }
+    #scan-schedule-form { display: grid; gap: var(--space-4); }
+    #scan-schedule-form .schedule-enabled { display: flex; align-items: center; gap: var(--space-3); }
+    #scan-schedule-form .schedule-enabled input { width: 16px; height: 16px; min-height: 16px; margin: 0; }
 
     .modal-backdrop {
       position: fixed;
@@ -2299,6 +2302,32 @@
       <div class="modal-actions">
         <button type="submit" value="cancel" autofocus>Cancel</button>
         <button type="submit" value="apply" id="bulk-protection-apply" class="primary">Start Scan</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="scan-confirm-dialog" id="scan-schedule-dialog" aria-labelledby="scan-schedule-title">
+    <form id="scan-schedule-form">
+      <h2 id="scan-schedule-title">Scan schedule</h2>
+      <p id="scan-schedule-target"></p>
+      <label class="schedule-enabled"><input type="checkbox" name="enabled" checked> Enable scheduled scans</label>
+      <label>Frequency
+        <select name="frequency"><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+      </label>
+      <label id="scan-schedule-weekday" class="hidden">Day
+        <select name="weekday">
+          <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option>
+          <option value="3">Thursday</option><option value="4">Friday</option><option value="5">Saturday</option>
+          <option value="6">Sunday</option>
+        </select>
+      </label>
+      <label>Local time <input type="time" name="local_time" required></label>
+      <label>Time zone <input type="text" name="timezone" required placeholder="America/Chicago"></label>
+      <p id="scan-schedule-status" role="status"></p>
+      <a id="scan-schedule-last-job" class="hidden">View last submitted scan</a>
+      <div class="modal-actions">
+        <button type="button" id="close-scan-schedule">Close</button>
+        <button type="submit" class="primary">Save schedule</button>
       </div>
     </form>
   </dialog>
@@ -3644,7 +3673,7 @@
           label: "Actions",
           className: "actions",
           render: (asset) => asset.coverage_state === "protected"
-            ? `${renderScopeScanAction(asset)}${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
+            ? `${renderScopeScanAction(asset)}${renderScanScheduleButton(asset)}${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
             : "",
         },
         {
@@ -4169,6 +4198,7 @@
       if (source === "connector_monitor") return "Monitor event";
       if (source === "connector") return "Connector request";
       if (source === "ui_scope_scan") return "Manual scan";
+      if (source === "scheduled_scope_scan") return "Scheduled scan";
       if (source === "desktop_transfer" || source === "file_gateway_api") return "Application submission";
       return source.replaceAll("_", " ");
     }
@@ -4889,6 +4919,7 @@
       const overview = await fetchJson(endpoints.overview);
       state.integrations = overview.integrations || [];
       state.scopes = overview.scopes || [];
+      state.scanSchedulerEnabled = overview.scan_scheduler_enabled === true;
       populateSelects();
       renderTopStats();
     }
@@ -5470,6 +5501,94 @@
       setProtectionProfilePickerOpen(false);
     }
 
+    function renderScanScheduleButton(asset) {
+      if (!state.scanSchedulerEnabled || !asset.matching_scope_id) return "";
+      return ` <button type="button" data-action="edit-scan-schedule" data-scope="${escapeHtml(asset.matching_scope_id)}" data-target="${escapeHtml(asset.display_name || asset.selector)}">Schedule</button>`;
+    }
+
+    const scheduleDialog = document.getElementById("scan-schedule-dialog");
+    const scheduleForm = document.getElementById("scan-schedule-form");
+    const scheduleStatus = document.getElementById("scan-schedule-status");
+    const scheduleSave = scheduleForm.querySelector('button[type="submit"]');
+    const scheduleFields = scheduleForm.elements;
+    let scheduleEndpoint = "";
+
+    function renderScanSchedule(schedule) {
+      scheduleFields.enabled.checked = schedule?.enabled ?? true;
+      scheduleFields.frequency.value = schedule?.frequency || "daily";
+      scheduleFields.weekday.value = schedule?.weekday ?? 0;
+      scheduleFields.local_time.value = schedule?.local_time?.slice(0, 5) || "02:00";
+      scheduleFields.timezone.value = schedule?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      scheduleFields.frequency.dispatchEvent(new Event("change"));
+      const lastJob = document.getElementById("scan-schedule-last-job");
+      lastJob.classList.toggle("hidden", !schedule?.last_job_id);
+      if (schedule?.last_job_id) {
+        lastJob.href = `/api/v1/ui/?job_id=${encodeURIComponent(schedule.last_job_id)}`;
+      }
+      if (!schedule) {
+        scheduleStatus.textContent = "No schedule is configured.";
+        return;
+      }
+      const formatter = new Intl.DateTimeFormat(undefined, {
+        timeZone: schedule.timezone, dateStyle: "medium", timeStyle: "short",
+      });
+      const next = schedule.next_run_at
+        ? `Next run: ${formatter.format(new Date(schedule.next_run_at))} (${schedule.timezone}).`
+        : "Schedule paused.";
+      const last = schedule.last_run_at
+        ? ` Last occurrence: ${formatter.format(new Date(schedule.last_run_at))} · ${schedule.last_outcome}.`
+        : "";
+      scheduleStatus.textContent = [next + last, schedule.last_reason || ""].filter(Boolean).join(" ");
+    }
+
+    async function openScanSchedule(button) {
+      if (scheduleDialog.open) return;
+      const endpoint = `/api/v1/ui/scopes/${encodeURIComponent(button.dataset.scope)}/scan-schedule`;
+      scheduleEndpoint = endpoint;
+      document.getElementById("scan-schedule-target").textContent = button.dataset.target;
+      renderScanSchedule(null);
+      scheduleStatus.textContent = "Loading schedule…";
+      scheduleSave.disabled = true;
+      scheduleDialog.showModal();
+      try {
+        const schedule = await fetchJson(endpoint);
+        if (scheduleEndpoint !== endpoint) return;
+        renderScanSchedule(schedule);
+        scheduleSave.disabled = false;
+      } catch (error) {
+        if (scheduleEndpoint === endpoint) scheduleStatus.textContent = error.message;
+      }
+    }
+
+    scheduleFields.frequency.addEventListener("change", () => {
+      document.getElementById("scan-schedule-weekday").classList.toggle("hidden", scheduleFields.frequency.value !== "weekly");
+    });
+    document.getElementById("close-scan-schedule").addEventListener("click", () => scheduleDialog.close());
+    scheduleDialog.addEventListener("close", () => { scheduleEndpoint = ""; });
+    scheduleForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const endpoint = scheduleEndpoint;
+      const frequency = scheduleFields.frequency.value;
+      scheduleSave.disabled = true;
+      try {
+        const schedule = await fetchJson(endpoint, {
+          method: "PUT",
+          body: JSON.stringify({
+            enabled: scheduleFields.enabled.checked,
+            frequency,
+            local_time: scheduleFields.local_time.value,
+            timezone: scheduleFields.timezone.value.trim(),
+            weekday: frequency === "weekly" ? Number(scheduleFields.weekday.value) : null,
+          }),
+        });
+        if (scheduleEndpoint === endpoint) renderScanSchedule(schedule);
+      } catch (error) {
+        if (scheduleEndpoint === endpoint) scheduleStatus.textContent = error.message;
+      } finally {
+        if (scheduleEndpoint === endpoint) scheduleSave.disabled = false;
+      }
+    });
+
     function renderScopeScanAction(asset) {
       const scopeId = asset.matching_scope_id || "";
       const tracked = state.scopeScanSubmissions[scopeId];
@@ -5808,6 +5927,11 @@
     });
 
     document.getElementById("protected-assets-body").addEventListener("click", async (event) => {
+      const schedule = event.target.closest("[data-action='edit-scan-schedule']");
+      if (schedule) {
+        await openScanSchedule(schedule);
+        return;
+      }
       const scan = event.target.closest("[data-action='scan-asset-scope']");
       if (scan && scan.dataset.scope) {
         if (!await confirmFullScan(scan.dataset.target || scan.dataset.scope, scan.dataset.scope)) return;

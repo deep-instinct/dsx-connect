@@ -295,7 +295,8 @@ Use the Operator Console to confirm connector registration, asset inventory, and
 
 ## October 28, 2026 release
 
-- DSX Connect core/chart: **2.0.39** — correct GCS remediation paths, record terminal remediation failures, and clarify scan progress.
+- DSX Connect core/chart: **2.0.40** — opt-in daily and weekly scans for protected assets.
+- Previous core/chart: **2.0.39** — correct GCS remediation paths, record terminal remediation failures, and clarify scan progress.
 - Previous core/chart: **2.0.38** — faster scan and policy progress updates, bulk scan controls, and clearer table filters.
 - Previous core/chart: **2.0.37** — simplified asset controls, selected asset scans, and connector filters.
 - Previous core/chart: **2.0.36** — readable scan targets, original attachment filenames,

@@ -23,12 +23,12 @@ OneDrive, M365 Mail, SharePoint, and Salesforce also have source and charts in t
 5. Configure network access from the connector to the repository and DSX-Connect, and from DSX-Connect to the connector's advertised URL. Configure TLS and authentication for the target environment.
 6. Review and version-control the non-secret Helm values. Pin an approved chart version; its default image tag comes from `appVersion` unless overridden.
 
-The current repository control-plane chart is `2.0.39`. The example below pins that version; use an approved published version for your environment rather than assuming connector and control-plane versions match.
+The current repository control-plane chart is `2.0.40`. The example below pins that version; use an approved published version for your environment rather than assuming connector and control-plane versions match.
 
 ```bash
 helm upgrade --install dsx-connect \
   oci://registry-1.docker.io/dsxconnect/dsx-connect-chart \
-  --version 2.0.39 \
+  --version 2.0.40 \
   --namespace dsx-connect \
   --create-namespace \
   -f dsx-connect-values.yaml

@@ -31,6 +31,7 @@
       --danger: #ff5f73;
       --danger-soft: #49202b;
       --good: #4ee08d;
+      --violet: #bc9cff;
       --good-soft: #173c2a;
       --shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
 
@@ -409,12 +410,6 @@
     .scope-scan-actions .scan-status { flex-basis: 100%; width: fit-content; }
 
 
-    .scan-action {
-      border-color: var(--good);
-      background: var(--good);
-      color: var(--accent-contrast);
-    }
-
     .app {
       height: 100vh;
       display: grid;
@@ -524,10 +519,11 @@
       color: var(--accent-soft-ink);
     }
 
-    .assets-subnav { display: grid; gap: 4px; margin: 4px 0 8px 22px; padding-left: 12px; border-left: 1px solid var(--line); }
-    .assets-nav-item { text-align: left; background: transparent; border-color: transparent; white-space: nowrap; padding: 8px 10px; }
+    .assets-subnav { display: grid; gap: 4px; margin: 4px 0 8px 12px; padding-left: 8px; border-left: 1px solid var(--line); }
+    .assets-nav-item { display: grid; grid-template-columns: var(--control-height-sm) minmax(0, 1fr); align-items: center; gap: 4px; min-width: 0; text-align: left; background: transparent; border-color: transparent; white-space: nowrap; padding: 6px; }
     .assets-nav-item[aria-current="page"] { background: var(--accent-soft); color: var(--accent-soft-ink); border-color: var(--accent); }
-    .assets-subnav.flyout { position: fixed; left: calc(var(--rail-width-collapsed) + 8px); top: var(--assets-menu-top); z-index: 60; margin: 0; padding: 8px; min-width: 190px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+    .app.nav-collapsed .assets-subnav { margin: 4px 0; padding: 0; border: 0; }
+    .app.nav-collapsed .assets-nav-item { grid-template-columns: var(--control-height-sm); justify-content: center; padding: var(--space-3); }
 
     .rail-icon {
       width: var(--control-height-sm);
@@ -572,6 +568,7 @@
     }
 
     .main {
+      position: relative;
       min-width: 0;
       display: grid;
       grid-template-rows: minmax(0, 1fr);
@@ -710,11 +707,33 @@
       font-weight: var(--font-weight-normal);
     }
 
-    .poll-countdown {
-      min-width: 76px;
-      color: var(--muted);
-      font-size: var(--font-size-xs);
-      font-variant-numeric: tabular-nums;
+    .polling-refresh {
+      position: relative;
+    }
+
+    .refresh-progress {
+      position: absolute;
+      inset: auto 4px 3px;
+      height: 2px;
+      background: var(--accent);
+      border-radius: 1px;
+      visibility: hidden;
+      transform-origin: left;
+    }
+
+    .is-waiting .refresh-progress {
+      visibility: visible;
+      animation: refresh-progress var(--poll-delay) linear both;
+    }
+
+    @keyframes refresh-progress {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .is-waiting .refresh-progress,
+      button.is-loading svg { animation: none; }
     }
 
     .icon-button {
@@ -727,7 +746,48 @@
       place-items: center;
     }
 
-    .view-scan-action { border-color: #2563eb; background: #2563eb; color: #fff; }
+    .scan-action {
+      --scan-action-border: #34865a;
+      --scan-action-fill: #10271e;
+      --scan-action-ink: #4ade80;
+      --scan-action-hover: #173a2a;
+    }
+
+    .view-scan-action {
+      --scan-action-border: #4b77af;
+      --scan-action-fill: #13243c;
+      --scan-action-ink: #93c5fd;
+      --scan-action-hover: #1b3455;
+    }
+
+    .cancel-scan-action {
+      --scan-action-border: #a55761;
+      --scan-action-fill: #321d25;
+      --scan-action-ink: #fda4af;
+      --scan-action-hover: #472733;
+    }
+
+    .schedule-scan-action {
+      --scan-action-border: #a37a2c;
+      --scan-action-fill: #2a2217;
+      --scan-action-ink: #fcd34d;
+      --scan-action-hover: #3d301a;
+    }
+
+    :is(.scan-action, .view-scan-action, .cancel-scan-action, .schedule-scan-action) {
+      border-color: var(--scan-action-border);
+      background: var(--scan-action-fill);
+      color: var(--scan-action-ink);
+    }
+
+    :is(.scan-action, .view-scan-action, .cancel-scan-action, .schedule-scan-action):enabled:hover {
+      background: var(--scan-action-hover);
+    }
+
+    :is(.scan-action, .view-scan-action, .cancel-scan-action, .schedule-scan-action):focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
 
     .icon-button svg {
       width: 16px;
@@ -1154,8 +1214,10 @@
       text-align: center;
     }
 
-    #protected-assets-table .header-label-row th { vertical-align: middle; }
-    #protected-assets-table .select-cell input[type="checkbox"] {
+    #protected-assets-table .header-label-row th,
+    #scan-results-table .header-label-row th { vertical-align: middle; }
+    #protected-assets-table .select-cell input[type="checkbox"],
+    #scan-results-compare-all {
       display: block;
       box-sizing: border-box;
       min-height: 16px;
@@ -1639,10 +1701,6 @@
         grid-template-columns: 1fr;
       }
 
-      .workspace {
-        grid-template-columns: var(--rail-width-collapsed) minmax(0, 1fr);
-      }
-
     }
 
     @media (max-width: 820px) {
@@ -1659,34 +1717,6 @@
         padding: var(--space-6);
       }
 
-      .workspace {
-        grid-template-columns: 1fr;
-      }
-
-      .rail {
-        grid-template-columns: auto minmax(0, 1fr);
-        align-items: center;
-      }
-
-      .rail-toggle {
-        justify-self: start;
-      }
-
-      .rail-nav {
-        display: flex;
-        overflow-x: auto;
-      }
-
-      .rail-label,
-      .app.nav-collapsed .rail-label {
-        display: inline;
-      }
-
-      .app.nav-collapsed .rail-item {
-        grid-template-columns: var(--control-height-sm) minmax(0, 1fr);
-        justify-content: start;
-      }
-
       .toolbar, .toolbar.scan, .toolbar.policy, .grid-2, .grid-3 {
         grid-template-columns: 1fr;
       }
@@ -1696,6 +1726,31 @@
       }
     }
     #view-dashboard { overflow-y: auto; overflow-x: hidden; }
+    .dashboard-initial-loading {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgb(6 12 23 / 72%);
+    }
+    #view-dashboard.hidden + .dashboard-initial-loading,
+    .dashboard-initial-loading[hidden] { display: none; }
+    .dashboard-loading-message {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 22px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .dashboard-loading-message svg { width: 20px; height: 20px; color: var(--accent); }
+    @media (prefers-reduced-motion: no-preference) {
+      .dashboard-loading-message svg { animation: refresh-spin 0.8s linear infinite; }
+    }
     .dashboard-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
     .dashboard-card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; min-width: 0; }
     .dashboard-card h3 { margin: 0 0 8px; font-size: 16px; }
@@ -1714,12 +1769,17 @@
     .dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .dashboard-heading h2 { margin: 0; }
-    .dashboard-controls { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
+    .dashboard-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
     .dashboard-controls select { width: auto; min-width: 0; min-height: var(--control-height-sm); padding: 4px 8px; font-size: var(--font-size-sm); }
+    #dashboard-connector { max-width: 220px; }
     .dashboard-refresh-control { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
     .dashboard-refresh-control svg { width: 16px; height: 16px; flex: none; }
     .dashboard-chart { position: relative; margin: 8px 0; }
     .dashboard-chart-tooltip { position: absolute; top: 0; z-index: 2; pointer-events: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 4px 16px #0003; font-size: 12px; white-space: nowrap; }
+    .dashboard-chart-tooltip.is-interactive { pointer-events: auto; }
+    .dashboard-chart-tooltip a { display: inline-block; margin-top: 8px; }
+    [data-dashboard-compare] { cursor: pointer; }
+    [data-dashboard-compare]:focus-visible rect { fill: var(--accent); fill-opacity: 0.16; }
     .dashboard-chart-tooltip > div { display: flex; justify-content: space-between; gap: 24px; margin-top: 5px; }
     #dashboard-error:empty { display: none; }
     #dashboard-error { color: var(--warn); }
@@ -1756,12 +1816,12 @@
       <aside class="rail" aria-label="Primary navigation">
         <button class="rail-toggle" id="nav-toggle" type="button" title="Collapse navigation" aria-label="Collapse navigation">&lt;&lt;</button>
         <nav class="rail-nav">
-          <button class="rail-item" type="button" data-tab="dashboard" aria-selected="false" title="Dashboard">
+          <button class="rail-item" type="button" data-tab="dashboard" aria-selected="true" title="Dashboard">
             <span class="rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="11" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="18" width="7" height="3" rx="1"/></svg></span>
             <span class="rail-label">Dashboard</span>
           </button>
           <div class="assets-nav-group">
-          <button class="rail-item" type="button" data-tab="assets" aria-selected="true" title="Assets" id="assets-nav-toggle" aria-expanded="false" aria-controls="assets-subnav">
+          <button class="rail-item" type="button" data-tab="assets" aria-selected="false" title="Assets" id="assets-nav-toggle" aria-expanded="false" aria-controls="assets-subnav">
             <span class="rail-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7.5 12 3l9 4.5-9 4.5-9-4.5Z"></path>
@@ -1772,8 +1832,14 @@
             <span class="rail-label">Assets</span>
           </button>
             <div id="assets-subnav" class="assets-subnav hidden" aria-label="Assets views">
-              <button type="button" class="assets-nav-item" data-assets-view="connectors">Connectors</button>
-              <button type="button" class="assets-nav-item" data-assets-view="protected">Protected Assets</button>
+              <button type="button" class="assets-nav-item" data-assets-view="connectors" aria-label="Connectors" title="Connectors">
+                <span class="rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8Zm6 9v4"/></svg></span>
+                <span class="rail-label">Connectors</span>
+              </button>
+              <button type="button" class="assets-nav-item" data-assets-view="protected" aria-label="Protected Assets" title="Protected Assets">
+                <span class="rail-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-7 3v5c0 4.5 2.9 8.4 7 10 4.1-1.6 7-5.5 7-10V6l-7-3Z"/><rect x="9" y="8" width="6" height="7" rx="1"/></svg></span>
+                <span class="rail-label">Protected Assets</span>
+              </button>
             </div>
           </div>
           <button class="rail-item" type="button" data-tab="scan-results" aria-selected="false" title="Scan Results">
@@ -1813,36 +1879,49 @@
       <div class="shell">
         <main class="main">
 
-        <section class="view hidden" id="view-dashboard" aria-label="Operations dashboard">
+        <section class="view" id="view-dashboard" aria-label="Operations dashboard" aria-busy="true" inert>
           <div class="view-heading dashboard-heading">
             <h2>Dashboard</h2>
             <div class="dashboard-controls">
+              <select id="dashboard-connector" aria-label="Dashboard connector" title="Filter by connector"><option value="">All connectors</option></select>
               <select id="dashboard-days" aria-label="Dashboard time range" title="Time range"><option value="1">1d</option><option value="7" selected>7d</option><option value="30">30d</option></select>
-              <div class="dashboard-refresh-control">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg>
+              <div class="dashboard-refresh-control" id="dashboard-refresh-control">
+                <button class="icon-button polling-refresh" id="refresh-dashboard" type="button" aria-label="Refresh dashboard" title="Refresh dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg><span class="refresh-progress" aria-hidden="true"></span></button>
                 <select id="dashboard-refresh-interval" aria-label="Dashboard refresh interval" title="Auto-refresh interval"><option value="1">1s</option><option value="5">5s</option><option value="15" selected>15s</option><option value="0">Pause</option></select>
               </div>
             </div>
           </div>
           <p id="dashboard-error" role="status"></p>
-          <div class="dashboard-kpis" id="dashboard-kpis"></div>
-          <div class="dashboard-grid">
-            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Total scans over time</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" aria-live="polite">Loading scan history…</div></div>
-            <div class="dashboard-card"><h3>Scan throughput</h3><p class="dashboard-muted">Completed scans per minute · bucket average · current bucket uses elapsed time</p><div id="dashboard-throughput"></div></div>
-            <div class="dashboard-card"><h3>Queue backlog</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog"></div></div>
-            <div class="dashboard-card"><h3>Processing latency</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency"></div></div>
-            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Protection coverage</h3><button type="button" data-dashboard-tab="assets">Review scopes</button></div><p class="dashboard-muted">Configured scopes on enabled integrations · configuration coverage, not file inventory</p><div id="dashboard-coverage"></div></div>
-            <div class="dashboard-card"><h3>Quarantined files by reason</h3><p class="dashboard-muted">Successful quarantine actions in the selected period. File-type policy takes precedence when both reasons apply.</p><div id="dashboard-quarantine"></div></div>
-            <div class="dashboard-card"><h3>Scanned file types</h3><p class="dashboard-muted">Completed scans in the selected period · top 8 types</p><div id="dashboard-types"></div></div>
-            <div class="dashboard-card"><h3>Work in progress</h3><p class="dashboard-muted">Item states across the latest 50 jobs. These are durable job counts, not RabbitMQ queue depths.</p><div id="dashboard-work"></div></div>
-            <div class="dashboard-card"><h3>Scan outcomes</h3><p class="dashboard-muted">Sampled findings from the latest 50 jobs; not lifetime totals.</p><div id="dashboard-outcomes"></div></div>
-            <div class="dashboard-card"><h3>Needs attention</h3><div id="dashboard-attention"></div></div>
-            <div class="dashboard-card"><h3>Connector health</h3><div id="dashboard-connectors"></div></div>
-            <div class="dashboard-card dashboard-wide"><div class="dashboard-actions"><h3 style="margin-right:auto">Recent jobs</h3><button type="button" data-dashboard-tab="scan-results">Open Scan Results</button></div><div class="table-wrap"><table><thead><tr><th>Target / job</th><th>State</th><th>Progress</th><th>Failed items</th></tr></thead><tbody id="dashboard-jobs"></tbody></table></div></div>
+          <div class="dashboard-kpis" id="dashboard-kpis" data-dashboard-widget></div>
+          <div class="dashboard-grid" id="dashboard-grid">
+            <div class="dashboard-card"><h3>File scan activity</h3><p class="dashboard-muted">Completed file scans per minute, including idle time</p><div id="dashboard-throughput" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>File scans under load</h3><p class="dashboard-muted">Completed file scans per second during sustained backlog. Hollow circles below the axis show completed scans without a qualifying rate.</p><div id="dashboard-under-load" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Scan worker time</h3><p class="dashboard-muted">File retrieval through the DSXA response</p><div id="dashboard-worker-time" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>DSXA scan time</h3><p class="dashboard-muted">Scan duration reported by DSXA</p><div id="dashboard-dsxa-time" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Job activity</h3><p class="dashboard-muted">Jobs finished per time bucket, including idle time</p><div id="dashboard-job-activity" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Job duration</h3><p class="dashboard-muted">Job creation to successful completion</p><div id="dashboard-job-duration" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">File scans by verdict</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" data-dashboard-widget aria-live="polite">Loading scan history…</div></div>
+            <div class="dashboard-card"><h3>Unfinished file items</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>File processing time</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Protection coverage</h3><button type="button" data-dashboard-tab="assets">Review scopes</button></div><p class="dashboard-muted">Configured scopes on enabled integrations · configuration coverage, not file inventory</p><div id="dashboard-coverage" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Quarantined files by reason</h3><p class="dashboard-muted">Successful quarantine actions in the selected period. File-type policy takes precedence when both reasons apply.</p><div id="dashboard-quarantine" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Scanned file types</h3><p class="dashboard-muted">Completed scans in the selected period · top 8 types</p><div id="dashboard-types" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Work in progress</h3><p class="dashboard-muted">Item states across the latest 50 jobs. These are durable job counts, not RabbitMQ queue depths.</p><div id="dashboard-work" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Scan outcomes</h3><p class="dashboard-muted">Sampled findings from the latest 50 jobs; not lifetime totals.</p><div id="dashboard-outcomes" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Needs attention</h3><div id="dashboard-attention" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>Connector health</h3><div id="dashboard-connectors" data-dashboard-widget></div></div>
+            <div class="dashboard-card dashboard-wide"><div class="dashboard-actions"><h3 style="margin-right:auto">Recent jobs</h3><button type="button" data-dashboard-tab="scan-results">Open Scan Results</button></div><div class="table-wrap"><table><thead><tr><th>Target / job</th><th>State</th><th>Progress</th><th>Failed items</th></tr></thead><tbody id="dashboard-jobs" data-dashboard-widget></tbody></table></div></div>
           </div>
         </section>
 
-        <section class="view" id="view-assets">
+        <div class="dashboard-initial-loading" id="dashboard-initial-loading" role="status">
+          <div class="dashboard-loading-message">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg>
+            Loading dashboard data…
+          </div>
+        </div>
+
+        <section class="view hidden" id="view-assets">
           <div class="view-heading">
             <h2 id="assets-view-title">Assets &gt; Connectors</h2>
           </div>
@@ -1855,13 +1934,14 @@
               <div class="metric"><span>Scopes</span><strong id="metric-scopes">0</strong></div>
             </div>
             <div class="table-actions">
-              <button class="icon-button" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
+              <button class="icon-button polling-refresh" id="refresh-connectors" type="button" aria-label="Refresh connectors" title="Refresh connectors">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
                   <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
                   <path d="M18 3v4h-4"></path>
                   <path d="M6 21v-4h4"></path>
                 </svg>
+                <span class="refresh-progress" aria-hidden="true"></span>
               </button>
             </div>
             <div class="table-wrap">
@@ -1875,6 +1955,15 @@
           <div class="asset-pane hidden" id="asset-pane-protected">
             <div class="asset-context" id="protected-context" aria-label="Protected assets navigation"></div>
             <div class="table-actions">
+              <button class="icon-button polling-refresh" id="refresh-protected-assets" type="button" aria-label="Refresh protected assets" title="Refresh protected assets">
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
+                  <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
+                  <path d="M18 3v4h-4"></path>
+                  <path d="M6 21v-4h4"></path>
+                </svg>
+                <span class="refresh-progress" aria-hidden="true"></span>
+              </button>
               <button type="button" id="clear-protected-filters" class="icon-button" disabled aria-label="Clear filters" title="Clear filters">
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 10h10M10 15h2m3 0 5 5m0-5-5 5"/></svg>
               </button>
@@ -1884,6 +1973,7 @@
                 <button type="button" id="stop-selected-scans">Stop Scans</button>
               </div>
             </div>
+            <p id="protected-assets-error" role="status"></p>
             <div class="table-wrap protected-assets">
               <div id="protected-assets-table-loading" class="table-loading hidden" role="status">Loading data…</div>
               <table id="protected-assets-table">
@@ -1908,17 +1998,17 @@
           </div>
           <div class="scan-stats-row" id="scan-stats-row"></div>
           <div class="table-actions">
-            <button class="icon-button" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
+            <button class="icon-button polling-refresh" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
                 <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
                 <path d="M18 3v4h-4"></path>
                 <path d="M6 21v-4h4"></path>
               </svg>
+              <span class="refresh-progress" aria-hidden="true"></span>
             </button>
             <div class="poll-control">Poll for new results
-              <label class="switch"><input type="checkbox" id="scan-results-poll" checked><span></span></label>
-              <span class="poll-countdown" id="scan-results-poll-countdown">Next in 5s</span>
+              <label class="switch"><input type="checkbox" id="scan-results-poll" aria-label="Poll for new results" checked><span></span></label>
             </div>
             <button class="icon-button compare-button" id="toggle-scan-compare" type="button" aria-label="Compare scan results" title="Compare scan results">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -1936,7 +2026,7 @@
           </div>
           <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
             <div class="scan-compare-header">
-              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.</div>
+              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.<div id="scan-compare-interval"></div></div>
               <button class="icon-button" id="export-scan-compare" type="button" aria-label="Export scan comparison CSV" title="Export scan comparison CSV" disabled>
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 3v12"></path>
@@ -2032,7 +2122,9 @@
           <h2>Add Repository Connector</h2>
           <p>Preconfigure a repository boundary before a runtime instance registers.</p>
         </div>
-        <button id="close-add-connector" type="button">Close</button>
+        <button class="icon-button" id="close-add-connector" type="button" aria-label="Close add connector" title="Close add connector">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
       </div>
       <div class="drawer-body">
         <form class="cards" id="integration-form">
@@ -2083,7 +2175,9 @@
           <h2 id="application-drawer-title">Onboard Application</h2>
           <p>Map a caller identity to destinations, attribution, and the DSXA protected entity used for scans.</p>
         </div>
-        <button id="close-application" type="button">Close</button>
+        <button class="icon-button" id="close-application" type="button" aria-label="Close application editor" title="Close application editor">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
       </div>
       <div class="drawer-body">
         <form id="application-form">
@@ -2168,7 +2262,9 @@
           <h2 id="policy-editor-title">Protection Profile Editor</h2>
           <p id="policy-editor-caption">Edit remediation and outcome handling.</p>
         </div>
-        <button id="close-policy-editor" type="button">Close</button>
+        <button class="icon-button" id="close-policy-editor" type="button" aria-label="Close protection profile editor" title="Close protection profile editor">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
       </div>
       <div class="drawer-body">
         <form class="cards" id="default-policy-form">
@@ -2265,7 +2361,9 @@
           <h2>Choose Protection Profile</h2>
           <p id="protection-profile-picker-caption">Select a protection profile to apply.</p>
         </div>
-        <button id="close-protection-profile-picker" type="button">Close</button>
+        <button class="icon-button" id="close-protection-profile-picker" type="button" aria-label="Close protection profile picker" title="Close protection profile picker">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
       </div>
       <div class="drawer-body">
         <div class="table-wrap">
@@ -2326,7 +2424,9 @@
       <p id="scan-schedule-status" role="status"></p>
       <a id="scan-schedule-last-job" class="hidden">View last submitted scan</a>
       <div class="modal-actions">
-        <button type="button" id="close-scan-schedule">Close</button>
+        <button class="icon-button" id="close-scan-schedule" type="button" aria-label="Close scan schedule" title="Close scan schedule">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
         <button type="submit" class="primary">Save schedule</button>
       </div>
     </form>
@@ -2360,6 +2460,7 @@
   </dialog>
 
 
+  <script src="/api/v1/ui-static/dashboard-charts.js"></script>
   <script>
     const consoleParams = new URLSearchParams(window.location.search);
     const state = {
@@ -2367,12 +2468,16 @@
       scanCompletedStart: consoleParams.get("completed_start") || "",
       scanCompletedEnd: consoleParams.get("completed_end") || "",
       scanExactJobId: consoleParams.get("job_id") || "",
+      scanIntegrationId: consoleParams.get("integration_id") || "",
+      scanIntegrationIds: consoleParams.getAll("integration_ids"),
+      selectComparisonOnLoad: consoleParams.get("tab") === "scan-results" && consoleParams.get("compare") === "1",
       integrations: [],
       scopes: [],
       connectorRows: [],
       protectedAssets: [],
       protectedAssetsLoaded: false,
       protectedPageIndex: 0,
+      protectedNextRunOrder: "asc",
       protectedPageLimit: 15,
       protectedPageCursors: [""],
       protectedNextCursor: null,
@@ -2390,7 +2495,7 @@
       syncingPolicyForm: false,
       policyEditorMode: "edit",
       policyEditorBaseId: "policy-1",
-      activeTab: "assets",
+      activeTab: "dashboard",
       activeAssetsTab: consoleParams.get("assets_tab") === "protected" ? "protected" : "connectors",
       applicationEditorMode: "create",
       editingApplicationId: "",
@@ -2408,9 +2513,6 @@
       scanJobIdFilterSelectionEnd: null,
       scanCompareVisible: false,
       scanResultsPolling: true,
-      scanResultsPollingInFlight: false,
-      scanResultsNextPollAt: null,
-      connectorsPollingInFlight: false,
       bulkSelected: {},
       bulkBusy: false,
       bulkOperationId: null,
@@ -2420,7 +2522,6 @@
     };
     let protectedFilterReloadTimer = null;
     let scanResultsPollTimer = null;
-    let scanResultsCountdownTimer = null;
     let connectorsPollTimer = null;
 
     const endpoints = {
@@ -2440,21 +2541,28 @@
     const policyStorageKey = "dsx-connect-v2-policy-catalog";
     const defaultProfileStorageKey = "dsx-connect-v2-default-protection-profiles";
 
-    async function fetchJson(url, options = {}) {
+    async function fetchJson(url, options = {}, onResponse = null) {
       const response = await fetch(url, {
         headers: { "Content-Type": "application/json", ...(options.headers || {}) },
         ...options,
       });
-      if (!response.ok) {
-        let detail = response.statusText;
-        try {
-          detail = JSON.stringify(await response.json(), null, 2);
-        } catch (error) {
-          detail = await response.text();
-        }
-        throw new Error(detail || `Request failed: ${response.status}`);
+      if (response.status === 304 && onResponse) {
+        onResponse(response);
+        return null;
       }
-      return response.json();
+      if (!response.ok) {
+        const body = await response.text();
+        let detail = body || response.statusText;
+        try {
+          detail = JSON.stringify(JSON.parse(body), null, 2);
+        } catch (error) {
+          // Plain-text and empty HTTP error responses are also valid.
+        }
+        throw new Error(`Request failed (${response.status}): ${detail}`);
+      }
+      const payload = await response.json();
+      if (onResponse) onResponse(response);
+      return payload;
     }
 
     function escapeHtml(value) {
@@ -2629,6 +2737,9 @@
     }
 
     function iconSvg(name) {
+      if (name === "calendar") {
+        return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M7 3v4m10-4v4M3 10h18"></path></svg>';
+      }
       if (name === "eye") {
         return '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
       }
@@ -2664,6 +2775,18 @@
       textarea.select();
       document.execCommand("copy");
       textarea.remove();
+    }
+
+    function stopRefreshCountdown(buttonId, timer) {
+      window.clearTimeout(timer);
+      document.getElementById(buttonId).classList.remove("is-waiting");
+    }
+
+    function startRefreshCountdown(buttonId, delay, refresh) {
+      const button = document.getElementById(buttonId);
+      button.style.setProperty("--poll-delay", String(delay) + "ms");
+      button.classList.add("is-waiting");
+      return window.setTimeout(refresh, delay);
     }
 
     async function withBusyButton(button, action) {
@@ -2755,49 +2878,36 @@
       }).join("");
     }
 
-    const dashboardData = {};
-    let dashboardLoading = false;
-    let dashboardHistoryRequest = 0;
-
-    function renderDashboardMetric(id, data, metrics, summary, format) {
+    const dashboardWidgetRevisions = new Map();
+    const dashboardSourceRevisions = new Map();
+    const dashboardWidgetMarkup = new WeakMap();
+    function updateDashboardWidgetHtml(id, html, force = false) {
       const target = document.getElementById(id);
-      const series = data.series;
-      const values = series.flatMap((bucket) => metrics.map(([key]) => bucket[key])).filter((value) => value !== null && value !== undefined);
-      if (!values.length) { target.innerHTML = '<p class="dashboard-muted">No completed items with timing data in this period.</p>'; return; }
-      const max = Math.max(1, ...values);
-      const x = (i) => 48 + i * 350 / Math.max(1, series.length - 1);
-      const y = (n) => 95 - n / max * 75;
-      const lines = metrics.map(([key, label, color]) => {
-        const segments = []; let points = [];
-        series.forEach((bucket, i) => {
-          if (bucket[key] == null) { if (points.length) segments.push(points); points = []; }
-          else points.push([x(i), y(bucket[key])]);
-        });
-        if (points.length) segments.push(points);
-        return segments.map((segment) => segment.length === 1
-          ? `<circle cx="${segment[0][0]}" cy="${segment[0][1]}" r="3" fill="var(--${color})"/>`
-          : `<polyline points="${segment.map((point) => point.join(",")).join(" ")}" fill="none" stroke="var(--${color})" stroke-width="2"/>`).join("");
-      }).join("");
-      const labels = [...new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])].filter((i) => series[i]).map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit",minute:"2-digit",timeZone:"UTC"} : {month:"short",day:"numeric",timeZone:"UTC"}))}</text>`).join("");
-      target.innerHTML = `<strong style="font-size:24px">${escapeHtml(summary)}</strong><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="img" aria-label="${escapeHtml(metrics.map(([,label]) => label).join(", "))} over time in UTC" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${escapeHtml(format(max))}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}</svg></div><div class="dashboard-actions">${metrics.map(([,label,color]) => `<span style="color:var(--${color})">● ${escapeHtml(label)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact values</summary><div class="table-wrap"><table><thead><tr><th>UTC</th>${metrics.map(([,label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${series.map((bucket) => `<tr><td>${escapeHtml(bucket.at)}</td>${metrics.map(([key]) => `<td>${bucket[key] == null ? "—" : escapeHtml(format(bucket[key]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`;
-      const svg = target.querySelector("svg");
-      const tooltip = target.querySelector("[role=tooltip]");
-      svg.addEventListener("pointermove", (event) => {
-        const bounds = svg.getBoundingClientRect();
-        const index = Math.max(0, Math.min(series.length - 1, Math.round(((event.clientX - bounds.left) / bounds.width * 450 - 48) / 350 * (series.length - 1))));
-        const bucket = series[index];
-        tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${metrics.map(([key,label,color]) => `<div><span style="color:var(--${color})">● ${escapeHtml(label)}</span><strong>${bucket[key] == null ? "—" : escapeHtml(format(bucket[key]))}</strong></div>`).join("")}${id === "dashboard-latency" ? `<div>${bucket.samples} completed items</div>` : ""}`;
-        tooltip.hidden = false;
-        tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
-      });
-      svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+      if (!target) return false;
+      if (!force && dashboardWidgetMarkup.get(target) === html) return false;
+      dashboardWidgetMarkup.set(target, html);
+      target.innerHTML = html;
+      return true;
     }
 
-    function scanResultsUrl(start, end, jobId = "") {
+    const dashboardData = {};
+    let dashboardLoading = false;
+    let dashboardRequest = 0;
+    const dashboardConnector = document.getElementById("dashboard-connector");
+    let dashboardHistoryRequest = 0;
+
+    function scanResultsUrl(start, end, jobId = "", {compareConnectors = []} = {}) {
       const url = new URL(window.location.href);
       url.search = new URLSearchParams({tab:"scan-results", completed_start:start, completed_end:end});
       url.searchParams.set("dashboard_days", document.getElementById("dashboard-days").value);
       if (jobId) url.searchParams.set("job_id", jobId);
+      if (dashboardConnector.value) url.searchParams.set("integration_id", dashboardConnector.value);
+      if (compareConnectors.length) {
+        url.searchParams.set("compare", "1");
+        if (!dashboardConnector.value) {
+          compareConnectors.forEach((id) => url.searchParams.append("integration_ids", id));
+        }
+      }
       url.hash = "";
       return url.href;
     }
@@ -2806,13 +2916,15 @@
     async function showDashboardScans(start, end) {
       const request = ++dashboardScanDetailsRequest;
       const target = document.getElementById("dashboard-scan-details");
+      if (!target) return;
       target.textContent = "Loading scan sample…";
       try {
         const params = new URLSearchParams({start, end, limit:"5"});
+        if (dashboardConnector.value) params.set("integration_id", dashboardConnector.value);
         const data = await fetchJson(`/api/v1/ui/dashboard/scans?${params}`);
         if (request !== dashboardScanDetailsRequest || !target.isConnected) return;
         const resultsUrl = escapeHtml(scanResultsUrl(start, end));
-        target.innerHTML = `<h4>${escapeHtml(new Date(start).toLocaleString([], {timeZone:"UTC"}))} UTC</h4><p class="dashboard-muted">Showing ${data.scans.length} of ${data.total.toLocaleString()} scans in this interval</p><div class="dashboard-actions"><a href="${resultsUrl}">Open Scan Results</a><a href="${resultsUrl}" target="_blank" rel="noopener">Open in new tab ↗</a><button type="button" data-close-scans>Close sample</button></div><div class="table-wrap"><table><thead><tr><th>File / object</th><th>Verdict</th><th>Job</th></tr></thead><tbody>${data.scans.map(row => `<tr><td>${escapeHtml(row.object_identity || row.job_item_id || "Unknown")}</td><td>${escapeHtml(row.verdict)}</td><td>${row.job_id ? `<a href="${escapeHtml(scanResultsUrl(start, end, row.job_id))}">${escapeHtml(row.job_id)}</a>` : "—"}</td></tr>`).join("") || '<tr><td colspan="3">No completed scans in this interval.</td></tr>'}</tbody></table></div>`;
+        target.innerHTML = `<h4>${escapeHtml(new Date(start).toLocaleString([], {timeZone:"UTC"}))} UTC</h4><p class="dashboard-muted">Showing ${data.scans.length} of ${data.total.toLocaleString()} scans in this interval</p><div class="dashboard-actions"><a href="${resultsUrl}">Open Scan Results</a><a href="${resultsUrl}" target="_blank" rel="noopener">Open in new tab ↗</a><button class="icon-button" type="button" data-close-scans aria-label="Close sample" title="Close sample">${iconSvg("x")}</button></div><div class="table-wrap"><table><thead><tr><th>File / object</th><th>Verdict</th><th>Job</th></tr></thead><tbody>${data.scans.map(row => `<tr><td>${escapeHtml(row.object_identity || row.job_item_id || "Unknown")}</td><td>${escapeHtml(row.verdict)}</td><td>${row.job_id ? `<a href="${escapeHtml(scanResultsUrl(start, end, row.job_id))}">${escapeHtml(row.job_id)}</a>` : "—"}</td></tr>`).join("") || '<tr><td colspan="3">No completed scans in this interval.</td></tr>'}</tbody></table></div>`;
         target.querySelector("[data-close-scans]").onclick = () => { target.innerHTML = ""; ++dashboardScanDetailsRequest; };
       } catch (error) {
         if (request === dashboardScanDetailsRequest && target.isConnected) target.textContent = `Scans unavailable: ${error.message}`;
@@ -2820,17 +2932,44 @@
     }
 
     let dashboardReturnSampleShown = false;
+    let dashboardUnderLoadData;
+
+    function updateDashboardUnderLoadChart() {
+      if (!dashboardUnderLoadData) return;
+      const connectorNames = new Map(Array.from(dashboardConnector.options, (option) => [option.value, option.text]));
+      renderDashboardUnderLoad(dashboardUnderLoadData, connectorNames, dashboardConnector.value,
+        (start, end, connectorIds) => scanResultsUrl(start, end, "", {compareConnectors: connectorIds}));
+    }
     async function loadDashboardHistory() {
       const request = ++dashboardHistoryRequest;
+      dashboardUnderLoadData = null;
       const days = document.getElementById("dashboard-days").value;
+      const grid = document.getElementById("dashboard-grid");
+      grid.setAttribute("aria-busy", "true");
       try {
-        const data = await fetchJson(`/api/v1/ui/dashboard/history?days=${days}`);
+        const params = new URLSearchParams({days});
+        if (dashboardConnector.value) params.set("integration_id", dashboardConnector.value);
+        const data = await fetchJson(`/api/v1/ui/dashboard/history?${params}`);
         if (request !== dashboardHistoryRequest) return;
         const rate = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
-        const seconds = (value) => `${Number(value).toLocaleString(undefined, {maximumFractionDigits: 2})} s`;
+        const seconds = (value) => value < 1 ? `${rate(value * 1000)} ms` : `${rate(value)} s`;
         renderDashboardMetric("dashboard-throughput", data, [["throughput_per_minute", "Scans / min", "accent"]], `${rate(data.throughput_per_minute)} scans/min average`, rate);
         renderDashboardMetric("dashboard-backlog", data, [["backlog", "Unfinished items", "warn"]], `${data.backlog.toLocaleString()} unfinished now`, (value) => Math.round(value).toLocaleString());
         renderDashboardMetric("dashboard-latency", data, [["median_seconds", "Median", "accent"], ["p95_seconds", "p95", "warn"]], data.latency.samples ? `${seconds(data.latency.median_seconds)} median · ${seconds(data.latency.p95_seconds)} p95` : "No timing data", seconds);
+        for (const [id, key] of [
+          ["dashboard-worker-time", "scan_worker"], ["dashboard-dsxa-time", "dsxa"], ["dashboard-job-duration", "job_duration"],
+        ]) {
+          const timing = data[key];
+          const chart = { ...data, series: data.series.map((bucket) => ({at: bucket.at, ...bucket[key]})) };
+          renderDashboardMetric(id, chart, [["median_seconds", "Median", "accent"], ["p95_seconds", "p95", "warn"]],
+            timing.samples ? `${seconds(timing.median_seconds)} median · ${seconds(timing.p95_seconds)} p95 · ${timing.samples.toLocaleString()} samples` : "No timing data", seconds);
+        }
+        renderDashboardMetric("dashboard-job-activity", data,
+          [["jobs_completed", "Completed", "good"], ["jobs_failed", "Failed", "danger"], ["jobs_cancelled", "Cancelled", "muted"]],
+          `${data.jobs.completed.toLocaleString()} completed · ${data.jobs.failed.toLocaleString()} failed · ${data.jobs.cancelled.toLocaleString()} cancelled`,
+          (value) => value.toLocaleString());
+        dashboardUnderLoadData = data;
+        updateDashboardUnderLoadChart();
         const series = data.series;
         const max = Math.max(1, ...series.map((bucket) => bucket.total));
         const colors = {total:"accent", benign:"good", malicious:"danger", suspicious:"warn"};
@@ -2843,7 +2982,7 @@
           return `<rect x="${left}" y="15" width="${right - left}" height="90" fill="transparent" tabindex="0" role="button" data-scan-bucket="${i}" aria-label="View ${bucket.total} scans at ${escapeHtml(bucket.at)}" style="cursor:pointer"><title>View scans at ${escapeHtml(bucket.at)}</title></rect>`;
         }).join("");
         const labels = [0, Math.floor((series.length - 1) / 2), series.length - 1].map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit", minute:"2-digit", timeZone:"UTC"} : {month:"short", day:"numeric", timeZone:"UTC"}))}</text>`).join("");
-        document.getElementById("dashboard-history").innerHTML = `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="group" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}${targets}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td><button type="button" data-scan-bucket="${series.indexOf(b)}">${escapeHtml(b.at)}</button></td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details><div id="dashboard-scan-details" aria-live="polite"></div>`;
+        if (updateDashboardWidgetHtml("dashboard-history", `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="group" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}${targets}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td><button type="button" data-scan-bucket="${series.indexOf(b)}">${escapeHtml(b.at)}</button></td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details><div id="dashboard-scan-details" aria-live="polite"></div>`)) {
         const history = document.getElementById("dashboard-history");
         const openBucket = (event) => {
           const target = event.target.closest("[data-scan-bucket]");
@@ -2871,19 +3010,27 @@
           tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
         });
         svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
-        document.getElementById("dashboard-quarantine").innerHTML = dashboardBars([["Malware", data.quarantined.malicious, "danger"], ["File-type policy", data.quarantined.file_type_policy, "warn"], ["Suspicious", data.quarantined.suspicious, "warn"], ["Other / unknown", data.quarantined.other, "muted"]]) + `<p class="dashboard-muted">${data.file_type_policy_matches.toLocaleString()} file-type policy matches, including outcomes other than quarantine. Pending and failed quarantine actions are excluded above.</p>`;
-        document.getElementById("dashboard-types").innerHTML = data.file_types.length ? dashboardBars(data.file_types.slice(0,8).map((row) => [row.type, row.count])) : '<p class="dashboard-muted">No completed scans in this period.</p>';
+        }
+        updateDashboardWidgetHtml("dashboard-quarantine", dashboardBars([["Malware", data.quarantined.malicious, "danger"], ["File-type policy", data.quarantined.file_type_policy, "warn"], ["Suspicious", data.quarantined.suspicious, "warn"], ["Other / unknown", data.quarantined.other, "muted"]]) + `<p class="dashboard-muted">${data.file_type_policy_matches.toLocaleString()} file-type policy matches, including outcomes other than quarantine. Pending and failed quarantine actions are excluded above.</p>`);
+        updateDashboardWidgetHtml("dashboard-types", data.file_types.length ? dashboardBars(data.file_types.slice(0,8).map((row) => [row.type, row.count])) : '<p class="dashboard-muted">No completed scans in this period.</p>');
         if (!dashboardReturnSampleShown && consoleParams.get("bucket_start") && consoleParams.get("bucket_end")) {
           dashboardReturnSampleShown = true;
           showDashboardScans(consoleParams.get("bucket_start"), consoleParams.get("bucket_end"));
         }
+        return true;
       } catch (error) {
         if (request !== dashboardHistoryRequest) return;
-        for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types", "dashboard-throughput", "dashboard-backlog", "dashboard-latency"]) document.getElementById(id).textContent = `Historical data unavailable: ${error.message}`;
+        for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types", "dashboard-throughput", "dashboard-backlog", "dashboard-latency",
+          "dashboard-under-load", "dashboard-worker-time", "dashboard-dsxa-time", "dashboard-job-activity", "dashboard-job-duration"]) { const widget = document.getElementById(id); if (widget) { dashboardWidgetMarkup.delete(widget); widget.textContent = `Historical data unavailable: ${error.message}`; } }
+        return false;
+      } finally {
+        if (request === dashboardHistoryRequest) {
+          grid.removeAttribute("aria-busy");
+        }
       }
     }
 
-    document.getElementById("dashboard-days").addEventListener("change", loadDashboardHistory);
+    document.getElementById("dashboard-days").addEventListener("change", () => loadDashboard({ connectorChanged: true }));
 
     function dashboardBars(rows) {
       const max = Math.max(1, ...rows.map((row) => row[1]));
@@ -2893,7 +3040,8 @@
     function renderDashboard() {
       const overview = dashboardData.overview;
       const results = dashboardData.results?.results || [];
-      const connectors = dashboardData.connectors?.connectors;
+      const connectors = dashboardData.connectors?.connectors?.filter(
+        (row) => !dashboardConnector.value || row.integration.integration_id === dashboardConnector.value);
       const jobs = overview?.job_summaries || [];
       const totals = {};
       jobs.forEach((row) => Object.entries(row.item_summary || {}).forEach(([key, value]) => { totals[key] = (totals[key] || 0) + Number(value || 0); }));
@@ -2905,26 +3053,26 @@
       const covered = scopes.filter((scope) => scope.enabled && enabledIntegrations.has(scope.integration_id));
       const monitor = covered.filter((scope) => scope.mode === "monitor").length;
       const fullScan = covered.filter((scope) => scope.mode === "full_scan").length;
-      document.getElementById("dashboard-coverage").innerHTML = overview ? `<strong style="font-size:24px">${covered.length} / ${scopes.length} scopes enabled</strong>${dashboardBars([["Monitoring", monitor, "good"], ["Full scan", fullScan, "accent"], ["Disabled", scopes.length - covered.length, "warn"]])}<p class="dashboard-muted">${scopes.length ? `${Math.round(covered.length / scopes.length * 100)}% enabled. Full-scan scopes require scans to be started; monitoring configuration does not confirm runtime health.` : "No protected scopes configured. Add a scope in Assets to get started."}</p>` : '<p class="dashboard-muted">Scope data unavailable.</p>';
+      updateDashboardWidgetHtml("dashboard-coverage", overview ? `<strong style="font-size:24px">${covered.length} / ${scopes.length} scopes enabled</strong>${dashboardBars([["Monitoring", monitor, "good"], ["Full scan", fullScan, "accent"], ["Disabled", scopes.length - covered.length, "warn"]])}<p class="dashboard-muted">${scopes.length ? `${Math.round(covered.length / scopes.length * 100)}% enabled. Full-scan scopes require scans to be started; monitoring configuration does not confirm runtime health.` : "No protected scopes configured. Add a scope in Assets to get started."}</p>` : '<p class="dashboard-muted">Scope data unavailable.</p>');
       const kpis = [
         ["Healthy connectors", connectors ? `${healthy} / ${connectors.length}` : "—", "Registered integrations", "assets"],
         ["Enabled protected scopes", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Configured protection, not coverage %", "assets"],
         ["Active jobs", overview ? active : "—", "Within latest 50 jobs", "scan-results"],
         ["Failed items", overview ? totals.failed || 0 : "—", "Within latest 50 jobs", "scan-results"],
       ];
-      document.getElementById("dashboard-kpis").innerHTML = kpis.map(([label, value, note, tab]) => `<button type="button" class="dashboard-card dashboard-kpi" data-dashboard-tab="${tab}"><span>${label}</span><strong>${escapeHtml(String(value))}</strong><span class="dashboard-muted">${note}</span></button>`).join("");
-      document.getElementById("dashboard-work").innerHTML = overview ? dashboardBars([
+      updateDashboardWidgetHtml("dashboard-kpis", kpis.map(([label, value, note, tab]) => `<button type="button" class="dashboard-card dashboard-kpi" data-dashboard-tab="${tab}"><span>${label}</span><strong>${escapeHtml(String(value))}</strong><span class="dashboard-muted">${note}</span></button>`).join(""));
+      updateDashboardWidgetHtml("dashboard-work", overview ? dashboardBars([
         ["Awaiting dispatch", (totals.accepted || 0) + (totals.publish_pending || 0)],
         ["Queued", totals.queued || 0], ["Scanning", totals.scanning || 0],
         ["Downstream", ["scanned", "remediating", "deliver_pending", "delivering_result"].reduce((sum, key) => sum + (totals[key] || 0), 0)],
         ["Completed", totals.completed || 0, "good"], ["Cancelled", totals.cancelled || 0, "muted"],
-      ]) : '<p class="dashboard-muted">Job data unavailable.</p>';
+      ]) : '<p class="dashboard-muted">Job data unavailable.</p>');
       const findings = { clean: 0, malicious: 0, suspicious: 0, not_scanned: 0, unknown: 0 };
       results.forEach((row) => Object.keys(findings).forEach((key) => { findings[key] += Number(row.findings?.[key] || 0); }));
-      document.getElementById("dashboard-outcomes").innerHTML = dashboardData.results ? dashboardBars([
+      updateDashboardWidgetHtml("dashboard-outcomes", dashboardData.results ? dashboardBars([
         ["Clean", findings.clean, "good"], ["Malicious", findings.malicious, "danger"], ["Suspicious", findings.suspicious, "warn"],
         ["Not scanned", findings.not_scanned, "muted"], ["Unknown", findings.unknown, "muted"],
-      ]) + `<p class="dashboard-muted">${results.length} recent jobs returned. Failed processing is shown separately from verdicts.</p>` : '<p class="dashboard-muted">Scan findings unavailable.</p>';
+      ]) + `<p class="dashboard-muted">${results.length} recent jobs returned. Failed processing is shown separately from verdicts.</p>` : '<p class="dashboard-muted">Scan findings unavailable.</p>');
       const scanner = dashboardData.scanner;
       const attention = [];
       if (!scanner) attention.push(["Scanner health could not be checked", "scan-results"]);
@@ -2933,51 +3081,132 @@
       (connectors || []).filter((row) => row.integration.enabled && row.health?.status !== "healthy").forEach((row) => attention.push([`${row.integration.display_name}: ${row.health?.status || "unknown"}`, "assets"]));
       if (totals.failed) attention.push([`${totals.failed.toLocaleString()} failed items in recent jobs`, "scan-results"]);
       if (overview && !scopes.some((scope) => scope.enabled)) attention.push(["No enabled protected scopes configured", "assets"]);
-      document.getElementById("dashboard-attention").innerHTML = attention.length ? attention.slice(0, 6).map(([message, tab]) => `<div class="dashboard-list-row"><span>${escapeHtml(message)}</span><button type="button" data-dashboard-tab="${tab}">Review</button></div>`).join("") : `<p class="dashboard-muted">${overview && connectors && dashboardData.results ? "No issues detected in available dashboard data." : "Some operational data is unavailable; review the refresh warning."}</p>`;
-      document.getElementById("dashboard-connectors").innerHTML = connectors?.length ? connectors.map((row) => `<div class="dashboard-list-row"><div><strong>${escapeHtml(row.integration.display_name)}</strong><div class="dashboard-muted">${escapeHtml(row.integration.platform)} · ${row.scope_count || 0} scopes${row.integration.enabled ? "" : " · disabled"}</div></div><span class="${pillClass(row.health?.status || "unknown")}">${escapeHtml(row.health?.status || "unknown")}</span></div>`).join("") : `<p class="dashboard-muted">${connectors ? "No connectors registered. Open Assets to get started." : "Connector data unavailable."}</p>`;
-      document.getElementById("dashboard-jobs").innerHTML = jobs.length ? jobs.slice(0, 8).map((row) => {
+      updateDashboardWidgetHtml("dashboard-attention", attention.length ? attention.slice(0, 6).map(([message, tab]) => `<div class="dashboard-list-row"><span>${escapeHtml(message)}</span><button type="button" data-dashboard-tab="${tab}">Review</button></div>`).join("") : `<p class="dashboard-muted">${overview && connectors && dashboardData.results ? "No issues detected in available dashboard data." : "Some operational data is unavailable; review the refresh warning."}</p>`);
+      updateDashboardWidgetHtml("dashboard-connectors", connectors?.length ? connectors.map((row) => `<div class="dashboard-list-row"><div><strong>${escapeHtml(row.integration.display_name)}</strong><div class="dashboard-muted">${escapeHtml(row.integration.platform)} · ${row.scope_count || 0} scopes${row.integration.enabled ? "" : " · disabled"}</div></div><span class="${pillClass(row.health?.status || "unknown")}">${escapeHtml(row.health?.status || "unknown")}</span></div>`).join("") : `<p class="dashboard-muted">${connectors ? "No connectors registered. Open Assets to get started." : "Connector data unavailable."}</p>`);
+      updateDashboardWidgetHtml("dashboard-jobs", jobs.length ? jobs.slice(0, 8).map((row) => {
         const summary = row.item_summary || {};
         const total = Number(summary.total || 0);
         const done = Number(summary.completed || 0) + Number(summary.failed || 0) + Number(summary.cancelled || 0);
         const detail = results.find((result) => result.job.job_id === row.job.job_id);
         const label = detail?.target?.label || row.job.object_identity || row.job.job_type;
         return `<tr><td><strong>${escapeHtml(label)}</strong><div class="dashboard-muted">${escapeHtml(row.job.job_id)}</div></td><td><span class="${pillClass(row.job.state)}">${escapeHtml(row.job.state)}</span></td><td>${done.toLocaleString()} / ${total.toLocaleString()}<div class="dashboard-bar"><span style="width:${total ? Math.min(100, done / total * 100) : 0}%"></span></div></td><td>${Number(summary.failed || 0).toLocaleString()}</td></tr>`;
-      }).join("") : `<tr><td colspan="4" class="dashboard-muted">${overview ? "No jobs yet. Protect a scope and start a scan from Assets." : "Job data unavailable."}</td></tr>`;
+      }).join("") : `<tr><td colspan="4" class="dashboard-muted">${overview ? "No jobs yet. Protect a scope and start a scan from Assets." : "Job data unavailable."}</td></tr>`);
     }
 
-    async function loadDashboard() {
-      if (dashboardLoading) return;
+    async function loadDashboard({ connectorChanged = false } = {}) {
+      if (dashboardLoading && !connectorChanged) return;
+      const request = ++dashboardRequest;
+      const integrationId = dashboardConnector.value;
       dashboardLoading = true;
+      stopRefreshCountdown("refresh-dashboard", dashboardRefreshTimer);
+      dashboardRefreshTimer = null;
+      const refreshButton = document.getElementById("refresh-dashboard");
+      refreshButton.disabled = true;
+      refreshButton.classList.add("is-loading");
+      refreshButton.setAttribute("aria-busy", "true");
       try {
-        await loadDashboardHistory();
-        const sources = [["overview", endpoints.overview], ["connectors", endpoints.connectors], ["results", `${endpoints.scanResults}?limit=50&item_limit=1&stats_item_limit=100`], ["scanner", endpoints.dsxaStatus]];
-        const responses = await Promise.allSettled(sources.map(([, url]) => fetchJson(url)));
+        const overviewParams = new URLSearchParams();
+        const resultsParams = new URLSearchParams({limit: "50", item_limit: "1", stats_item_limit: "100"});
+        if (integrationId) {
+          overviewParams.set("integration_id", integrationId);
+          resultsParams.set("integration_id", integrationId);
+        }
+        const widgets = Array.from(document.querySelectorAll("[data-dashboard-widget]"))
+          .filter((element) => !element.closest("[hidden], .hidden") && getComputedStyle(element).display !== "none")
+          .map((element) => element.id);
+        const changeParams = new URLSearchParams({days: document.getElementById("dashboard-days").value});
+        if (integrationId) changeParams.set("integration_id", integrationId);
+        widgets.forEach((widget) => changeParams.append("widgets", widget));
+        const changes = await fetchJson(`/api/v1/ui/dashboard/changes?${changeParams}`);
+        if (request !== dashboardRequest) return;
+        const changed = Object.entries(changes.widgets).filter(([id, widget]) =>
+          dashboardWidgetRevisions.get(id) !== widget.revision);
+        const needed = new Set(changed.flatMap(([, widget]) => widget.sources).filter((source) =>
+          dashboardSourceRevisions.get(source) !== changes.sources[source]));
+        const availableSources = [["overview", `${endpoints.overview}?${overviewParams}`], ["connectors", endpoints.connectors],
+          ["results", `${endpoints.scanResults}?${resultsParams}`], ["scanner", endpoints.dsxaStatus]];
+        const sources = availableSources.filter(([source]) => needed.has(source));
+        const historyRequested = needed.has("history");
+        const [responses, historyLoaded] = await Promise.all([
+          Promise.allSettled(sources.map(([, url]) => fetchJson(url))),
+          historyRequested ? loadDashboardHistory() : Promise.resolve(true),
+        ]);
+        if (request !== dashboardRequest) return;
         const failures = [];
         responses.forEach((response, index) => {
           const key = sources[index][0];
           if (response.status === "fulfilled") dashboardData[key] = response.value;
           else { delete dashboardData[key]; failures.push(key); }
         });
-        renderDashboard();
+        for (const source of needed) {
+          if (source === "history" ? historyLoaded : !failures.includes(source)) {
+            dashboardSourceRevisions.set(source, changes.sources[source]);
+          }
+        }
+        for (const [id, widget] of changed) {
+          if (widget.sources.every((source) => source === "history" ? historyLoaded : !failures.includes(source))) {
+            dashboardWidgetRevisions.set(id, widget.revision);
+          }
+        }
+        if (needed.has("connectors") && dashboardData.connectors) {
+          const options = [new Option("All connectors", "")];
+          for (const {integration} of dashboardData.connectors.connectors) {
+            options.push(new Option(integration.display_name, integration.integration_id));
+          }
+          if (integrationId && !options.some((option) => option.value === integrationId)) {
+            options.push(new Option(integrationId, integrationId));
+          }
+          dashboardConnector.replaceChildren(...options);
+          dashboardConnector.value = integrationId;
+          updateDashboardUnderLoadChart();
+        }
+        if (sources.length) renderDashboard();
         document.getElementById("dashboard-error").textContent = failures.length ? `Some data could not be loaded: ${failures.join(", ")}. Refresh to retry.` : "";
-      } finally { dashboardLoading = false; }
+      } finally {
+        if (request === dashboardRequest) {
+          dashboardLoading = false;
+          refreshButton.disabled = false;
+          refreshButton.classList.remove("is-loading");
+          refreshButton.removeAttribute("aria-busy");
+          scheduleDashboardRefresh();
+          const loading = document.getElementById("dashboard-initial-loading");
+          if (!loading.hidden) {
+            loading.hidden = true;
+            const dashboard = document.getElementById("view-dashboard");
+            dashboard.inert = false;
+            dashboard.removeAttribute("aria-busy");
+          }
+        }
+      }
     }
+
+    dashboardConnector.addEventListener("change", () => {
+      ++dashboardScanDetailsRequest;
+      document.getElementById("dashboard-scan-details")?.replaceChildren();
+      loadDashboard({ connectorChanged: true }).catch((error) => {
+        document.getElementById("dashboard-error").textContent = error.message;
+      });
+    });
 
     document.getElementById("view-dashboard").addEventListener("click", (event) => {
       const button = event.target.closest("[data-dashboard-tab]");
       if (button) selectTab(button.dataset.dashboardTab);
     });
-    let dashboardRefreshTimer;
+    let dashboardRefreshTimer = null;
     function scheduleDashboardRefresh() {
-      clearInterval(dashboardRefreshTimer);
-      const seconds = Number(document.getElementById("dashboard-refresh-interval").value);
-      if (!seconds) return;
-      dashboardRefreshTimer = setInterval(() => {
-        if (state.activeTab === "dashboard" && !document.hidden) loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
-      }, seconds * 1000);
+      stopRefreshCountdown("refresh-dashboard", dashboardRefreshTimer);
+      dashboardRefreshTimer = null;
+      const delay = Number(document.getElementById("dashboard-refresh-interval").value) * 1000;
+      if (!delay || dashboardLoading || state.activeTab !== "dashboard" || document.hidden) return;
+      dashboardRefreshTimer = startRefreshCountdown("refresh-dashboard", delay, () => {
+        dashboardRefreshTimer = null;
+        loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
+      });
     }
+    document.getElementById("refresh-dashboard").addEventListener("click", () => {
+      loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
+    });
     document.getElementById("dashboard-refresh-interval").addEventListener("change", scheduleDashboardRefresh);
-    scheduleDashboardRefresh();
 
     function selectTab(tabName) {
       state.activeTab = tabName;
@@ -2990,8 +3219,9 @@
         view.classList.toggle("hidden", view.id !== `view-${tabName}`);
       });
       updateScanResultsPolling();
-      updateScanResultsCountdownTimer();
       updateConnectorsPolling();
+      updateProtectedAssetsPolling();
+      scheduleDashboardRefresh();
       if (tabName === "dashboard") loadDashboard().catch((error) => { document.getElementById("dashboard-error").textContent = error.message; });
     }
 
@@ -3007,10 +3237,9 @@
       const menu = document.getElementById("assets-subnav");
       const parent = document.getElementById("assets-nav-toggle");
       const collapsed = document.querySelector(".app").classList.contains("nav-collapsed");
-      menu.classList.toggle("flyout", collapsed);
-      menu.style.setProperty("--assets-menu-top", `${parent.getBoundingClientRect().top}px`);
-      menu.classList.toggle("hidden", !open);
-      parent.setAttribute("aria-expanded", String(open));
+      const visible = open || collapsed;
+      menu.classList.toggle("hidden", !visible);
+      parent.setAttribute("aria-expanded", String(visible));
     }
 
     function selectAssetsTab(tabName, { forceReload = false } = {}) {
@@ -3022,14 +3251,18 @@
       document.getElementById("protected-assets-pager").classList.toggle("hidden", tabName !== "protected");
       if (forceReload) { clearBulkSelection(); resetProtectedPagination(); }
       if (tabName === "protected" && (forceReload || !state.protectedAssetsLoaded)) {
-        loadProtectedAssets().catch(showProtectedAssetsError);
+        loadProtectedAssets().then(() => withProtectedAssetsRefresh(refreshProtectedScanStatuses)).catch(showProtectedAssetsError);
+      }
+      if (tabName === "connectors") {
+        loadConnectors().catch((error) => console.warn("Connector refresh failed", error));
       }
       updateConnectorsPolling();
+      updateProtectedAssetsPolling();
     }
 
-    function setNavCollapsed(collapsed) {
+    function setNavCollapsed(collapsed, { persist = true } = {}) {
       document.querySelector(".app").classList.toggle("nav-collapsed", collapsed);
-      localStorage.setItem(navStorageKey, collapsed ? "true" : "false");
+      if (persist) localStorage.setItem(navStorageKey, collapsed ? "true" : "false");
       const toggle = document.getElementById("nav-toggle");
       toggle.title = collapsed ? "Expand navigation" : "Collapse navigation";
       toggle.textContent = collapsed ? ">>" : "<<";
@@ -3038,7 +3271,13 @@
     }
 
     function initNav() {
-      setNavCollapsed(localStorage.getItem(navStorageKey) === "true");
+      const narrowNavigation = window.matchMedia("(max-width: 1180px)");
+      const updateNavigation = () => {
+        const collapsed = narrowNavigation.matches || localStorage.getItem(navStorageKey) === "true";
+        setNavCollapsed(collapsed, { persist: false });
+      };
+      narrowNavigation.addEventListener("change", updateNavigation);
+      updateNavigation();
     }
 
     function renderTopStats() {
@@ -3605,6 +3844,11 @@
       const asset = document.getElementById("protected-filter-asset-value");
       const coverage = document.getElementById("protected-filter-coverage");
       const connector = document.getElementById("protected-filter-integration");
+      for (const id of ["protected-filter-schedule", "protected-filter-monitoring"]) {
+        const filter = document.getElementById(id);
+        if (filter) filter.value = "";
+      }
+      state.protectedNextRunOrder = "asc";
       if (asset) { asset.value = ""; updateFilterClearButton(asset); }
       if (coverage) coverage.value = "";
       if (connector) connector.textContent = connectorFilterLabel() + " ▾";
@@ -3673,7 +3917,7 @@
           label: "Actions",
           className: "actions",
           render: (asset) => asset.coverage_state === "protected"
-            ? `${renderScopeScanAction(asset)}${renderScanScheduleButton(asset)}${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
+            ? `${renderScopeScanAction(asset)}${asset.platform === "jira" ? ` <button class="button secondary" type="button" data-action="scan-jira-issues" data-scope="${escapeHtml(asset.matching_scope_id || "")}" data-issues="${escapeHtml((asset.metadata?.allowed_issue_keys || []).join(', '))}">Scan issues</button>` : ""}`
             : "",
         },
         {
@@ -3701,6 +3945,32 @@
             </div>
           `,
           render: (asset) => `${renderConnectorName(state.connectorRows.find((row) => row.integration.integration_id === asset.integration_id)?.integration || {display_name: asset.integration_display_name})}<br><span class="copy-line"><span class="mono copy-value">${escapeHtml(asset.integration_id)}</span>${copyButton(asset.integration_id)}</span>`,
+        },
+        ...(state.scanSchedulerEnabled ? [{
+          key: "schedule",
+          label: "Schedule",
+          headerAttributes: previousFilters.schedule === "scheduled"
+            ? {"aria-sort": state.protectedNextRunOrder === "desc" ? "descending" : "ascending"} : {},
+          headerHtml: `Schedule <button type="button" class="icon-button" id="protected-sort-schedule"
+            aria-label="Sort scheduled assets by next run" title="Sort scheduled assets by next run">${previousFilters.schedule === "scheduled" && state.protectedNextRunOrder === "desc" ? "↑" : "↓"}</button>`,
+          filterHtml: `<div class="column-filter">
+            <select id="protected-filter-schedule" aria-label="Schedule filter">
+              <option value="">All</option><option value="scheduled">Scheduled</option>
+              <option value="paused">Paused</option><option value="none">No schedule</option>
+            </select>
+          </div>`,
+          render: renderProtectedAssetSchedule,
+        }] : []),
+        {
+          key: "monitoring",
+          label: "Monitoring",
+          filterHtml: `<div class="column-filter">
+            <select id="protected-filter-monitoring" aria-label="Monitoring configuration filter">
+              <option value="">All</option><option value="on">Configured</option><option value="off">Not configured</option>
+            </select>
+          </div>`,
+          render: (asset) => asset.monitoring_configured
+            ? '<span title="Monitoring mode is configured on this scope">Configured</span>' : "—",
         },
         { key: "type", label: "Type", render: (asset) => escapeHtml(asset.asset_type) },
         {
@@ -3763,6 +4033,9 @@
         "protected-filter-integration",
         "protected-filter-coverage",
         "protected-filter-asset-value",
+        "protected-filter-schedule",
+        "protected-filter-monitoring",
+        "protected-sort-schedule",
       ]);
       if (!active || !filterIds.has(active.id)) return null;
       return {
@@ -3781,6 +4054,21 @@
         coverage.value = values.coverage || "";
         coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
       }
+      for (const [name, id] of [["schedule", "protected-filter-schedule"], ["monitoring", "protected-filter-monitoring"]]) {
+        const filter = document.getElementById(id);
+        if (!filter) continue;
+        filter.value = values[name] || "";
+        filter.addEventListener("change", () => {
+          if (name === "schedule") state.protectedNextRunOrder = "asc";
+          reloadProtectedAssetsFromFilters();
+        });
+      }
+      document.getElementById("protected-sort-schedule")?.addEventListener("click", () => {
+        const filter = document.getElementById("protected-filter-schedule");
+        state.protectedNextRunOrder = filter.value === "scheduled" && state.protectedNextRunOrder === "asc" ? "desc" : "asc";
+        filter.value = "scheduled";
+        reloadProtectedAssetsFromFilters();
+      });
       if (assetValue) {
         assetValue.value = values.assetValue || "";
         updateFilterClearButton(assetValue);
@@ -3808,6 +4096,10 @@
 
     document.getElementById("clear-scan-filters").addEventListener("click", async (event) => {
       event.currentTarget.disabled = true;
+      state.scanIntegrationId = "";
+      state.scanIntegrationIds = [];
+      if (consoleParams.get("compare") === "1") state.selectedScanCompareJobIds = [];
+      state.selectComparisonOnLoad = false;
       state.scanCompletedStart = "";
       state.scanCompletedEnd = "";
       state.scanExactJobId = "";
@@ -3817,7 +4109,7 @@
       state.scanJobIdFilterFocused = false;
       state.scanTargetFilterFocused = false;
       const url = new URL(window.location.href);
-      ["completed_start", "completed_end", "job_id"].forEach((key) => url.searchParams.delete(key));
+      ["completed_start", "completed_end", "job_id", "integration_id", "integration_ids", "compare"].forEach((key) => url.searchParams.delete(key));
       window.history.replaceState(null, "", url);
       try {
         await withTableLoading("scan-results-table", loadScanResults);
@@ -3827,10 +4119,21 @@
       }
     });
 
+    function renderScanDateTime(value) {
+      if (!value) return '<span class="muted">—</span>';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return '<span class="muted">—</span>';
+      const label = date.toLocaleString([], {
+        year: "numeric", month: "short", day: "numeric",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "short",
+      });
+      return `<time datetime="${escapeHtml(date.toISOString())}">${escapeHtml(label)}</time>`;
+    }
+
     function renderScanResults() {
       const clear = document.getElementById("clear-scan-filters");
       const timeRange = state.scanCompletedStart || state.scanCompletedEnd;
-      clear.disabled = !(timeRange || state.scanExactJobId || state.scanJobTypeFilter
+      clear.disabled = !(timeRange || state.scanIntegrationId || state.scanIntegrationIds.length || state.scanExactJobId || state.scanJobTypeFilter
         || state.scanJobIdFilter.trim() || state.scanTargetFilter.trim());
       clear.title = timeRange ? `Clear filters (time range: ${state.scanCompletedStart || "any start"} to ${state.scanCompletedEnd || "any end"})` : "Clear filters";
       const rows = filteredScanResults();
@@ -3838,7 +4141,8 @@
           key: "compare",
           label: "",
           className: "select-cell",
-          filterHtml: `<input id="scan-results-compare-all" type="checkbox" aria-label="Select visible scan results for comparison">`,
+          headerAttributes: {class: "select-cell"},
+          headerHtml: '<span class="table-selection-control"><input id="scan-results-compare-all" type="checkbox" aria-label="Select visible scan results for comparison"></span>',
           render: (result) => `
             <input
               type="checkbox"
@@ -3874,7 +4178,7 @@
           render: (result) => {
             const cancel = isTerminalJobState(result.job.state)
               ? ""
-              : `<button class="icon-button danger" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}" aria-label="Cancel Full Scan" title="Cancel Full Scan">${iconSvg("x")}</button>`;
+              : `<button class="icon-button cancel-scan-action" type="button" data-action="cancel-scan-result" data-id="${escapeHtml(result.job.job_id)}" aria-label="Cancel Full Scan" title="Cancel Full Scan">${iconSvg("x")}</button>`;
             return `<div class="actions-row">${cancel || '<span class="muted">-</span>'}</div>`;
           },
         },
@@ -3893,9 +4197,22 @@
           render: (result) => renderScanTarget(result),
         },
         {
+          key: "started_at",
+          label: "Start",
+          render: (result) => renderScanDateTime(result.started_at || result.job.created_at),
+        },
+        {
+          key: "finished_at",
+          label: "End",
+          render: (result) => renderScanDateTime(result.finished_at || result.job.completed_at),
+        },
+        {
           key: "state",
-          label: "State",
-          render: (result) => `<span class="${pillClass(result.job.state)}">${escapeHtml(result.job.state)}</span>`,
+          label: "Status",
+          render: (result) => {
+            const label = result.job.state.replaceAll("_", " ");
+            return `<span class="${pillClass(result.job.state)}">${escapeHtml(label.charAt(0).toUpperCase() + label.slice(1))}</span>`;
+          },
         },
         {
           key: "progress",
@@ -4148,7 +4465,16 @@
       return `<select data-action="set-default-profile" data-integration="${escapeHtml(integrationId)}">${options}</select>`;
     }
 
+    const pendingProtectionUpdates = new Set();
+
+    function protectionUpdateKey(asset) {
+      return asset.matching_scope_id || bulkAssetKey(asset);
+    }
+
     function renderProtectedAssetActionSelect(asset) {
+      if (pendingProtectionUpdates.has(protectionUpdateKey(asset))) {
+        return '<span class="pill scan-status" role="status">Updating protection…</span>';
+      }
       const protectedNow = asset.coverage_state === "protected";
       const known = ["protected", "unprotected", "disabled"].includes(asset.coverage_state);
       const currentLabel = protectedNow ? protectedAssetPolicyLabel(asset) : known ? "Unprotected" : "Protection unknown";
@@ -4435,6 +4761,14 @@
         exportButton.disabled = comparisonRows.length === 0;
       }
       if (!state.scanCompareVisible) return;
+      const interval = document.getElementById("scan-compare-interval");
+      const formatUtc = (value) => new Date(value).toLocaleString([], {timeZone: "UTC"});
+      const limit = state.scanMatchingJobs > state.scanResults.length
+        ? ` Showing the latest ${state.scanResults.length} of ${state.scanMatchingJobs} matching jobs.`
+        : "";
+      interval.textContent = state.scanCompletedStart && state.scanCompletedEnd
+        ? `${formatUtc(state.scanCompletedStart)} to ${formatUtc(state.scanCompletedEnd)} UTC.${limit}`
+        : "";
       if (!comparisonRows.length) {
         const table = document.getElementById("scan-compare-table");
         const body = document.getElementById("scan-compare-body");
@@ -4924,7 +5258,20 @@
       renderTopStats();
     }
 
-    async function loadConnectors() {
+    let connectorsLoadPromise = null;
+    function loadConnectors() {
+      if (connectorsLoadPromise) return connectorsLoadPromise;
+      stopRefreshCountdown("refresh-connectors", connectorsPollTimer);
+      connectorsPollTimer = null;
+      connectorsLoadPromise = withBusyButton(document.getElementById("refresh-connectors"), loadConnectorsData)
+        .finally(() => {
+          connectorsLoadPromise = null;
+          updateConnectorsPolling();
+        });
+      return connectorsLoadPromise;
+    }
+
+    async function loadConnectorsData() {
       const payload = await fetchJson(endpoints.connectors);
       state.connectorRows = payload.connectors || [];
       state.integrations = state.connectorRows;
@@ -4933,36 +5280,18 @@
       renderTopStats();
     }
 
-    async function pollConnectors() {
-      if (
-        document.hidden
-        || state.activeTab !== "assets"
-        || state.activeAssetsTab !== "connectors"
-        || state.connectorsPollingInFlight
-      ) {
+    function updateConnectorsPolling() {
+      const active = !document.hidden && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
+      if (!active) {
+        stopRefreshCountdown("refresh-connectors", connectorsPollTimer);
+        connectorsPollTimer = null;
         return;
       }
-      state.connectorsPollingInFlight = true;
-      try {
-        await loadConnectors();
-      } catch (error) {
-        console.warn("Connector polling failed", error);
-      } finally {
-        state.connectorsPollingInFlight = false;
-      }
-    }
-
-    function updateConnectorsPolling() {
-      const shouldPoll = !document.hidden && state.activeTab === "assets" && state.activeAssetsTab === "connectors";
-      if (shouldPoll && !connectorsPollTimer) {
-        pollConnectors();
-        connectorsPollTimer = window.setInterval(() => {
-          pollConnectors();
-        }, 30000);
-      } else if (!shouldPoll && connectorsPollTimer) {
-        window.clearInterval(connectorsPollTimer);
+      if (connectorsLoadPromise || connectorsPollTimer !== null) return;
+      connectorsPollTimer = startRefreshCountdown("refresh-connectors", 30000, () => {
         connectorsPollTimer = null;
-      }
+        loadConnectors().catch((error) => console.warn("Connector polling failed", error));
+      });
     }
 
     function resetProtectedPagination() {
@@ -4976,18 +5305,22 @@
     function protectedFilterValues() {
       return {
         coverage: document.getElementById("protected-filter-coverage")?.value || "",
+        schedule: document.getElementById("protected-filter-schedule")?.value || "",
+        monitoring: document.getElementById("protected-filter-monitoring")?.value || "",
         assetMode: "contains",
         assetValue: document.getElementById("protected-filter-asset-value")?.value || "",
       };
     }
 
     function updateProtectedFilterIndicators() {
-      const {assetValue, coverage} = protectedFilterValues();
+      const {assetValue, coverage, schedule, monitoring} = protectedFilterValues();
       const connector = state.protectedIntegrationFilters.length > 0;
       document.getElementById("protected-filter-integration")?.classList.toggle("filter-active", connector);
       document.getElementById("protected-filter-coverage")?.classList.toggle("filter-active", Boolean(coverage));
       document.getElementById("protected-filter-asset-value")?.classList.toggle("filter-active", Boolean(assetValue.trim()));
-      document.getElementById("clear-protected-filters").disabled = !(connector || coverage || assetValue.trim());
+      document.getElementById("protected-filter-schedule")?.classList.toggle("filter-active", Boolean(schedule));
+      document.getElementById("protected-filter-monitoring")?.classList.toggle("filter-active", Boolean(monitoring));
+      document.getElementById("clear-protected-filters").disabled = !(connector || coverage || schedule || monitoring || assetValue.trim());
     }
 
     function reloadProtectedAssetsFromFilters({ debounce = false } = {}) {
@@ -5019,7 +5352,35 @@
       await loadProtectedAssets();
     }
 
-    async function loadProtectedAssets() {
+    let protectedRefreshRequests = 0;
+    async function withProtectedAssetsRefresh(action) {
+      const button = document.getElementById("refresh-protected-assets");
+      stopRefreshCountdown("refresh-protected-assets", protectedAssetsPollTimer);
+      protectedAssetsPollTimer = null;
+      protectedRefreshRequests += 1;
+      button.disabled = true;
+      button.classList.add("is-loading");
+      button.setAttribute("aria-busy", "true");
+      try {
+        return await action();
+      } finally {
+        protectedRefreshRequests -= 1;
+        if (!protectedRefreshRequests) {
+          button.disabled = false;
+          button.classList.remove("is-loading");
+          button.removeAttribute("aria-busy");
+          updateProtectedAssetsPolling();
+        }
+      }
+    }
+
+    function loadProtectedAssets() {
+      return withProtectedAssetsRefresh(loadProtectedAssetsData);
+    }
+
+    let protectedAssetsRequest = 0;
+    async function loadProtectedAssetsData() {
+      const request = ++protectedAssetsRequest;
       const params = new URLSearchParams();
       const integrationIds = state.protectedIntegrationFilters;
       const filters = protectedFilterValues();
@@ -5029,26 +5390,42 @@
       const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
       integrationIds.forEach((id) => params.append("integration_ids", id));
       if (coverage) params.set("coverage_state", coverage);
+      if (filters.schedule) params.set("schedule_status", filters.schedule);
+      if (filters.monitoring) params.set("monitoring", filters.monitoring);
+      if (filters.schedule === "scheduled") params.set("next_run_order", state.protectedNextRunOrder);
       params.set("limit", String(state.protectedPageLimit));
       params.set("cursors", cursor || "{}");
       if (assetFilterValue) {
         params.set("asset_filter_mode", assetFilterMode);
         params.set("asset_filter_value", assetFilterValue);
       }
-      const payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
+      let payload;
+      try {
+        payload = await fetchJson(`${endpoints.protectedAssets}?${params.toString()}`);
+      } catch (error) {
+        if (request === protectedAssetsRequest) throw error;
+        return;
+      }
+      if (request !== protectedAssetsRequest) return;
       state.protectedAssets = payload.assets || [];
       state.protectedDiscoveryFailures = [...new Set([...state.protectedDiscoveryFailures, ...(payload.failed_integrations || []).map((item) => item.integration_id)])];
       const cursors = payload.next_cursors || {};
       state.protectedNextCursor = Object.values(cursors).some((cursor) => cursor !== null) ? JSON.stringify(cursors) : null;
       state.protectedPageSizes[state.protectedPageIndex] = state.protectedAssets.length;
       state.protectedAssetsLoaded = true;
+      document.getElementById("protected-assets-error").textContent = "";
       renderProtectedAssets();
+      updateProtectedAssetsPolling();
     }
 
     function showProtectedAssetsError(error) {
       state.protectedAssetsLoaded = false;
-      document.getElementById("protected-assets-body").innerHTML = `<tr><td colspan="8"><div class="empty">Failed to load assets: ${escapeHtml(error.message)}</div></td></tr>`;
+      document.getElementById("protected-assets-error").textContent = "Assets could not be refreshed. Retrying automatically. " + error.message;
+      if (!document.querySelector("#protected-assets-table .header-label-row")) renderProtectedAssets();
+      updateProtectedAssetsPolling();
     }
+
+    let scanResultsValidator = null;
 
     async function fetchScanResultsPayload() {
       const params = new URLSearchParams();
@@ -5059,13 +5436,43 @@
         params.set("limit", "200");
       }
       if (state.scanExactJobId) params.set("job_id", state.scanExactJobId);
-      return fetchJson(`${endpoints.scanResults}?${params.toString()}`);
+      if (state.scanIntegrationId) params.set("integration_id", state.scanIntegrationId);
+      state.scanIntegrationIds.forEach((id) => params.append("integration_ids", id));
+      const url = `${endpoints.scanResults}?${params.toString()}`;
+      const headers = {};
+      if (scanResultsValidator?.url === url) headers["If-None-Match"] = scanResultsValidator.etag;
+      return fetchJson(url, { headers, cache: "no-store" }, (response) => {
+        const etag = response.headers.get("ETag");
+        scanResultsValidator = etag ? { url, etag } : null;
+      });
     }
 
-    async function loadScanResults({ resetSelection = true } = {}) {
+    let scanResultsLoadPromise = null;
+
+    function loadScanResults(options = {}) {
+      if (scanResultsLoadPromise) return scanResultsLoadPromise;
+      stopScanResultsPollTimer();
+      const button = document.getElementById("refresh-scan-results");
+      scanResultsLoadPromise = withBusyButton(button, () => loadScanResultsData(options))
+        .finally(() => {
+          scanResultsLoadPromise = null;
+          updateScanResultsPolling();
+        });
+      return scanResultsLoadPromise;
+    }
+
+    async function loadScanResultsData({ resetSelection = true } = {}) {
       const payload = await fetchScanResultsPayload();
-      state.scanResults = payload.results || [];
-      state.scanMatchingJobs = payload.matching_jobs;
+      if (payload === null && !resetSelection && !state.selectComparisonOnLoad) return;
+      if (payload !== null) {
+        state.scanResults = payload.results || [];
+        state.scanMatchingJobs = payload.matching_jobs;
+      }
+      if (state.selectComparisonOnLoad) {
+        state.selectComparisonOnLoad = false;
+        state.selectedScanCompareJobIds = state.scanResults.map((result) => result.job.job_id);
+        state.scanCompareVisible = true;
+      }
       if (resetSelection) {
         state.selectedScanResult = null;
         state.selectedScanResultItemKey = null;
@@ -5082,103 +5489,33 @@
       renderApplications();
     }
 
-    function scheduleNextScanResultsPoll() {
-      state.scanResultsNextPollAt = Date.now() + 5000;
-      if (scanResultsPollTimer) {
-        window.clearTimeout(scanResultsPollTimer);
-      }
-      scanResultsPollTimer = window.setTimeout(() => {
-        scanResultsPollTimer = null;
-        pollScanResults();
-      }, 5000);
-      updateScanResultsCountdown();
-    }
+    const scanResultsPollDelay = 5000;
 
-    function updateScanResultsCountdown() {
-      const node = document.getElementById("scan-results-poll-countdown");
-      if (!node) return;
-      const active = state.scanResultsPolling && state.activeTab === "scan-results";
-      if (!active) {
-        node.textContent = "Paused";
-        return;
-      }
-      if (state.scanResultsPollingInFlight) {
-        node.textContent = "Refreshing...";
-        return;
-      }
-      if (!state.scanResultsNextPollAt) {
-        scheduleNextScanResultsPoll();
-        return;
-      }
-      const seconds = Math.max(0, Math.ceil((state.scanResultsNextPollAt - Date.now()) / 1000));
-      node.textContent = seconds > 0 ? `Next in ${seconds}s` : "Due now";
-    }
-
-    function updateScanResultsCountdownTimer() {
-      const shouldShow = state.activeTab === "scan-results";
-      if (shouldShow && !scanResultsCountdownTimer) {
-        scanResultsCountdownTimer = window.setInterval(updateScanResultsCountdown, 1000);
-      } else if (!shouldShow && scanResultsCountdownTimer) {
-        window.clearInterval(scanResultsCountdownTimer);
-        scanResultsCountdownTimer = null;
-      }
-      updateScanResultsCountdown();
-    }
-
-    function setScanResultsRefreshIndicator(active) {
-      const button = document.getElementById("refresh-scan-results");
-      if (!button) return;
-      button.classList.toggle("is-loading", Boolean(active));
-      button.setAttribute("aria-busy", String(Boolean(active)));
-      if (!active) {
-        button.removeAttribute("aria-busy");
-      }
-    }
-
-    async function pollScanResults() {
-      if (!state.scanResultsPolling || state.activeTab !== "scan-results" || state.scanResultsPollingInFlight) return;
-      state.scanResultsPollingInFlight = true;
-      state.scanResultsNextPollAt = null;
-      setScanResultsRefreshIndicator(true);
-      updateScanResultsCountdown();
-      try {
-        const openJobId = state.selectedScanResult;
-        const payload = await fetchScanResultsPayload();
-        const nextResults = payload.results || [];
-        const nextOpen = openJobId
-          ? nextResults.find((result) => result.job.job_id === openJobId)
-          : null;
-        state.scanResults = nextResults;
-        state.scanMatchingJobs = payload.matching_jobs;
-        if (openJobId && !nextOpen) {
-          state.selectedScanResult = null;
-          state.selectedScanResultItemKey = null;
-        }
-        pruneScanCompareSelection();
-        renderScanResults();
-      } catch (error) {
-        console.warn("Scan result polling failed", error);
-      } finally {
-        state.scanResultsPollingInFlight = false;
-        setScanResultsRefreshIndicator(false);
-        if (state.scanResultsPolling && state.activeTab === "scan-results") {
-          scheduleNextScanResultsPoll();
-        } else {
-          updateScanResultsCountdown();
-        }
-      }
+    function stopScanResultsPollTimer() {
+      stopRefreshCountdown("refresh-scan-results", scanResultsPollTimer);
+      scanResultsPollTimer = null;
     }
 
     function updateScanResultsPolling() {
-      const shouldPoll = state.scanResultsPolling && state.activeTab === "scan-results";
-      if (shouldPoll && !scanResultsPollTimer) {
-        scheduleNextScanResultsPoll();
-      } else if (!shouldPoll && scanResultsPollTimer) {
-        window.clearTimeout(scanResultsPollTimer);
-        scanResultsPollTimer = null;
-        state.scanResultsNextPollAt = null;
+      const button = document.getElementById("refresh-scan-results");
+      if (!state.scanResultsPolling || state.activeTab !== "scan-results" || document.hidden) {
+        stopScanResultsPollTimer();
+        return;
       }
-      updateScanResultsCountdownTimer();
+      if (scanResultsPollTimer !== null || button.disabled) return;
+      scanResultsPollTimer = startRefreshCountdown("refresh-scan-results", scanResultsPollDelay, refreshScanResults);
+    }
+
+    async function refreshScanResults({ manual = false } = {}) {
+      const button = document.getElementById("refresh-scan-results");
+      if (button.disabled) return;
+      stopScanResultsPollTimer();
+      try {
+        await loadScanResults({ resetSelection: false });
+      } catch (error) {
+        if (manual) alert(`Scan result refresh failed: ${error.message}`);
+        else console.warn("Scan result polling failed", error);
+      }
     }
 
     async function cancelScanResult(jobId, button) {
@@ -5206,12 +5543,14 @@
     }
 
     async function refreshAll() {
+      const openingComparison = state.selectComparisonOnLoad;
+      if (openingComparison) await withTableLoading("scan-results-table", loadScanResults);
       if (state.activeTab === "dashboard") await loadDashboard();
       await loadDsxaStatus();
       await loadOverview();
       await loadConnectors();
       await loadApplications();
-      await loadScanResults();
+      if (!openingComparison) await loadScanResults();
       await loadPolicies();
       if (state.activeAssetsTab === "protected") {
         await loadProtectedAssets();
@@ -5449,6 +5788,36 @@
       });
     }
 
+    async function updateAssetProtection(asset, save, {updateProfile = false} = {}) {
+      const assetKey = bulkAssetKey({integration_id: asset.integrationId, selector: asset.selector});
+      const key = asset.matchingScopeId || assetKey;
+      if (pendingProtectionUpdates.has(key)) return;
+      pendingProtectionUpdates.add(key);
+      renderProtectedAssets();
+      try {
+        const scope = await save();
+        state.protectedAssets = state.protectedAssets.map((row) => {
+          if (row.matching_scope_id !== scope.scope_id && bulkAssetKey(row) !== assetKey) return row;
+          return {
+            ...row,
+            matching_scope_id: scope.scope_id,
+            coverage_state: scope.enabled ? "protected" : "disabled",
+            policy: updateProfile ? scope.post_scan_policy : row.policy,
+          };
+        });
+      } finally {
+        pendingProtectionUpdates.delete(key);
+        renderProtectedAssets();
+      }
+      const onProtectedAssets = state.activeTab === "assets" && state.activeAssetsTab === "protected";
+      const refreshes = onProtectedAssets
+        ? [loadProtectedAssets(), loadOverview()]
+        : [loadOverview().finally(loadConnectors)];
+      for (const refresh of refreshes) {
+        refresh.catch((error) => console.warn("Protection saved; refresh failed", error));
+      }
+    }
+
     async function protectAsset(asset) {
       const policyEntry = asset.policyEntry || defaultProfileForIntegration(asset.integrationId);
       if (!await confirmProtectionChange(asset, policyDisplayName(policyEntry))) return;
@@ -5459,21 +5828,13 @@
         if (existingAsset?.policy?.scanner) {
           policy.scanner = cloneValue(existingAsset.policy.scanner);
         }
-        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/policy`, {
-          method: "PUT",
-          body: JSON.stringify({ policy }),
-        });
-        await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/enabled`, {
-          method: "POST",
-          body: JSON.stringify({ enabled: true }),
-        });
-        await refreshAll();
-        if (state.activeAssetsTab === "protected") {
-          await loadProtectedAssets();
-        }
+        await updateAssetProtection(asset, () => fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ enabled: true, post_scan_policy: policy }),
+        }), {updateProfile: true});
         return;
       }
-      await fetchJson(endpoints.createScope, {
+      await updateAssetProtection(asset, () => fetchJson(endpoints.createScope, {
         method: "POST",
         body: JSON.stringify({
           integration_id: asset.integrationId,
@@ -5484,11 +5845,17 @@
           enabled: true,
           post_scan_policy: policy,
         }),
-      });
-      await refreshAll();
-      if (state.activeAssetsTab === "protected") {
-        await loadProtectedAssets();
-      }
+      }), {updateProfile: true});
+    }
+
+    async function setAssetProtectionEnabled(asset, enabled) {
+      const existing = state.protectedAssets.find((row) => row.matching_scope_id === asset.matchingScopeId);
+      const profile = enabled ? protectedAssetPolicyLabel(existing || {}) : "Unprotected";
+      if (!await confirmProtectionChange(asset, profile, !enabled)) return;
+      await updateAssetProtection(asset, () => fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(asset.matchingScopeId)}/enabled`, {
+        method: "POST",
+        body: JSON.stringify({ enabled }),
+      }));
     }
 
     async function applySelectedProtectionProfile() {
@@ -5501,9 +5868,23 @@
       setProtectionProfilePickerOpen(false);
     }
 
+    function renderProtectedAssetSchedule(asset) {
+      const schedule = asset.scan_schedule;
+      if (!schedule) return "—";
+      if (!schedule.enabled || asset.coverage_state === "disabled") return "Paused";
+      const time = schedule.local_time.slice(0, 5);
+      const weekday = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][schedule.weekday];
+      const cadence = schedule.frequency === "weekly" ? `Weekly · ${weekday} ${time}` : `Daily · ${time}`;
+      if (!schedule.next_run_at) return escapeHtml(cadence);
+      const next = new Intl.DateTimeFormat(undefined, {
+        timeZone: schedule.timezone, dateStyle: "medium", timeStyle: "short",
+      }).format(new Date(schedule.next_run_at));
+      return `<strong>${escapeHtml(cadence)}</strong><br><span class="muted">Next: ${escapeHtml(next)} · ${escapeHtml(schedule.timezone)}</span>`;
+    }
+
     function renderScanScheduleButton(asset) {
       if (!state.scanSchedulerEnabled || !asset.matching_scope_id) return "";
-      return ` <button type="button" data-action="edit-scan-schedule" data-scope="${escapeHtml(asset.matching_scope_id)}" data-target="${escapeHtml(asset.display_name || asset.selector)}">Schedule</button>`;
+      return `<button type="button" class="icon-button schedule-scan-action" aria-label="Schedule scans" title="Schedule scans" data-action="edit-scan-schedule" data-scope="${escapeHtml(asset.matching_scope_id)}" data-target="${escapeHtml(asset.display_name || asset.selector)}">${iconSvg("calendar")}</button>`;
     }
 
     const scheduleDialog = document.getElementById("scan-schedule-dialog");
@@ -5511,7 +5892,7 @@
     const scheduleStatus = document.getElementById("scan-schedule-status");
     const scheduleSave = scheduleForm.querySelector('button[type="submit"]');
     const scheduleFields = scheduleForm.elements;
-    let scheduleEndpoint = "";
+    let scheduleSession;
 
     function renderScanSchedule(schedule) {
       scheduleFields.enabled.checked = schedule?.enabled ?? true;
@@ -5544,7 +5925,8 @@
     async function openScanSchedule(button) {
       if (scheduleDialog.open) return;
       const endpoint = `/api/v1/ui/scopes/${encodeURIComponent(button.dataset.scope)}/scan-schedule`;
-      scheduleEndpoint = endpoint;
+      const session = {endpoint};
+      scheduleSession = session;
       document.getElementById("scan-schedule-target").textContent = button.dataset.target;
       renderScanSchedule(null);
       scheduleStatus.textContent = "Loading schedule…";
@@ -5552,11 +5934,11 @@
       scheduleDialog.showModal();
       try {
         const schedule = await fetchJson(endpoint);
-        if (scheduleEndpoint !== endpoint) return;
+        if (!scheduleDialog.open || scheduleSession !== session) return;
         renderScanSchedule(schedule);
         scheduleSave.disabled = false;
       } catch (error) {
-        if (scheduleEndpoint === endpoint) scheduleStatus.textContent = error.message;
+        if (scheduleDialog.open && scheduleSession === session) scheduleStatus.textContent = error.message;
       }
     }
 
@@ -5564,14 +5946,18 @@
       document.getElementById("scan-schedule-weekday").classList.toggle("hidden", scheduleFields.frequency.value !== "weekly");
     });
     document.getElementById("close-scan-schedule").addEventListener("click", () => scheduleDialog.close());
-    scheduleDialog.addEventListener("close", () => { scheduleEndpoint = ""; });
+    scheduleDialog.addEventListener("close", () => {
+      if (!scheduleDialog.open) scheduleSession = undefined;
+    });
     scheduleForm.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const endpoint = scheduleEndpoint;
+      const session = scheduleSession;
+      if (!scheduleDialog.open || !session || scheduleSave.disabled) return;
       const frequency = scheduleFields.frequency.value;
       scheduleSave.disabled = true;
+      scheduleStatus.textContent = "Saving schedule…";
       try {
-        const schedule = await fetchJson(endpoint, {
+        await fetchJson(session.endpoint, {
           method: "PUT",
           body: JSON.stringify({
             enabled: scheduleFields.enabled.checked,
@@ -5581,37 +5967,45 @@
             weekday: frequency === "weekly" ? Number(scheduleFields.weekday.value) : null,
           }),
         });
-        if (scheduleEndpoint === endpoint) renderScanSchedule(schedule);
       } catch (error) {
-        if (scheduleEndpoint === endpoint) scheduleStatus.textContent = error.message;
-      } finally {
-        if (scheduleEndpoint === endpoint) scheduleSave.disabled = false;
+        if (scheduleDialog.open && scheduleSession === session) {
+          scheduleStatus.textContent = error.message;
+          scheduleSave.disabled = false;
+        }
+        return;
       }
+      if (scheduleDialog.open && scheduleSession === session) scheduleDialog.close();
+      await reloadProtectedAssetsFromFilters();
     });
 
     function renderScopeScanAction(asset) {
       const scopeId = asset.matching_scope_id || "";
       const tracked = state.scopeScanSubmissions[scopeId];
       const terminalStates = ["completed", "failed", "cancelled"];
+      if (tracked?.job_id && tracked.job_id === asset.last_scan?.job_id && !tracked.cancelling
+          && terminalStates.includes(asset.last_scan?.state)) {
+        tracked.state = asset.last_scan.state;
+      }
       if (asset.last_scan?.job_id && !terminalStates.includes(asset.last_scan.state)
           && (!tracked || (tracked.job_id !== asset.last_scan.job_id && terminalStates.includes(tracked.state)))) {
         state.scopeScanSubmissions[scopeId] = {job_id: asset.last_scan.job_id, state: asset.last_scan.state};
       }
       const submission = state.scopeScanSubmissions[scopeId];
+      const schedule = renderScanScheduleButton(asset);
       const last = submission || asset.last_scan;
       if (submission?.starting) {
-        return `<button type="button" class="scan-action" disabled aria-busy="true">Starting scan…</button>`;
+        return `<span class="scope-scan-buttons"><button type="button" class="scan-action" disabled aria-busy="true">Starting scan…</button>${schedule}</span>`;
       }
       const active = last && !["completed", "failed", "cancelled"].includes(last.state);
       const view = last?.job_id ? `<button type="button" class="icon-button view-scan-action" data-action="view-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="View scan results" title="View scan results">${iconSvg("eye")}</button>` : "";
       if (active) {
         return `<div class="scope-scan-actions">
           <span class="pill scan-status" role="status">${submission?.cancelling ? "Cancelling…" : "Scan in progress"}</span>
-          <span class="scope-scan-buttons">${view}<button type="button" class="icon-button danger" data-action="cancel-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="Cancel Full Scan" title="Stop future scan work. Files already being processed may finish." ${submission?.cancelling ? 'disabled aria-busy="true"' : ""}>${iconSvg("x")}</button></span>
+          <span class="scope-scan-buttons"><button type="button" class="icon-button cancel-scan-action" data-action="cancel-scope-scan" data-scope="${escapeHtml(scopeId)}" data-job="${escapeHtml(last.job_id)}" aria-label="Cancel Full Scan" title="Stop future scan work. Files already being processed may finish." ${submission?.cancelling ? 'disabled aria-busy="true"' : ""}>${iconSvg("x")}</button>${view}${schedule}</span>
         </div>`;
       }
       const status = last?.job_id && last.state !== "completed" ? `<span class="pill scan-status" role="status">${last.state === "failed" ? "Scan failed" : "Scan cancelled"}</span>` : "";
-      return `<div class="scope-scan-actions">${status}<span class="scope-scan-buttons"><button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-target="${escapeHtml(asset.display_name || asset.selector)}" data-scope="${escapeHtml(scopeId)}" aria-label="Start Full Scan" title="Start Full Scan — review scope and resource impact">${iconSvg("play")}</button>${view}</span></div>`;
+      return `<div class="scope-scan-actions">${status}<span class="scope-scan-buttons"><button class="icon-button scan-action" type="button" data-action="scan-asset-scope" data-target="${escapeHtml(asset.display_name || asset.selector)}" data-scope="${escapeHtml(scopeId)}" aria-label="Start Full Scan" title="Start Full Scan — review scope and resource impact">${iconSvg("play")}</button>${view}${schedule}</span></div>`;
     }
 
     function requestScanCancellation(jobId) {
@@ -5686,24 +6080,51 @@
         throw error;
       } finally {
         renderProtectedAssets();
+        updateProtectedAssetsPolling();
       }
     }
 
-    // Refresh only tracked jobs, without rediscovering storage or changing pages.
-    window.setInterval(async () => {
-      if (document.hidden || state.activeTab !== "assets" || state.activeAssetsTab !== "protected") return;
+    async function refreshProtectedScanStatuses() {
+      const terminalStates = ["completed", "failed", "cancelled"];
       for (const [scopeId, scan] of Object.entries(state.scopeScanSubmissions)) {
-        if (!scan.job_id || scan.checking || scan.cancelling || ["completed", "failed", "cancelled"].includes(scan.state)) continue;
-        scan.checking = true;
+        if (state.scopeScanSubmissions[scopeId] !== scan || !scan.job_id || scan.cancelling || terminalStates.includes(scan.state)) continue;
         try {
           const job = await fetchJson(`/api/v1/execution/jobs/${encodeURIComponent(scan.job_id)}`);
-          if (scan.cancelling || ["completed", "failed", "cancelled"].includes(scan.state)) continue;
+          if (state.scopeScanSubmissions[scopeId] !== scan || scan.cancelling || terminalStates.includes(scan.state)) continue;
           scan.state = job.state;
-          if (["completed", "failed", "cancelled"].includes(job.state)) renderProtectedAssets();
-        } catch (error) { console.warn("Scan status refresh failed", error); }
-        finally { scan.checking = false; }
+          if (terminalStates.includes(job.state)) renderProtectedAssets();
+        } catch (error) {
+          console.warn("Scan status refresh failed", error);
+        }
       }
-    }, 10000);
+    }
+
+    let protectedAssetsPollTimer = null;
+    function updateProtectedAssetsPolling() {
+      stopRefreshCountdown("refresh-protected-assets", protectedAssetsPollTimer);
+      protectedAssetsPollTimer = null;
+      if (document.hidden || state.activeTab !== "assets" || state.activeAssetsTab !== "protected") return;
+      const button = document.getElementById("refresh-protected-assets");
+      if (button.disabled) return;
+      protectedAssetsPollTimer = startRefreshCountdown("refresh-protected-assets", 10000, () => {
+        protectedAssetsPollTimer = null;
+        pollProtectedAssets();
+      });
+    }
+
+    async function refreshProtectedAssets() {
+      const button = document.getElementById("refresh-protected-assets");
+      if (button.disabled) return;
+      await withProtectedAssetsRefresh(async () => {
+        await loadProtectedAssets();
+        await refreshProtectedScanStatuses();
+      });
+    }
+
+    function pollProtectedAssets() {
+      if (document.hidden || state.activeTab !== "assets" || state.activeAssetsTab !== "protected") return;
+      return refreshProtectedAssets().catch(showProtectedAssetsError);
+    }
 
     document.querySelectorAll(".rail-item").forEach((button) => {
       button.addEventListener("click", () => {
@@ -5752,16 +6173,15 @@
         }
       });
     });
-    document.getElementById("refresh-connectors").addEventListener("click", (event) => {
-      withBusyButton(event.currentTarget, async () => {
-        try {
-          await loadConnectors();
-        } catch (error) {
-          alert(`Connector refresh failed: ${error.message}`);
-        }
-      });
+    document.getElementById("refresh-connectors").addEventListener("click", () => {
+      loadConnectors().catch((error) => alert("Connector refresh failed: " + error.message));
     });
-    document.addEventListener("visibilitychange", updateConnectorsPolling);
+    document.addEventListener("visibilitychange", () => {
+      updateConnectorsPolling();
+      updateProtectedAssetsPolling();
+      updateScanResultsPolling();
+      scheduleDashboardRefresh();
+    });
     document.getElementById("open-add-connector")?.addEventListener("click", () => setConnectorDrawerOpen(true));
     document.getElementById("close-add-connector").addEventListener("click", () => setConnectorDrawerOpen(false));
     document.getElementById("connector-drawer-backdrop").addEventListener("click", () => setConnectorDrawerOpen(false));
@@ -5844,14 +6264,11 @@
     document.getElementById("protected-page-next").addEventListener("click", () => {
       loadNextProtectedAssetsPage().catch(showProtectedAssetsError);
     });
-    document.getElementById("refresh-scan-results").addEventListener("click", (event) => {
-      withBusyButton(event.currentTarget, async () => {
-        try {
-          await loadScanResults();
-        } catch (error) {
-          alert(`Scan result refresh failed: ${error.message}`);
-        }
-      });
+    document.getElementById("refresh-protected-assets").addEventListener("click", () => {
+      refreshProtectedAssets().catch(showProtectedAssetsError);
+    });
+    document.getElementById("refresh-scan-results").addEventListener("click", () => {
+      refreshScanResults({ manual: true });
     });
     document.getElementById("toggle-scan-compare").addEventListener("click", () => {
       if (state.scanCompareVisible) {
@@ -5866,13 +6283,7 @@
     document.getElementById("scan-results-poll").addEventListener("change", (event) => {
       state.scanResultsPolling = event.target.checked;
       updateScanResultsPolling();
-      if (state.scanResultsPolling) {
-        scheduleNextScanResultsPoll();
-        pollScanResults();
-      } else {
-        state.scanResultsNextPollAt = null;
-        updateScanResultsCountdown();
-      }
+      if (state.scanResultsPolling) refreshScanResults();
     });
     document.getElementById("refresh-policies").addEventListener("click", (event) => {
       withBusyButton(event.currentTarget, async () => {
@@ -5954,6 +6365,9 @@
       if (viewScan) {
         await withBusyButton(viewScan, async () => {
           try {
+            state.scanIntegrationId = "";
+            state.scanIntegrationIds = [];
+            state.selectComparisonOnLoad = false;
             state.scanCompletedStart = "";
             state.scanCompletedEnd = "";
             state.scanJobTypeFilter = "";
@@ -6045,23 +6459,8 @@
           openProtectionProfilePicker(asset);
           select.disabled = false;
           select.value = "";
-        } else if (action === "enable-existing" && select.dataset.scope) {
-          const existing = state.protectedAssets.find((row) => row.matching_scope_id === asset.matchingScopeId);
-          if (!await confirmProtectionChange(asset, protectedAssetPolicyLabel(existing || {}))) return;
-          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
-            method: "POST",
-            body: JSON.stringify({ enabled: true }),
-          });
-          await loadOverview();
-          await loadProtectedAssets();
-        } else if (action === "disable" && select.dataset.scope) {
-          if (!await confirmProtectionChange(asset, "Unprotected", true)) return;
-          await fetchJson(`/api/v1/ui/scopes/${encodeURIComponent(select.dataset.scope)}/enabled`, {
-            method: "POST",
-            body: JSON.stringify({ enabled: false }),
-          });
-          await loadOverview();
-          await loadProtectedAssets();
+        } else if (["enable-existing", "disable"].includes(action) && asset.matchingScopeId) {
+          await setAssetProtectionEnabled(asset, action === "enable-existing");
         } else {
           select.disabled = false;
           select.value = "";
@@ -6175,6 +6574,9 @@
       }
     });
 
+    if (state.scanIntegrationId) {
+      dashboardConnector.add(new Option(state.scanIntegrationId, state.scanIntegrationId, true, true));
+    }
     const dashboardDays = consoleParams.get("dashboard_days");
     if (["1", "7", "30"].includes(dashboardDays)) document.getElementById("dashboard-days").value = dashboardDays;
     initNav();

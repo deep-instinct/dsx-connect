@@ -47,15 +47,27 @@ def apply_schema(db_url: str) -> None:
 
 
 class PostgresJobRepository(JobRepository):
-    def dashboard_stages(self, since: datetime):
+    def dashboard_jobs(self, since: datetime, end: datetime, integration_id: str | None = None):
+        with self._connect() as conn, conn.cursor(name="dashboard_jobs") as cur:
+            cur.execute("""
+                SELECT job_id, job_type, state, integration_id, created_at, completed_at
+                FROM cp_jobs WHERE job_type <> 'protection.bulk' AND completed_at BETWEEN %s AND %s
+                  AND (%s::text IS NULL OR integration_id = %s)
+            """, (since, end, integration_id, integration_id))
+            for row in cur:
+                yield JobRecord.model_validate(row)
+
+    def dashboard_stages(self, since: datetime, integration_id: str | None = None):
         with self._connect() as conn, conn.cursor(name="dashboard_history") as cur:
             cur.execute("""
                 SELECT scan_stage_json AS scan_stage, policy_stage_json AS policy_stage,
-                       remediation_stage_json AS remediation_stage, created_at, completed_at, state,
-                       job_id, job_item_id, object_identity
-                FROM cp_job_items WHERE (updated_at >= %s OR completed_at IS NULL)
-                AND job_id IN (SELECT job_id FROM cp_jobs WHERE job_type <> 'protection.bulk')
-            """, (since,))
+                       remediation_stage_json AS remediation_stage, item.created_at, item.completed_at, item.state,
+                       item.job_id, job_item_id, item.object_identity, job.integration_id
+                FROM cp_job_items AS item JOIN cp_jobs AS job ON job.job_id = item.job_id
+                WHERE (item.updated_at >= %s OR item.completed_at IS NULL)
+                  AND job.job_type <> 'protection.bulk'
+                  AND (%s::text IS NULL OR job.integration_id = %s)
+            """, (since, integration_id, integration_id))
             yield from cur
 
     def __init__(self, db_url: str) -> None:
@@ -112,6 +124,38 @@ class PostgresJobRepository(JobRepository):
             claimed = cur.fetchone() is not None
             conn.commit()
             return claimed
+
+    def dashboard_revision(self, since: datetime, integration_id: str | None = None) -> str:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                  (SELECT md5(string_agg(job_id || ':' || xmin::text, ',' ORDER BY job_id))
+                   FROM cp_jobs WHERE job_type <> 'protection.bulk'
+                     AND (%s::text IS NULL OR integration_id = %s)) AS jobs,
+                  (SELECT md5(string_agg(item.job_item_id || ':' || item.xmin::text, ',' ORDER BY item.job_item_id))
+                   FROM cp_job_items item JOIN cp_jobs job ON job.job_id = item.job_id
+                   WHERE job.job_type <> 'protection.bulk'
+                     AND (item.updated_at >= %s OR item.completed_at IS NULL)
+                     AND (%s::text IS NULL OR job.integration_id = %s)) AS items
+            """, (integration_id, integration_id, since, integration_id, integration_id))
+            row = cur.fetchone()
+        return str(row["jobs"]) + ":" + str(row["items"])
+
+    def scan_result_revisions(self, job_ids: list[str]) -> dict[str, str]:
+        if not job_ids:
+            return {}
+        # xmin changes on every row update, including updates from transactions
+        # that commit out of timestamp order. No stage JSON needs decoding.
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("""
+                SELECT job_id,
+                       md5(string_agg(job_item_id || ':' || xmin::text, ',' ORDER BY job_item_id)) AS revision
+                FROM cp_job_items
+                WHERE job_id = ANY(%s)
+                GROUP BY job_id
+            """, (job_ids,))
+            revisions = {row["job_id"]: row["revision"] for row in cur.fetchall()}
+        return {job_id: revisions.get(job_id, "empty") for job_id in job_ids}
 
     def list_jobs(
         self,

@@ -2,18 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+from collections import OrderedDict
+from threading import Lock
 import re
 import ssl
 import statistics
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from fastapi import BackgroundTasks, APIRouter, Depends, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field, field_validator
 
 from dsx_connect_v2.api.dependencies import get_control_plane_service
@@ -47,12 +50,85 @@ from dsx_connect_v2.version import DSX_CONNECT_VERSION
 router = APIRouter(prefix="/ui", tags=["ui"])
 
 
+DASHBOARD_WIDGET_SOURCES = {
+    'dashboard-throughput': ['history'],
+    'dashboard-backlog': ['history'],
+    'dashboard-latency': ['history'],
+    'dashboard-worker-time': ['history'],
+    'dashboard-dsxa-time': ['history'],
+    'dashboard-job-duration': ['history'],
+    'dashboard-job-activity': ['history'],
+    'dashboard-under-load': ['history'],
+    'dashboard-history': ['history'],
+    'dashboard-quarantine': ['history'],
+    'dashboard-types': ['history'],
+    'dashboard-kpis': ['overview', 'connectors'],
+    'dashboard-coverage': ['overview'],
+    'dashboard-work': ['overview'],
+    'dashboard-outcomes': ['results'],
+    'dashboard-attention': ['overview', 'results', 'connectors', 'scanner'],
+    'dashboard-connectors': ['connectors'],
+    'dashboard-jobs': ['overview', 'results'],
+}
+
+
+@router.get("/dashboard/changes")
+def dashboard_widget_changes(
+    response: Response,
+    widgets: list[str] = Query(default=[], max_length=32),
+    days: int = Query(default=7),
+    integration_id: str | None = None,
+    job_service: JobService = Depends(get_job_service),
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> dict:
+    if days not in {1, 7, 30}:
+        raise HTTPException(422, "days must be 1, 7, or 30")
+    if any(widget not in DASHBOARD_WIDGET_SOURCES for widget in widgets):
+        raise HTTPException(422, "Unknown dashboard widget")
+    response.headers["Cache-Control"] = "private, no-store"
+    requested = sorted(set(widgets))
+    sources = {source for widget in requested for source in DASHBOARD_WIDGET_SOURCES[widget]}
+    now = datetime.now(timezone.utc)
+    signals = {}
+    if sources & {"history", "overview", "results"}:
+        since = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2 * days + 1)
+        revision = job_service.repo.dashboard_revision(since, integration_id)
+        signals.update(history=(revision, now.strftime("%Y-%m-%dT%H:%M")), overview=revision, results=revision)
+    if sources & {"overview", "connectors", "results"}:
+        integrations = sorted((row.model_dump_json() for row in control_plane.list_integrations()))
+        scopes = sorted((row.model_dump_json() for row in control_plane.list_scopes()))
+        if "overview" in sources:
+            signals["overview"] = (signals["overview"], integrations, scopes)
+        if "results" in sources:
+            signals["results"] = (signals["results"], integrations, scopes)
+        if "connectors" in sources:
+            instances = sorted(row.model_dump_json() for row in control_plane.list_connector_instances())
+            signals["connectors"] = (integrations, scopes, instances, int(now.timestamp()) // 30)
+    if "scanner" in sources:
+        # External health may change without a database write.
+        signals["scanner"] = int(now.timestamp()) // 15
+    versions = {}
+    for widget in requested:
+        dependencies = DASHBOARD_WIDGET_SOURCES[widget]
+        content = ("dashboard-v1", days, integration_id, [(source, signals[source]) for source in dependencies])
+        versions[widget] = {"revision": hashlib.sha256(json.dumps(content).encode()).hexdigest(),
+                            "sources": dependencies}
+    source_versions = {source: hashlib.sha256(json.dumps(
+        ("dashboard-source-v1", days, integration_id, signals[source]),
+    ).encode()).hexdigest() for source in sources}
+    return {"widgets": versions, "sources": source_versions}
+
+
 @router.get("/dashboard/history")
-def dashboard_scan_history(days: int = Query(default=7), job_service: JobService = Depends(get_job_service)) -> dict:
+def dashboard_scan_history(
+    request: Request,
+    days: int = Query(default=7),
+    integration_id: str | None = None,
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
     if days not in {1, 7, 30}:
         raise HTTPException(status_code=422, detail="days must be 1, 7, or 30")
-    from dsx_connect_v2.jobs.dashboard import dashboard_history
-    return dashboard_history(job_service.repo, days)
+    return request.app.state.dashboard_history_cache.get(job_service.repo, days, integration_id)
 
 def _validate_scan_interval(start: datetime, end: datetime) -> None:
     if start.utcoffset() is None or end.utcoffset() is None or not timedelta(0) < end - start <= timedelta(days=1):
@@ -64,11 +140,12 @@ def dashboard_scan_details(
     start: datetime, end: datetime,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=200),
+    integration_id: str | None = None,
     job_service: JobService = Depends(get_job_service),
 ) -> dict:
     _validate_scan_interval(start, end)
     from dsx_connect_v2.jobs.dashboard import dashboard_scans
-    return dashboard_scans(job_service.repo, start, end, offset, limit)
+    return dashboard_scans(job_service.repo, start, end, offset, limit, integration_id)
 
 
 _OPERATOR_CONSOLE_PATH = Path(__file__).resolve().parents[2] / "ui" / "operator_console.html"
@@ -255,6 +332,38 @@ class UIScanResultsResponse(BaseModel):
     stats: UIScanResultsStatsSummary = Field(default_factory=UIScanResultsStatsSummary)
 
 
+class ScanResultCache:
+    """Bound per-job summaries by both entry count and serialized size."""
+
+    def __init__(self, max_entries: int = 256, max_bytes: int = 32 * 1024 * 1024) -> None:
+        self._entries = OrderedDict()
+        self._lock = Lock()
+        self._max_entries = max_entries
+        self._max_bytes = max_bytes
+        self._size_bytes = 0
+
+    def get(self, key, build) -> UIScanResultSummary:
+        with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None:
+                self._entries.move_to_end(key)
+                return entry[0].model_copy(deep=True)
+        result = build()
+        size = len(result.model_dump_json().encode())
+        if size > self._max_bytes:
+            return result
+        with self._lock:
+            previous = self._entries.pop(key, None)
+            if previous is not None:
+                self._size_bytes -= previous[1]
+            self._entries[key] = (result.model_copy(deep=True), size)
+            self._size_bytes += size
+            while len(self._entries) > self._max_entries or self._size_bytes > self._max_bytes:
+                _, (_, removed_size) = self._entries.popitem(last=False)
+                self._size_bytes -= removed_size
+        return result
+
+
 class UIOverview(BaseModel):
     scan_scheduler_enabled: bool = False
     integrations: list[UIIntegrationSummary] = Field(default_factory=list)
@@ -343,6 +452,8 @@ class UIProtectedAssetSummary(BaseModel):
     selector: str
     coverage_state: str = "unknown"
     matching_scope_id: str | None = None
+    scan_schedule: ScanSchedule | None = None
+    monitoring_configured: bool = False
     policy: dict[str, Any] = Field(default_factory=dict)
     protected_entity: int | None = None
     inherited_protected_entity: int | None = None
@@ -2006,13 +2117,18 @@ async def set_ui_integration_enabled(
 
 
 @router.get("/overview", response_model=UIOverview)
-async def get_ui_overview(
+def get_ui_overview(
+    integration_id: str | None = None,
     control_plane: ControlPlaneService = Depends(get_control_plane_service),
     job_service: JobService = Depends(get_job_service),
 ) -> UIOverview:
     summaries = _list_ui_integration_summaries(control_plane)
     scopes = control_plane.list_scopes()
-    jobs = [job for job in job_service.list_jobs(limit=50) if job.job_type != bulk_protection.JOB_TYPE]
+    if integration_id is not None:
+        summaries = [row for row in summaries if row.integration.integration_id == integration_id]
+        scopes = [scope for scope in scopes if scope.integration_id == integration_id]
+    jobs = [job for job in job_service.list_jobs(integration_id=integration_id, limit=50)
+            if job.job_type != bulk_protection.JOB_TYPE]
     job_summaries = [_summarize_job(job_service, job) for job in jobs]
     return UIOverview(
         integrations=summaries, scopes=scopes, jobs=jobs, job_summaries=job_summaries,
@@ -2032,12 +2148,15 @@ async def list_ui_jobs(
 
 
 @router.get("/scan-results", response_model=UIScanResultsResponse)
-async def list_scan_results(
+def list_scan_results(
+    request: Request,
+    response: Response,
     completed_start: datetime | None = None,
     completed_end: datetime | None = None,
     job_id: str | None = None,
     integration_id: str | None = None,
     state: str | None = None,
+    integration_ids: list[str] = Query(default=[], max_length=5),
     limit: int = Query(default=50, ge=1, le=200),
     item_limit: int = Query(default=100, ge=1, le=1000),
     stats_item_limit: int = Query(default=1000, ge=1, le=5000),
@@ -2047,10 +2166,14 @@ async def list_scan_results(
     matching_jobs = None
     if (completed_start is None) != (completed_end is None):
         raise HTTPException(status_code=422, detail="completed_start and completed_end must be provided together")
+    if integration_ids and completed_start is None:
+        raise HTTPException(status_code=422, detail="A completed interval is required for multiple connectors")
     if completed_start is not None:
         _validate_scan_interval(completed_start, completed_end)
         from dsx_connect_v2.jobs.dashboard import dashboard_scan_job_ids
-        ids = dashboard_scan_job_ids(job_service.repo, completed_start, completed_end)
+        ids = dashboard_scan_job_ids(
+            job_service.repo, completed_start, completed_end, integration_id, frozenset(integration_ids),
+        )
         jobs = [job for key in ids if (job_id is None or key == job_id)
                 if (job := job_service.repo.get_job(key)) is not None]
         jobs = [job for job in jobs if (integration_id is None or job.integration_id == integration_id)
@@ -2064,12 +2187,25 @@ async def list_scan_results(
     else:
         jobs = job_service.list_jobs(integration_id=integration_id, state=state, limit=limit)
     jobs = [job for job in jobs if job.job_type != bulk_protection.JOB_TYPE]
-    results = [
-        _summarize_scan_result(job_service, job, item_limit=item_limit, stats_item_limit=stats_item_limit)
-        for job in jobs
-    ]
     integration_names = {i.integration_id: i.display_name for i in control_plane.list_integrations()}
     scope_names = {s.scope_id: s.display_name for s in control_plane.list_scopes()}
+    revisions = job_service.repo.scan_result_revisions([job.job_id for job in jobs])
+    job_keys = [(job.job_id, job.model_dump_json(), revisions[job.job_id], item_limit, stats_item_limit)
+                for job in jobs]
+    revision_data = ("scan-results-v1", sorted(request.query_params.multi_items()), matching_jobs,
+                     job_keys, sorted(integration_names.items()), sorted(scope_names.items()))
+    digest = hashlib.sha256(json.dumps(revision_data).encode()).hexdigest()
+    etag = 'W/"' + digest + '"'
+    headers = {"ETag": etag, "Cache-Control": "private, no-cache"}
+    validators = [value.strip().removeprefix("W/")
+                  for value in request.headers.get("if-none-match", "").split(",")]
+    if "*" in validators or etag.removeprefix("W/") in validators:
+        return Response(status_code=304, headers=headers)
+    response.headers.update(headers)
+    cache = request.app.state.scan_result_cache
+    results = [cache.get(key, lambda job=job: _summarize_scan_result(
+        job_service, job, item_limit=item_limit, stats_item_limit=stats_item_limit,
+    )) for job, key in zip(jobs, job_keys)]
     for result in results:
         result.target.connector_name = integration_names.get(result.job.integration_id) or result.job.payload.get("connectorName")
         result.target.scope_name = scope_names.get(result.job.scope_id)
@@ -2126,8 +2262,75 @@ async def discover_integration_assets(
     )
 
 
+def _asset_scan_schedules(
+    job_service: JobService, scopes: list[ProtectedScopeRecord],
+) -> dict[str, ScanSchedule]:
+    if not settings.scan_scheduler_enabled:
+        return {}
+    return _scan_schedule_store(job_service).list_for_scopes([scope.scope_id for scope in scopes])
+
+
+def _scope_has_monitoring(scope: ProtectedScopeRecord | None) -> bool:
+    return bool(scope and scope.enabled and scope.mode == "monitor")
+
+
+def _scope_schedule_status(scope: ProtectedScopeRecord, schedule: ScanSchedule | None) -> str:
+    if schedule is None:
+        return "none"
+    return "scheduled" if schedule.enabled and scope.enabled else "paused"
+
+
+_SCOPE_VIEW_CURSOR = "@protected-scopes"
+
+
+def _list_configured_scope_assets(
+    *, scopes, integrations, schedules, schedule_status, monitoring, coverage_state,
+    filter_mode, filter_value, asset_type, descending, cursor_map, limit, job_service,
+) -> UIAssetsProtectedResponse:
+    integrations_by_id = {integration.integration_id: integration for integration in integrations}
+    matching = []
+    for scope in scopes:
+        schedule = schedules.get(scope.scope_id)
+        if schedule_status and _scope_schedule_status(scope, schedule) != schedule_status:
+            continue
+        monitoring_configured = _scope_has_monitoring(scope)
+        if monitoring and monitoring_configured != (monitoring == "on"):
+            continue
+        if coverage_state and ("protected" if scope.enabled else "disabled") != coverage_state:
+            continue
+        integration = integrations_by_id[scope.integration_id]
+        asset, = _summarize_scope_backed_protected_assets_for_integration(
+            integration=integration, scopes=[scope], asset_type=_effective_asset_type(asset_type, integration),
+            scopes_by_id={scope.scope_id: scope}, job_service=job_service, latest_jobs_by_scope={},
+        )
+        asset.scan_schedule = schedule
+        asset.monitoring_configured = monitoring_configured
+        if _asset_matches_filter(asset, mode=filter_mode, value=filter_value):
+            matching.append(asset)
+    if schedule_status == "scheduled":
+        def next_run_key(asset: UIProtectedAssetSummary) -> tuple[bool, float, str]:
+            next_run = asset.scan_schedule.next_run_at if asset.scan_schedule else None
+            timestamp = next_run.timestamp() if next_run else 0.0
+            return next_run is None, -timestamp if descending else timestamp, asset.matching_scope_id or ""
+
+        matching.sort(key=next_run_key)
+    raw_offset = (cursor_map or {}).get(_SCOPE_VIEW_CURSOR) or "0"
+    if not raw_offset.isascii() or not raw_offset.isdigit() or len(raw_offset) > 10:
+        raise HTTPException(422, "Invalid protected scope cursor")
+    offset = int(raw_offset)
+    page = matching[offset:offset + limit]
+    latest = _latest_jobs_by_scope(job_service, integration_ids={asset.integration_id for asset in page}) if page else {}
+    for asset in page:
+        asset.last_scan, asset.findings = _protected_asset_last_scan(job_service, latest.get(asset.matching_scope_id or ""))
+    following = offset + len(page)
+    return UIAssetsProtectedResponse(
+        assets=page,
+        next_cursors={_SCOPE_VIEW_CURSOR: str(following) if following < len(matching) else None},
+    )
+
+
 @router.get("/assets/protected", response_model=UIAssetsProtectedResponse)
-async def list_protected_assets(
+def list_protected_assets(
     connector_type: str | None = Query(default=None),
     integration_id: str | None = Query(default=None),
     integration_ids: list[str] = Query(default=[]),
@@ -2135,6 +2338,9 @@ async def list_protected_assets(
     asset_type: str = Query(default="auto", alias="type"),
     source: str = Query(default="all"),
     coverage_state: str | None = Query(default=None),
+    schedule_status: Literal["scheduled", "paused", "none"] | None = None,
+    monitoring: Literal["on", "off"] | None = None,
+    next_run_order: Literal["asc", "desc"] = "asc",
     limit: int = Query(default=100, ge=1, le=1000),
     cursor: str | None = Query(default=None),
     asset_filter_mode: str | None = Query(default=None),
@@ -2161,7 +2367,9 @@ async def list_protected_assets(
     if connector_type is not None:
         integrations = [integration for integration in integrations if integration.platform == connector_type]
 
-    scopes = control_plane.list_scopes()
+    selected_integration_ids = {integration.integration_id for integration in integrations}
+    scopes = [scope for scope in control_plane.list_scopes() if scope.integration_id in selected_integration_ids]
+    schedules = _asset_scan_schedules(job_service, scopes)
     scopes_by_id = {scope.scope_id: scope for scope in scopes}
     latest_jobs = {}
     assets: list[UIProtectedAssetSummary] = []
@@ -2175,6 +2383,16 @@ async def list_protected_assets(
     normalized_coverage_state = str(coverage_state or "").strip().lower() or None
     if normalized_coverage_state == "all":
         normalized_coverage_state = None
+
+    # Scheduled and monitoring scopes come from the control plane. Filtering
+    # and ordering them here includes scopes whose connector discovery is down.
+    if schedule_status in {"scheduled", "paused"} or monitoring == "on":
+        return _list_configured_scope_assets(
+            scopes=scopes, integrations=integrations, schedules=schedules, schedule_status=schedule_status,
+            monitoring=monitoring, coverage_state=normalized_coverage_state, filter_mode=normalized_filter_mode,
+            filter_value=asset_filter_value, asset_type=asset_type, descending=next_run_order == "desc", cursor_map=cursor_map,
+            limit=limit, job_service=job_service,
+        )
 
     for integration in integrations:
         if paged and len(assets) >= limit:
@@ -2234,6 +2452,14 @@ async def list_protected_assets(
                 job_service=job_service,
                 latest_jobs_by_scope=latest_jobs,
             )
+        for asset in integration_assets:
+            scope = scopes_by_id.get(asset.matching_scope_id or "")
+            asset.monitoring_configured = _scope_has_monitoring(scope)
+            asset.scan_schedule = schedules.get(asset.matching_scope_id or "")
+        if schedule_status == "none":
+            integration_assets = [asset for asset in integration_assets if asset.scan_schedule is None]
+        if monitoring == "off":
+            integration_assets = [asset for asset in integration_assets if not asset.monitoring_configured]
         if normalized_coverage_state is not None:
             integration_assets = [
                 asset for asset in integration_assets if asset.coverage_state == normalized_coverage_state

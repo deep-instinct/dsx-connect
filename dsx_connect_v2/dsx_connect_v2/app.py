@@ -8,10 +8,11 @@ from dsx_connect_v2.api.routes.control_plane import router as control_plane_rout
 from dsx_connect_v2.api.routes.execution import router as execution_router
 from dsx_connect_v2.api.routes.file_gateway import router as file_gateway_router
 from dsx_connect_v2.api.routes.health import router as health_router
-from dsx_connect_v2.api.routes.ui import _load_operator_console_html, router as ui_router
+from dsx_connect_v2.api.routes.ui import ScanResultCache, _load_operator_console_html, router as ui_router
 from dsx_connect_v2.config import settings
 from dsx_connect_v2.control_plane.bootstrap import bootstrap_control_plane
 from dsx_connect_v2.jobs.bootstrap import bootstrap_job_bus, bootstrap_job_service
+from dsx_connect_v2.jobs.dashboard import DashboardHistoryCache
 from dsx_connect_v2.version import DSX_CONNECT_VERSION
 
 _UI_ASSETS_DIR = Path(__file__).resolve().parent / "ui" / "assets"
@@ -32,6 +33,8 @@ def create_app() -> FastAPI:
     app.state.job_bus = job_bus_bootstrap.bus
     app.state.job_service_bootstrap = job_service_bootstrap
     app.state.job_service = job_service_bootstrap.service
+    app.state.dashboard_history_cache = DashboardHistoryCache()
+    app.state.scan_result_cache = ScanResultCache()
     app.include_router(health_router, prefix=settings.api_prefix)
     app.include_router(control_plane_router, prefix=settings.api_prefix)
     app.include_router(execution_router, prefix=settings.api_prefix)

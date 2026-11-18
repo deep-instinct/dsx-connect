@@ -293,6 +293,11 @@ Before publishing release artifacts, validate the local path with the workflows 
 Use the Operator Console to confirm connector registration, asset inventory, and scan dispatch before cutting a release.
 
 
+## November 18, 2026 release
+
+- DSX Connect core/chart: **2.0.41** — conditional Scan Results polling, dashboard widget revisions and selective refreshes, per-job summary caching, responsive navigation, scan timestamps and status columns, and consistent scan action buttons.
+- Scheduled scans expose cadence and next-run filters. Short successful scans remain visible on the under-load chart through activity markers.
+
 ## October 28, 2026 release
 
 - DSX Connect core/chart: **2.0.40** — opt-in daily and weekly scans for protected assets.

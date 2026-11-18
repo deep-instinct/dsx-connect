@@ -8,6 +8,7 @@ import sys
 import time
 import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, AsyncIterable, Awaitable, Callable
 
@@ -936,6 +937,7 @@ async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> S
         )
     read_result = None
     try:
+        worker_started_at = datetime.now(timezone.utc)
         read_started = time.perf_counter()
         read_result = await reader.acquire(request)
         read_elapsed_ms = (time.perf_counter() - read_started) * 1000.0
@@ -997,6 +999,8 @@ async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> S
         except DSXAError as exc:
             code, message = _classify_dsxa_transport_error(exc)
             raise RuntimeError(f"{code}: {message}") from exc
+        worker_finished_at = datetime.now(timezone.utc)
+        worker_elapsed_ms = (time.perf_counter() - read_started) * 1000.0
         dsxa_elapsed_ms = (time.perf_counter() - dsxa_started) * 1000.0
         result = map_dsxa_scan_response(response)
         proxy_response = read_result.details.get("proxyResponse")
@@ -1015,6 +1019,9 @@ async def execute_scan_via_dsxa(request: ScanItemRequested, reader: Reader) -> S
             "transport": settings.scanner.transport,
             "contentLength": read_result.content_length,
             "contentType": proxy_response.get("content_type") if isinstance(proxy_response, dict) else None,
+            "workerStartedAt": worker_started_at.isoformat(),
+            "workerFinishedAt": worker_finished_at.isoformat(),
+            "workerElapsedMs": round(worker_elapsed_ms, 3),
             "readerElapsedMs": round(read_elapsed_ms, 3),
             "requestElapsedMs": getattr(response, "dsxconnect_request_elapsed_ms", None) or round(read_elapsed_ms + dsxa_elapsed_ms, 3),
             "streamReadElapsedMs": round(stream_timing.elapsed_ms, 3) if stream_timing is not None else None,

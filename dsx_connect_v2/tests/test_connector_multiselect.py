@@ -105,3 +105,46 @@ def test_cursor_for_removed_connector_does_not_leave_endless_next_page(env,monke
     assert result['next_cursors'] == {'a':None}
     assert result['assets'] == []
     assert calls == []
+
+
+def test_schedule_filters_and_global_next_run_sort(env, monkeypatch):
+    from datetime import datetime, timezone
+
+    from dsx_connect_v2.api.routes import ui
+    from dsx_connect_v2.control_plane.scan_schedules import ScanSchedule
+
+    _, cp, client = env
+    first, second, paused = [
+        cp.create_scope(ProtectedScopeCreate(
+            integration_id=integration, scope_type="path", resource_selector=name,
+            display_name=name, mode=mode,
+        ))
+        for integration, name, mode in [
+            ("a", "weekly", "full_scan"), ("b", "daily", "monitor"), ("a", "paused", "full_scan"),
+        ]
+    ]
+    schedules = {
+        scope.scope_id: ScanSchedule(
+            scope_id=scope.scope_id, enabled=enabled, frequency="daily", local_time="02:00",
+            timezone="UTC", next_run_at=datetime(2026, 11, day, 2, tzinfo=timezone.utc) if enabled else None,
+            last_run_at=None, last_outcome=None, last_reason=None, last_job_id=None,
+        )
+        for scope, enabled, day in [(first, True, 12), (second, True, 11), (paused, False, 10)]
+    }
+    monkeypatch.setattr(ui, "_asset_scan_schedules", lambda *_: schedules)
+    calls = listing(monkeypatch, {"a": ["weekly", "paused", "unscheduled"], "b": ["daily"]})
+    url = "/api/v1/ui/assets/protected"
+    params = {"schedule_status": "scheduled", "limit": 1, "cursors": "{}"}
+    page_one = client.get(url, params=params).json()
+    assert page_one["assets"][0]["matching_scope_id"] == second.scope_id
+    assert page_one["assets"][0]["monitoring_configured"] is True
+    assert page_one["assets"][0]["scan_schedule"]["next_run_at"].startswith("2026-11-11")
+    page_two = client.get(url, params={**params, "cursors": json.dumps(page_one["next_cursors"])}).json()
+    assert page_two["assets"][0]["matching_scope_id"] == first.scope_id
+    assert client.get(url, params={**params, "next_run_order": "desc"}).json()["assets"][0]["matching_scope_id"] == first.scope_id
+    assert client.get(url, params={**params, "monitoring": "off"}).json()["assets"][0]["matching_scope_id"] == first.scope_id
+    assert client.get(url, params={"schedule_status": "paused"}).json()["assets"][0]["matching_scope_id"] == paused.scope_id
+    assert calls == []
+
+    discovered = client.get(url, params={"integration_id": "a", "schedule_status": "none"}).json()["assets"]
+    assert [row["selector"] for row in discovered] == ["unscheduled"]

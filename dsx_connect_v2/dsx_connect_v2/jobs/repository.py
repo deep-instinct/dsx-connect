@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any
 import uuid
+import hashlib
 import threading
 from contextlib import contextmanager
 from fastapi import HTTPException
@@ -28,8 +29,20 @@ def utcnow() -> datetime:
 
 
 class JobRepository(ABC):
-    def dashboard_stages(self, since: datetime):
+    def dashboard_revision(self, since: datetime, integration_id: str | None = None) -> str:
+        """Fingerprint persisted history without decoding stage payloads."""
+        raise NotImplementedError
+
+    def scan_result_revisions(self, job_ids: list[str]) -> dict[str, str]:
+        """Return item revisions without loading scan result payloads."""
+        raise NotImplementedError
+
+    def dashboard_stages(self, since: datetime, integration_id: str | None = None):
         """Yield persisted stages for historical dashboard aggregation."""
+        raise NotImplementedError
+
+    def dashboard_jobs(self, since: datetime, end: datetime, integration_id: str | None = None):
+        """Yield operational jobs that reached a terminal state in the dashboard window."""
         raise NotImplementedError
 
     def has_active_scope_scan(self, scope_id: str) -> bool:
@@ -213,13 +226,44 @@ class JobRepository(ABC):
 
 
 class InMemoryJobRepository(JobRepository):
-    def dashboard_stages(self, since: datetime):
+    def dashboard_revision(self, since: datetime, integration_id: str | None = None) -> str:
+        selected = {job.job_id: job for job in self._jobs.values()
+                    if job.job_type != "protection.bulk"
+                    and (integration_id is None or job.integration_id == integration_id)}
+        digest = hashlib.sha256()
+        for job_id, job in sorted(selected.items()):
+            digest.update(job.model_dump_json().encode())
+        for item_id, item in sorted(self._job_items.items()):
+            if item.job_id in selected and (item.updated_at >= since or item.completed_at is None):
+                digest.update(item.model_dump_json().encode())
+        return digest.hexdigest()
+
+    def scan_result_revisions(self, job_ids: list[str]) -> dict[str, str]:
+        selected = set(job_ids)
+        hashes = {job_id: hashlib.sha256() for job_id in selected}
+        for item_id, item in sorted(self._job_items.items()):
+            if item.job_id in selected:
+                hashes[item.job_id].update(item.model_dump_json().encode())
+        return {job_id: digest.hexdigest() for job_id, digest in hashes.items()}
+
+    def dashboard_jobs(self, since: datetime, end: datetime, integration_id: str | None = None):
+        for job in self._jobs.values():
+            if (job.job_type != "protection.bulk" and job.completed_at
+                and since <= job.completed_at <= end
+                and (integration_id is None or job.integration_id == integration_id)):
+                yield job
+
+    def dashboard_stages(self, since: datetime, integration_id: str | None = None):
         for item in self._job_items.values():
-            if (job := self._jobs.get(item.job_id)) is not None and job.job_type == "protection.bulk":
+            job = self._jobs.get(item.job_id)
+            if job is not None and job.job_type == "protection.bulk":
+                continue
+            if integration_id is not None and (job is None or job.integration_id != integration_id):
                 continue
             if item.updated_at >= since or item.completed_at is None:
                 yield {
                     **{name: getattr(item, name).model_dump(mode="json") for name in ("scan_stage", "policy_stage", "remediation_stage")},
+                    "integration_id": job.integration_id if job else None,
                     "job_id": item.job_id,
                     "job_item_id": item.job_item_id,
                     "object_identity": item.object_identity,

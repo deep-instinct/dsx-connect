@@ -60,7 +60,9 @@ def test_operator_console_page_renders() -> None:
     assert 'class="rail-item" type="button" data-tab="assets"' in response.text
     assert 'id="connector-drawer"' in response.text
     assert 'id="protected-filter-source"' not in response.text
-    assert 'id="refresh-protected-assets"' not in response.text
+    assert 'id="refresh-protected-assets"' in response.text
+    assert 'class="refresh-progress"' in response.text
+    assert 'id="scan-results-poll-countdown"' not in response.text
     assert "Load Assets" not in response.text
     assert 'id="open-add-connector"' not in response.text
     assert "function reloadProtectedAssetsFromFilters" in response.text
@@ -110,11 +112,18 @@ def test_operator_console_page_renders_at_root() -> None:
 
     assert response.status_code == 200
     assert "DSX-Connect Operator Console" in response.text
+    assert 'class="view" id="view-dashboard"' in response.text
+    assert 'data-tab="dashboard" aria-selected="true"' in response.text
+    assert 'class="view hidden" id="view-assets"' in response.text
+    assert "Loading dashboard data…" in response.text
     assert 'dsxaStatus: "/api/v1/ui/dsxa/status"' in response.text
 
 
 def test_operator_console_serves_icon_assets() -> None:
     client = TestClient(create_app())
+    charts = client.get("/api/v1/ui-static/dashboard-charts.js")
+    assert charts.status_code == 200
+    assert "function renderDashboardUnderLoad" in charts.text
 
     svg_response = client.get("/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg")
     png_response = client.get("/api/v1/ui-static/icons/dsx-connect-icon-squircle-32.png")
@@ -1481,6 +1490,14 @@ def test_ui_operator_workflow_smoke_assets_policy_scan_results(monkeypatch) -> N
         },
     )
     assert policy_response.status_code == 200
+    assert client.post("/api/v1/ui/scopes/scope-bucket-a/enabled", json={"enabled": False}).status_code == 200
+    applied = client.patch("/api/v1/ui/scopes/scope-bucket-a", json={
+        "enabled": True,
+        "post_scan_policy": policy_response.json()["post_scan_policy"],
+    })
+    assert applied.status_code == 200
+    assert applied.json()["enabled"] is True
+    assert applied.json()["post_scan_policy"]["policy_id"] == "policy-quarantine-malware"
 
     protected = client.get("/api/v1/ui/assets/protected?connector_type=gcs&type=bucket").json()["assets"]
     assert protected[0]["selector"] == "bucket-a"
@@ -1658,6 +1675,14 @@ def test_scan_results_time_link_finds_matching_jobs_beyond_recent_list(monkeypat
     payload = response.json()
     assert {result["job"]["job_id"] for result in payload["results"]} == expected
     assert payload["matching_jobs"] == len(expected)
+    integration_id = payload["results"][0]["job"]["integration_id"]
+    comparison = client.get("/api/v1/ui/scan-results", params={
+        **params, "integration_ids": [integration_id, "outside-the-chart"],
+    })
+    assert comparison.status_code == 200
+    assert {row["job"]["job_id"] for row in comparison.json()["results"]} == {
+        row["job"]["job_id"] for row in payload["results"] if row["job"]["integration_id"] == integration_id
+    }
     job_id = next(iter(expected))
     result = client.get("/api/v1/ui/scan-results", params={**params, "job_id": job_id}).json()
     assert [row["job"]["job_id"] for row in result["results"]] == [job_id]
@@ -1705,3 +1730,116 @@ def test_scan_preview_is_bounded_and_does_not_submit_jobs(monkeypatch, page, exp
     assert response.json() == {**expected, "scan_limit": 10000}
     assert calls == [("bucket", 1000, None)]
     assert client.get("/api/v1/ui/scan-results").json() == before
+
+
+def test_scan_results_conditional_requests_skip_unchanged_summaries(monkeypatch):
+    from datetime import datetime, timezone
+    from dsx_connect_v2.api.routes import ui
+    from dsx_connect_v2.control_plane.models import IntegrationUpdate
+    from dsx_connect_v2.jobs.models import JobCreate, JobItemCreate, StageRecord
+
+    app = create_app()
+    cp = app.state.control_plane_service
+    cp.create_integration(IntegrationCreate(
+        integration_id="conditional", platform="gcs", platform_key="conditional", display_name="Before",
+    ))
+    repo = app.state.job_service.repo
+    job = repo.create_job(JobCreate(job_type="scan.batch", state="completed", integration_id="conditional"))
+    now = datetime.now(timezone.utc)
+    repo.update_job_state(job.job_id, state="completed", completed_at=now)
+    item = repo.create_job_item(JobItemCreate(
+        job_id=job.job_id, item_index=0, object_identity="bucket/file", state="completed",
+        scan_stage=StageRecord(state="completed", started_at=now, completed_at=now, result={"verdict": "Benign"}),
+    ))
+    original = ui._summarize_scan_result
+    calls = []
+
+    def summarize(*args, **kwargs):
+        calls.append(args[1].job_id)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ui, "_summarize_scan_result", summarize)
+    client = TestClient(app)
+    url = "/api/v1/ui/scan-results"
+    first = client.get(url)
+    assert first.status_code == 200
+    etag = first.headers["etag"]
+    unchanged = client.get(url, headers={"If-None-Match": etag})
+    assert unchanged.status_code == 304
+    assert unchanged.content == b""
+    assert calls == [job.job_id]
+    assert client.get(url).json() == first.json()
+    assert calls == [job.job_id]
+
+    parent_updated = repo.get_job(job.job_id).updated_at
+    repo.update_job_item_stage(item.job_item_id, stage_name="scan_stage", state="completed", stage_record=StageRecord(
+        state="completed", started_at=now, completed_at=now, result={"verdict": "Malicious"},
+    ))
+    assert repo.get_job(job.job_id).updated_at == parent_updated
+    changed = client.get(url, headers={"If-None-Match": etag})
+    assert changed.status_code == 200
+    assert changed.headers["etag"] != etag
+    assert changed.json()["results"][0]["findings"]["malicious"] == 1
+    assert calls == [job.job_id, job.job_id]
+
+    cp.update_integration("conditional", IntegrationUpdate(display_name="After"))
+    renamed = client.get(url, headers={"If-None-Match": changed.headers["etag"]})
+    assert renamed.status_code == 200
+    assert renamed.json()["results"][0]["target"]["connector_name"] == "After"
+    assert calls == [job.job_id, job.job_id]
+    assert client.get(url + "?item_limit=1", headers={"If-None-Match": renamed.headers["etag"]}).status_code == 200
+    repo.update_job_state(job.job_id, state="cancelled")
+    cancelled = client.get(url, headers={"If-None-Match": renamed.headers["etag"]})
+    assert cancelled.status_code == 200
+    assert cancelled.json()["results"][0]["job"]["state"] == "cancelled"
+
+
+
+def test_scan_results_empty_revision_changes_when_job_added():
+    from dsx_connect_v2.jobs.models import JobCreate
+
+    app = create_app()
+    client = TestClient(app)
+    first = client.get("/api/v1/ui/scan-results")
+    assert client.get("/api/v1/ui/scan-results", headers={"If-None-Match": first.headers["etag"]}).status_code == 304
+    app.state.job_service.repo.create_job(JobCreate(job_type="scan.batch", state="queued"))
+    changed = client.get("/api/v1/ui/scan-results", headers={"If-None-Match": first.headers["etag"]})
+    assert changed.status_code == 200
+    assert len(changed.json()["results"]) == 1
+
+
+def test_dashboard_widget_revisions_are_selective_and_track_item_changes(monkeypatch):
+    from dsx_connect_v2.jobs.models import JobCreate, JobItemCreate
+
+    app = create_app()
+    client = TestClient(app)
+    repo = app.state.job_service.repo
+    # An empty layout does not query jobs or control-plane records.
+    def unexpected(*args, **kwargs):
+        raise AssertionError("Unrequested data source was checked")
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(repo, "dashboard_revision", unexpected)
+        scoped.setattr(app.state.control_plane_service, "list_integrations", unexpected)
+        assert client.get("/api/v1/ui/dashboard/changes").json() == {"widgets": {}, "sources": {}}
+
+    with monkeypatch.context() as scoped:
+        scoped.setattr(repo, "dashboard_revision", unexpected)
+        connectors = client.get("/api/v1/ui/dashboard/changes?widgets=dashboard-connectors")
+        assert connectors.status_code == 200
+        assert set(connectors.json()["sources"]) == {"connectors"}
+
+    params = [("widgets", "dashboard-worker-time"), ("days", "7")]
+    before = client.get("/api/v1/ui/dashboard/changes", params=params).json()
+    assert list(before["widgets"]) == ["dashboard-worker-time"]
+    assert set(before["sources"]) == {"history"}
+    assert client.get("/api/v1/ui/dashboard/changes", params=params).json() == before
+    job = repo.create_job(JobCreate(job_type="scan.batch", state="queued"))
+    item = repo.create_job_item(JobItemCreate(job_id=job.job_id, item_index=0, object_identity="file", state="queued"))
+    after = client.get("/api/v1/ui/dashboard/changes", params=params).json()
+    assert after["widgets"]["dashboard-worker-time"]["revision"] != before["widgets"]["dashboard-worker-time"]["revision"]
+    repo.update_job_item_state(item.job_item_id, state="scanning")
+    changed = client.get("/api/v1/ui/dashboard/changes", params=params).json()
+    assert changed["sources"]["history"] != after["sources"]["history"]
+    assert client.get("/api/v1/ui/dashboard/changes?widgets=unknown").status_code == 422
+    assert client.get("/api/v1/ui/dashboard/changes?widgets=dashboard-worker-time&days=2").status_code == 422

@@ -252,3 +252,19 @@ def test_postgres_job_repository_bulk_updates_stages(postgres_repo: PostgresJobR
     assert {row.state for row in rows} == {"completed"}
     assert {row.scan_stage.result["scanGuid"] for row in rows} == {"scan-1", "scan-2"}
     assert all(row.completed_at is not None for row in rows)
+
+
+def test_scan_result_revision_tracks_file_changes_with_unchanged_timestamp(postgres_repo):
+    job = postgres_repo.create_job(JobCreate(job_type="scan.batch", state="queued"))
+    item = postgres_repo.create_job_item(JobItemCreate(
+        job_id=job.job_id, item_index=0, object_identity="revision-test/file", state="queued",
+    ))
+    before = postgres_repo.scan_result_revisions([job.job_id, "no-items"])
+    # A timestamp watermark must not hide updates with the same recorded time.
+    with postgres_repo._connect() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE cp_job_items SET state = 'scanning' WHERE job_item_id = %s", (item.job_item_id,))
+    after = postgres_repo.scan_result_revisions([job.job_id, "no-items"])
+    assert before[job.job_id] != after[job.job_id]
+    assert before["no-items"] == after["no-items"] == "empty"
+    assert postgres_repo.get_job_item(item.job_item_id).updated_at == item.updated_at
+    assert postgres_repo.scan_result_revisions([]) == {}

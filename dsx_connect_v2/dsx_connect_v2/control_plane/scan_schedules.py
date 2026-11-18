@@ -68,6 +68,15 @@ class ScanScheduleStore:
             row = conn.execute("SELECT * FROM cp_scan_schedules WHERE scope_id = %s", (scope_id,)).fetchone()
         return ScanSchedule.model_validate(row) if row else None
 
+    def list_for_scopes(self, scope_ids: list[str]) -> dict[str, ScanSchedule]:
+        if not scope_ids:
+            return {}
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM cp_scan_schedules WHERE scope_id = ANY(%s)", (scope_ids,),
+            ).fetchall()
+        return {row["scope_id"]: ScanSchedule.model_validate(row) for row in rows}
+
     def save(self, scope_id: str, settings: ScanScheduleSettings) -> ScanSchedule:
         next_run = next_occurrence(settings, datetime.now(timezone.utc)) if settings.enabled else None
         with self._connect() as conn:

@@ -53,6 +53,8 @@ Repository monitoring is configured in each connector deployment. Depending on t
 
 With the scheduler enabled, open **Schedule** on a protected asset to set a daily or weekly full scan. Choose a local time and an IANA time zone, such as `America/Chicago`. The dialog shows the next run and the outcome of the most recent occurrence. Clear **Enable scheduled scans** to pause the schedule.
 
+The **Schedule** column shows each asset's cadence, next run, and time zone. Filter for scheduled, paused, or unscheduled assets. Use the sort button in the Schedule header to show scheduled assets ordered by their next run. The separate **Monitoring** filter reflects the mode configured on a protected scope. Connector deployment settings determine whether monitoring is running.
+
 The scheduler submits the same full scan as the asset's play button, using the protection profile assigned when the scan runs. Scheduled jobs appear in Scan Results as **Scheduled scan**. A run is skipped if protection is disabled, a scan for that scope is already active, or its start window was missed by more than five minutes. For daylight saving changes, the scheduler runs once during a repeated hour and moves a nonexistent time forward by the size of the time change.
 
 Enable the scheduler in Helm with `workers.scheduler.enabled=true` on a deployment that uses PostgreSQL, RabbitMQ, and the existing relay and scan workers. It runs independently of the console. Outside Helm, start `python -m dsx_connect_v2.workers.scheduler` and set `DSX_CONNECT_V2__SCAN_SCHEDULER_ENABLED=true` on the API to expose the schedule controls.

@@ -1,5 +1,5 @@
 {{- range $workerName, $worker := .Values.workers }}
-{{- if $worker.enabled }}
+{{- if and (ne $workerName "discovery") (or $worker.enabled (and (eq $workerName "management") $.Values.workers.discovery.enabled)) }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,6 +25,9 @@ spec:
         {{- range $.Values.imagePullSecrets }}
         - name: {{ . | quote }}
         {{- end }}
+      {{- end }}
+      {{- if eq $workerName "management" }}
+      terminationGracePeriodSeconds: 90
       {{- end }}
       containers:
         - name: {{ $workerName | kebabcase }}

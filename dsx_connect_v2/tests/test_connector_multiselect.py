@@ -148,3 +148,47 @@ def test_schedule_filters_and_global_next_run_sort(env, monkeypatch):
 
     discovered = client.get(url, params={"integration_id": "a", "schedule_status": "none"}).json()["assets"]
     assert [row["selector"] for row in discovered] == ["unscheduled"]
+
+
+def test_protection_and_schedule_multiselects_use_or_within_and_between_filters(env, monkeypatch):
+    from dsx_connect_v2.api.routes import ui
+    from dsx_connect_v2.control_plane.models import ProtectedScopeUpdate
+    from dsx_connect_v2.control_plane.scan_schedules import ScanSchedule
+    _, cp, client = env
+    active, paused = [cp.create_scope(ProtectedScopeCreate(integration_id='a',scope_type='path',resource_selector=name,display_name=name,mode='full_scan')) for name in ['active','paused']]
+    schedules={scope.scope_id:ScanSchedule(scope_id=scope.scope_id,enabled=enabled,frequency='daily',local_time='12:00',timezone='UTC',next_run_at=None,last_run_at=None,last_outcome=None,last_reason=None,last_job_id=None) for scope,enabled in [(active,True),(paused,False)]}
+    monkeypatch.setattr(ui,'_asset_scan_schedules',lambda *_:schedules)
+    calls=listing(monkeypatch,{'a':['active','paused','unscheduled']})
+    url='/api/v1/ui/assets/protected'
+    base=[('integration_ids','a'),('schedule_statuses','scheduled'),('schedule_statuses','paused'),('limit',1)]
+    first=client.get(url,params=base+[('cursors','{}')]).json()
+    second=client.get(url,params=base+[('cursors',json.dumps(first['next_cursors']))]).json()
+    assert {a['selector'] for a in first['assets']+second['assets']}=={'active','paused'}
+    assert calls==[]  # Scheduled/paused scope views do not require cloud enumeration.
+    params=[('integration_ids','a'),('schedule_statuses','paused'),('schedule_statuses','none'),('coverage_states','protected'),('coverage_states','unprotected')]
+    both=client.get(url,params=params)
+    assert both.status_code==200
+    assert {a['selector'] for a in both.json()['assets']}=={'paused','unscheduled'}
+    protected=client.get(url,params=params[:-2]+[('coverage_states','protected')]).json()
+    assert [a['selector'] for a in protected['assets']]==['paused']
+    cp.update_scope(paused.scope_id,ProtectedScopeUpdate(enabled=False))
+    mixed=client.get(url,params=[('integration_ids','a'),('coverage_states','protected'),('coverage_states','disabled')]).json()
+    assert {a['coverage_state'] for a in mixed['assets']}=={'protected','disabled'}
+    assert client.get(url,params={'coverage_states':'invalid'}).status_code==422
+    assert client.get(url,params={'schedule_statuses':'invalid'}).status_code==422
+
+
+def test_mixed_schedule_choices_keep_known_scopes_when_discovery_fails(env,monkeypatch):
+    from fastapi import HTTPException
+    from dsx_connect_v2.api.routes import ui
+    from dsx_connect_v2.control_plane.scan_schedules import ScanSchedule
+    _,cp,client=env
+    scope=cp.create_scope(ProtectedScopeCreate(integration_id='a',scope_type='path',resource_selector='known',display_name='Known',mode='full_scan'))
+    schedule=ScanSchedule(scope_id=scope.scope_id,enabled=True,frequency='daily',local_time='12:00',timezone='UTC',next_run_at=None,last_run_at=None,last_outcome=None,last_reason=None,last_job_id=None)
+    monkeypatch.setattr(ui,'_asset_scan_schedules',lambda *_:{scope.scope_id:schedule})
+    def unavailable(*args,**kwargs): raise HTTPException(503,'Unavailable')
+    monkeypatch.setattr(ui,'_fetch_connector_assets',unavailable)
+    r=client.get('/api/v1/ui/assets/protected',params=[('integration_ids','a'),('schedule_statuses','scheduled'),('schedule_statuses','none'),('cursors','{}')])
+    assert r.status_code==200
+    assert [row['selector'] for row in r.json()['assets']]==['known']
+    assert r.json()['failed_integrations'][0]['integration_id']=='a'

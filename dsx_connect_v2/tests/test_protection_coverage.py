@@ -82,7 +82,7 @@ def test_discovered_includes_assets_without_scopes_and_subsets_can_overlap():
     assert data['current']['protected'] == data['current']['unprotected'] == 1
     for point in data['series']:
         if point['discovered'] is not None:
-            assert point['discovered'] == point['protected'] + point['unprotected']
+            assert point['known'] == point['protected'] + point['unprotected']
             assert point['scheduled'] <= point['protected']
             assert point['monitoring'] <= point['protected']
 
@@ -143,3 +143,39 @@ def test_snapshot_replays_historical_protection_and_membership_not_current_state
     assert after['total'] == after['counts']['unprotected'] == 2
     assert len(after['assets']) == 1
     assert after['counts']['protected'] == 0
+
+
+def test_configured_assets_are_known_and_protected_before_discovery_without_double_counting():
+    from dsx_connect_v2.control_plane.coverage import coverage_snapshot
+    rows = baseline()
+    rows[2]['state']['source'] = 'configuration'
+    first = coverage_history(rows, START, 7, NOW)['current']
+    assert first['known'] == first['total'] == first['protected'] == 1
+    assert first['discovered'] == first['unprotected'] == 0
+    promoted = dict(rows[2]['state'], source='discovery')
+    rows.append(event(10, 'asset', 'a', promoted, at=START + timedelta(minutes=10), operation='UPDATE'))
+    data = coverage_history(rows, START, 7, NOW)
+    assert data['current']['known'] == data['current']['discovered'] == data['current']['protected'] == 1
+    assert data['changes'][0]['notes'] == ['Bucket A: discovery confirmed']
+    snapshot = coverage_snapshot(rows, START + timedelta(minutes=5))
+    assert snapshot['counts']['known'] == 1 and snapshot['counts']['discovered'] == 0
+    assert snapshot['assets'][0]['discovered'] is False
+
+
+def test_configured_asset_removed_with_last_scope_but_disabled_scope_remains_known():
+    rows = baseline()
+    rows[2]['state']['source'] = 'configuration'
+    rows.append(event(10, 'scope', 's', dict(rows[1]['state'], enabled=False), at=START + timedelta(minutes=10), operation='UPDATE'))
+    current = coverage_history(rows, START, 7, NOW)['current']
+    assert current['known'] == current['unprotected'] == 1 and current['protected'] == 0
+    rows.append(event(11, 'scope', 's', rows[1]['state'], at=START + timedelta(minutes=20), operation='DELETE'))
+    current = coverage_history(rows, START, 7, NOW)['current']
+    assert current['known'] == current['discovered'] == current['protected'] == 0
+
+
+def test_asset_missing_from_completed_discovery_remains_known_through_configuration():
+    rows = baseline()
+    rows.append(event(10, 'asset', 'a', dict(rows[2]['state'], active=False), at=START + timedelta(minutes=10), operation='UPDATE'))
+    current = coverage_history(rows, START, 7, NOW)['current']
+    assert current['known'] == current['protected'] == 1 and current['discovered'] == 0
+    assert current['known'] == current['protected'] + current['unprotected']

@@ -367,6 +367,10 @@
       padding-bottom: var(--space-3);
     }
 
+    .protected-options-panel { position: fixed; inset: auto; margin: 0; padding: 14px; width: min(280px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+    .protected-options-panel:popover-open { display: grid; gap: 10px; }
+    #protected-options-list { display: grid; gap: 8px; }
+    #protected-filter-coverage, #protected-filter-schedule { width: 100%; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #connector-filter-panel { position: fixed; inset: auto; margin: 0; padding: 14px; width: min(400px, calc(100vw - 16px)); max-height: calc(100vh - 24px); overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
     #connector-filter-panel:popover-open { display: grid; grid-template-rows: repeat(6, auto) minmax(0, 1fr) auto; gap: 8px; }
     #connector-filter-options { min-height: 0; overflow: auto; }
@@ -413,21 +417,8 @@
     .app {
       height: 100vh;
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr);
+      grid-template-rows: minmax(0, 1fr);
       overflow: hidden;
-    }
-
-    .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--space-8);
-      padding: var(--space-7) var(--space-10);
-      border-bottom: 1px solid var(--line);
-      background: var(--surface);
-      position: sticky;
-      top: 0;
-      z-index: 10;
     }
 
     .brand {
@@ -453,13 +444,20 @@
       font-size: var(--font-size-2xs);
     }
 
-    .statusbar {
-      display: flex;
-      align-items: center;
-      gap: var(--space-4);
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
+    .rail-branding { padding: 4px 3px 12px; border-bottom: 1px solid var(--line); }
+    .rail-branding .brand { grid-template-columns: 30px minmax(0, 1fr); column-gap: 7px; }
+    .rail-branding .brand-mark { width: 30px; height: 30px; }
+    .rail-branding .brand small { font-size: 9px; letter-spacing: 0.035em; white-space: nowrap; }
+    .rail-branding h1 { font-size: 14px; white-space: nowrap; }
+    .rail-status { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 12px; }
+    .rail-status .pill { font-size: 11px; white-space: nowrap; }
+    .rail-status .icon-button { width: 28px; min-width: 28px; height: 28px; min-height: 28px; }
+    .app.nav-collapsed .rail-branding { padding-inline: 0; }
+    .app.nav-collapsed .rail-branding .brand { display: flex; justify-content: center; }
+    .app.nav-collapsed .rail-branding .brand small,
+    .app.nav-collapsed .rail-branding h1 { display: none; }
+    .app.nav-collapsed .rail-status { flex-direction: column; gap: 10px; }
+    .app.nav-collapsed #stat-dsxa { width: 12px; height: 12px; min-width: 12px; min-height: 12px; padding: 0; font-size: 0; border-radius: 50%; }
 
     .workspace {
       display: grid;
@@ -481,6 +479,8 @@
       align-content: start;
       gap: var(--space-4);
       min-width: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .rail-toggle {
@@ -1714,15 +1714,6 @@
     }
 
     @media (max-width: 820px) {
-      .topbar {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .statusbar {
-        justify-content: flex-start;
-      }
-
       .shell {
         padding: var(--space-6);
       }
@@ -1839,19 +1830,17 @@
 </head>
 <body>
   <div class="app">
-    <header class="topbar">
+    <div class="workspace">
+      <aside class="rail" aria-label="Primary navigation">
+        <header class="rail-branding">
       <div class="brand">
         <img class="brand-mark" src="/api/v1/ui-static/icons/dsx-connect-icon-squircle.svg" alt="" aria-hidden="true">
         <small id="product-version">DSX-Connect</small>
         <h1>Operator Console</h1>
       </div>
-      <div class="statusbar">
-        <span class="pill warn" id="stat-dsxa">DSXA checking</span>
-        <span class="pill" id="stat-integrations">0 connectors</span>
-        <span class="pill" id="stat-scopes">0 scopes</span>
-        <span class="pill" id="stat-jobs">0 jobs</span>
-        <span class="pill good" id="stat-healthy">0 healthy</span>
-        <button class="icon-button" id="refresh-all" type="button" aria-label="Refresh" title="Refresh">
+          <div class="rail-status">
+            <span class="pill warn" id="stat-dsxa" role="status" aria-label="DSXA checking">DSXA checking</span>
+        <button class="icon-button" id="refresh-dsxa" type="button" aria-label="Check DSXA reachability" title="Check DSXA reachability">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
             <path d="M3 12A9 9 0 0 1 18.5 5.8"></path>
@@ -1859,11 +1848,9 @@
             <path d="M6 21v-4h4"></path>
           </svg>
         </button>
-      </div>
-    </header>
+          </div>
+        </header>
 
-    <div class="workspace">
-      <aside class="rail" aria-label="Primary navigation">
         <button class="rail-toggle" id="nav-toggle" type="button" title="Collapse navigation" aria-label="Collapse navigation">&lt;&lt;</button>
         <nav class="rail-nav">
           <button class="rail-item" type="button" data-tab="dashboard" aria-selected="true" title="Dashboard">
@@ -1949,13 +1936,13 @@
           <p id="dashboard-error" role="status"></p>
           <div class="dashboard-kpis" id="dashboard-kpis" data-dashboard-widget></div>
           <div class="dashboard-grid" id="dashboard-grid">
-            <div class="dashboard-card"><div class="dashboard-actions"><div class="dashboard-title" style="margin-right:auto"><h3>Protection coverage</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-coverage-info" aria-label="About protection coverage" title="About protection coverage"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div></div><button type="button" class="icon-button dashboard-details-button" popovertarget="dashboard-coverage-details" aria-label="Protection coverage details" title="Protection coverage details"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button><div id="dashboard-coverage-info" class="dashboard-info-popover dashboard-explanation-popover" popover="auto"><p>Discovered assets and their protection capabilities over time. Discovered = Unprotected + Protected. Scheduled scan and Monitoring are overlapping subsets of Protected; protected assets with neither rely on manual scans.</p><p>Counts reflect discovered assets, including those without a scope. Failed or incomplete discovery retains the last known inventory. Configuration does not confirm runtime health. Details contains inventory completeness and audit history.</p></div><div id="dashboard-coverage-details" class="dashboard-info-popover dashboard-details-popover dashboard-report-info" popover="auto"><button type="button" id="dashboard-coverage-copy" class="icon-button dashboard-report-copy" aria-label="Copy protection coverage summary" title="Copy protection coverage summary" data-copy-value="" data-copy-feedback="dashboard-coverage-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-coverage-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><div id="dashboard-coverage-report">Loading protection coverage…</div></div><p class="dashboard-muted">Discovered assets · protection and capability changes over time</p><div id="dashboard-coverage" data-dashboard-widget>Loading protection coverage…</div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><div class="dashboard-title" style="margin-right:auto"><h3>Protection coverage</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-coverage-info" aria-label="About protection coverage" title="About protection coverage"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div></div><button type="button" class="icon-button dashboard-details-button" popovertarget="dashboard-coverage-details" aria-label="Protection coverage details" title="Protection coverage details"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button><div id="dashboard-coverage-info" class="dashboard-info-popover dashboard-explanation-popover" popover="auto"><p>Known assets and their protection capabilities over time. Known = Unprotected + Protected. Known assets combine discovered assets with configured selectors, counted once. Scheduled scan and Monitoring are overlapping subsets of Protected; protected assets with neither rely on manual scans.</p><p>Configured assets count even when discovery is unavailable. Discovered counts only assets confirmed by enumeration, including those without a scope. Failed or incomplete discovery retains the last known inventory. Configuration does not confirm runtime health. Details contains inventory completeness and audit history.</p></div><div id="dashboard-coverage-details" class="dashboard-info-popover dashboard-details-popover dashboard-report-info" popover="auto"><button type="button" id="dashboard-coverage-copy" class="icon-button dashboard-report-copy" aria-label="Copy protection coverage summary" title="Copy protection coverage summary" data-copy-value="" data-copy-feedback="dashboard-coverage-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-coverage-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><div id="dashboard-coverage-report">Loading protection coverage…</div></div><p class="dashboard-muted">Known assets · protection and capability changes over time</p><div id="dashboard-coverage" data-dashboard-widget>Loading protection coverage…</div></div>
             <div class="dashboard-card"><div class="dashboard-title"><h3>File scans under load</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-under-load-info" aria-label="About file scans under load" title="About file scans under load"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><button type="button" class="icon-button dashboard-details-button" popovertarget="dashboard-under-load-details" aria-label="File scans under load details" title="File scans under load details"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button><div id="dashboard-under-load-info" class="dashboard-info-popover dashboard-explanation-popover" popover="auto"><p>Completed file scans per second while work was continuously waiting to start scanning.</p><p id="dashboard-under-load-explanation">A rate requires at least 30 seconds of continuous backlog. Hollow circles mark completed scans without a qualifying rate. Lines show the top five connectors; the headline covers all selected scans.</p></div><div id="dashboard-under-load-details" class="dashboard-info-popover dashboard-details-popover dashboard-report-info" popover="auto" aria-label="About file scans under load"><button type="button" id="dashboard-under-load-copy" class="icon-button dashboard-report-copy" aria-label="Copy file scan rate details" title="Copy file scan rate details" data-copy-value="" data-copy-feedback="dashboard-under-load-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-under-load-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><div id="dashboard-under-load-info-content"></div></div><p class="dashboard-muted">Completed file scans per second during sustained backlog. Hollow circles below the axis show completed scans without a qualifying rate.</p><div id="dashboard-under-load" data-dashboard-widget></div></div>
             <div class="dashboard-card"><div class="dashboard-title"><h3>Scan worker time</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-worker-time-info" aria-label="About scan worker time" title="About scan worker time"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><button type="button" class="icon-button dashboard-details-button" popovertarget="dashboard-worker-time-details" aria-label="Scan worker time details" title="Scan worker time details"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button><div id="dashboard-worker-time-info" class="dashboard-info-popover dashboard-explanation-popover" popover="auto"><p>Per-file elapsed time from file retrieval through the DSXA response, across scan workers.</p><p>Median describes the typical file; p95 and p99 show the slower tail. Comparing with DSXA scan time helps identify retrieval, streaming, and response wait. Timing is based on recorded completed files in the selected range and connector filter.</p></div><div id="dashboard-worker-time-details" class="dashboard-info-popover dashboard-details-popover dashboard-timing-info" popover="auto"><p id="dashboard-worker-time-description">File retrieval through the DSXA response</p><p id="dashboard-worker-time-context" class="dashboard-muted"></p><p id="dashboard-worker-time-tail" class="dashboard-timing-summary"></p><button type="button" id="dashboard-worker-time-copy" class="icon-button dashboard-timing-copy" aria-label="Copy timing summary" title="Copy timing summary" data-copy-value="" data-copy-feedback="dashboard-worker-time-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-worker-time-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span></div><div id="dashboard-worker-time" data-dashboard-widget></div></div>
             <div class="dashboard-card"><div class="dashboard-title"><h3>DSXA scan time</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-dsxa-time-info" aria-label="About DSXA scan time" title="About DSXA scan time"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><button type="button" class="icon-button dashboard-details-button" popovertarget="dashboard-dsxa-time-details" aria-label="DSXA scan time details" title="DSXA scan time details"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg></button><div id="dashboard-dsxa-time-info" class="dashboard-info-popover dashboard-explanation-popover" popover="auto"><p>Per-file scan duration reported by DSXA.</p><p>Median describes the typical scan; p95 and p99 show the slower tail. Retrieval, streaming, and response wait are included in Scan worker time. Timing is based on completed files with recorded DSXA timing in the selected range and connector filter.</p></div><div id="dashboard-dsxa-time-details" class="dashboard-info-popover dashboard-details-popover dashboard-timing-info" popover="auto"><p id="dashboard-dsxa-time-description">Scan duration reported by DSXA</p><p id="dashboard-dsxa-time-context" class="dashboard-muted"></p><p id="dashboard-dsxa-time-tail" class="dashboard-timing-summary"></p><button type="button" id="dashboard-dsxa-time-copy" class="icon-button dashboard-timing-copy" aria-label="Copy timing summary" title="Copy timing summary" data-copy-value="" data-copy-feedback="dashboard-dsxa-time-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-dsxa-time-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span></div><div id="dashboard-dsxa-time" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Job activity</h3><p class="dashboard-muted">Jobs finished per time bucket, including idle time</p><div id="dashboard-job-activity" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Job duration</h3><p class="dashboard-muted">Job creation to successful completion</p><div id="dashboard-job-duration" data-dashboard-widget></div></div>
-            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">File scans by verdict</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" data-dashboard-widget aria-live="polite">Loading scan history…</div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">File scans by verdict</h3></div><p class="dashboard-muted" id="dashboard-verdict-description">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" data-dashboard-widget aria-live="polite">Loading scan history…</div></div>
             <div class="dashboard-card"><h3>Unfinished file items</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>File processing time</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>File scan activity</h3><p class="dashboard-muted">Completed file scans per minute, including idle time</p><div id="dashboard-throughput" data-dashboard-widget></div></div>
@@ -1977,7 +1964,15 @@
         </div>
 
         <section class="view hidden" id="view-settings" aria-label="Operator Console Settings">
-          <div class="view-heading"><h2>Operator Console Settings</h2><p>Discovery runs in a backend worker. Opening or refreshing this page reads stored status.</p></div>
+          <div class="view-heading"><h2>Operator Console Settings</h2><p>The Management Worker runs discovery and daily aggregation independently. Refreshing this page reads stored status.</p></div>
+          <div class="settings-card"><h3>Management Worker</h3><p id="management-worker-health" role="status">Loading worker health…</p><p>Tasks: asset discovery and daily scan aggregates. Detailed results and protection audit history are retained independently.</p></div>
+          <div class="settings-card"><h3>Daily scan aggregates</h3><p>UTC-day summaries preserve scan verdicts, file types, quarantine counts, job totals, and daily timing statistics. Closed-day counts feed dashboard history when ready; live data fills the current day. Daily percentiles are stored per connector and are not averaged across days. No results are purged.</p>
+            <form id="management-settings-form"><label class="discovery-periodic-toggle"><input type="checkbox" name="aggregates_enabled">Enable daily aggregation</label><div class="discovery-policy-grid">
+              <label>Live-day refresh interval (minutes)<input type="number" name="aggregate_interval_minutes" min="0.5" max="1440" step="0.5" required></label>
+              <label>Connector-days per pass<input type="number" name="aggregate_days_per_pass" min="1" max="10" required></label>
+            </div><div class="dashboard-actions"><button type="submit" id="save-management-settings" disabled>Save aggregate settings</button><span id="management-policy-revision" class="dashboard-muted"></span></div></form>
+            <p id="management-settings-message" role="status"></p><p id="management-aggregate-status" role="status">Loading daily aggregate status…</p>
+          </div>
           <div class="settings-card"><h3>Discovery policy</h3><p class="dashboard-muted">Periodic refresh can be paused while first-online and manual requests remain available. Changes apply to new attempts; an in-flight page finishes safely.</p>
           <form id="discovery-settings-form"><label class="discovery-periodic-toggle"><input type="checkbox" name="periodic_enabled">Enable periodic discovery</label>
             <div class="discovery-policy-grid">
@@ -2101,18 +2096,20 @@
                 <path d="M18 16v-4"></path>
               </svg>
               <span class="icon-badge hidden" id="scan-compare-count">0</span>
-            </button></div>
-          </div>
-          <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
-            <div class="scan-compare-header">
-              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.<div id="scan-compare-interval"></div></div>
-              <button class="icon-button" id="export-scan-compare" type="button" aria-label="Export scan comparison CSV" title="Export scan comparison CSV" disabled>
+            </button>
+              <button class="icon-button hidden" id="export-scan-compare" type="button" aria-label="Export scan comparison CSV" title="Export scan comparison CSV" disabled>
                 <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 3v12"></path>
                   <path d="m7 10 5 5 5-5"></path>
                   <path d="M5 21h14"></path>
                 </svg>
               </button>
+            </div>
+          </div>
+          <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
+            <div class="scan-compare-header">
+              <div class="scan-compare-note">Comparison uses selected jobs from the current Scan Results table. Scan time is DSXA engine time; job time is end-to-end request throughput.<div id="scan-compare-interval"></div></div>
+
             </div>
             <div class="table-wrap compact-table-wrap">
               <table id="scan-compare-table">
@@ -2459,6 +2456,13 @@
     </aside>
   </div>
 
+  <div popover="auto" id="protected-options-panel" class="protected-options-panel" role="dialog" aria-labelledby="protected-options-title">
+    <strong id="protected-options-title"></strong>
+    <label class="connector-filter-option"><input type="checkbox" id="protected-options-all">All</label>
+    <div id="protected-options-list"></div>
+    <div class="modal-actions"><button type="button" id="protected-options-cancel">Cancel</button><button type="button" id="protected-options-apply" class="primary">Apply filters</button></div>
+  </div>
+
   <div popover="auto" id="connector-filter-panel" role="dialog" aria-label="Filter connectors">
     <strong>Connectors</strong>
     <input type="search" id="connector-filter-search" aria-label="Search connectors" placeholder="Search name, platform, account or project…">
@@ -2566,6 +2570,9 @@
       scopes: [],
       connectorRows: [],
       protectedAssets: [],
+      protectedAssetCount: null,
+      discoveredAssetCount: null,
+      protectedAssetCountContext: null,
       protectedAssetsLoaded: false,
       protectedPageIndex: 0,
       protectedNextRunOrder: "asc",
@@ -3057,6 +3064,8 @@
         const data = await fetchJson(`/api/v1/ui/dashboard/history?${params}`);
         if (request !== dashboardHistoryRequest) return;
         dashboardHistoryReportData = data;
+        document.getElementById("dashboard-verdict-description").textContent = `Completed scan stages · UTC · ${data.bucket === "hour" ? "hourly from detailed results" : `daily; ${data.daily_aggregate_days || 0} closed days from retained summaries`} · current bucket is partial · click a time to view scans`;
+
         const rate = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
         const seconds = (value) => value < 1 ? `${rate(value * 1000)} ms` : `${rate(value)} s`;
         renderDashboardMetric("dashboard-throughput", data, [["throughput_per_minute", "Scans / min", "accent"]], `${rate(data.throughput_per_minute)} scans/min average`, rate, dashboardSampleUrls(data), {viewLabel:"View scan results"});
@@ -3181,7 +3190,7 @@
       const activity = data.changes.slice(-10).reverse();
       const sections = [
         {heading: "Protection coverage", text: `Connector: ${connector}\nPeriod: ${utc(data.start)} to ${utc(data.end)}\nAs of: ${utc(current.at)}`},
-        {heading: "Current coverage", text: `Discovered: ${count(current.discovered)}\nUnprotected: ${count(current.unprotected)}\nProtected: ${count(current.protected)}\nScheduled scan: ${count(current.scheduled)}\nMonitoring: ${count(current.monitoring)}`},
+        {heading: "Current coverage", text: `Known assets: ${count(current.known)}\nDiscovered: ${count(current.discovered)}\nConfiguration only: ${count(current.known - current.discovered)}\nUnprotected: ${count(current.unprotected)}\nProtected: ${count(current.protected)}\nScheduled scan: ${count(current.scheduled)}\nMonitoring: ${count(current.monitoring)}`},
         {heading: "Inventory completeness", text: `${incomplete.length ? `Incomplete for ${incomplete.length} connector${incomplete.length === 1 ? "" : "s"}; totals reflect the known inventory.` : inventory.length ? "Discovery is complete for the selected connectors." : "No persistent discovery inventory is available."}\n${inventory.map((row) => `${row.display_name}: ${row.state}${row.last_completed_at ? `; last complete ${utc(row.last_completed_at)}` : "; no complete discovery yet"}${row.detail ? `\n  ${row.detail}` : ""}`).join("\n")}`},
         {heading: "Audit history", text: data.durable_history
           ? `Recording began: ${utc(data.recording_started_at)}. Earlier configuration history is unavailable.${data.scheduler_enabled ? "" : " The scan scheduler is currently disabled; configured schedules will not run."}\n${count(data.changes_count)} audit updates in the selected period. Protection changes retain their recorded times; discovery updates are grouped into ${data.discovery_resolution_seconds / 60}-minute intervals.`
@@ -3207,7 +3216,7 @@
         const data = await fetchJson(`/api/v1/ui/dashboard/coverage/snapshot?${params}`);
         if (request !== coverageSnapshotRequest || !dialog.open) return;
         const counts = data.counts;
-        target.innerHTML = `<p><strong>${counts.discovered} discovered · ${counts.protected} protected · ${counts.unprotected} unprotected · ${counts.scheduled} scheduled · ${counts.monitoring} monitoring</strong></p><p class="dashboard-muted">Known inventory as recorded at this time. Discovery can lag changes in the source system.</p><div class="table-wrap"><table><thead><tr><th>Asset</th><th>Connector</th><th>Protection</th><th>Scheduled scan</th><th>Monitoring</th></tr></thead><tbody>${data.assets.map((row) => `<tr><td>${escapeHtml(row.name)}<br><span class="dashboard-muted">${escapeHtml(row.selector)}</span></td><td>${escapeHtml(row.connector)}</td><td>${row.protected ? "Protected" : "Unprotected"}</td><td>${row.scheduled ? "Yes" : "—"}</td><td>${row.monitoring ? "Yes" : "—"}</td></tr>`).join("") || '<tr><td colspan="5">No assets had been discovered at this time.</td></tr>'}</tbody></table></div><div class="dashboard-actions"><button type="button" data-snapshot-prev ${offset ? "" : "disabled"}>Previous</button><span>${data.total ? offset + 1 : 0}–${offset + data.assets.length} of ${data.total}</span><button type="button" data-snapshot-next ${offset + data.assets.length < data.total ? "" : "disabled"}>Next</button></div>`;
+        target.innerHTML = `<p><strong>${counts.known} known · ${counts.discovered} discovered · ${counts.protected} protected · ${counts.unprotected} unprotected · ${counts.scheduled} scheduled · ${counts.monitoring} monitoring</strong></p><p class="dashboard-muted">Known inventory as recorded at this time. Discovery can lag changes in the source system.</p><div class="table-wrap"><table><thead><tr><th>Asset</th><th>Connector</th><th>Known through</th><th>Protection</th><th>Scheduled scan</th><th>Monitoring</th></tr></thead><tbody>${data.assets.map((row) => `<tr><td>${escapeHtml(row.name)}<br><span class="dashboard-muted">${escapeHtml(row.selector)}</span></td><td>${escapeHtml(row.connector)}</td><td>${row.discovered ? "Discovery" : "Configuration"}</td><td>${row.protected ? "Protected" : "Unprotected"}</td><td>${row.scheduled ? "Yes" : "—"}</td><td>${row.monitoring ? "Yes" : "—"}</td></tr>`).join("") || '<tr><td colspan="6">No assets were known at this time.</td></tr>'}</tbody></table></div><div class="dashboard-actions"><button type="button" data-snapshot-prev ${offset ? "" : "disabled"}>Previous</button><span>${data.total ? offset + 1 : 0}–${offset + data.assets.length} of ${data.total}</span><button type="button" data-snapshot-next ${offset + data.assets.length < data.total ? "" : "disabled"}>Next</button></div>`;
         target.querySelector("[data-snapshot-prev]").onclick = () => showCoverageSnapshot(at, integrationId, Math.max(0, offset - 100));
         target.querySelector("[data-snapshot-next]").onclick = () => showCoverageSnapshot(at, integrationId, offset + 100);
       } catch (error) {
@@ -3221,8 +3230,8 @@
       if (!data) return;
       const current = data.current;
       renderDashboardMetric("dashboard-coverage", data,
-        [["discovered", "Discovered", "muted"], ["unprotected", "Unprotected", "danger"], ["protected", "Protected", "good"], ["scheduled", "Scheduled scan", "accent"], ["monitoring", "Monitoring", "warn"]],
-        `${current.discovered} discovered · ${current.protected} protected · ${current.unprotected} unprotected`,
+        [["known", "Known assets", "muted"], ["discovered", "Discovered", "violet"], ["unprotected", "Unprotected", "danger"], ["protected", "Protected", "good"], ["scheduled", "Scheduled scan", "accent"], ["monitoring", "Monitoring", "warn"]],
+        `${current.known} known · ${current.protected} protected · ${current.unprotected} unprotected`,
         (value) => Math.round(value).toLocaleString(), [],
         {viewLabel: "View protection coverage", onView: (at) => showCoverageSnapshot(at, data.integration_id)});
       const utc = (value) => new Date(value).toLocaleString([], {timeZone:"UTC"}) + " UTC";
@@ -3289,7 +3298,7 @@
       renderDashboardCoverage();
       const kpis = [
         ["Healthy connectors", connectors ? `${healthy} / ${connectors.length}` : "—", "Registered integrations", "assets", "connectors"],
-        ["Enabled protected scopes", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Configured protection, not coverage %", "assets", "protected", "protected"],
+        ["Enabled scope configurations", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Scope configurations; assets are counted below", "assets", "protected", "protected"],
         ["Active jobs", overview ? active : "—", "Within latest 50 jobs", "scan-results"],
         ["Failed items", overview ? totals.failed || 0 : "—", "Within latest 50 jobs", "scan-results"],
       ];
@@ -3502,6 +3511,42 @@
     });
     document.getElementById("dashboard-refresh-interval").addEventListener("change", scheduleDashboardRefresh);
 
+    let managementSettingsDirty = false;
+    let managementSettingsVersion = null;
+    function renderManagementSettings(data) {
+      const form = document.getElementById("management-settings-form");
+      if (!managementSettingsDirty) {
+        form.elements.aggregates_enabled.checked = data.settings.aggregates_enabled;
+        form.elements.aggregate_interval_minutes.value = data.settings.aggregate_interval_seconds / 60;
+        form.elements.aggregate_days_per_pass.value = data.settings.aggregate_days_per_pass;
+        managementSettingsVersion = data.revision;
+      }
+      form.querySelectorAll("input").forEach((node) => node.disabled = !data.available);
+      document.getElementById("save-management-settings").disabled = !data.available || !managementSettingsDirty;
+      document.getElementById("management-policy-revision").textContent = data.available ? `Revision ${managementSettingsVersion}${managementSettingsDirty ? " · unsaved changes" : ""}` : "PostgreSQL required";
+      document.getElementById("management-worker-health").textContent = data.healthy_workers ? `${data.healthy_workers} healthy Management Worker${data.healthy_workers === 1 ? "" : "s"}` : "No healthy Management Worker heartbeat in the last 30 seconds.";
+      const complete = data.backfill.length && data.backfill.every((row) => row.complete);
+      const summary = data.summary || {};
+      document.getElementById("management-aggregate-status").textContent = !data.available ? "Daily aggregation requires PostgreSQL." : `${complete ? "Initial backfill complete" : "Initial backfill in progress"} · ${summary.connector_days || 0} stored connector-days · ${data.pending_days} pending · ${data.task?.state || "pending"}${data.task?.last_completed_at ? ` · Last completed ${new Date(data.task.last_completed_at).toLocaleString([], {timeZoneName:"short"})}` : ""}${data.task?.detail ? ` · ${data.task.detail}` : ""}${data.detail_gaps ? ` · ${data.detail_gaps} connector-days have removed details; stored summaries are retained` : ""}`;
+    }
+    document.getElementById("management-settings-form").addEventListener("input", () => {
+      managementSettingsDirty = true;
+      document.getElementById("save-management-settings").disabled = false;
+      document.getElementById("management-policy-revision").textContent = `Revision ${managementSettingsVersion} · unsaved changes`;
+    });
+    document.getElementById("management-settings-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = document.getElementById("save-management-settings"); button.disabled = true;
+      try {
+        const data = await fetchJson('/api/v1/ui/settings/management', {method:"PUT", body:JSON.stringify({expected_revision:managementSettingsVersion,settings:{aggregates_enabled:form.elements.aggregates_enabled.checked,aggregate_interval_seconds:Math.round(Number(form.elements.aggregate_interval_minutes.value)*60),aggregate_days_per_pass:Number(form.elements.aggregate_days_per_pass.value)}})});
+        managementSettingsDirty = false;
+        managementSettingsVersion = data.revision;
+        document.getElementById("management-settings-message").textContent = "Aggregate settings saved. Discovery settings are independent.";
+        await loadDiscoverySettings();
+      } catch (error) { document.getElementById("management-settings-message").textContent = `Save failed: ${error.message}`; }
+      finally { button.disabled = !managementSettingsDirty; }
+    });
     let discoverySettingsTimer = null;
     let discoverySettingsLoading = false;
     let discoverySettingsDirty = false;
@@ -3530,7 +3575,8 @@
       const refresh = document.getElementById("refresh-discovery-settings");
       refresh.classList.remove("is-waiting"); refresh.classList.add("is-loading"); refresh.disabled = true;
       try {
-        const data = await fetchJson('/api/v1/ui/settings/discovery');
+        const [data, management] = await Promise.all([fetchJson('/api/v1/ui/settings/discovery'),fetchJson('/api/v1/ui/settings/management')]);
+        renderManagementSettings(management);
         discoverySettingsAvailable = data.available;
         discoveryInventory = data.inventory;
         const form = document.getElementById("discovery-settings-form");
@@ -3547,7 +3593,7 @@
         document.getElementById("discovery-connector-filter").replaceChildren(new Option("All connectors", ""), ...data.inventory.map((row) => new Option(row.display_name, row.integration_id)));
         document.getElementById("discovery-connector-filter").value = selected;
         const active = data.workers.filter((row) => row.healthy).reduce((sum,row) => sum + row.active_connectors,0);
-        document.getElementById("discovery-worker-health").textContent = !data.available ? "Persistent discovery requires PostgreSQL and a discovery worker." : data.healthy_workers ? `${data.healthy_workers} healthy discovery worker${data.healthy_workers === 1 ? "" : "s"} · ${active} active connector refreshes` : "No healthy discovery worker heartbeat in the last 30 seconds. Queued requests will wait for a worker.";
+        document.getElementById("discovery-worker-health").textContent = !data.available ? "Persistent discovery requires PostgreSQL and a Management Worker." : data.healthy_workers ? `${data.healthy_workers} healthy discovery task${data.healthy_workers === 1 ? "" : "s"} · ${active} active connector refreshes` : "No healthy discovery task heartbeat in the last 30 seconds. Queued requests will wait for a worker.";
         renderDiscoveryInventory();
       } catch (error) {
         document.getElementById("discovery-worker-health").textContent = `Status unavailable: ${error.message}`;
@@ -3664,10 +3710,6 @@
 
     function renderTopStats() {
       const healthy = state.connectorRows.filter((row) => row.health?.status === "healthy").length;
-      document.getElementById("stat-integrations").textContent = `${state.integrations.length} connectors`;
-      document.getElementById("stat-scopes").textContent = `${state.scopes.length} scopes`;
-      document.getElementById("stat-jobs").textContent = `${state.scanResults.length} jobs`;
-      document.getElementById("stat-healthy").textContent = `${healthy} healthy`;
       document.getElementById("metric-connectors").textContent = String(state.connectorRows.length);
       document.getElementById("metric-healthy").textContent = String(healthy);
       document.getElementById("metric-enabled").textContent = String(state.connectorRows.filter((row) => row.integration.enabled).length);
@@ -3681,8 +3723,9 @@
     function renderDsxaStatus(payload) {
       const node = document.getElementById("stat-dsxa");
       node.textContent = payload?.label || "DSXA unknown";
+      node.setAttribute("aria-label", node.textContent);
       node.className = pillClass(payload?.state || "unknown");
-      node.title = payload?.base_url ? `${payload.base_url} (${payload.mode || "unknown"})` : `scanner mode: ${payload?.mode || "unknown"}`;
+      node.title = `${node.textContent} · ${payload?.base_url ? `${payload.base_url} (${payload.mode || "unknown"})` : `scanner mode: ${payload?.mode || "unknown"}`}`;
     }
 
     async function loadDsxaStatus() {
@@ -3704,6 +3747,7 @@
         const displayName = meta.display_name || `DSX-Connect v${meta.version || ""}`.trim();
         state.defaultScannerProtectedEntity = meta.scanner_protected_entity ?? null;
         document.getElementById("product-version").textContent = displayName;
+        document.querySelector(".rail-branding .brand").title = `${displayName} · Operator Console`;
         document.title = `${displayName} Operator Console`;
       } catch (error) {
         state.defaultScannerProtectedEntity = null;
@@ -3864,20 +3908,20 @@
       });
     }
 
-    function selectedProtectedConnectorRow() {
-      return state.protectedIntegrationFilters.length === 1 ? state.connectorRows.find((row) => state.protectedIntegrationFilters.includes(row.integration.integration_id)) || null : null;
-    }
-
     function renderProtectedContext() {
       const node = document.getElementById("protected-context");
       if (!node) return;
-      const connector = selectedProtectedConnectorRow();
-      const connectorLabel = connector
-        ? renderConnectorName(connector.integration)
-        : `<span class="asset-context-muted">${state.protectedIntegrationFilters.length ? `${state.protectedIntegrationFilters.length} selected connectors` : "All connectors"}</span>`;
+      const selected = state.protectedIntegrationFilters.length;
+      const connectorLabel = selected ? `${selected} selected connector${selected === 1 ? "" : "s"}` : "All connectors";
       const failedNames = state.protectedDiscoveryFailures.map((id) => state.connectorRows.find((row) => row.integration.integration_id === id)?.integration.display_name || id);
+      const countContext = [...state.protectedIntegrationFilters].sort().join(",");
+      const count = state.protectedAssetCountContext === countContext ? state.protectedAssetCount : null;
+      const discovered = state.protectedAssetCountContext === countContext ? state.discoveredAssetCount : null;
+      const formatCount = (value, kind) => value === null ? `— ${kind} assets` : `${value.toLocaleString()} ${kind} asset${value === 1 ? "" : "s"}`;
+      const countLabel = `${formatCount(discovered, "discovered")} · ${formatCount(count, "protected")}`;
+      const countBadge = `<span class="pill" id="protected-asset-count" role="status" title="Discovered and known protected assets for the selected connectors, before table filters">${countLabel}</span>`;
       const warning = failedNames.length ? `<span role="status" class="muted">Discovery unavailable: ${escapeHtml(failedNames.slice(0, 3).join(", "))}${failedNames.length > 3 ? ` and ${failedNames.length - 3} more` : ""}. Results may be incomplete.</span>` : "";
-      node.innerHTML = `<span class="asset-context-muted">Connector:</span><span class="asset-context-current">${connectorLabel}</span>${state.protectedIntegrationFilters.length ? '<button class="asset-context-link" type="button" data-action="show-all-connectors">Show all connectors</button>' : ""}${warning}`;
+      node.innerHTML = `<span class="asset-context-muted">Connector:</span><span class="asset-context-muted">${connectorLabel}</span>${countBadge}${warning}`;
     }
 
     function destinationLabel(scope) {
@@ -4223,6 +4267,7 @@
     document.getElementById("clear-protected-filters").addEventListener("click", async () => {
       state.protectedIntegrationFilters = [];
       document.getElementById("connector-filter-panel").hidePopover();
+      document.getElementById("protected-options-panel").hidePopover();
       const asset = document.getElementById("protected-filter-asset-value");
       const coverage = document.getElementById("protected-filter-coverage");
       const connector = document.getElementById("protected-filter-integration");
@@ -4307,13 +4352,7 @@
           label: "Protection Profile",
           filterHtml: `
             <div class="column-filter">
-              <select id="protected-filter-coverage" aria-label="Coverage filter">
-                <option value="">all</option>
-                <option value="unprotected">unprotected</option>
-                <option value="protected">protected</option>
-                <option value="disabled">disabled</option>
-                <option value="unknown">unknown</option>
-              </select>
+              <button type="button" id="protected-filter-coverage" aria-label="Coverage filter" aria-controls="protected-options-panel" aria-haspopup="dialog" aria-expanded="false">All ▾</button>
             </div>
           `,
           render: (asset) => renderProtectedAssetActionSelect(asset),
@@ -4336,10 +4375,7 @@
           headerHtml: `Schedule <button type="button" class="icon-button" id="protected-sort-schedule"
             aria-label="Sort scheduled assets by next run" title="Sort scheduled assets by next run">${previousFilters.schedule === "scheduled" && state.protectedNextRunOrder === "desc" ? "↑" : "↓"}</button>`,
           filterHtml: `<div class="column-filter">
-            <select id="protected-filter-schedule" aria-label="Schedule filter">
-              <option value="">All</option><option value="scheduled">Scheduled</option>
-              <option value="paused">Paused</option><option value="none">No schedule</option>
-            </select>
+            <button type="button" id="protected-filter-schedule" aria-label="Schedule filter" aria-controls="protected-options-panel" aria-haspopup="dialog" aria-expanded="false">All ▾</button>
           </div>`,
           render: renderProtectedAssetSchedule,
         }] : []),
@@ -4434,16 +4470,17 @@
       if (integration) integration.addEventListener("click", openConnectorFilter);
       if (coverage) {
         coverage.value = values.coverage || "";
-        coverage.addEventListener("change", () => reloadProtectedAssetsFromFilters());
+        coverage.addEventListener("click", () => openProtectedOptions("coverage"));
       }
-      for (const [name, id] of [["schedule", "protected-filter-schedule"], ["monitoring", "protected-filter-monitoring"]]) {
-        const filter = document.getElementById(id);
-        if (!filter) continue;
-        filter.value = values[name] || "";
-        filter.addEventListener("change", () => {
-          if (name === "schedule") state.protectedNextRunOrder = "asc";
-          reloadProtectedAssetsFromFilters();
-        });
+      const schedule = document.getElementById("protected-filter-schedule");
+      if (schedule) {
+        schedule.value = values.schedule || "";
+        schedule.addEventListener("click", () => openProtectedOptions("schedule"));
+      }
+      const monitoring = document.getElementById("protected-filter-monitoring");
+      if (monitoring) {
+        monitoring.value = values.monitoring || "";
+        monitoring.addEventListener("change", () => reloadProtectedAssetsFromFilters());
       }
       document.getElementById("protected-sort-schedule")?.addEventListener("click", () => {
         const filter = document.getElementById("protected-filter-schedule");
@@ -5140,6 +5177,7 @@
         countNode.classList.toggle("hidden", selectedCount === 0);
       }
       if (exportButton) {
+        exportButton.classList.toggle("hidden", !state.scanCompareVisible);
         exportButton.disabled = comparisonRows.length === 0;
       }
       if (!state.scanCompareVisible) return;
@@ -5579,6 +5617,66 @@
       document.getElementById('connector-filter-apply').disabled = selected === 0;
     }
 
+    const protectedOptionSets = {
+      coverage: {title:"Protection state", options:[["unprotected","Unprotected"],["protected","Protected"],["disabled","Disabled"],["unknown","Unknown"]]},
+      schedule: {title:"Schedule", options:[["scheduled","Scheduled"],["paused","Paused"],["none","No schedule"]]},
+    };
+    let protectedOptionsKind = null;
+    function updateProtectedOptionButtons() {
+      for (const [kind, config] of Object.entries(protectedOptionSets)) {
+        const button = document.getElementById(`protected-filter-${kind}`);
+        if (!button) continue;
+        const values = (button.value || "").split(",").filter(Boolean);
+        const labels = config.options.filter(([value]) => values.includes(value)).map(([,label]) => label);
+        const label = !labels.length ? "All" : labels.length <= 2 ? labels.join(", ") : `${labels.length} selected`;
+        button.textContent = label + " ▾";
+        button.title = labels.length ? labels.join(", ") : `All ${kind === "coverage" ? "protection" : "schedule"} states`;
+        button.setAttribute("aria-expanded", String(protectedOptionsKind === kind && document.getElementById("protected-options-panel").matches(":popover-open")));
+      }
+    }
+    function updateProtectedOptionsDraft() {
+      const inputs = [...document.querySelectorAll("#protected-options-list input")];
+      const count = inputs.filter((input) => input.checked).length;
+      const all = document.getElementById("protected-options-all");
+      all.checked = count === inputs.length;
+      all.indeterminate = count > 0 && count < inputs.length;
+      document.getElementById("protected-options-apply").disabled = count === 0;
+    }
+    function openProtectedOptions(kind) {
+      protectedOptionsKind = kind;
+      const config = protectedOptionSets[kind];
+      const button = document.getElementById(`protected-filter-${kind}`);
+      const selected = (button.value || "").split(",").filter(Boolean);
+      document.getElementById("protected-options-title").textContent = config.title;
+      document.getElementById("protected-options-list").innerHTML = config.options.map(([value,label]) => `<label class="connector-filter-option"><input type="checkbox" value="${value}" ${!selected.length || selected.includes(value) ? "checked" : ""}>${label}</label>`).join("");
+      updateProtectedOptionsDraft();
+      const panel = document.getElementById("protected-options-panel");
+      const rect = button.getBoundingClientRect();
+      panel.showPopover();
+      panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 8))}px`;
+      panel.style.top = `${Math.max(8, Math.min(rect.bottom + 4, window.innerHeight - panel.offsetHeight - 8))}px`;
+      updateProtectedOptionButtons();
+      document.getElementById("protected-options-all").focus();
+    }
+    document.getElementById("protected-options-all").addEventListener("change", (event) => {
+      document.querySelectorAll("#protected-options-list input").forEach((input) => input.checked = event.target.checked);
+      updateProtectedOptionsDraft();
+    });
+    document.getElementById("protected-options-list").addEventListener("change", updateProtectedOptionsDraft);
+    document.getElementById("protected-options-cancel").addEventListener("click", () => document.getElementById("protected-options-panel").hidePopover());
+    document.getElementById("protected-options-apply").addEventListener("click", () => {
+      const values = [...document.querySelectorAll("#protected-options-list input:checked")].map((input) => input.value);
+      if (!values.length) return;
+      const button = document.getElementById(`protected-filter-${protectedOptionsKind}`);
+      button.value = values.length === protectedOptionSets[protectedOptionsKind].options.length ? "" : values.join(",");
+      if (protectedOptionsKind === "schedule") state.protectedNextRunOrder = "asc";
+      document.getElementById("protected-options-panel").hidePopover();
+      updateProtectedOptionButtons();
+      button.focus();
+      reloadProtectedAssetsFromFilters();
+    });
+    document.getElementById("protected-options-panel").addEventListener("toggle", updateProtectedOptionButtons);
+
     function openConnectorFilter() {
       const panel = document.getElementById('connector-filter-panel');
       document.getElementById('connector-filter-search').value = '';
@@ -5695,6 +5793,7 @@
     }
 
     function updateProtectedFilterIndicators() {
+      updateProtectedOptionButtons();
       const {assetValue, coverage, schedule, monitoring} = protectedFilterValues();
       const connector = state.protectedIntegrationFilters.length > 0;
       document.getElementById("protected-filter-integration")?.classList.toggle("filter-active", connector);
@@ -5771,8 +5870,8 @@
       const assetFilterValue = filters.assetValue.trim();
       const cursor = state.protectedPageCursors[state.protectedPageIndex] || "";
       integrationIds.forEach((id) => params.append("integration_ids", id));
-      if (coverage) params.set("coverage_state", coverage);
-      if (filters.schedule) params.set("schedule_status", filters.schedule);
+      if (coverage) coverage.split(",").forEach((value) => params.append("coverage_states", value));
+      if (filters.schedule) filters.schedule.split(",").forEach((value) => params.append("schedule_statuses", value));
       if (filters.monitoring) params.set("monitoring", filters.monitoring);
       if (filters.schedule === "scheduled") params.set("next_run_order", state.protectedNextRunOrder);
       params.set("limit", String(state.protectedPageLimit));
@@ -5790,6 +5889,9 @@
       }
       if (request !== protectedAssetsRequest) return;
       state.protectedAssets = payload.assets || [];
+      state.protectedAssetCount = payload.protected_asset_count ?? null;
+      state.discoveredAssetCount = payload.discovered_asset_count ?? null;
+      state.protectedAssetCountContext = [...integrationIds].sort().join(",");
       state.protectedDiscoveryFailures = [...new Set([...state.protectedDiscoveryFailures, ...(payload.failed_integrations || []).map((item) => item.integration_id)])];
       const cursors = payload.next_cursors || {};
       state.protectedNextCursor = Object.values(cursors).some((cursor) => cursor !== null) ? JSON.stringify(cursors) : null;
@@ -6540,20 +6642,8 @@
       setNavCollapsed(!document.querySelector(".app").classList.contains("nav-collapsed"));
     });
 
-    document.getElementById("protected-context").addEventListener("click", (event) => {
-      if (!event.target.closest("[data-action='show-all-connectors']")) return;
-      state.protectedIntegrationFilters = [];
-      selectAssetsTab("protected", {forceReload: true});
-    });
-
-    document.getElementById("refresh-all").addEventListener("click", (event) => {
-      withBusyButton(event.currentTarget, async () => {
-        try {
-          await refreshAll();
-        } catch (error) {
-          alert(`Refresh failed: ${error.message}`);
-        }
-      });
+    document.getElementById("refresh-dsxa").addEventListener("click", (event) => {
+      withBusyButton(event.currentTarget, loadDsxaStatus);
     });
     document.getElementById("refresh-connectors").addEventListener("click", () => {
       loadConnectors().catch((error) => alert("Connector refresh failed: " + error.message));

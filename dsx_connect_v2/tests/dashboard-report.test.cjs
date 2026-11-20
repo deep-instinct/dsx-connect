@@ -12,7 +12,7 @@ const sample = () => ({
   warnings:['Inventory incomplete <3 connectors>'], captureNote:'Fixed snapshot; refresh times may differ.',
   sections:[{id:'coverage',title:'Protection coverage',scope:'Recorded inventory.',asOf:'2026-11-20T01:59:00Z',available:true,
     description:'Known assets.',graphicHtml:'<svg viewBox="0 0 450 140"><polyline points="0,0 20,20"/></svg>',
-    supportingHtml:'<p>Discovered = Unprotected + Protected.</p>',text:'101 discovered\n9 protected\n92 unprotected'},
+    supportingHtml:'<p>Known = Unprotected + Protected.</p>',text:'103 known; 101 discovered\n17 protected\n86 unprotected'},
     {id:'worker',title:'Scan worker time',scope:'Selected window.',available:false,
       graphicHtml:'<p>Timing data unavailable.</p>',supportingHtml:'',text:'Timing data unavailable.'}]
 });
@@ -20,7 +20,7 @@ const sample = () => ({
 test('HTML report preserves order, graphics, Info, UTC scope, and completeness warnings', () => {
   const html = context.dashboardReportHtml(sample());
   assert.ok(html.indexOf('data-report-widget="coverage"') < html.indexOf('data-report-widget="worker"'));
-  for (const expected of ['<svg', '<polyline', 'Discovered = Unprotected + Protected.', 'Range covered',
+  for (const expected of ['<svg', '<polyline', 'Known = Unprotected + Protected.', 'Range covered',
     '2026-11-14 00:00:00 UTC', '2026-11-20 01:59:00 UTC', 'GCS (disabled)', 'Source data unavailable at capture time.']) assert.ok(html.includes(expected), expected);
   assert.ok(!html.includes('<script'));
   assert.ok(!html.includes('src="http'));
@@ -39,7 +39,7 @@ test('untrusted headings and connector names remain text in the exported documen
 test('plain-text copy includes the same ordered sections, counts, warnings and scope', () => {
   const text = context.dashboardReportText(sample());
   assert.ok(text.indexOf('1. Protection coverage') < text.indexOf('2. Scan worker time'));
-  for (const expected of ['All connectors','101 discovered','9 protected','92 unprotected',
+  for (const expected of ['All connectors','103 known; 101 discovered','17 protected','86 unprotected',
     'Inventory incomplete','Source unavailable at capture time.','Data through: 2026-11-20 01:59:00 UTC']) assert.ok(text.includes(expected), expected);
   assert.ok(!text.includes('<svg'));
   assert.ok(!text.includes('undefined'));

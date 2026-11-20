@@ -148,6 +148,11 @@ def dashboard_history(repo, days: int, now: datetime | None = None, *,
     connector_queue_changes = defaultdict(Counter)
     connector_completions = defaultdict(Counter)
 
+    daily = {}
+    if not hourly and getattr(repo, "db_url", None):
+        from dsx_connect_v2.jobs.daily_aggregates import DailyAggregateStore
+        daily = DailyAggregateStore(repo.db_url).ready_days(start, now, integration_id)
+
     def timestamp(raw):
         if not raw:
             return None
@@ -200,8 +205,10 @@ def dashboard_history(repo, days: int, now: datetime | None = None, *,
         if scan.get("state") == "completed" and at:
             index = int((at - start) / step)
             bucket = buckets[index]
-            bucket["total"] += 1
-            if connector_id:
+            use_daily = at.date() in daily
+            if not use_daily:
+                bucket["total"] += 1
+            if connector_id and not use_daily:
                 connector_counts[connector_id] += 1
                 connector_bucket_counts[connector_id][index] += 1
             worker_seconds = _duration_seconds(metadata.get("workerElapsedMs"), 1000)
@@ -214,18 +221,20 @@ def dashboard_history(repo, days: int, now: datetime | None = None, *,
                 if seconds is not None:
                     timing_samples[key][index].append(seconds)
             key = "benign" if verdict in {"benign", "clean"} else verdict if verdict in {"malicious", "suspicious"} else "other"
-            bucket[key] += 1
+            if not use_daily:
+                bucket[key] += 1
             file_info = result.get("file_info") or result.get("fileInfo") or {}
             file_type = str(file_info.get("file_type") or file_info.get("fileType") or result.get("fileType") or result.get("file_type") or "Unknown")
-            types[file_type] = types.get(file_type, 0) + 1
+            if not use_daily:
+                types[file_type] = types.get(file_type, 0) + 1
         policy_result = policy.get("result") or {}
         policy_result = policy_result.get("policy_stage_result") or policy_result
         trace = policy_result.get("decision_trace") or policy_result.get("decisionTrace") or {}
         type_block = str(trace.get("policy_reason") or "").startswith("blocked_file_type:")
-        if policy.get("state") == "completed" and in_window(policy) and type_block:
+        if policy.get("state") == "completed" and in_window(policy) and in_window(policy).date() not in daily and type_block:
             blocked += 1
         action = remediation.get("result") or {}
-        if remediation.get("state") == "completed" and in_window(remediation) and action.get("action") == "quarantine" and action.get("outcome") == "succeeded":
+        if remediation.get("state") == "completed" and in_window(remediation) and in_window(remediation).date() not in daily and action.get("action") == "quarantine" and action.get("outcome") == "succeeded":
             reason = "file_type_policy" if type_block else verdict if verdict in {"malicious", "suspicious"} else "other"
             quarantine[reason] += 1
 
@@ -233,10 +242,27 @@ def dashboard_history(repo, days: int, now: datetime | None = None, *,
         if job.state not in {"completed", "failed", "cancelled"}:
             continue
         index = int((job.completed_at - start) / step)
-        job_counts[index][job.state] += 1
+        if job.completed_at.date() not in daily:
+            job_counts[index][job.state] += 1
         if job.state == "completed" and job.completed_at >= job.created_at:
             timing_samples["job_duration"][index].append((job.completed_at - job.created_at).total_seconds())
 
+    for day, summaries in daily.items():
+        index = (day - start.date()).days
+        for summary in summaries:
+            for key in ("total", "benign", "malicious", "suspicious", "other"):
+                buckets[index][key] += summary[key]
+            for state, value in summary["jobs"].items():
+                job_counts[index][state] += value
+            connector = summary.get("integration_id")
+            if integration_id is None and connector and summary["total"]:
+                connector_counts[connector] += summary["total"]
+                connector_bucket_counts[connector][index] += summary["total"]
+            blocked += summary["file_type_policy_matches"]
+            for key, value in summary["quarantined"].items():
+                quarantine[key] += value
+            for key, value in summary["file_types"].items():
+                types[key] = types.get(key, 0) + value
     backlog = 0
     for i, bucket in enumerate(buckets):
         backlog += backlog_changes[i]
@@ -260,6 +286,7 @@ def dashboard_history(repo, days: int, now: datetime | None = None, *,
         ]
     return {"days": days, "timezone": "UTC", "start": start.isoformat(), "end": now.isoformat(),
             "bucket": "hour" if hourly else "day", "series": buckets,
+            "daily_aggregate_days": len(daily), "daily_aggregate_metrics": ["verdicts", "file_types", "quarantine", "file_type_policy_matches", "job_totals"] if daily else [],
             "throughput_per_minute": sum(b["total"] for b in buckets) / max((now - start).total_seconds() / 60, 1 / 60),
             "backlog": backlog, "latency": _latency_summary(latency_all),
             "under_load": under_load, "under_load_series": throughput_series,

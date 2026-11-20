@@ -144,3 +144,12 @@ Push to an OCI chart repository:
 scripts/dsx-connect-v2/package-chart.sh \
   --push oci://registry-1.docker.io/dsxconnect
 ```
+
+## Management Worker
+
+Enable `workers.management.enabled=true` for the shared discovery and daily-aggregation
+process. The legacy `workers.discovery.enabled` switch enables the same deployment;
+it does not create another worker. PostgreSQL schema migration 0018 is required.
+The worker needs a 90-second termination grace period for its bounded SQL work.
+Operator Console Settings manages task policy independently of Helm replica counts.
+No result-purge or protection-audit retention task is enabled.

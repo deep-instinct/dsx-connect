@@ -24,7 +24,7 @@ rabbitmq:
     enabled: false
 
 workers:
-  discovery:
+  management:
     enabled: true
   relay:
     enabled: true

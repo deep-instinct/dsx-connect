@@ -35,6 +35,7 @@ from dsx_connect_v2.control_plane.models import (
 )
 from dsx_connect_v2.control_plane.service import ControlPlaneService
 from dsx_connect_v2.control_plane.discovery_settings import DiscoverySettings
+from dsx_connect_v2.jobs.daily_aggregates import DailyAggregateStore, ManagementSettings
 from dsx_connect_v2.control_plane.discovery_transport import (
     _build_connector_assets_url, _fetch_connector_assets, _connector_asset_endpoint,
     _default_asset_type_for_platform, _effective_asset_type,
@@ -154,6 +155,15 @@ def dashboard_protection_coverage(
                 for row in control_plane.list_integrations() if not integration_id or row.integration_id == integration_id]
         rows += [("scope", row.scope_id, row.model_dump(mode="json"))
                  for row in control_plane.list_scopes(integration_id=integration_id)]
+        from dsx_connect_v2.control_plane.coverage_inventory import asset_identity
+        configured = {}
+        for kind, key, row in rows:
+            if kind == "scope":
+                selector = row["resource_selector"].strip().strip("/")
+                asset_id = asset_identity(row["integration_id"], row["resource_selector"])
+                configured[asset_id] = {"integration_id": row["integration_id"], "selector": row["resource_selector"],
+                    "normalized_selector": selector, "display_name": row["display_name"], "source": "configuration", "active": True}
+        rows += [("asset", key, row) for key, row in configured.items()]
         events = [dict(event_id=i, entity_type=kind, entity_id=key, state=state,
                        occurred_at=now, operation="baseline") for i, (kind, key, state) in enumerate(rows)]
         data = coverage_history(events, now, days, now)
@@ -232,6 +242,49 @@ def request_discovery_refresh(payload: UIDiscoveryRefreshRequest,
         rows = [row]
     eligible = [row.integration_id for row in rows if row.enabled and row.capability_discover]
     return {"status": "queued", "requests": store.request(eligible), "queued_connectors": len(eligible)}
+
+
+class UIManagementSettingsUpdate(BaseModel):
+    settings: ManagementSettings
+    expected_revision: int = Field(ge=1)
+
+
+def _management_store(control_plane):
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if not db_url:
+        raise HTTPException(409, "Management tasks require PostgreSQL.")
+    return DailyAggregateStore(db_url)
+
+
+@router.get("/settings/management")
+def get_management_settings(control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    if not getattr(control_plane.repo, "db_url", None):
+        return {"available": False, "settings": ManagementSettings().model_dump(), "revision": None,
+                "healthy_workers": 0, "workers": [], "task": None, "summary": {}, "pending_days": 0, "backfill": []}
+    store = _management_store(control_plane)
+    return {"available": True, **store.settings(), **store.status()}
+
+
+@router.put("/settings/management")
+def update_management_settings(payload: UIManagementSettingsUpdate,
+                               control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    try:
+        return _management_store(control_plane).save_settings(payload.settings, payload.expected_revision)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.get("/dashboard/daily-aggregates")
+def get_daily_aggregates(days: int = Query(default=30, ge=1, le=365), integration_id: str | None = None,
+                         offset: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=1000),
+                         control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    now = datetime.now(timezone.utc)
+    start = now.date() - timedelta(days=days-1)
+    rows = _management_store(control_plane).history(start, now.date()+timedelta(days=1), integration_id, limit=limit+1, offset=offset)
+    return {"timezone": "UTC", "start": start, "end": now, "offset": offset, "limit": limit,
+            "has_more": len(rows)>limit, "aggregates": rows[:limit],
+            "timing_semantics": "Exact daily timing statistics per connector; daily percentiles must not be averaged or combined into range percentiles.",
+            "detail_retention_enabled": False}
 
 
 @router.get("/dashboard/worker-time")
@@ -603,6 +656,8 @@ class UIProtectedAssetSummary(BaseModel):
 
 
 class UIAssetsProtectedResponse(BaseModel):
+    discovered_asset_count: int | None = None
+    protected_asset_count: int | None = None
     assets: list[UIProtectedAssetSummary] = Field(default_factory=list)
     unsupported_integrations: list[str] = Field(default_factory=list)
     failed_integrations: list[dict[str, Any]] = Field(default_factory=list)
@@ -2329,12 +2384,12 @@ def _list_configured_scope_assets(
     matching = []
     for scope in scopes:
         schedule = schedules.get(scope.scope_id)
-        if schedule_status and _scope_schedule_status(scope, schedule) != schedule_status:
+        if schedule_status and _scope_schedule_status(scope, schedule) not in schedule_status:
             continue
         monitoring_configured = _scope_has_monitoring(scope)
         if monitoring and monitoring_configured != (monitoring == "on"):
             continue
-        if coverage_state and ("protected" if scope.enabled else "disabled") != coverage_state:
+        if coverage_state and ("protected" if scope.enabled else "disabled") not in coverage_state:
             continue
         integration = integrations_by_id[scope.integration_id]
         asset, = _summarize_scope_backed_protected_assets_for_integration(
@@ -2345,7 +2400,7 @@ def _list_configured_scope_assets(
         asset.monitoring_configured = monitoring_configured
         if _asset_matches_filter(asset, mode=filter_mode, value=filter_value):
             matching.append(asset)
-    if schedule_status == "scheduled":
+    if schedule_status == {"scheduled"}:
         def next_run_key(asset: UIProtectedAssetSummary) -> tuple[bool, float, str]:
             next_run = asset.scan_schedule.next_run_at if asset.scan_schedule else None
             timestamp = next_run.timestamp() if next_run else 0.0
@@ -2367,6 +2422,25 @@ def _list_configured_scope_assets(
     )
 
 
+def _protected_asset_count(control_plane, integrations, scopes):
+    from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
+    selected = {row.integration_id for row in integrations if row.enabled}
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if db_url:
+        return ProtectionCoverageStore(db_url).protected_count(selected)
+    # In-memory mode has only configured inventory, deduplicated just like coverage.
+    return len({(row.integration_id, row.resource_selector.strip().strip('/'))
+                for row in scopes if row.enabled and row.integration_id in selected})
+
+
+def _protected_asset_counts(control_plane, integrations, scopes):
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if db_url:
+        from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
+        return ProtectionCoverageStore(db_url).asset_counts({row.integration_id for row in integrations})
+    return {'discovered': 0, 'protected': _protected_asset_count(control_plane, integrations, scopes)}
+
+
 @router.get("/assets/protected", response_model=UIAssetsProtectedResponse)
 def list_protected_assets(
     connector_type: str | None = Query(default=None),
@@ -2376,6 +2450,8 @@ def list_protected_assets(
     asset_type: str = Query(default="auto", alias="type"),
     source: str = Query(default="all"),
     coverage_state: str | None = Query(default=None),
+    coverage_states: list[Literal["unprotected", "protected", "disabled", "unknown"]] = Query(default=[]),
+    schedule_statuses: list[Literal["scheduled", "paused", "none"]] = Query(default=[]),
     schedule_status: Literal["scheduled", "paused", "none"] | None = None,
     monitoring: Literal["on", "off"] | None = None,
     next_run_order: Literal["asc", "desc"] = "asc",
@@ -2418,19 +2494,27 @@ def list_protected_assets(
     if cursor_map == {}:
         cursor_map = {integration.integration_id: "" for integration in integrations}
     next_cursors: dict[str, str | None] = {integration.integration_id: cursor_map.get(integration.integration_id) for integration in integrations} if paged else {}
-    normalized_coverage_state = str(coverage_state or "").strip().lower() or None
-    if normalized_coverage_state == "all":
-        normalized_coverage_state = None
+    normalized_coverage_state = set(coverage_states)
+    legacy_coverage = str(coverage_state or "").strip().lower()
+    if legacy_coverage and legacy_coverage != "all":
+        normalized_coverage_state.add(legacy_coverage)
+    selected_schedule_statuses = set(schedule_statuses)
+    if schedule_status:
+        selected_schedule_statuses.add(schedule_status)
 
     # Scheduled and monitoring scopes come from the control plane. Filtering
     # and ordering them here includes scopes whose connector discovery is down.
-    if schedule_status in {"scheduled", "paused"} or monitoring == "on":
-        return _list_configured_scope_assets(
-            scopes=scopes, integrations=integrations, schedules=schedules, schedule_status=schedule_status,
+    if (selected_schedule_statuses and "none" not in selected_schedule_statuses) or monitoring == "on":
+        result = _list_configured_scope_assets(
+            scopes=scopes, integrations=integrations, schedules=schedules, schedule_status=selected_schedule_statuses,
             monitoring=monitoring, coverage_state=normalized_coverage_state, filter_mode=normalized_filter_mode,
             filter_value=asset_filter_value, asset_type=asset_type, descending=next_run_order == "desc", cursor_map=cursor_map,
             limit=limit, job_service=job_service,
         )
+        counts = _protected_asset_counts(control_plane, integrations, scopes)
+        result.protected_asset_count = counts["protected"]
+        result.discovered_asset_count = counts["discovered"]
+        return result
 
     for integration in integrations:
         if paged and len(assets) >= limit:
@@ -2461,7 +2545,10 @@ def list_protected_assets(
         except HTTPException as exc:
             failed_integrations.append({"integration_id": integration.integration_id, "detail": exc.detail})
             next_cursors[integration.integration_id] = None
-            continue
+            if not selected_schedule_statuses:
+                continue
+            # Mixed schedule choices still include known scopes when discovery is unavailable.
+            asset_payload = {"unsupported": True, "asset_type": effective_asset_type, "assets": []}
 
         _remember_discovered_assets(control_plane, integration.integration_id, asset_payload, effective_asset_type)
         asset_response = _summarize_assets(
@@ -2495,13 +2582,14 @@ def list_protected_assets(
             scope = scopes_by_id.get(asset.matching_scope_id or "")
             asset.monitoring_configured = _scope_has_monitoring(scope)
             asset.scan_schedule = schedules.get(asset.matching_scope_id or "")
-        if schedule_status == "none":
-            integration_assets = [asset for asset in integration_assets if asset.scan_schedule is None]
+        if selected_schedule_statuses:
+            integration_assets = [asset for asset in integration_assets
+                if _scope_schedule_status(scopes_by_id.get(asset.matching_scope_id or ""), asset.scan_schedule) in selected_schedule_statuses]
         if monitoring == "off":
             integration_assets = [asset for asset in integration_assets if not asset.monitoring_configured]
-        if normalized_coverage_state is not None:
+        if normalized_coverage_state:
             integration_assets = [
-                asset for asset in integration_assets if asset.coverage_state == normalized_coverage_state
+                asset for asset in integration_assets if asset.coverage_state in normalized_coverage_state
             ]
         if normalized_filter_mode and asset_filter_value:
             integration_assets = [
@@ -2517,7 +2605,10 @@ def list_protected_assets(
             next_cursors[integration.integration_id] = f"scopes:{following}" if following < total_scopes else None
         assets.extend(integration_assets)
 
+    counts = _protected_asset_counts(control_plane, integrations, scopes)
     return UIAssetsProtectedResponse(
+        protected_asset_count=counts["protected"],
+        discovered_asset_count=counts["discovered"],
         assets=assets,
         unsupported_integrations=unsupported_integrations,
         failed_integrations=failed_integrations,

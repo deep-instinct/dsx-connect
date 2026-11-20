@@ -15,11 +15,16 @@ def _capabilities(state, asset_ids, scopes):
     result = {}
     for asset_id in asset_ids:
         asset = state.get(('asset', asset_id), {})
-        if not asset or not asset.get('active', True) or asset.get('source') != 'discovery':
+        if not asset:
             continue
         integration = state.get(('integration', asset['integration_id']), {})
         selector = asset['normalized_selector']
         matches = list(scopes.get((asset['integration_id'], selector), []))
+        discovered = asset.get('active', True) and asset.get('source') == 'discovery'
+        # Configured selectors remain known even when enumeration fails or stops returning them.
+        # Historical configuration-only rows without a remaining scope are not inventory.
+        if not discovered and not matches:
+            continue
         ancestor = selector
         while '/' in ancestor:
             ancestor = ancestor.rsplit('/', 1)[0]
@@ -31,7 +36,7 @@ def _capabilities(state, asset_ids, scopes):
         monitoring = any(scope.get('mode') == 'monitor' and integration.get('capability_monitor', False) for _, scope in enabled)
         scheduled = any(state.get(('schedule', scope_id), {}).get('enabled', False) for scope_id, _ in enabled)
         result[asset_id] = {'name': asset['display_name'], 'monitoring': bool(monitoring), 'scheduled': bool(scheduled),
-                            'protected': protected, 'unprotected': not protected, 'discovered': True}
+                            'protected': protected, 'unprotected': not protected, 'known': True, 'discovered': bool(discovered)}
     return result
 
 
@@ -40,14 +45,14 @@ def coverage_history(events, started_at, days=7, now=None):
     start = coverage_window(days, now)
     state, scope_states, scope_index = {}, {}, {}
     assets_by_integration = defaultdict(set)
-    totals = dict.fromkeys(('discovered', 'unprotected', 'protected', 'scheduled', 'monitoring'), 0)
+    totals = dict.fromkeys(('known', 'discovered', 'unprotected', 'protected', 'scheduled', 'monitoring'), 0)
     series, changes = [], deque(maxlen=100)
     change_count = 0
     resolution = {1: 60, 7: 300, 30: 900}[days]
     last_discovery_bin = None
 
     def point(at, notes=None):
-        return {'at': at.isoformat(), 'total': totals['discovered'], **totals, 'notes': notes or []}
+        return {'at': at.isoformat(), 'total': totals['known'], **totals, 'notes': notes or []}
 
     ordered = sorted((event for event in events if event['occurred_at'] <= now),
                      key=lambda event: (event['occurred_at'], event['event_id']))
@@ -108,11 +113,13 @@ def coverage_history(events, started_at, days=7, now=None):
                 old, new = before.get(asset_id), after.get(asset_id)
                 name = (new or old)['name']
                 if old is None:
-                    add_note(f'{name}: discovered ({"Protected" if new["protected"] else "Unprotected"})')
+                    add_note(f'{name}: {"discovered" if new["discovered"] else "configured"} ({"Protected" if new["protected"] else "Unprotected"})')
                     continue
                 if new is None:
-                    add_note(f'{name}: removed from discovered inventory')
+                    add_note(f'{name}: removed from {"discovered" if old["discovered"] else "known"} inventory')
                     continue
+                if old['discovered'] != new['discovered']:
+                    add_note(f'{name}: {"discovery confirmed" if new["discovered"] else "retained from configuration; no longer returned by discovery"}')
                 for capability, label in [('protected', 'Protection'), ('scheduled', 'Scheduled scan'), ('monitoring', 'Monitoring')]:
                     if old[capability] != new[capability]:
                         add_note(f'{name}: {label} {"granted" if new[capability] else "removed"}')
@@ -155,6 +162,29 @@ class ProtectionCoverageStore:
         import psycopg
         from psycopg.rows import dict_row
         return psycopg.connect(self.db_url, row_factory=dict_row)
+
+    def asset_counts(self, integration_ids):
+        """Current connector inventory counts without audit replay or cloud enumeration."""
+        if not integration_ids:
+            return {'discovered': 0, 'protected': 0}
+        with self._connect() as conn:
+            row = conn.execute("""SELECT
+                count(*) FILTER (WHERE a.active AND a.source = 'discovery') AS discovered,
+                count(*) FILTER (WHERE i.enabled AND EXISTS (
+                    SELECT 1 FROM cp_scopes s WHERE s.integration_id = a.integration_id AND s.enabled
+                    AND (btrim(btrim(s.resource_selector), '/') = a.normalized_selector
+                    OR (s.scope_type = 'path' AND (btrim(btrim(s.resource_selector), '/') = ''
+                        OR starts_with(a.normalized_selector, btrim(btrim(s.resource_selector), '/') || '/')))))) AS protected
+                FROM cp_discovered_assets a JOIN cp_integrations i USING(integration_id)
+                WHERE a.integration_id = ANY(%s::text[])
+                AND ((a.active AND a.source = 'discovery') OR EXISTS (
+                    SELECT 1 FROM cp_scopes configured WHERE configured.integration_id = a.integration_id
+                    AND btrim(btrim(configured.resource_selector), '/') = a.normalized_selector))
+                """, (list(integration_ids),)).fetchone()
+        return dict(row)
+
+    def protected_count(self, integration_ids):
+        return self.asset_counts(integration_ids)['protected']
 
     def revision(self, integration_id=None):
         with self._connect() as conn:
@@ -223,6 +253,6 @@ def coverage_snapshot(events, at, *, offset=0, limit=100):
                      'integration_id': asset['integration_id'],
                      'connector': integration.get('display_name', asset['integration_id'])})
     rows.sort(key=lambda row: (row['connector'].casefold(), row['name'].casefold(), row['asset_id']))
-    counts = {key: sum(row[key] for row in rows) for key in ('discovered', 'unprotected', 'protected', 'scheduled', 'monitoring')}
+    counts = {key: sum(row[key] for row in rows) for key in ('known', 'discovered', 'unprotected', 'protected', 'scheduled', 'monitoring')}
     return {'at': at.isoformat(), 'counts': counts, 'total': len(rows), 'offset': offset, 'limit': limit,
             'assets': rows[offset:offset + limit]}

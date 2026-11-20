@@ -23,6 +23,9 @@ def test_audit_is_transactional_deduplicated_filterable_and_retained_after_delet
         conn.execute("INSERT INTO cp_integrations(integration_id, platform, platform_key, display_name) VALUES (%s, 's3', %s, 'Audit test')", (integration, suffix))
         conn.execute("INSERT INTO cp_scopes(scope_id, integration_id, scope_type, resource_selector, normalized_selector, display_name, mode) VALUES (%s, %s, 'identity', 'test-bucket', 'test-bucket', 'Audit bucket', 'monitor')", (scope, integration))
         store_page(conn, integration, 'bucket', [dict(selector='test-bucket', display_name='Audit bucket')])
+        assert store.protected_count([integration]) == store.history(7, integration)['current']['protected'] == 1
+        assert store.protected_count([]) == 0
+        assert store.asset_counts([integration]) == {'discovered': 1, 'protected': 1}
         revision = store.revision(integration)
         assert revision > 0
         with pytest.raises(RuntimeError):
@@ -49,6 +52,8 @@ def test_audit_is_transactional_deduplicated_filterable_and_retained_after_delet
             assert recorded >= before
         data = store.history(7, integration)
         assert data['current']['unprotected'] == 1
+        assert store.protected_count([integration]) == data['current']['protected'] == 0
+        assert store.asset_counts([integration]) == {'discovered': 1, 'protected': 0}
         assert any('Monitoring removed' in note for change in data['changes'] for note in change['notes'])
         epoch = data['recording_started_at']
         revision = store.revision(integration)
@@ -84,7 +89,9 @@ def test_existing_configuration_gets_an_honest_baseline_not_backdated_history():
         store = ProtectionCoverageStore(isolated_url)
         data = store.history(7)
         assert data['current']['discovered'] == 0
-        assert data['current']['protected'] == 0
+        assert data['current']['known'] == data['current']['protected'] == 1
+        assert store.protected_count(['i']) == 1
+        assert store.asset_counts(['i']) == {'discovered': 0, 'protected': 1}
         assert data['changes'] == []
         assert data['series'][0]['scheduled'] is None
         assert data['series'][1]['notes'] == ['Recording started: current configuration baseline.']
@@ -96,7 +103,7 @@ def test_existing_configuration_gets_an_honest_baseline_not_backdated_history():
             store_page(conn, 'i', 'bucket', [dict(selector='bucket', display_name='Existing bucket')])
         data = store.history(7)
         assert data['current']['discovered'] == data['current']['protected'] == data['current']['scheduled'] == 1
-        assert data['changes'][-1]['notes'] == ['Existing bucket: discovered (Protected)']
+        assert data['changes'][-1]['notes'] == ['Existing bucket: discovery confirmed']
     finally:
         with psycopg.connect(URL, autocommit=True) as conn:
             conn.execute(sql.SQL('DROP SCHEMA {} CASCADE').format(sql.Identifier(schema)))

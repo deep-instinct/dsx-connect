@@ -1890,3 +1890,23 @@ def test_manual_discovery_endpoint_only_queues_work(monkeypatch):
     assert response.status_code == 202
     assert response.json()['queued_connectors'] == 1
     assert queued == ['eligible']
+
+
+def test_protected_asset_count_deduplicates_configured_selectors_and_excludes_disabled_connectors():
+    from types import SimpleNamespace as Row
+    from dsx_connect_v2.api.routes.ui import _protected_asset_count
+    control = Row(repo=Row())
+    integrations = [Row(integration_id='enabled', enabled=True), Row(integration_id='disabled', enabled=False)]
+    scopes = [Row(integration_id='enabled', resource_selector=selector, enabled=enabled)
+              for selector, enabled in [('bucket', True), (' /bucket/ ', True), ('other', False)]]
+    scopes.append(Row(integration_id='disabled', resource_selector='bucket', enabled=True))
+    assert _protected_asset_count(control, integrations, scopes) == 1
+
+
+def test_management_settings_are_explicitly_unavailable_without_postgres():
+    client=TestClient(create_app())
+    response=client.get('/api/v1/ui/settings/management')
+    assert response.status_code==200 and response.json()['available'] is False
+    assert client.put('/api/v1/ui/settings/management',json={'settings':{},'expected_revision':1}).status_code==409
+    assert client.get('/api/v1/ui/dashboard/daily-aggregates').status_code==409
+    assert client.get('/api/v1/ui/dashboard/daily-aggregates?days=9999').status_code==422

@@ -148,11 +148,13 @@ rabbitmq:
     size: 8Gi
 
 workers:
+  # discovery.enabled remains accepted as a compatibility switch for management.
   discovery:
-    # Backend-owned asset inventory; requires PostgreSQL, independently of RabbitMQ/scan scheduling.
+    enabled: false
+  management:
     enabled: false
     replicaCount: 1
-    command: ["python", "-m", "dsx_connect_v2.workers.discovery_worker"]
+    command: ["python", "-m", "dsx_connect_v2.workers.management_worker"]
     args: []
 
   scheduler:

@@ -2,10 +2,8 @@
 import asyncio
 import logging
 import socket
-import signal
 import uuid
 
-from dsx_connect_v2.control_plane.bootstrap import bootstrap_control_plane
 from dsx_connect_v2.control_plane.coverage_inventory import _refresh_one
 from dsx_connect_v2.control_plane.discovery_settings import DiscoverySettings, DiscoverySettingsStore
 from dsx_connect_v2.control_plane.discovery_transport import _connector_asset_endpoint, _effective_asset_type, _fetch_connector_assets
@@ -61,17 +59,9 @@ async def serve(control_plane, store, *, stop=None):
 
 
 def run():
-    logging.basicConfig(level=logging.INFO)
-    control = bootstrap_control_plane()
-    db_url = getattr(control.service.repo, 'db_url', None)
-    if not db_url:
-        raise SystemExit('The discovery worker requires a PostgreSQL control plane.')
-    async def main():
-        stop = asyncio.Event()
-        for signum in (signal.SIGINT, signal.SIGTERM):
-            asyncio.get_running_loop().add_signal_handler(signum, stop.set)
-        await serve(control.service, DiscoverySettingsStore(db_url), stop=stop)
-    asyncio.run(main())
+    """Compatibility entrypoint: discovery now runs inside the Management Worker."""
+    from dsx_connect_v2.workers.management_worker import run as management_run
+    management_run()
 
 
 if __name__ == '__main__':

@@ -156,12 +156,14 @@ pip install -e .
 python -m uvicorn dsx_connect_v2.app:app --reload
 ```
 
-### Backend discovery and Operator Console Settings
+### Management Worker and Operator Console Settings
 
-Asset discovery runs independently of dashboard requests in `dsx-connect-v2-discovery`
-(or `python -m dsx_connect_v2.workers.discovery_worker`). It requires PostgreSQL;
-it does not consume scan queues or need RabbitMQ. Start one replica initially.
-Enable the Helm deployment with `workers.discovery.enabled=true`.
+The Management Worker runs independent discovery and daily-aggregation tasks:
+`dsx-connect-v2-management` (or `python -m dsx_connect_v2.workers.management_worker`).
+It requires PostgreSQL, but does not consume scan queues or need RabbitMQ. Start one
+replica with `workers.management.enabled=true`. The old discovery command and
+`workers.discovery.enabled` switch remain compatibility aliases; Helm renders one
+Management Worker deployment, rather than a second discovery deployment.
 
 Operator Console **Settings** persists the periodic interval, per-worker connector
 concurrency, retry backoff, page budget, and HTTP timeout. Defaults are five minutes,
@@ -185,6 +187,32 @@ A new manual request restarts enumeration; completion of older work cannot consu
 that newer request. Graceful shutdown finishes the current request and retains the
 cursor. More worker replicas increase aggregate concurrency; the setting is per
 worker, rather than a cluster-wide cap.
+
+Daily aggregates use UTC days and are keyed by connector and day. They preserve
+completed scan/verdict totals, file-type and quarantine counts, file-type policy
+matches, terminal job totals, and exact daily timing statistics (sample count,
+sum, minimum, median, p95, p99, maximum). Daily percentiles are **not mergeable**:
+they must never be averaged into range-wide percentiles. Existing range timing,
+continuous-backlog rates, and hourly history still use detailed results.
+
+An initial keyset backfill processes at most 5,000 items per pass and checkpoints
+its progress. Derived completion timestamps and indexes support subsequent
+connector-day queries. Transactional triggers queue days affected by late results
+or corrections, including both sides of a changed completion date. One connector-day
+is aggregated per pass by default; live-day refresh defaults to five minutes.
+Settings exposes these independent controls and worker/backfill/queue health.
+
+The 7/30-day dashboard uses ready closed-day summaries for additive counts and
+live records for the current day or days still awaiting backfill. No API request
+starts aggregation. Paginated stored summaries are available at
+`GET /api/v1/ui/dashboard/daily-aggregates?days=30&limit=100&offset=0`.
+
+Aggregates have no cascading job/item foreign keys and are retained indefinitely
+in this first iteration. No details or protection audit records are purged. A source
+removal guard prevents partial source data from overwriting an existing summary.
+The eventual retention job must require up-to-date summaries before removing detail;
+range timing and under-load retention need their own design before enabling purging.
+Protection coverage continues to use its separate configuration audit policy.
 
 Queue-driven worker entrypoints:
 
@@ -779,3 +807,7 @@ See:
 - [docs/architecture-vnext/rfc/job-model-rfc.md](../docs/architecture-vnext/rfc/job-model-rfc.md)
 - [docs/architecture-vnext/rfc/scope-engine-rfc.md](../docs/architecture-vnext/rfc/scope-engine-rfc.md)
 - [bootstrap-plan.md](bootstrap-plan.md)
+
+Protection coverage counts known assets: active discovered assets plus configured selectors, deduplicated by connector and normalized selector. Known = Protected + Unprotected; Discovered remains a separate enumeration-only count. Configured assets remain visible when discovery fails or no longer returns them. Configuration-only entries leave coverage when their last scope is removed. Historical views and reports use the same definitions.
+
+Protected Assets protection-state and Schedule filters use checkbox multiselect pickers with Apply/Cancel. Choices within a filter are ORed; filters are ANDed. The API accepts repeated `coverage_states` and `schedule_statuses` parameters, retaining singular legacy parameters for compatibility. All choices selected removes that filter.

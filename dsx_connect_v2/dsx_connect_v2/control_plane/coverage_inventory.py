@@ -1,12 +1,12 @@
 """Bounded background discovery. Only complete walks may remove known assets."""
 import hashlib
-import threading
+import logging
+
+from dsx_connect_v2.control_plane.discovery_settings import DiscoverySettings, discovery_due
 
 from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
 
-_running = set()
-_guard = threading.Lock()
-
+log = logging.getLogger(__name__)
 
 def asset_identity(integration_id, selector):
     return hashlib.md5((integration_id + '\x1f' + selector.strip().strip('/')).encode()).hexdigest()
@@ -32,26 +32,8 @@ def store_page(conn, integration_id, asset_type, assets):
                     asset_type = EXCLUDED.asset_type, source = 'discovery', active = TRUE, last_seen_at = clock_timestamp()''', rows)
 
 
-def start_inventory_refresh(db_url, control_plane, discover, integration_id=None):
-    """One bounded sweep per API process; database locks prevent cross-process duplicates."""
-    with _guard:
-        if db_url in _running:
-            return
-        _running.add(db_url)
-    def run():
-        try:
-            store = ProtectionCoverageStore(db_url)
-            for integration in control_plane.list_integrations():
-                if integration_id and integration.integration_id != integration_id:
-                    continue
-                _refresh_one(store, integration, discover)
-        finally:
-            with _guard:
-                _running.discard(db_url)
-    threading.Thread(target=run, name='coverage-inventory', daemon=True).start()
-
-
-def _refresh_one(store, integration, discover):
+def _refresh_one(store, integration, discover, config=None, should_stop=None):
+    config = config or DiscoverySettings()
     with store._connect() as conn:
         # This session lock survives page commits and is released on connection close.
         if not conn.execute('SELECT pg_try_advisory_lock(hashtextextended(%s, 0)) AS locked',
@@ -59,20 +41,28 @@ def _refresh_one(store, integration, discover):
             return
         status = conn.execute('SELECT * FROM cp_asset_inventory_status WHERE integration_id = %s', (integration.integration_id,)).fetchone()
         now = conn.execute("SELECT clock_timestamp() AS now").fetchone()["now"]
-        delay = 5 if status and status['state'] in {'partial', 'refreshing'} else 60 if status and status['state'] == 'error' else 300
-        if status and (now - status['last_attempt_at']).total_seconds() < delay and not (status['state'] == 'disabled' and integration.enabled):
+        request = conn.execute('SELECT * FROM cp_discovery_refresh_queue WHERE integration_id = %s AND completed_at IS NULL', (integration.integration_id,)).fetchone()
+        if not discovery_due(status, request, config, now):
             return
-        cursor = status['next_cursor'] if status else None
+        request_id = request['request_id'] if request else None
+        restart = bool(request and (not status or status.get('active_request_id') != request_id))
+        cursor = status['next_cursor'] if status and not restart else None
         started = status['run_started_at'] if cursor and status else now
+        failures = status.get('consecutive_failures', 0) if status and not restart else 0
         def save(state, next_cursor=None, detail=None, complete=False):
             conn.execute('''INSERT INTO cp_asset_inventory_status
-                (integration_id, state, last_attempt_at, run_started_at, next_cursor, detail, last_completed_at)
-                VALUES (%s, %s, clock_timestamp(), %s, %s, %s, CASE WHEN %s THEN clock_timestamp() END)
+                (integration_id, state, last_attempt_at, run_started_at, next_cursor, detail, last_completed_at, consecutive_failures, active_request_id)
+                VALUES (%s, %s, clock_timestamp(), %s, %s, %s, CASE WHEN %s THEN clock_timestamp() END, %s, %s)
                 ON CONFLICT (integration_id) DO UPDATE SET state = EXCLUDED.state,
                     last_attempt_at = EXCLUDED.last_attempt_at, run_started_at = EXCLUDED.run_started_at,
                     next_cursor = EXCLUDED.next_cursor, detail = EXCLUDED.detail,
-                    last_completed_at = COALESCE(EXCLUDED.last_completed_at, cp_asset_inventory_status.last_completed_at)''',
-                (integration.integration_id, state, started, next_cursor, detail, complete))
+                    last_completed_at = COALESCE(EXCLUDED.last_completed_at, cp_asset_inventory_status.last_completed_at),
+                    consecutive_failures = EXCLUDED.consecutive_failures, active_request_id = EXCLUDED.active_request_id''',
+                (integration.integration_id, state, started, next_cursor, detail, complete,
+                 0 if complete else failures + 1 if state == 'error' else failures, request_id))
+            if request_id and state in {'complete', 'unsupported', 'disabled'}:
+                conn.execute('UPDATE cp_discovery_refresh_queue SET completed_at = clock_timestamp(), outcome = %s WHERE integration_id = %s AND request_id = %s', (state, integration.integration_id, request_id))
+                conn.execute('UPDATE cp_discovery_refresh_audit SET completed_at = clock_timestamp(), outcome = %s WHERE request_id = %s AND completed_at IS NULL', (state, request_id))
             conn.commit()
         if not integration.enabled:
             save('disabled', detail='Connector disabled; retaining previously discovered assets.')
@@ -82,7 +72,10 @@ def _refresh_one(store, integration, discover):
             return
         save('refreshing', cursor)
         seen_cursors = set()
-        for _ in range(10):
+        for _ in range(config.max_pages_per_pass):
+            if should_stop and should_stop():
+                save('partial', cursor)
+                return
             try:
                 payload, asset_type = discover(integration, cursor)
                 if payload.get('unsupported'):
@@ -108,7 +101,8 @@ def _refresh_one(store, integration, discover):
                 seen_cursors.add(following)
                 cursor = following
                 save('partial', cursor)
-            except Exception:
+            except Exception as exc:
+                log.warning("Discovery attempt failed for %s (%s)", integration.integration_id, type(exc).__name__)
                 conn.rollback()
                 save('error', cursor, 'Discovery failed; retaining the last known inventory. Retrying automatically.')
                 return

@@ -24,6 +24,8 @@ rabbitmq:
     enabled: false
 
 workers:
+  discovery:
+    enabled: true
   relay:
     enabled: true
   scan:

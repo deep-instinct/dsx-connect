@@ -1863,3 +1863,30 @@ def test_coverage_snapshot_rejects_ambiguous_timestamps_and_unavailable_history(
     assert client.get(endpoint, params={'at':'2026-11-19T12:00:00'}).status_code == 422
     assert client.get(endpoint, params={'at':'2099-01-01T00:00:00Z'}).status_code == 422
     assert client.get(endpoint, params={'at':'2020-01-01T00:00:00Z'}).status_code == 409
+
+
+def test_discovery_settings_memory_backend_is_explicitly_unavailable():
+    client = TestClient(create_app())
+    response = client.get('/api/v1/ui/settings/discovery')
+    assert response.status_code == 200
+    assert response.json()['available'] is False
+    assert client.post('/api/v1/ui/settings/discovery/refresh', json={}).status_code == 409
+    assert client.put('/api/v1/ui/settings/discovery', json={
+        'settings': {'concurrency': 17}, 'expected_revision': 1}).status_code == 422
+
+
+def test_manual_discovery_endpoint_only_queues_work(monkeypatch):
+    from types import SimpleNamespace
+    from dsx_connect_v2.api.routes import ui
+    queued = []
+    store = SimpleNamespace(request=lambda ids: queued.extend(ids) or [{'request_id':'queued'}])
+    monkeypatch.setattr(ui, '_discovery_settings_store', lambda _: store)
+    app = create_app()
+    app.dependency_overrides[ui.get_control_plane_service] = lambda: SimpleNamespace(
+        list_integrations=lambda: [SimpleNamespace(integration_id='eligible', enabled=True, capability_discover=True),
+                                   SimpleNamespace(integration_id='disabled', enabled=False, capability_discover=True)])
+    client = TestClient(app)
+    response = client.post('/api/v1/ui/settings/discovery/refresh', json={})
+    assert response.status_code == 202
+    assert response.json()['queued_connectors'] == 1
+    assert queued == ['eligible']

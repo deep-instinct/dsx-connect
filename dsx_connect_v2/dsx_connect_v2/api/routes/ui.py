@@ -34,6 +34,11 @@ from dsx_connect_v2.control_plane.models import (
     utcnow,
 )
 from dsx_connect_v2.control_plane.service import ControlPlaneService
+from dsx_connect_v2.control_plane.discovery_settings import DiscoverySettings
+from dsx_connect_v2.control_plane.discovery_transport import (
+    _build_connector_assets_url, _fetch_connector_assets, _connector_asset_endpoint,
+    _default_asset_type_for_platform, _effective_asset_type,
+)
 from dsx_connect_v2.control_plane.scan_schedules import ScanSchedule, ScanScheduleSettings, ScanScheduleStore
 from dsx_connect_v2.control_plane import bulk_protection
 from dsx_connect_v2.jobs.models import (
@@ -141,14 +146,6 @@ def dashboard_protection_coverage(
     from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore, coverage_history
     db_url = getattr(control_plane.repo, "db_url", None)
     if db_url:
-        from dsx_connect_v2.control_plane.coverage_inventory import start_inventory_refresh
-        def discover(integration, cursor):
-            asset_type = _effective_asset_type("auto", integration)
-            base_url, connector_name = _connector_asset_endpoint(
-                integration, control_plane.list_connector_instances(integration_id=integration.integration_id))
-            return _fetch_connector_assets(base_url, connector_name, asset_type=asset_type,
-                                           source="all", limit=1000, cursor=cursor), asset_type
-        start_inventory_refresh(db_url, control_plane, discover, integration_id)
         data = ProtectionCoverageStore(db_url).history(days, integration_id)
         data["durable_history"] = True
     else:
@@ -185,6 +182,56 @@ def dashboard_coverage_snapshot(
                                                       offset=offset, limit=limit)
     except ValueError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+class UIDiscoverySettingsUpdate(BaseModel):
+    settings: "DiscoverySettings"
+    expected_revision: int = Field(ge=1)
+
+
+class UIDiscoveryRefreshRequest(BaseModel):
+    integration_id: str | None = None
+
+
+def _discovery_settings_store(control_plane):
+    from dsx_connect_v2.control_plane.discovery_settings import DiscoverySettingsStore
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if not db_url:
+        raise HTTPException(409, "Discovery settings and queued refreshes require PostgreSQL.")
+    return DiscoverySettingsStore(db_url)
+
+
+@router.get("/settings/discovery")
+def get_discovery_settings(control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    if not getattr(control_plane.repo, "db_url", None):
+        return {"available": False, "settings": DiscoverySettings().model_dump(), "revision": None,
+                "inventory": [], "workers": [], "healthy_workers": 0}
+    store = _discovery_settings_store(control_plane)
+    return {"available": True, **store.settings(), **store.status()}
+
+
+@router.put("/settings/discovery")
+def update_discovery_settings(payload: UIDiscoverySettingsUpdate,
+                              control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    store = _discovery_settings_store(control_plane)
+    try:
+        return store.save_settings(payload.settings, payload.expected_revision)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@router.post("/settings/discovery/refresh", status_code=202)
+def request_discovery_refresh(payload: UIDiscoveryRefreshRequest,
+                              control_plane: ControlPlaneService = Depends(get_control_plane_service)):
+    store = _discovery_settings_store(control_plane)
+    rows = control_plane.list_integrations()
+    if payload.integration_id:
+        row = control_plane.get_integration_or_404(payload.integration_id)
+        if not row.enabled or not row.capability_discover:
+            raise HTTPException(409, "Enable discovery on this connector before requesting a refresh.")
+        rows = [row]
+    eligible = [row.integration_id for row in rows if row.enabled and row.capability_discover]
+    return {"status": "queued", "requests": store.request(eligible), "queued_connectors": len(eligible)}
 
 
 @router.get("/dashboard/worker-time")
@@ -1024,29 +1071,6 @@ def _load_operator_console_html() -> str:
     return _OPERATOR_CONSOLE_PATH.read_text(encoding="utf-8")
 
 
-def _build_connector_assets_url(
-    base_url: str | None,
-    connector_name: str | None,
-    *,
-    asset_type: str,
-    source: str,
-    limit: int,
-    cursor: str | None,
-    asset_filter_mode: str | None = None,
-    asset_filter_value: str | None = None,
-) -> str | None:
-    if not base_url:
-        return None
-    normalized = base_url.rstrip("/") + "/"
-    path = f"{connector_name.strip('/')}/assets" if connector_name else "assets"
-    endpoint = urllib_parse.urljoin(normalized, path)
-    query = {"type": asset_type, "source": source, "limit": str(limit)}
-    if cursor:
-        query["cursor"] = cursor
-    if asset_filter_mode and asset_filter_value:
-        query["asset_filter_mode"] = asset_filter_mode
-        query["asset_filter_value"] = asset_filter_value
-    return f"{endpoint}?{urllib_parse.urlencode(query)}"
 
 
 def _build_connector_health_url(base_url: str | None, connector_name: str | None) -> str | None:
@@ -1194,71 +1218,6 @@ def _scope_relative_object_path(scope_selector: str, object_identity: str) -> st
     return identity
 
 
-def _fetch_connector_assets(
-    base_url: str | None,
-    connector_name: str | None,
-    *,
-    asset_type: str,
-    source: str,
-    limit: int,
-    cursor: str | None,
-    asset_filter_mode: str | None = None,
-    asset_filter_value: str | None = None,
-) -> dict[str, Any]:
-    endpoint = _build_connector_assets_url(
-        base_url,
-        connector_name,
-        asset_type=asset_type,
-        source=source,
-        limit=limit,
-        cursor=cursor,
-        asset_filter_mode=asset_filter_mode,
-        asset_filter_value=asset_filter_value,
-    )
-    if endpoint is None:
-        return {
-            "asset_type": asset_type,
-            "source": source,
-            "status": "unsupported",
-            "assets": [],
-            "unsupported": True,
-            "message": "connector_endpoint_not_configured",
-        }
-    request = urllib_request.Request(endpoint, method="GET", headers={"Accept": "application/json"})
-    try:
-        with urllib_request.urlopen(request, timeout=10.0) as response:
-            body = response.read().decode("utf-8") or "{}"
-            return json.loads(body)
-    except urllib_error.HTTPError as exc:
-        raw = exc.read()
-        connector_detail: dict[str, Any] | str | None = None
-        if raw:
-            text = raw.decode("utf-8", errors="replace")
-            try:
-                connector_detail = json.loads(text)
-            except json.JSONDecodeError:
-                connector_detail = text
-        if exc.code == 404:
-            return {
-                "asset_type": asset_type,
-                "source": source,
-                "status": "unsupported",
-                "assets": [],
-                "unsupported": True,
-                "message": "asset_discovery_not_supported",
-            }
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "code": "connector_asset_discovery_http_error",
-                "status_code": exc.code,
-                "connector_detail": connector_detail,
-            },
-        ) from exc
-    except (urllib_error.URLError, TimeoutError) as exc:
-        raise HTTPException(status_code=502, detail={"code": "connector_asset_discovery_transport_error", "message": str(exc)}) from exc
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=502, detail={"code": "connector_asset_discovery_invalid_json"}) from exc
 
 
 def _probe_connector_health(base_url: str | None, connector_name: str | None) -> ConnectorHealthStatus:
@@ -1483,20 +1442,6 @@ def _connector_instance_health(connector_instances: list[ConnectorInstanceRecord
     )
 
 
-def _connector_asset_endpoint(
-    integration: IntegrationRecord,
-    connector_instances: list[ConnectorInstanceRecord],
-) -> tuple[str | None, str | None]:
-    live_instances = [instance for instance in connector_instances if instance.expires_at > utcnow()]
-    if live_instances:
-        priority = {"healthy": 0, "degraded": 1, "unknown": 2, "unhealthy": 3}
-        instance = sorted(live_instances, key=lambda item: priority.get(item.health, 99))[0]
-        return instance.base_url, None
-    runtime = parse_integration_runtime_config(integration.config)
-    proxy = runtime.reader.proxy if runtime.reader is not None else None
-    if proxy is None:
-        return None, None
-    return proxy.base_url, proxy.connector_name
 
 
 def _list_ui_integration_summaries(service: ControlPlaneService) -> list[UIIntegrationSummary]:
@@ -1715,18 +1660,8 @@ def _selector_key(value: str | None) -> str:
     return str(value or "").strip().strip("/")
 
 
-def _default_asset_type_for_platform(platform: str | None) -> str:
-    normalized = str(platform or "").strip().lower().replace("-", "_")
-    if normalized == "filesystem":
-        return "folder"
-    return "bucket"
 
 
-def _effective_asset_type(requested_type: str | None, integration: IntegrationRecord) -> str:
-    normalized = str(requested_type or "").strip().lower()
-    if not normalized or normalized == "auto":
-        return _default_asset_type_for_platform(integration.platform)
-    return normalized
 
 
 def _coverage_for_selector(selector: str, scopes: list[ProtectedScopeRecord]) -> tuple[str, str | None]:

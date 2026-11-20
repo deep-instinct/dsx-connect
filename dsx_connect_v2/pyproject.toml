@@ -1,6 +1,6 @@
 [project]
 name = "dsx-connect-v2"
-version = "2.0.42"
+version = "2.0.43"
 description = "Standalone next-generation control-plane and worker architecture for DSX-Connect"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,6 +35,7 @@ workers = [
 
 [project.scripts]
 dsx-connect-v2 = "dsx_connect_v2.app:run"
+dsx-connect-v2-discovery = "dsx_connect_v2.workers.discovery_worker:run"
 dsx-connect-v2-relay = "dsx_connect_v2.workers.relay_worker:run"
 dsx-connect-v2-scan-worker = "dsx_connect_v2.workers.scan_worker:run"
 dsx-connect-v2-policy-worker = "dsx_connect_v2.workers.policy_worker:run"

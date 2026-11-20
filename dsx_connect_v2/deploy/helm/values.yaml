@@ -148,6 +148,13 @@ rabbitmq:
     size: 8Gi
 
 workers:
+  discovery:
+    # Backend-owned asset inventory; requires PostgreSQL, independently of RabbitMQ/scan scheduling.
+    enabled: false
+    replicaCount: 1
+    command: ["python", "-m", "dsx_connect_v2.workers.discovery_worker"]
+    args: []
+
   scheduler:
     # Requires the PostgreSQL control plane and RabbitMQ worker stack.
     enabled: false

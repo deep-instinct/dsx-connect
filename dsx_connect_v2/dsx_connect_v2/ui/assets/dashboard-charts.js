@@ -233,12 +233,16 @@ function renderDashboardUnderLoad(data, connectorNames, selectedConnector, compa
   const info = document.getElementById("dashboard-under-load-info-content");
   if (!info) return;
   info.replaceChildren();
-  const notes = [comparison + change,
-    `Rates require ${data.minimum_sustained_wait_seconds} seconds of continuous backlog. Hollow circles below the axis mark completed file scans without a qualifying rate. Hover over the chart for counts.`];
+  const notes = [`Connector: ${selectedConnector ? connectorNames.get(selectedConnector) || selectedConnector : "All connectors"}`,
+    `Period: ${new Date(data.start).toISOString()} to ${new Date(data.end).toISOString()} (UTC)`,
+    headline, comparison + change];
   if (current.files_per_second !== null) {
     notes.push(`${current.scans.toLocaleString()} file scans completed during ${rate(current.waiting_seconds)} s of sustained load. File mix and concurrency can differ between periods.`);
   }
-  if (!selectedConnector) notes.push("Lines show the top five connectors by completed file scans. The headline covers all scans.");
+  const explanation = document.getElementById("dashboard-under-load-explanation");
+  if (explanation) explanation.textContent = `A rate requires at least ${data.minimum_sustained_wait_seconds} seconds of continuous backlog. Hollow circles mark completed scans without a qualifying rate. ${selectedConnector ? "The chart covers the selected connector." : "Lines show the top five connectors; the headline covers all selected scans."}`;
+  const copy = document.getElementById("dashboard-under-load-copy");
+  if (copy) { copy.dataset.copyValue = ["File scans under load — Details", ...notes].join("\n\n"); copy.disabled = false; }
   for (const note of notes) {
     const paragraph = document.createElement("p");
     paragraph.className = "dashboard-muted";

@@ -156,6 +156,36 @@ pip install -e .
 python -m uvicorn dsx_connect_v2.app:app --reload
 ```
 
+### Backend discovery and Operator Console Settings
+
+Asset discovery runs independently of dashboard requests in `dsx-connect-v2-discovery`
+(or `python -m dsx_connect_v2.workers.discovery_worker`). It requires PostgreSQL;
+it does not consume scan queues or need RabbitMQ. Start one replica initially.
+Enable the Helm deployment with `workers.discovery.enabled=true`.
+
+Operator Console **Settings** persists the periodic interval, per-worker connector
+concurrency, retry backoff, page budget, and HTTP timeout. Defaults are five minutes,
+two concurrent connectors, 60–900 seconds retry backoff, ten pages per pass, and
+ten seconds per request. The coordinator checks for work every five seconds. Each
+page requests at most 1,000 assets. Additional pages resume in a later pass.
+
+First registration and a return after a connector lease expires queue discovery.
+**Refresh discovery** queues one connector or all eligible connectors; it does not
+wait for enumeration. These requests are durable and work even while periodic
+refresh is paused. Settings and manual requests have audit records; optimistic
+revision checks prevent overwriting another operator's settings edits. The Settings
+page shows worker heartbeats, attempts, completions, failures, and request state.
+Its polling refresh reads status only and pauses while the page is hidden.
+
+Database locks prevent overlapping walks for the same connector across workers.
+Failures retry with capped exponential backoff and preserve inventory. Partial walks
+persist their cursor; only a completed enumeration may remove missing assets.
+Discovery records when changes were *observed*, not when the source changed.
+A new manual request restarts enumeration; completion of older work cannot consume
+that newer request. Graceful shutdown finishes the current request and retains the
+cursor. More worker replicas increase aggregate concurrency; the setting is per
+worker, rather than a cluster-wide cap.
+
 Queue-driven worker entrypoints:
 
 ```bash

@@ -44,3 +44,14 @@ test('plain-text copy includes the same ordered sections, counts, warnings and s
   assert.ok(!text.includes('<svg'));
   assert.ok(!text.includes('undefined'));
 });
+
+
+test('widget explanation introduces the graphic and operational details follow it', () => {
+  const report = sample();
+  report.sections[0].explanationHtml = '<section data-report-explanation>Interpretation</section>';
+  report.sections[0].detailsHtml = '<section data-report-details>Recorded values</section>';
+  const html = context.dashboardReportHtml(report);
+  assert.ok(html.indexOf('data-report-explanation') < html.indexOf('<polyline'));
+  assert.ok(html.indexOf('<polyline') < html.indexOf('data-report-details'));
+  assert.equal((html.match(/Recorded values/g) || []).length, 1);
+});

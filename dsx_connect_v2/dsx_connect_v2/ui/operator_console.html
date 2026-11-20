@@ -1630,6 +1630,14 @@
       color: var(--text);
       box-shadow: var(--shadow);
     }
+    #dashboard-report-dialog { width: min(1240px, calc(100vw - 24px)); height: 94vh; max-height: 94vh; padding: 16px; overflow: hidden; }
+    #dashboard-report-dialog .report-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    #dashboard-report-dialog h3 { margin: 0 auto 0 0; }
+    #dashboard-report-frame { width: 100%; height: calc(100% - 105px); border: 1px solid var(--line); background: white; border-radius: 6px; }
+    #dashboard-report-status { min-height: 18px; margin: 4px 0; }
+    #coverage-snapshot-dialog { width: min(1100px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; }
+    .dashboard-chart-tooltip .dashboard-point-view { display: inline-flex; margin: 0; flex: none; text-decoration: none; }
+    .dashboard-chart-tooltip .dashboard-hover-heading { align-items: center; gap: 24px; margin-bottom: 8px; }
     .scan-confirm-dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
     .scan-confirm-dialog p { line-height: 1.5; }
     .scan-confirm-dialog strong { overflow-wrap: anywhere; }
@@ -1769,13 +1777,41 @@
     .dashboard-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .dashboard-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
     .dashboard-heading h2 { margin: 0; }
-    .dashboard-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+    .dashboard-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-left: auto; }
+    .dashboard-controls { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .toolbar-filter-group { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .separated-toolbar { justify-content: space-between; gap: 16px; }
+    .toolbar-action-group { display: inline-flex; align-items: center; gap: 8px; padding-left: 16px; border-left: 1px solid var(--line); }
     .dashboard-controls select { width: auto; min-width: 0; min-height: var(--control-height-sm); padding: 4px 8px; font-size: var(--font-size-sm); }
     #dashboard-connector { max-width: 220px; }
+    .dashboard-title { display: flex; align-items: flex-start; gap: 4px; margin-bottom: 8px; }
+    .dashboard-title h3 { margin: 0; }
+    .dashboard-title .dashboard-info-button { margin-top: -8px; }
+    .dashboard-info-button { width: 24px; min-width: 24px; height: 24px; min-height: 24px; border: 0; background: transparent; color: var(--muted); }
+    .dashboard-info-button:hover { color: var(--accent); }
+    .dashboard-info-popover {
+      max-width: min(560px, calc(100vw - 32px));
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      box-shadow: var(--shadow);
+    }
+    .dashboard-info-popover p { margin-top: 10px; }
+    .dashboard-timing-summary { white-space: pre-line; line-height: 1.7; }
+    .dashboard-copy-status { color: var(--muted); }
+    .dashboard-timing-info, .dashboard-report-info { padding-top: 36px; }
+    .dashboard-timing-copy, .dashboard-report-copy { position: absolute; top: 8px; right: 8px; }
+    .dashboard-timing-info .dashboard-copy-status, .dashboard-report-info .dashboard-copy-status { position: absolute; top: 12px; right: 44px; }
+
     .dashboard-refresh-control { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
     .dashboard-refresh-control svg { width: 16px; height: 16px; flex: none; }
     .dashboard-chart { position: relative; margin: 8px 0; }
-    .dashboard-chart-tooltip { position: absolute; top: 0; z-index: 2; pointer-events: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 4px 16px #0003; font-size: 12px; white-space: nowrap; }
+    .dashboard-chart-tooltip { position: fixed; inset: auto; margin: 0; width: max-content; max-width: min(640px, calc(100vw - 16px)); pointer-events: none; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); box-shadow: 0 4px 16px #0003; font-size: 12px; white-space: normal; overflow-wrap: anywhere; overflow-y: auto; }
+    .dashboard-chart-tooltip > div > strong { text-align: right; }
     .dashboard-chart-tooltip.is-interactive { pointer-events: auto; }
     .dashboard-chart-tooltip a { display: inline-block; margin-top: 8px; }
     [data-dashboard-compare] { cursor: pointer; }
@@ -1882,28 +1918,32 @@
         <section class="view" id="view-dashboard" aria-label="Operations dashboard" aria-busy="true" inert>
           <div class="view-heading dashboard-heading">
             <h2>Dashboard</h2>
-            <div class="dashboard-controls">
+            <div class="dashboard-toolbar">
+            <div class="dashboard-controls" role="group" aria-label="Dashboard filters">
               <select id="dashboard-connector" aria-label="Dashboard connector" title="Filter by connector"><option value="">All connectors</option></select>
+
               <select id="dashboard-days" aria-label="Dashboard time range" title="Time range"><option value="1">1d</option><option value="7" selected>7d</option><option value="30">30d</option></select>
               <div class="dashboard-refresh-control" id="dashboard-refresh-control">
                 <button class="icon-button polling-refresh" id="refresh-dashboard" type="button" aria-label="Refresh dashboard" title="Refresh dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg><span class="refresh-progress" aria-hidden="true"></span></button>
                 <select id="dashboard-refresh-interval" aria-label="Dashboard refresh interval" title="Auto-refresh interval"><option value="1">1s</option><option value="5">5s</option><option value="15" selected>15s</option><option value="0">Pause</option></select>
               </div>
             </div>
+            <div class="dashboard-toolbar-actions toolbar-action-group" role="group" aria-label="Dashboard actions"><button type="button" class="icon-button" id="create-dashboard-report" disabled aria-label="Create dashboard report" title="Create dashboard report"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6M8 17v-3m4 3v-5m4 5v-2"/></svg></button></div>
+            </div>
           </div>
           <p id="dashboard-error" role="status"></p>
           <div class="dashboard-kpis" id="dashboard-kpis" data-dashboard-widget></div>
           <div class="dashboard-grid" id="dashboard-grid">
-            <div class="dashboard-card"><h3>File scan activity</h3><p class="dashboard-muted">Completed file scans per minute, including idle time</p><div id="dashboard-throughput" data-dashboard-widget></div></div>
-            <div class="dashboard-card"><h3>File scans under load</h3><p class="dashboard-muted">Completed file scans per second during sustained backlog. Hollow circles below the axis show completed scans without a qualifying rate.</p><div id="dashboard-under-load" data-dashboard-widget></div></div>
-            <div class="dashboard-card"><h3>Scan worker time</h3><p class="dashboard-muted">File retrieval through the DSXA response</p><div id="dashboard-worker-time" data-dashboard-widget></div></div>
-            <div class="dashboard-card"><h3>DSXA scan time</h3><p class="dashboard-muted">Scan duration reported by DSXA</p><div id="dashboard-dsxa-time" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><div class="dashboard-actions"><div class="dashboard-title" style="margin-right:auto"><h3>Protection coverage</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-coverage-info" aria-label="About protection coverage" title="About protection coverage"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div></div><div id="dashboard-coverage-info" class="dashboard-info-popover dashboard-report-info" popover="auto"><button type="button" id="dashboard-coverage-copy" class="icon-button dashboard-report-copy" aria-label="Copy protection coverage summary" title="Copy protection coverage summary" data-copy-value="" data-copy-feedback="dashboard-coverage-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-coverage-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><div id="dashboard-coverage-report">Loading protection coverage…</div></div><p class="dashboard-muted">Discovered assets · protection and capability changes over time</p><div id="dashboard-coverage" data-dashboard-widget>Loading protection coverage…</div></div>
+            <div class="dashboard-card"><div class="dashboard-title"><h3>File scans under load</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-under-load-info" aria-label="About file scans under load" title="About file scans under load"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><div id="dashboard-under-load-info" class="dashboard-info-popover" popover="auto" aria-label="About file scans under load"><div id="dashboard-under-load-info-content"></div></div><p class="dashboard-muted">Completed file scans per second during sustained backlog. Hollow circles below the axis show completed scans without a qualifying rate.</p><div id="dashboard-under-load" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><div class="dashboard-title"><h3>Scan worker time</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-worker-time-info" aria-label="About scan worker time" title="About scan worker time"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><div id="dashboard-worker-time-info" class="dashboard-info-popover dashboard-timing-info" popover="auto"><p id="dashboard-worker-time-description">File retrieval through the DSXA response</p><p id="dashboard-worker-time-context" class="dashboard-muted"></p><p id="dashboard-worker-time-tail" class="dashboard-timing-summary"></p><button type="button" id="dashboard-worker-time-copy" class="icon-button dashboard-timing-copy" aria-label="Copy timing summary" title="Copy timing summary" data-copy-value="" data-copy-feedback="dashboard-worker-time-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-worker-time-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><p class="dashboard-muted">Completed files in the selected date range and connector filter. Median and p95 describe per-file elapsed time across workers. Comparing with DSXA scan time helps identify time spent retrieving, streaming, and waiting for a response.</p></div><div id="dashboard-worker-time" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><div class="dashboard-title"><h3>DSXA scan time</h3><button type="button" class="icon-button dashboard-info-button" popovertarget="dashboard-dsxa-time-info" aria-label="About DSXA scan time" title="About DSXA scan time"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button></div><div id="dashboard-dsxa-time-info" class="dashboard-info-popover dashboard-timing-info" popover="auto"><p id="dashboard-dsxa-time-description">Scan duration reported by DSXA</p><p id="dashboard-dsxa-time-context" class="dashboard-muted"></p><p id="dashboard-dsxa-time-tail" class="dashboard-timing-summary"></p><button type="button" id="dashboard-dsxa-time-copy" class="icon-button dashboard-timing-copy" aria-label="Copy timing summary" title="Copy timing summary" data-copy-value="" data-copy-feedback="dashboard-dsxa-time-copy-status" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button><span id="dashboard-dsxa-time-copy-status" class="dashboard-copy-status" role="status" aria-live="polite"></span><p class="dashboard-muted">Completed files with recorded DSXA timing in the selected date range and connector filter. Median and p95 summarize the scanner-reported duration. Retrieval, streaming, and response wait are included in Scan worker time.</p></div><div id="dashboard-dsxa-time" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Job activity</h3><p class="dashboard-muted">Jobs finished per time bucket, including idle time</p><div id="dashboard-job-activity" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Job duration</h3><p class="dashboard-muted">Job creation to successful completion</p><div id="dashboard-job-duration" data-dashboard-widget></div></div>
             <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">File scans by verdict</h3></div><p class="dashboard-muted">Completed scan stages · UTC · hourly for 1 day, daily for 7 / 30 days · current bucket is partial · click a time to view scans</p><div id="dashboard-history" data-dashboard-widget aria-live="polite">Loading scan history…</div></div>
             <div class="dashboard-card"><h3>Unfinished file items</h3><p class="dashboard-muted">Unfinished file items at bucket end · includes in-flight work · current bucket shows now</p><div id="dashboard-backlog" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>File processing time</h3><p class="dashboard-muted">Item creation to successful completion · median / p95 · includes downstream stages</p><div id="dashboard-latency" data-dashboard-widget></div></div>
-            <div class="dashboard-card"><div class="dashboard-actions"><h3 style="margin-right:auto">Protection coverage</h3><button type="button" data-dashboard-tab="assets">Review scopes</button></div><p class="dashboard-muted">Configured scopes on enabled integrations · configuration coverage, not file inventory</p><div id="dashboard-coverage" data-dashboard-widget></div></div>
+            <div class="dashboard-card"><h3>File scan activity</h3><p class="dashboard-muted">Completed file scans per minute, including idle time</p><div id="dashboard-throughput" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Quarantined files by reason</h3><p class="dashboard-muted">Successful quarantine actions in the selected period. File-type policy takes precedence when both reasons apply.</p><div id="dashboard-quarantine" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Scanned file types</h3><p class="dashboard-muted">Completed scans in the selected period · top 8 types</p><div id="dashboard-types" data-dashboard-widget></div></div>
             <div class="dashboard-card"><h3>Work in progress</h3><p class="dashboard-muted">Item states across the latest 50 jobs. These are durable job counts, not RabbitMQ queue depths.</p><div id="dashboard-work" data-dashboard-widget></div></div>
@@ -1997,7 +2037,8 @@
             <p>Job progress, findings, remediation, and scan statistics and comparisons.</p>
           </div>
           <div class="scan-stats-row" id="scan-stats-row"></div>
-          <div class="table-actions">
+          <div class="table-actions separated-toolbar">
+            <div class="toolbar-filter-group" role="group" aria-label="Scan Results filters">
             <button class="icon-button polling-refresh" id="refresh-scan-results" type="button" aria-label="Refresh scan results" title="Refresh scan results">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 0 1-15.5 6.2"></path>
@@ -2010,7 +2051,12 @@
             <div class="poll-control">Poll for new results
               <label class="switch"><input type="checkbox" id="scan-results-poll" aria-label="Poll for new results" checked><span></span></label>
             </div>
-            <button class="icon-button compare-button" id="toggle-scan-compare" type="button" aria-label="Compare scan results" title="Compare scan results">
+
+            <button type="button" id="clear-scan-filters" class="icon-button" disabled aria-label="Clear filters" title="Clear filters">
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 10h10M10 15h2m3 0 5 5m0-5-5 5"/></svg>
+            </button>
+            </div>
+            <div class="toolbar-action-group" role="group" aria-label="Scan Results actions"><button class="icon-button compare-button" id="toggle-scan-compare" type="button" aria-label="Compare scan results" title="Compare scan results">
               <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 19V5"></path>
                 <path d="M4 19h16"></path>
@@ -2019,10 +2065,7 @@
                 <path d="M18 16v-4"></path>
               </svg>
               <span class="icon-badge hidden" id="scan-compare-count">0</span>
-            </button>
-            <button type="button" id="clear-scan-filters" class="icon-button" disabled aria-label="Clear filters" title="Clear filters">
-              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16M7 10h10M10 15h2m3 0 5 5m0-5-5 5"/></svg>
-            </button>
+            </button></div>
           </div>
           <div class="scan-compare-wrap hidden" id="scan-compare-wrap">
             <div class="scan-compare-header">
@@ -2391,6 +2434,17 @@
     <div class="modal-actions"><button type="button" id="connector-filter-cancel">Cancel</button><button type="button" id="connector-filter-apply" class="primary">Apply filters</button></div>
   </div>
 
+  <dialog class="scan-confirm-dialog" id="dashboard-report-dialog" aria-labelledby="dashboard-report-title">
+    <div class="report-toolbar"><h3 id="dashboard-report-title">Operator report preview</h3><button type="button" id="copy-dashboard-report" data-copy-value="" data-copy-feedback="dashboard-report-status" title="Copy report text" aria-label="Copy report text">Copy text</button><button type="button" id="download-dashboard-report">Download HTML</button><button type="button" id="print-dashboard-report" disabled>Print / Save PDF</button><button type="button" class="icon-button" id="close-dashboard-report" aria-label="Close report preview" title="Close">✕</button></div>
+    <p class="dashboard-muted">Fixed snapshot of the selected dashboard. Polling continues behind this preview.</p><p id="dashboard-report-status" role="status" aria-live="polite" class="dashboard-muted"></p>
+    <iframe id="dashboard-report-frame" title="Operator report preview" sandbox="allow-same-origin allow-modals"></iframe>
+  </dialog>
+
+  <dialog class="scan-confirm-dialog" id="coverage-snapshot-dialog" aria-labelledby="coverage-snapshot-title">
+    <form method="dialog" class="dashboard-actions"><h3 id="coverage-snapshot-title" style="margin-right:auto">Protection coverage snapshot</h3><button type="submit" class="icon-button" aria-label="Close coverage snapshot" title="Close">✕</button></form>
+    <p id="coverage-snapshot-context" class="dashboard-muted"></p><div id="coverage-snapshot-content" aria-live="polite"></div>
+  </dialog>
+
   <dialog class="scan-confirm-dialog" id="bulk-protection-confirm" aria-labelledby="bulk-protection-title">
     <form method="dialog">
       <h2 id="bulk-protection-title">Start scans for selected assets?</h2>
@@ -2461,6 +2515,7 @@
 
 
   <script src="/api/v1/ui-static/dashboard-charts.js"></script>
+  <script src="/api/v1/ui-static/dashboard-report.js"></script>
   <script>
     const consoleParams = new URLSearchParams(window.location.search);
     const state = {
@@ -2761,7 +2816,7 @@
       button.classList.toggle("hidden", !input.value);
     }
 
-    async function copyTextToClipboard(value) {
+    async function copyTextToClipboard(value, container = document.body) {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(value);
         return;
@@ -2769,12 +2824,25 @@
       const textarea = document.createElement("textarea");
       textarea.value = value;
       textarea.setAttribute("readonly", "");
-      textarea.style.position = "fixed";
-      textarea.style.left = "-9999px";
-      document.body.appendChild(textarea);
+      textarea.style.cssText = "position:absolute;top:0;left:0;width:1px;height:1px;opacity:0;pointer-events:none";
+      container.appendChild(textarea);
+      textarea.focus({preventScroll: true});
       textarea.select();
-      document.execCommand("copy");
-      textarea.remove();
+      textarea.setSelectionRange(0, value.length);
+      let handled = false;
+      const onCopy = (event) => {
+        if (!event.clipboardData) return;
+        event.clipboardData.setData("text/plain", value);
+        event.preventDefault();
+        handled = true;
+      };
+      document.addEventListener("copy", onCopy);
+      try {
+        if (!document.execCommand("copy") || !handled) throw new Error("Clipboard copy unavailable");
+      } finally {
+        document.removeEventListener("copy", onCopy);
+        textarea.remove();
+      }
     }
 
     function stopRefreshCountdown(buttonId, timer) {
@@ -2933,6 +3001,7 @@
 
     let dashboardReturnSampleShown = false;
     let dashboardUnderLoadData;
+    let dashboardHistoryReportData = null;
 
     function updateDashboardUnderLoadChart() {
       if (!dashboardUnderLoadData) return;
@@ -2951,13 +3020,14 @@
         if (dashboardConnector.value) params.set("integration_id", dashboardConnector.value);
         const data = await fetchJson(`/api/v1/ui/dashboard/history?${params}`);
         if (request !== dashboardHistoryRequest) return;
+        dashboardHistoryReportData = data;
         const rate = (value) => Number(value).toLocaleString(undefined, {maximumFractionDigits: 2});
         const seconds = (value) => value < 1 ? `${rate(value * 1000)} ms` : `${rate(value)} s`;
-        renderDashboardMetric("dashboard-throughput", data, [["throughput_per_minute", "Scans / min", "accent"]], `${rate(data.throughput_per_minute)} scans/min average`, rate);
+        renderDashboardMetric("dashboard-throughput", data, [["throughput_per_minute", "Scans / min", "accent"]], `${rate(data.throughput_per_minute)} scans/min average`, rate, dashboardSampleUrls(data), {viewLabel:"View scan results"});
         renderDashboardMetric("dashboard-backlog", data, [["backlog", "Unfinished items", "warn"]], `${data.backlog.toLocaleString()} unfinished now`, (value) => Math.round(value).toLocaleString());
         renderDashboardMetric("dashboard-latency", data, [["median_seconds", "Median", "accent"], ["p95_seconds", "p95", "warn"]], data.latency.samples ? `${seconds(data.latency.median_seconds)} median · ${seconds(data.latency.p95_seconds)} p95` : "No timing data", seconds);
         for (const [id, key] of [
-          ["dashboard-worker-time", "scan_worker"], ["dashboard-dsxa-time", "dsxa"], ["dashboard-job-duration", "job_duration"],
+          ["dashboard-job-duration", "job_duration"],
         ]) {
           const timing = data[key];
           const chart = { ...data, series: data.series.map((bucket) => ({at: bucket.at, ...bucket[key]})) };
@@ -2982,7 +3052,7 @@
           return `<rect x="${left}" y="15" width="${right - left}" height="90" fill="transparent" tabindex="0" role="button" data-scan-bucket="${i}" aria-label="View ${bucket.total} scans at ${escapeHtml(bucket.at)}" style="cursor:pointer"><title>View scans at ${escapeHtml(bucket.at)}</title></rect>`;
         }).join("");
         const labels = [0, Math.floor((series.length - 1) / 2), series.length - 1].map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit", minute:"2-digit", timeZone:"UTC"} : {month:"short", day:"numeric", timeZone:"UTC"}))}</text>`).join("");
-        if (updateDashboardWidgetHtml("dashboard-history", `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="group" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}${targets}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact counts</summary><div class="table-wrap"><table><thead><tr><th>UTC</th><th>Total</th><th>Benign</th><th>Malicious</th><th>Suspicious</th><th>Other</th></tr></thead><tbody>${series.map((b) => `<tr><td><button type="button" data-scan-bucket="${series.indexOf(b)}">${escapeHtml(b.at)}</button></td><td>${b.total}</td><td>${b.benign}</td><td>${b.malicious}</td><td>${b.suspicious}</td><td>${b.other}</td></tr>`).join("")}</tbody></table></div></details><div id="dashboard-scan-details" aria-live="polite"></div>`)) {
+        if (updateDashboardWidgetHtml("dashboard-history", `<strong style="font-size:28px">${data.total_scans.toLocaleString()}</strong> <span class="dashboard-muted">completed scans</span><div class="dashboard-chart"><div class="dashboard-chart-tooltip" popover="manual" role="tooltip" hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="group" aria-label="Completed scans by time: total, benign, malicious, and suspicious" style="width:100%;height:130px;display:block"><path d="M48 20V95H398" fill="none" stroke="var(--line)"/><text x="38" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${max}</text><text x="38" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${labels}${targets}</svg></div><div class="dashboard-actions">${Object.entries(colors).map(([key,color]) => `<span style="color:var(--${color})">● ${key[0].toUpperCase()+key.slice(1)}</span>`).join("")}</div><div id="dashboard-scan-details" aria-live="polite"></div>`)) {
         const history = document.getElementById("dashboard-history");
         const openBucket = (event) => {
           const target = event.target.closest("[data-scan-bucket]");
@@ -2998,6 +3068,7 @@
         const chart = document.querySelector("#dashboard-history .dashboard-chart");
         const svg = chart.querySelector("svg");
         const tooltip = chart.querySelector("[role=tooltip]");
+        bindDashboardChartHover(svg, tooltip);
         svg.addEventListener("pointermove", (event) => {
           if (!series.length) return;
           const bounds = svg.getBoundingClientRect();
@@ -3005,11 +3076,11 @@
           const index = Math.max(0, Math.min(series.length - 1, Math.round((chartX - 48) / 350 * (series.length - 1))));
           const bucket = series[index];
           tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${Object.entries(colors).map(([key, color]) => `<div><span style="color:var(--${color})">● ${key[0].toUpperCase() + key.slice(1)}</span><strong>${Number(bucket[key]).toLocaleString()}</strong></div>`).join("")}`;
-          tooltip.innerHTML += "<p>Click to view scans</p>";
-          tooltip.hidden = false;
-          tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
+          const sampleEnd = new Date(Math.min(new Date(bucket.at).getTime() + (data.bucket === "hour" ? 3600000 : 86400000), new Date(data.end).getTime())).toISOString();
+          appendDashboardViewAction(tooltip, {at:bucket.at, label:"View scan results", href:scanResultsUrl(bucket.at, sampleEnd)});
+          const points = Object.entries(colors).map(([key, color]) => [y(bucket[key]), color]);
+          showDashboardChartHover(svg, tooltip, x(index), points);
         });
-        svg.addEventListener("pointerleave", () => { tooltip.hidden = true; });
         }
         updateDashboardWidgetHtml("dashboard-quarantine", dashboardBars([["Malware", data.quarantined.malicious, "danger"], ["File-type policy", data.quarantined.file_type_policy, "warn"], ["Suspicious", data.quarantined.suspicious, "warn"], ["Other / unknown", data.quarantined.other, "muted"]]) + `<p class="dashboard-muted">${data.file_type_policy_matches.toLocaleString()} file-type policy matches, including outcomes other than quarantine. Pending and failed quarantine actions are excluded above.</p>`);
         updateDashboardWidgetHtml("dashboard-types", data.file_types.length ? dashboardBars(data.file_types.slice(0,8).map((row) => [row.type, row.count])) : '<p class="dashboard-muted">No completed scans in this period.</p>');
@@ -3020,8 +3091,9 @@
         return true;
       } catch (error) {
         if (request !== dashboardHistoryRequest) return;
+        dashboardHistoryReportData = null;
         for (const id of ["dashboard-history", "dashboard-quarantine", "dashboard-types", "dashboard-throughput", "dashboard-backlog", "dashboard-latency",
-          "dashboard-under-load", "dashboard-worker-time", "dashboard-dsxa-time", "dashboard-job-activity", "dashboard-job-duration"]) { const widget = document.getElementById(id); if (widget) { dashboardWidgetMarkup.delete(widget); widget.textContent = `Historical data unavailable: ${error.message}`; } }
+          "dashboard-under-load", "dashboard-job-activity", "dashboard-job-duration"]) { const widget = document.getElementById(id); if (widget) { dashboardWidgetMarkup.delete(widget); widget.textContent = `Historical data unavailable: ${error.message}`; } }
         return false;
       } finally {
         if (request === dashboardHistoryRequest) {
@@ -3037,7 +3109,138 @@
       return rows.map(([label, count, color]) => `<div class="dashboard-bar-row"><span>${escapeHtml(label)}</span><div class="dashboard-bar"><span style="width:${Math.max(0, count / max * 100)}%;background:var(--${color || "accent"})"></span></div><strong>${Number(count).toLocaleString()}</strong></div>`).join("");
     }
 
+    let dashboardCoverageRefreshTimer = null;
+    function scheduleCoverageWhileLoading() {
+      const pending = (dashboardData.coverage?.inventory || []).some((row) => ["pending", "refreshing", "partial"].includes(row.state));
+      if (dashboardCoverageRefreshTimer || state.activeTab !== "dashboard" || (!dashboardLoading && !pending)) return;
+      dashboardCoverageRefreshTimer = window.setTimeout(async () => {
+        dashboardCoverageRefreshTimer = null;
+        if (state.activeTab !== "dashboard") return;
+        const days = document.getElementById("dashboard-days").value, integrationId = dashboardConnector.value;
+        const context = `${days}:${integrationId}`;
+        const params = new URLSearchParams({days, widgets:"dashboard-coverage"});
+        if (integrationId) params.set("integration_id", integrationId);
+        try {
+          const changes = await fetchJson(`/api/v1/ui/dashboard/changes?${params}`);
+          if (changes.sources.coverage !== dashboardSourceRevisions.get("coverage")) {
+            params.delete("widgets");
+            const data = await fetchJson(`/api/v1/ui/dashboard/coverage?${params}`);
+            if (context !== `${document.getElementById("dashboard-days").value}:${dashboardConnector.value}` || state.activeTab !== "dashboard") return;
+            dashboardData.coverage = data;
+            dashboardSourceRevisions.set("coverage", changes.sources.coverage);
+            dashboardWidgetRevisions.set("dashboard-coverage", changes.widgets["dashboard-coverage"].revision);
+            renderDashboardCoverage();
+          }
+        } catch (_) { /* The normal dashboard refresh reports failures and retries. */ }
+        scheduleCoverageWhileLoading();
+      }, 5000);
+    }
+
+    function buildProtectionCoverageReport(data, connector) {
+      const utc = (value) => new Date(value).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
+      const count = (value) => Number(value).toLocaleString();
+      const current = data.current;
+      const inventory = data.inventory || [];
+      const incomplete = inventory.filter((row) => row.state !== "complete");
+      const activity = data.changes.slice(-10).reverse();
+      const sections = [
+        {heading: "Protection coverage", text: `Connector: ${connector}\nPeriod: ${utc(data.start)} to ${utc(data.end)}\nAs of: ${utc(current.at)}`},
+        {heading: "Current coverage", text: `Discovered: ${count(current.discovered)}\nUnprotected: ${count(current.unprotected)}\nProtected: ${count(current.protected)}\nScheduled scan: ${count(current.scheduled)}\nMonitoring: ${count(current.monitoring)}`},
+        {heading: "How to read this", text: "Discovered = Unprotected + Protected. Protected assets have an enabled protection scope on an enabled connector. Scheduled scan and Monitoring are subsets of Protected and can overlap. Protected assets with neither subset rely on manual scans."},
+        {heading: "Inventory completeness", text: `${incomplete.length ? `Incomplete for ${incomplete.length} connector${incomplete.length === 1 ? "" : "s"}; totals reflect the known inventory.` : inventory.length ? "Discovery is complete for the selected connectors." : "No persistent discovery inventory is available."}\n${inventory.map((row) => `${row.display_name}: ${row.state}${row.last_completed_at ? `; last complete ${utc(row.last_completed_at)}` : "; no complete discovery yet"}${row.detail ? `\n  ${row.detail}` : ""}`).join("\n")}`},
+        {heading: "Audit history", text: data.durable_history
+          ? `Recording began: ${utc(data.recording_started_at)}. Earlier configuration history is unavailable.\n${count(data.changes_count)} audit updates in the selected period. Protection changes retain their recorded times; discovery updates are grouped into ${data.discovery_resolution_seconds / 60}-minute intervals.`
+          : "Current configuration only. Persistent audit history requires PostgreSQL."},
+        {heading: "Recent activity", text: activity.length
+          ? `Latest ${activity.length} activity group${activity.length === 1 ? "" : "s"}:\n${activity.map((change) => `${utc(change.at)}\n${change.notes.map((note) => `  ${note}`).join("\n")}`).join("\n\n")}`
+          : "No configuration changes recorded in this period."},
+        {heading: "Scope and limitations", text: "Discovery records assets even when they have never had a protection scope. Failed or incomplete discovery retains the last known inventory. Configured-only assets are excluded until discovered. Configuration does not confirm runtime health. All timestamps are UTC." + (data.scheduler_enabled ? "" : " The scan scheduler is currently disabled; configured schedules will not run.")},
+      ];
+      return {sections, text: sections.map(({heading, text}) => `${heading}\n${text}`).join("\n\n")};
+    }
+
+    let coverageSnapshotRequest = 0;
+    async function showCoverageSnapshot(at, integrationId, offset = 0) {
+      const dialog = document.getElementById("coverage-snapshot-dialog");
+      const target = document.getElementById("coverage-snapshot-content");
+      const request = ++coverageSnapshotRequest;
+      if (!dialog.open) dialog.showModal();
+      document.getElementById("coverage-snapshot-context").textContent = `Recorded coverage at ${new Date(at).toLocaleString([], {timeZone:"UTC"})} UTC. This historical view is read-only.`;
+      target.textContent = "Loading recorded assets…";
+      try {
+        const params = new URLSearchParams({at, offset, limit:"100"});
+        if (integrationId) params.set("integration_id", integrationId);
+        const data = await fetchJson(`/api/v1/ui/dashboard/coverage/snapshot?${params}`);
+        if (request !== coverageSnapshotRequest || !dialog.open) return;
+        const counts = data.counts;
+        target.innerHTML = `<p><strong>${counts.discovered} discovered · ${counts.protected} protected · ${counts.unprotected} unprotected · ${counts.scheduled} scheduled · ${counts.monitoring} monitoring</strong></p><p class="dashboard-muted">Known inventory as recorded at this time. Discovery can lag changes in the source system.</p><div class="table-wrap"><table><thead><tr><th>Asset</th><th>Connector</th><th>Protection</th><th>Scheduled scan</th><th>Monitoring</th></tr></thead><tbody>${data.assets.map((row) => `<tr><td>${escapeHtml(row.name)}<br><span class="dashboard-muted">${escapeHtml(row.selector)}</span></td><td>${escapeHtml(row.connector)}</td><td>${row.protected ? "Protected" : "Unprotected"}</td><td>${row.scheduled ? "Yes" : "—"}</td><td>${row.monitoring ? "Yes" : "—"}</td></tr>`).join("") || '<tr><td colspan="5">No assets had been discovered at this time.</td></tr>'}</tbody></table></div><div class="dashboard-actions"><button type="button" data-snapshot-prev ${offset ? "" : "disabled"}>Previous</button><span>${data.total ? offset + 1 : 0}–${offset + data.assets.length} of ${data.total}</span><button type="button" data-snapshot-next ${offset + data.assets.length < data.total ? "" : "disabled"}>Next</button></div>`;
+        target.querySelector("[data-snapshot-prev]").onclick = () => showCoverageSnapshot(at, integrationId, Math.max(0, offset - 100));
+        target.querySelector("[data-snapshot-next]").onclick = () => showCoverageSnapshot(at, integrationId, offset + 100);
+      } catch (error) {
+        if (request === coverageSnapshotRequest && dialog.open) target.textContent = `Snapshot unavailable: ${error.message}`;
+      }
+    }
+    document.getElementById("coverage-snapshot-dialog").addEventListener("close", () => ++coverageSnapshotRequest);
+
+    function renderDashboardCoverage() {
+      const data = dashboardData.coverage;
+      if (!data) return;
+      const current = data.current;
+      renderDashboardMetric("dashboard-coverage", data,
+        [["discovered", "Discovered", "muted"], ["unprotected", "Unprotected", "danger"], ["protected", "Protected", "good"], ["scheduled", "Scheduled scan", "accent"], ["monitoring", "Monitoring", "warn"]],
+        `${current.discovered} discovered · ${current.protected} protected · ${current.unprotected} unprotected`,
+        (value) => Math.round(value).toLocaleString(), [],
+        {viewLabel: "View protection coverage", onView: (at) => showCoverageSnapshot(at, data.integration_id)});
+      const utc = (value) => new Date(value).toLocaleString([], {timeZone:"UTC"}) + " UTC";
+      const started = utc(data.recording_started_at);
+      const incomplete = (data.inventory || []).filter((row) => row.state !== "complete");
+      const report = buildProtectionCoverageReport(data, dashboardConnector.selectedOptions[0]?.textContent || "All connectors");
+      document.getElementById("dashboard-coverage-report").innerHTML = report.sections.map(({heading, text}) => `<section><h4>${escapeHtml(heading)}</h4><p style="white-space:pre-line">${escapeHtml(text)}</p></section>`).join("");
+      const copy = document.getElementById("dashboard-coverage-copy");
+      copy.dataset.copyValue = report.text;
+      copy.disabled = false;
+      const target = document.getElementById("dashboard-coverage");
+      let note = target.querySelector("[data-coverage-note]");
+      if (!note) { note = document.createElement("p"); note.className = "dashboard-muted"; note.dataset.coverageNote = ""; target.append(note); }
+      note.textContent = `${incomplete.length ? `Inventory incomplete for ${incomplete.length} connector${incomplete.length === 1 ? "" : "s"}. ` : ""}Audit from ${started}${data.scheduler_enabled ? "" : " · Scan scheduler disabled"}`;
+      scheduleCoverageWhileLoading();
+    }
+
+    function dashboardSampleUrls(data) {
+      const width = data.bucket === "hour" ? 3600000 : 86400000;
+      return data.series.map((bucket) => scanResultsUrl(bucket.at,
+        new Date(Math.min(new Date(bucket.at).getTime() + width, new Date(data.end).getTime())).toISOString()));
+    }
+
     function renderDashboard() {
+      for (const [source, metric, id, description] of [
+        ["worker_time", "scan_worker", "dashboard-worker-time", "File retrieval through the DSXA response"],
+        ["dsxa_time", "dsxa", "dashboard-dsxa-time", "Scan duration reported by DSXA"],
+      ]) {
+        const data = dashboardData[source];
+        if (!data) continue;
+        const seconds = (value) => value < 1
+          ? `${(value * 1000).toLocaleString(undefined, {maximumFractionDigits: 2})} ms`
+          : `${value.toLocaleString(undefined, {maximumFractionDigits: 2})} s`;
+        const timing = data[metric];
+        renderDashboardMetric(id, data,
+          [["median_seconds", "Median", "accent"], ["p95_seconds", "p95", "warn"]],
+          timing.samples ? `${seconds(timing.median_seconds)} median · ${seconds(timing.p95_seconds)} p95` : "No timing data", seconds, dashboardSampleUrls(data), {viewLabel:"View scan results"});
+        const label = document.getElementById(`${id}-description`);
+        if (label) label.textContent = `${description} (${timing.samples.toLocaleString()} samples)`;
+        const connector = dashboardConnector.selectedOptions[0]?.textContent || "All connectors";
+        const utc = (value) => new Date(value).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
+        const context = `Connector: ${connector}\nPeriod: ${utc(data.start)} to ${utc(data.end)}`;
+        const stats = timing.samples
+          ? `Median: ${seconds(timing.median_seconds)}\np95: ${seconds(timing.p95_seconds)}\np99: ${seconds(timing.p99_seconds)}\nSlowest observed: ${seconds(timing.max_seconds)}`
+          : "No timing data in the selected period.";
+        document.getElementById(`${id}-context`).textContent = context;
+        document.getElementById(`${id}-context`).style.whiteSpace = "pre-line";
+        document.getElementById(`${id}-tail`).textContent = stats;
+        const copy = document.getElementById(`${id}-copy`);
+        copy.dataset.copyValue = `${metric === "scan_worker" ? "Scan worker time" : "DSXA scan time"}\n${description}\n${context}\nSamples: ${timing.samples.toLocaleString()}\n${stats}`;
+        copy.disabled = false;
+      }
       const overview = dashboardData.overview;
       const results = dashboardData.results?.results || [];
       const connectors = dashboardData.connectors?.connectors?.filter(
@@ -3049,18 +3252,14 @@
       const active = jobs.filter((row) => !terminal.has(row.job.state)).length;
       const healthy = (connectors || []).filter((row) => row.health?.status === "healthy").length;
       const scopes = overview?.scopes || [];
-      const enabledIntegrations = new Set((overview?.integrations || []).filter((row) => row.integration.enabled).map((row) => row.integration.integration_id));
-      const covered = scopes.filter((scope) => scope.enabled && enabledIntegrations.has(scope.integration_id));
-      const monitor = covered.filter((scope) => scope.mode === "monitor").length;
-      const fullScan = covered.filter((scope) => scope.mode === "full_scan").length;
-      updateDashboardWidgetHtml("dashboard-coverage", overview ? `<strong style="font-size:24px">${covered.length} / ${scopes.length} scopes enabled</strong>${dashboardBars([["Monitoring", monitor, "good"], ["Full scan", fullScan, "accent"], ["Disabled", scopes.length - covered.length, "warn"]])}<p class="dashboard-muted">${scopes.length ? `${Math.round(covered.length / scopes.length * 100)}% enabled. Full-scan scopes require scans to be started; monitoring configuration does not confirm runtime health.` : "No protected scopes configured. Add a scope in Assets to get started."}</p>` : '<p class="dashboard-muted">Scope data unavailable.</p>');
+      renderDashboardCoverage();
       const kpis = [
-        ["Healthy connectors", connectors ? `${healthy} / ${connectors.length}` : "—", "Registered integrations", "assets"],
-        ["Enabled protected scopes", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Configured protection, not coverage %", "assets"],
+        ["Healthy connectors", connectors ? `${healthy} / ${connectors.length}` : "—", "Registered integrations", "assets", "connectors"],
+        ["Enabled protected scopes", overview ? scopes.filter((scope) => scope.enabled).length : "—", "Configured protection, not coverage %", "assets", "protected", "protected"],
         ["Active jobs", overview ? active : "—", "Within latest 50 jobs", "scan-results"],
         ["Failed items", overview ? totals.failed || 0 : "—", "Within latest 50 jobs", "scan-results"],
       ];
-      updateDashboardWidgetHtml("dashboard-kpis", kpis.map(([label, value, note, tab]) => `<button type="button" class="dashboard-card dashboard-kpi" data-dashboard-tab="${tab}"><span>${label}</span><strong>${escapeHtml(String(value))}</strong><span class="dashboard-muted">${note}</span></button>`).join(""));
+      updateDashboardWidgetHtml("dashboard-kpis", kpis.map(([label, value, note, tab, assetsView, coverage]) => `<button type="button" class="dashboard-card dashboard-kpi" data-dashboard-tab="${tab}"${assetsView ? ` data-dashboard-assets-view="${assetsView}"` : ""}${coverage ? ` data-dashboard-coverage="${coverage}"` : ""}><span>${label}</span><strong>${escapeHtml(String(value))}</strong><span class="dashboard-muted">${note}</span></button>`).join(""));
       updateDashboardWidgetHtml("dashboard-work", overview ? dashboardBars([
         ["Awaiting dispatch", (totals.accepted || 0) + (totals.publish_pending || 0)],
         ["Queued", totals.queued || 0], ["Scanning", totals.scanning || 0],
@@ -3093,11 +3292,50 @@
       }).join("") : `<tr><td colspan="4" class="dashboard-muted">${overview ? "No jobs yet. Protect a scope and start a scan from Assets." : "Job data unavailable."}</td></tr>`);
     }
 
+    let dashboardReportDocument = null;
+    let dashboardReportFilename = "";
+    document.getElementById("create-dashboard-report").addEventListener("click", () => {
+      if (document.getElementById("create-dashboard-report").disabled) return;
+      const report = collectDashboardReport({data:dashboardData, history:dashboardHistoryReportData,
+        integrationId:dashboardConnector.value, days:document.getElementById("dashboard-days").value});
+      dashboardReportDocument = dashboardReportHtml(report);
+      dashboardReportFilename = `dsx-connect-report-${report.generatedAt.replace(/[:.]/g, "-")}.html`;
+      document.getElementById("copy-dashboard-report").dataset.copyValue = dashboardReportText(report);
+      document.getElementById("dashboard-report-status").textContent = `${report.sections.length} sections captured · ${report.connectors.length} connector${report.connectors.length === 1 ? "" : "s"} · ${reportUtc(report.generatedAt)}`;
+      const frame = document.getElementById("dashboard-report-frame");
+      const print = document.getElementById("print-dashboard-report");
+      print.disabled = true;
+      frame.onload = () => { print.disabled = false; };
+      frame.srcdoc = dashboardReportDocument;
+      document.getElementById("dashboard-report-dialog").showModal();
+    });
+    document.getElementById("close-dashboard-report").onclick = () => document.getElementById("dashboard-report-dialog").close();
+    document.getElementById("download-dashboard-report").onclick = () => {
+      if (!dashboardReportDocument) return;
+      const url = URL.createObjectURL(new Blob([dashboardReportDocument], {type:"text/html;charset=utf-8"}));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = dashboardReportFilename;
+      document.getElementById("dashboard-report-dialog").append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 10000);
+    };
+    document.getElementById("print-dashboard-report").onclick = () => {
+      const frame = document.getElementById("dashboard-report-frame");
+      try { frame.contentWindow.focus(); frame.contentWindow.print(); }
+      catch (_) { document.getElementById("dashboard-report-status").textContent = "Printing is unavailable here. Download the HTML report and print it from your browser."; }
+    };
+
     async function loadDashboard({ connectorChanged = false } = {}) {
       if (dashboardLoading && !connectorChanged) return;
       const request = ++dashboardRequest;
       const integrationId = dashboardConnector.value;
       dashboardLoading = true;
+      if (connectorChanged) {
+        document.getElementById("create-dashboard-report").disabled = true;
+        dashboardHistoryReportData = null;
+      }
       stopRefreshCountdown("refresh-dashboard", dashboardRefreshTimer);
       dashboardRefreshTimer = null;
       const refreshButton = document.getElementById("refresh-dashboard");
@@ -3123,19 +3361,26 @@
           dashboardWidgetRevisions.get(id) !== widget.revision);
         const needed = new Set(changed.flatMap(([, widget]) => widget.sources).filter((source) =>
           dashboardSourceRevisions.get(source) !== changes.sources[source]));
-        const availableSources = [["overview", `${endpoints.overview}?${overviewParams}`], ["connectors", endpoints.connectors],
-          ["results", `${endpoints.scanResults}?${resultsParams}`], ["scanner", endpoints.dsxaStatus]];
+        const availableSources = [["coverage", `/api/v1/ui/dashboard/coverage?days=${document.getElementById("dashboard-days").value}${integrationId ? `&integration_id=${encodeURIComponent(integrationId)}` : ""}`], ["overview", `${endpoints.overview}?${overviewParams}`], ["connectors", endpoints.connectors],
+          ["results", `${endpoints.scanResults}?${resultsParams}`], ["scanner", endpoints.dsxaStatus], ["worker_time", `/api/v1/ui/dashboard/worker-time?days=${document.getElementById("dashboard-days").value}${integrationId ? `&integration_id=${encodeURIComponent(integrationId)}` : ""}`], ["dsxa_time", `/api/v1/ui/dashboard/dsxa-time?days=${document.getElementById("dashboard-days").value}${integrationId ? `&integration_id=${encodeURIComponent(integrationId)}` : ""}`]];
         const sources = availableSources.filter(([source]) => needed.has(source));
         const historyRequested = needed.has("history");
         const [responses, historyLoaded] = await Promise.all([
-          Promise.allSettled(sources.map(([, url]) => fetchJson(url))),
+          Promise.allSettled(sources.map(async ([source, url]) => {
+            const data = await fetchJson(url);
+            if (source === "coverage" && request === dashboardRequest) {
+              dashboardData.coverage = data;
+              renderDashboardCoverage();
+            }
+            return data;
+          })),
           historyRequested ? loadDashboardHistory() : Promise.resolve(true),
         ]);
         if (request !== dashboardRequest) return;
         const failures = [];
         responses.forEach((response, index) => {
           const key = sources[index][0];
-          if (response.status === "fulfilled") dashboardData[key] = response.value;
+          if (response.status === "fulfilled") { if (key !== "coverage") dashboardData[key] = response.value; }
           else { delete dashboardData[key]; failures.push(key); }
         });
         for (const source of needed) {
@@ -3165,6 +3410,7 @@
       } finally {
         if (request === dashboardRequest) {
           dashboardLoading = false;
+          document.getElementById("create-dashboard-report").disabled = false;
           refreshButton.disabled = false;
           refreshButton.classList.remove("is-loading");
           refreshButton.removeAttribute("aria-busy");
@@ -3190,7 +3436,21 @@
 
     document.getElementById("view-dashboard").addEventListener("click", (event) => {
       const button = event.target.closest("[data-dashboard-tab]");
-      if (button) selectTab(button.dataset.dashboardTab);
+      if (!button) return;
+      selectTab(button.dataset.dashboardTab);
+      if (button.dataset.dashboardCoverage || button.hasAttribute("data-dashboard-coverage-view")) {
+        state.protectedIntegrationFilters = dashboardConnector.value ? [dashboardConnector.value] : [];
+        renderProtectedAssets();
+        for (const id of ["protected-filter-asset-value", "protected-filter-schedule", "protected-filter-monitoring"]) {
+          const filter = document.getElementById(id);
+          if (filter) filter.value = "";
+        }
+        document.getElementById("protected-filter-coverage").value = button.dataset.dashboardCoverage || "";
+        updateProtectedFilterIndicators();
+      }
+      if (button.dataset.dashboardAssetsView) {
+        selectAssetsTab(button.dataset.dashboardAssetsView, { forceReload: Boolean(button.dataset.dashboardCoverage || button.hasAttribute("data-dashboard-coverage-view")) });
+      }
     });
     let dashboardRefreshTimer = null;
     function scheduleDashboardRefresh() {
@@ -6237,19 +6497,23 @@
       if (!button) return;
       event.preventDefault();
       event.stopPropagation();
+      const feedback = document.getElementById(button.dataset.copyFeedback || "");
       const originalTitle = button.title;
       const originalLabel = button.getAttribute("aria-label") || originalTitle;
       try {
-        await copyTextToClipboard(button.dataset.copyValue || "");
+        await copyTextToClipboard(button.dataset.copyValue || "", button.closest("[popover], dialog") || document.body);
+        if (feedback) feedback.textContent = "Copied";
         button.classList.add("copied");
         button.title = "Copied";
         button.setAttribute("aria-label", "Copied");
         setTimeout(() => {
+          if (feedback) feedback.textContent = "";
           button.classList.remove("copied");
           button.title = originalTitle;
           button.setAttribute("aria-label", originalLabel);
         }, 900);
       } catch (error) {
+        if (feedback) feedback.textContent = "Copy failed. Please try again.";
         button.title = "Copy failed";
         button.setAttribute("aria-label", "Copy failed");
         setTimeout(() => {

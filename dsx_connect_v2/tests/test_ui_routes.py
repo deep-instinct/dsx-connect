@@ -1832,7 +1832,7 @@ def test_dashboard_widget_revisions_are_selective_and_track_item_changes(monkeyp
     params = [("widgets", "dashboard-worker-time"), ("days", "7")]
     before = client.get("/api/v1/ui/dashboard/changes", params=params).json()
     assert list(before["widgets"]) == ["dashboard-worker-time"]
-    assert set(before["sources"]) == {"history"}
+    assert set(before["sources"]) == {"worker_time"}
     assert client.get("/api/v1/ui/dashboard/changes", params=params).json() == before
     job = repo.create_job(JobCreate(job_type="scan.batch", state="queued"))
     item = repo.create_job_item(JobItemCreate(job_id=job.job_id, item_index=0, object_identity="file", state="queued"))
@@ -1840,6 +1840,26 @@ def test_dashboard_widget_revisions_are_selective_and_track_item_changes(monkeyp
     assert after["widgets"]["dashboard-worker-time"]["revision"] != before["widgets"]["dashboard-worker-time"]["revision"]
     repo.update_job_item_state(item.job_item_id, state="scanning")
     changed = client.get("/api/v1/ui/dashboard/changes", params=params).json()
-    assert changed["sources"]["history"] != after["sources"]["history"]
+    assert changed["sources"]["worker_time"] != after["sources"]["worker_time"]
     assert client.get("/api/v1/ui/dashboard/changes?widgets=unknown").status_code == 422
     assert client.get("/api/v1/ui/dashboard/changes?widgets=dashboard-worker-time&days=2").status_code == 422
+
+
+def test_coverage_widget_is_independent_and_current_memory_baseline_is_explicit():
+    client = TestClient(create_app())
+    data = client.get('/api/v1/ui/dashboard/coverage?days=7').json()
+    assert data['durable_history'] is False
+    assert data['recording_started_at']
+    assert data['current']['unprotected'] >= 0
+    assert client.get('/api/v1/ui/dashboard/coverage?days=2').status_code == 422
+    versions = client.get('/api/v1/ui/dashboard/changes?widgets=dashboard-coverage').json()
+    assert versions['widgets']['dashboard-coverage']['sources'] == ['coverage']
+    assert set(versions['sources']) == {'coverage'}
+
+
+def test_coverage_snapshot_rejects_ambiguous_timestamps_and_unavailable_history():
+    client = TestClient(create_app())
+    endpoint = '/api/v1/ui/dashboard/coverage/snapshot'
+    assert client.get(endpoint, params={'at':'2026-11-19T12:00:00'}).status_code == 422
+    assert client.get(endpoint, params={'at':'2099-01-01T00:00:00Z'}).status_code == 422
+    assert client.get(endpoint, params={'at':'2020-01-01T00:00:00Z'}).status_code == 409

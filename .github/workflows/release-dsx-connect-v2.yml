@@ -96,6 +96,22 @@ jobs:
   release:
     needs: resolve-version
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dsx_connect_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dsx_connect_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DSX_CONNECT_V2_TEST_POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/dsx_connect_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,6 +120,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Set up Node for dashboard report tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

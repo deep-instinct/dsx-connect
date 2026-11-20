@@ -54,8 +54,8 @@ DASHBOARD_WIDGET_SOURCES = {
     'dashboard-throughput': ['history'],
     'dashboard-backlog': ['history'],
     'dashboard-latency': ['history'],
-    'dashboard-worker-time': ['history'],
-    'dashboard-dsxa-time': ['history'],
+    'dashboard-worker-time': ['worker_time'],
+    'dashboard-dsxa-time': ['dsxa_time'],
     'dashboard-job-duration': ['history'],
     'dashboard-job-activity': ['history'],
     'dashboard-under-load': ['history'],
@@ -63,7 +63,7 @@ DASHBOARD_WIDGET_SOURCES = {
     'dashboard-quarantine': ['history'],
     'dashboard-types': ['history'],
     'dashboard-kpis': ['overview', 'connectors'],
-    'dashboard-coverage': ['overview'],
+    'dashboard-coverage': ['coverage'],
     'dashboard-work': ['overview'],
     'dashboard-outcomes': ['results'],
     'dashboard-attention': ['overview', 'results', 'connectors', 'scanner'],
@@ -90,10 +90,13 @@ def dashboard_widget_changes(
     sources = {source for widget in requested for source in DASHBOARD_WIDGET_SOURCES[widget]}
     now = datetime.now(timezone.utc)
     signals = {}
-    if sources & {"history", "overview", "results"}:
+    if sources & {"history", "worker_time", "dsxa_time", "overview", "results"}:
         since = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=2 * days + 1)
         revision = job_service.repo.dashboard_revision(since, integration_id)
-        signals.update(history=(revision, now.strftime("%Y-%m-%dT%H:%M")), overview=revision, results=revision)
+        signals.update(history=(revision, now.strftime("%Y-%m-%dT%H:%M")),
+                       worker_time=("all-files-v2", revision, now.strftime("%Y-%m-%dT%H" if days == 1 else "%Y-%m-%d")),
+                       dsxa_time=("all-files-v1", revision, now.strftime("%Y-%m-%dT%H" if days == 1 else "%Y-%m-%d")),
+                       overview=revision, results=revision)
     if sources & {"overview", "connectors", "results"}:
         integrations = sorted((row.model_dump_json() for row in control_plane.list_integrations()))
         scopes = sorted((row.model_dump_json() for row in control_plane.list_scopes()))
@@ -104,6 +107,14 @@ def dashboard_widget_changes(
         if "connectors" in sources:
             instances = sorted(row.model_dump_json() for row in control_plane.list_connector_instances())
             signals["connectors"] = (integrations, scopes, instances, int(now.timestamp()) // 30)
+    if "coverage" in sources:
+        from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
+        db_url = getattr(control_plane.repo, "db_url", None)
+        revision = ProtectionCoverageStore(db_url).revision(integration_id) if db_url else (
+            sorted(row.model_dump_json() for row in control_plane.list_scopes(integration_id=integration_id)),
+            sorted(row.model_dump_json() for row in control_plane.list_integrations()
+                   if not integration_id or row.integration_id == integration_id))
+        signals["coverage"] = (revision, int(now.timestamp()) // 60, settings.scan_scheduler_enabled)
     if "scanner" in sources:
         # External health may change without a database write.
         signals["scanner"] = int(now.timestamp()) // 15
@@ -117,6 +128,87 @@ def dashboard_widget_changes(
         ("dashboard-source-v1", days, integration_id, signals[source]),
     ).encode()).hexdigest() for source in sources}
     return {"widgets": versions, "sources": source_versions}
+
+
+@router.get("/dashboard/coverage")
+def dashboard_protection_coverage(
+    days: int = Query(default=7),
+    integration_id: str | None = None,
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> dict:
+    if days not in {1, 7, 30}:
+        raise HTTPException(422, "days must be 1, 7, or 30")
+    from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore, coverage_history
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if db_url:
+        from dsx_connect_v2.control_plane.coverage_inventory import start_inventory_refresh
+        def discover(integration, cursor):
+            asset_type = _effective_asset_type("auto", integration)
+            base_url, connector_name = _connector_asset_endpoint(
+                integration, control_plane.list_connector_instances(integration_id=integration.integration_id))
+            return _fetch_connector_assets(base_url, connector_name, asset_type=asset_type,
+                                           source="all", limit=1000, cursor=cursor), asset_type
+        start_inventory_refresh(db_url, control_plane, discover, integration_id)
+        data = ProtectionCoverageStore(db_url).history(days, integration_id)
+        data["durable_history"] = True
+    else:
+        now = datetime.now(timezone.utc)
+        rows = [("integration", row.integration_id, row.model_dump(mode="json"))
+                for row in control_plane.list_integrations() if not integration_id or row.integration_id == integration_id]
+        rows += [("scope", row.scope_id, row.model_dump(mode="json"))
+                 for row in control_plane.list_scopes(integration_id=integration_id)]
+        events = [dict(event_id=i, entity_type=kind, entity_id=key, state=state,
+                       occurred_at=now, operation="baseline") for i, (kind, key, state) in enumerate(rows)]
+        data = coverage_history(events, now, days, now)
+        data["durable_history"] = False
+    data["scheduler_enabled"] = settings.scan_scheduler_enabled
+    data["integration_id"] = integration_id
+    return data
+
+
+@router.get("/dashboard/coverage/snapshot")
+def dashboard_coverage_snapshot(
+    at: datetime,
+    integration_id: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=1000),
+    control_plane: ControlPlaneService = Depends(get_control_plane_service),
+) -> dict:
+    if at.tzinfo is None or at > datetime.now(timezone.utc):
+        raise HTTPException(422, "Choose a recorded timestamp with an explicit timezone.")
+    from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if not db_url:
+        raise HTTPException(409, "Historical asset snapshots require persistent audit history.")
+    try:
+        return ProtectionCoverageStore(db_url).snapshot(at.astimezone(timezone.utc), integration_id,
+                                                      offset=offset, limit=limit)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/dashboard/worker-time")
+def dashboard_worker_time(
+    days: int = Query(default=7),
+    integration_id: str | None = None,
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    if days not in {1, 7, 30}:
+        raise HTTPException(422, "days must be 1, 7, or 30")
+    from dsx_connect_v2.jobs.dashboard import scan_worker_history
+    return scan_worker_history(job_service.repo, days, integration_id=integration_id)
+
+
+@router.get("/dashboard/dsxa-time")
+def dashboard_dsxa_time(
+    days: int = Query(default=7),
+    integration_id: str | None = None,
+    job_service: JobService = Depends(get_job_service),
+) -> dict:
+    if days not in {1, 7, 30}:
+        raise HTTPException(422, "days must be 1, 7, or 30")
+    from dsx_connect_v2.jobs.dashboard import scan_timing_history
+    return scan_timing_history(job_service.repo, days, integration_id=integration_id, metric="dsxa")
 
 
 @router.get("/dashboard/history")
@@ -1649,6 +1741,16 @@ def _coverage_for_selector(selector: str, scopes: list[ProtectedScopeRecord]) ->
     return "unprotected", None
 
 
+def _remember_discovered_assets(control_plane, integration_id, payload, asset_type):
+    db_url = getattr(control_plane.repo, "db_url", None)
+    if not db_url or payload.get("unsupported") or payload.get("status") not in {None, "success"}:
+        return
+    from dsx_connect_v2.control_plane.coverage import ProtectionCoverageStore
+    from dsx_connect_v2.control_plane.coverage_inventory import store_page
+    with ProtectionCoverageStore(db_url)._connect() as conn:
+        store_page(conn, integration_id, str(payload.get("asset_type") or asset_type), payload.get("assets") or [])
+
+
 def _summarize_assets(
     *,
     integration_id: str,
@@ -2252,6 +2354,7 @@ async def discover_integration_assets(
         asset_filter_mode=normalized_filter_mode,
         asset_filter_value=asset_filter_value,
     )
+    _remember_discovered_assets(control_plane, integration_id, asset_payload, effective_asset_type)
     scopes = control_plane.list_scopes(integration_id=integration_id)
     return _summarize_assets(
         integration_id=integration_id,
@@ -2425,6 +2528,7 @@ def list_protected_assets(
             next_cursors[integration.integration_id] = None
             continue
 
+        _remember_discovered_assets(control_plane, integration.integration_id, asset_payload, effective_asset_type)
         asset_response = _summarize_assets(
             integration_id=integration.integration_id,
             asset_payload=asset_payload,

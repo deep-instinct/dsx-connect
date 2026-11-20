@@ -29,6 +29,39 @@ def utcnow() -> datetime:
 
 
 class JobRepository(ABC):
+    def scan_worker_timing_summary(self, start: datetime, end: datetime, integration_id: str | None, bucket: str):
+        return self.scan_timing_summary(start, end, integration_id, bucket, "scan_worker")
+
+    def scan_timing_summary(self, start: datetime, end: datetime, integration_id: str | None, bucket: str, metric: str):
+        from collections import defaultdict
+        from dsx_connect_v2.jobs.dashboard import _duration_seconds, _latency_summary
+
+        samples = defaultdict(list)
+        for row in self.dashboard_stages(start, integration_id):
+            scan = row.get("scan_stage") or {}
+            raw = scan.get("completed_at")
+            if scan.get("state") != "completed" or not raw:
+                continue
+            at = raw if isinstance(raw, datetime) else datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if not start <= at <= end:
+                continue
+            metadata = scan.get("metadata") or {}
+            if metric == "dsxa":
+                seconds = _duration_seconds((scan.get("result") or {}).get("scan_duration_in_microseconds"), 1_000_000)
+                if seconds is None:
+                    seconds = _duration_seconds(metadata.get("scannerEngineElapsedMs"), 1000)
+            else:
+                seconds = _duration_seconds(metadata.get("workerElapsedMs"), 1000)
+                if seconds is None:
+                    seconds = _duration_seconds(metadata.get("requestElapsedMs"), 1000)
+            if seconds is not None:
+                at = at.astimezone(timezone.utc)
+                at = at.replace(minute=0, second=0, microsecond=0) if bucket == "hour" else at.replace(hour=0, minute=0, second=0, microsecond=0)
+                samples[at].append(seconds)
+        return [{"at": at, **_latency_summary(values, include_tail=True)} for at, values in samples.items()] + [
+            {"at": None, **_latency_summary([value for values in samples.values() for value in values], include_tail=True)},
+        ]
+
     def dashboard_revision(self, since: datetime, integration_id: str | None = None) -> str:
         """Fingerprint persisted history without decoding stage payloads."""
         raise NotImplementedError

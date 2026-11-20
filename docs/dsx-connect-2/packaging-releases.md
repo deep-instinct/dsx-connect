@@ -293,6 +293,46 @@ Before publishing release artifacts, validate the local path with the workflows 
 Use the Operator Console to confirm connector registration, asset inventory, and scan dispatch before cutting a release.
 
 
+## November 19, 2026 release
+
+- DSX Connect core/chart: **2.0.42**.
+- Protection coverage leads the dashboard with Discovered, Unprotected, Protected,
+  Scheduled scan, and Monitoring history. Discovered equals Unprotected plus
+  Protected; Scheduled scan and Monitoring are overlapping subsets of Protected.
+- Migration `0016_protection_audit.sql` adds durable configuration auditing,
+  discovered-asset inventory, and lightweight revision counters. Existing
+  configuration receives a baseline at upgrade time; earlier protection history
+  is unavailable. Audit and inventory data persist across API restarts.
+- Discovery runs in bounded background pages. Failed or incomplete discovery
+  retains the last known inventory. Only a completed inventory walk marks missing
+  discovered assets as removed. Configured-only assets are excluded until discovered.
+- Coverage hover actions open read-only asset snapshots at the selected recorded
+  time. Shared eye icons identify date-specific scan and comparison drilldowns.
+- Scan worker and DSXA timing summarize all recorded samples in the selected
+  range using database aggregates. Info popovers include median, p95, p99, slowest
+  observed, sample count, connector, and range, with copy actions.
+- The Report icon creates a fixed dashboard snapshot in widget order, including
+  charts, Info text, selected range and connectors, and inventory warnings.
+  Copy text, standalone HTML generation, and browser print/PDF controls are
+  included. HTML download behavior in embedded webviews still needs follow-up.
+  Current-health and recent-job sections retain their own scope labels and are
+  not presented as full reporting-window totals.
+- Dashboard and Scan Results toolbars separate filters and refresh controls from
+  Report and Scan Comparison actions. Dashboard cards link to the appropriate
+  connector and protected-asset views.
+- Release validation now runs PostgreSQL-backed audit/snapshot tests and the
+  dashboard report JavaScript tests in CI.
+
+For PostgreSQL deployments with automatic schema application disabled, apply the
+bundled schema from the **2.0.42 image** before using the new coverage dashboard:
+
+```bash
+python -c 'from dsx_connect_v2.config import settings; from dsx_connect_v2.jobs.postgres_repo import apply_schema; apply_schema(settings.postgres.url)'
+```
+
+The migration is idempotent. Reapplying it preserves the original audit epoch and
+recorded history. The shared lab already has this migration applied.
+
 ## November 18, 2026 release
 
 - DSX Connect core/chart: **2.0.41** — conditional Scan Results polling, dashboard widget revisions and selective refreshes, per-job summary caching, responsive navigation, scan timestamps and status columns, and consistent scan action buttons.

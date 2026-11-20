@@ -7,16 +7,42 @@ from threading import Lock
 from time import monotonic
 
 
-def _latency_summary(samples):
+def _latency_summary(samples, *, include_tail=False):
     ordered = sorted(samples)
-    return {"samples": len(ordered), "median_seconds": median(ordered) if ordered else None,
+    summary = {"samples": len(ordered), "median_seconds": median(ordered) if ordered else None,
             "p95_seconds": ordered[ceil(len(ordered) * .95) - 1] if ordered else None}
+    if include_tail:
+        summary.update(p99_seconds=ordered[ceil(len(ordered) * .99) - 1] if ordered else None,
+                       max_seconds=ordered[-1] if ordered else None)
+    return summary
 
 
 def _duration_seconds(value, units_per_second):
     if isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value) and value >= 0:
         return value / units_per_second
     return None
+
+
+def scan_worker_history(repo, days: int, now: datetime | None = None, *, integration_id: str | None = None):
+    return scan_timing_history(repo, days, now, integration_id=integration_id, metric="scan_worker")
+
+
+def scan_timing_history(repo, days: int, now: datetime | None = None, *, integration_id: str | None = None, metric: str):
+    now = now or datetime.now(timezone.utc)
+    hourly = days == 1
+    step = timedelta(hours=1) if hourly else timedelta(days=1)
+    end_bucket = now.replace(minute=0, second=0, microsecond=0) if hourly else now.replace(hour=0, minute=0, second=0, microsecond=0)
+    count = 24 if hourly else days
+    start = end_bucket - step * (count - 1)
+    bucket = "hour" if hourly else "day"
+    summaries = {row["at"]: {key: row[key] for key in ("samples", "median_seconds", "p95_seconds", "p99_seconds", "max_seconds")}
+                 for row in repo.scan_timing_summary(start, now, integration_id, bucket, metric)}
+    empty = _latency_summary([], include_tail=True)
+    return {"start": start.isoformat(), "end": now.isoformat(), "bucket": bucket,
+            metric: summaries.get(None, empty),
+            "series": [{"at": (start + step * i).isoformat(), **summaries.get(start + step * i, empty)}
+                       for i in range(count)]}
+
 
 
 class DashboardHistoryCache:

@@ -65,6 +65,7 @@ done
 version="${version:-$(ng_version)}"
 
 python3 -m pytest dsx_connect_v2/tests
+node --test "$(repo_root)/dsx_connect_v2/tests/dashboard-report.test.cjs"
 helm lint "$(ng_chart_dir)"
 helm template dsx-connect "$(ng_chart_dir)" >/dev/null
 

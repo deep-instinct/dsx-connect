@@ -1,6 +1,98 @@
+function hideDashboardChartHover(svg, tooltip) {
+  if (tooltip.matches(":popover-open")) tooltip.hidePopover();
+  tooltip.hidden = true;
+  const marker = svg.querySelector(".dashboard-hover-marker");
+  if (marker) marker.style.display = "none";
+}
+
+function bindDashboardChartHover(svg, tooltip) {
+  let hideTimer;
+  const cancelHide = () => window.clearTimeout(hideTimer);
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimer = window.setTimeout(() => hideDashboardChartHover(svg, tooltip), 200);
+  };
+  svg.addEventListener("pointerenter", cancelHide);
+  svg.addEventListener("pointerleave", scheduleHide);
+  tooltip.addEventListener("pointerenter", cancelHide);
+  tooltip.addEventListener("pointerleave", scheduleHide);
+}
+
+function showDashboardChartHover(svg, tooltip, chartX, points) {
+  let marker = svg.querySelector(".dashboard-hover-marker");
+  if (!marker) {
+    marker = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    marker.classList.add("dashboard-hover-marker");
+    marker.setAttribute("aria-hidden", "true");
+    marker.setAttribute("pointer-events", "none");
+    svg.append(marker);
+  }
+  marker.style.display = "";
+  marker.innerHTML = `<line x1="${chartX}" x2="${chartX}" y1="20" y2="108" stroke="var(--muted)" stroke-dasharray="3 3"/>${points.map(([y, color]) => `<circle cx="${chartX}" cy="${y}" r="3.5" fill="var(--surface)" stroke="var(--${color})" stroke-width="2"/>`).join("")}`;
+  tooltip.style.maxHeight = "";
+  tooltip.hidden = false;
+  if (!tooltip.matches(":popover-open")) tooltip.showPopover();
+  const chart = svg.getBoundingClientRect();
+  const box = tooltip.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth;
+  const viewportHeight = document.documentElement.clientHeight;
+  const selectedX = chart.left + chartX / 450 * chart.width;
+  const plotTop = chart.top + 20 / 140 * chart.height;
+  const plotBottom = chart.top + 108 / 140 * chart.height;
+  const gap = 12;
+  let top = plotTop - box.height - gap;
+  if (top < 8) top = plotBottom + gap;
+  if (top + box.height > viewportHeight - 8) {
+    // When vertical space is limited, use the open side of the chart.
+    const right = chart.right + gap;
+    const left = chart.left - box.width - gap;
+    if (right + box.width <= viewportWidth - 8 || left >= 8) {
+      tooltip.style.left = `${left >= 8 ? left : right}px`;
+      tooltip.style.top = `${Math.max(8, Math.min(chart.top, viewportHeight - box.height - 8))}px`;
+      return;
+    }
+    const above = Math.max(0, plotTop - gap - 8);
+    const below = Math.max(0, viewportHeight - plotBottom - gap - 8);
+    tooltip.style.maxHeight = `${Math.max(24, Math.max(above, below))}px`;
+    top = above >= below ? 8 : plotBottom + gap;
+  }
+  tooltip.style.left = `${Math.max(8, Math.min(selectedX - box.width / 2, viewportWidth - box.width - 8))}px`;
+  tooltip.style.top = `${top}px`;
+}
+
+function dismissDashboardChartHovers(event) {
+  if (event?.target?.closest?.(".dashboard-chart-tooltip")) return;
+  document.querySelectorAll(".dashboard-chart-tooltip:popover-open").forEach((tooltip) => {
+    const svg = tooltip.parentElement.querySelector("svg");
+    if (svg) hideDashboardChartHover(svg, tooltip);
+  });
+}
+window.addEventListener("scroll", dismissDashboardChartHovers, true);
+window.addEventListener("resize", dismissDashboardChartHovers);
+window.addEventListener("keydown", (event) => { if (event.key === "Escape") dismissDashboardChartHovers(); });
+
 const dashboardUnderLoadSignatures = new WeakMap();
 
-function renderDashboardMetric(id, data, metrics, summary, format, comparisonUrls = []) {
+function appendDashboardViewAction(tooltip, {at, label = "View records", href, onView}) {
+  const action = document.createElement(href ? "a" : "button");
+  action.className = "icon-button view-scan-action dashboard-point-view";
+  const description = `${label} (${new Date(at).toLocaleString([], {timeZone:"UTC"})} UTC)`;
+  action.title = description;
+  action.setAttribute("aria-label", description);
+  action.innerHTML = iconSvg("eye");
+  if (href) action.href = href;
+  else { action.type = "button"; action.onclick = onView; }
+  const heading = tooltip.querySelector(":scope > strong");
+  const row = document.createElement("div");
+  row.className = "dashboard-hover-heading";
+  if (heading) row.append(heading);
+  row.append(action);
+  tooltip.prepend(row);
+  tooltip.classList.add("is-interactive");
+  tooltip.removeAttribute("role");
+}
+
+function renderDashboardMetric(id, data, metrics, summary, format, comparisonUrls = [], options = {}) {
   const target = document.getElementById(id);
   if (!target) return;
   const series = data.series;
@@ -12,13 +104,19 @@ function renderDashboardMetric(id, data, metrics, summary, format, comparisonUrl
   const plotLeft = Math.max(48, maxLabel.length * 7 + 18);
   const plotRight = 398;
   const plotWidth = plotRight - plotLeft;
-  const x = (i) => plotLeft + i * plotWidth / Math.max(1, series.length - 1);
+  const timeStart = new Date(data.start).getTime(), timeEnd = new Date(data.end).getTime();
+  const x = (i) => plotLeft + (data.time_scale
+    ? (new Date(series[i].at).getTime() - timeStart) / Math.max(1, timeEnd - timeStart)
+    : i / Math.max(1, series.length - 1)) * plotWidth;
   const y = (n) => 95 - n / max * 75;
   const lines = metrics.map(([key, label, color]) => {
     const segments = []; let points = [];
     series.forEach((bucket, i) => {
       if (bucket[key] == null) { if (points.length) segments.push(points); points = []; }
-      else points.push([x(i), y(bucket[key])]);
+      else {
+        if (data.step && points.length) points.push([x(i), points[points.length - 1][1]]);
+        points.push([x(i), y(bucket[key])]);
+      }
     });
     if (points.length) segments.push(points);
     return segments.map((segment) => segment.length === 1
@@ -36,32 +134,57 @@ function renderDashboardMetric(id, data, metrics, summary, format, comparisonUrl
     if (bucket[key] != null) return `${format(bucket[key])} · ${count}`;
     return scans > 0 ? `${count} · insufficient sustained backlog` : "No completed file scans";
   };
-  const labels = [...new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])].filter((i) => series[i]).map((i) => `<text x="${x(i)}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(series[i].at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit",minute:"2-digit",timeZone:"UTC"} : {month:"short",day:"numeric",timeZone:"UTC"}))}</text>`).join("");
-  const links = comparisonUrls.map((url, i) => {
+  const ticks = data.time_scale
+    ? [0, .5, 1].map((fraction) => ({at: timeStart + fraction * (timeEnd - timeStart), x: plotLeft + fraction * plotWidth}))
+    : [...new Set([0, Math.floor((series.length - 1) / 2), series.length - 1])].filter((i) => series[i]).map((i) => ({at: series[i].at, x: x(i)}));
+  const labels = ticks.map((tick) => `<text x="${tick.x}" y="125" text-anchor="middle" fill="var(--muted)" font-size="12">${escapeHtml(new Date(tick.at).toLocaleString([], data.bucket === "hour" ? {hour:"2-digit",minute:"2-digit",timeZone:"UTC"} : {month:"short",day:"numeric",timeZone:"UTC"}))}</text>`).join("");
+  const pointUrls = options.onView
+    ? series.map((bucket) => bucket.discovered == null ? null : "#") : comparisonUrls;
+  const links = pointUrls.map((url, i) => {
     if (!url) return "";
     const left = i ? (x(i - 1) + x(i)) / 2 : plotLeft - 8;
     const right = i < series.length - 1 ? (x(i) + x(i + 1)) / 2 : plotRight + 8;
-    return `<a href="${escapeHtml(url)}" data-dashboard-compare aria-label="Compare scans for ${escapeHtml(series[i].at)}"><rect x="${left}" y="12" width="${right - left}" height="102" fill="transparent"/></a>`;
+    return `<a href="${escapeHtml(url)}" data-dashboard-compare data-point-index="${i}" aria-label="${escapeHtml(options.viewLabel || "View scan results")} at ${escapeHtml(series[i].at)}"><rect x="${left}" y="12" width="${right - left}" height="102" fill="transparent"/></a>`;
   }).join("");
-  if (!updateDashboardWidgetHtml(id, `<strong style="font-size:24px">${escapeHtml(summary)}</strong><div class="dashboard-chart"><div class="dashboard-chart-tooltip${links ? " is-interactive" : ""}" ${links ? "" : 'role="tooltip"'} hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="${links ? "group" : "img"}" aria-label="${escapeHtml(metrics.map(([,label]) => label).join(", "))} over time in UTC" style="width:100%;height:130px;display:block"><path d="M${plotLeft} 20V95H${plotRight}" fill="none" stroke="var(--line)"/><text x="${plotLeft - 10}" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${escapeHtml(maxLabel)}</text><text x="${plotLeft - 10}" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${activityMarkers}${labels}${links}</svg></div><div class="dashboard-actions">${metrics.map(([,label,color]) => `<span style="color:var(--${color})">● ${escapeHtml(label)}</span>`).join("")}</div><details><summary class="dashboard-muted">View exact values</summary><div class="table-wrap"><table><thead><tr><th>UTC</th>${metrics.map(([,label]) => `<th>${escapeHtml(label)}</th>`).join("")}</tr></thead><tbody>${series.map((bucket, i) => `<tr><td>${comparisonUrls[i] ? `<a href="${escapeHtml(comparisonUrls[i])}">${escapeHtml(bucket.at)}</a>` : escapeHtml(bucket.at)}</td>${metrics.map(([key]) => `<td>${escapeHtml(metricValue(bucket, key))}</td>`).join("")}</tr>`).join("")}</tbody></table></div></details>`, id === "dashboard-under-load")) return;
+  if (!updateDashboardWidgetHtml(id, `<strong style="font-size:24px">${escapeHtml(summary)}</strong><div class="dashboard-chart"><div class="dashboard-chart-tooltip${links ? " is-interactive" : ""}" popover="manual" ${links ? "" : 'role="tooltip"'} hidden></div><svg viewBox="0 0 450 140" preserveAspectRatio="none" role="${links ? "group" : "img"}" aria-label="${escapeHtml(metrics.map(([,label]) => label).join(", "))} over time in UTC" style="width:100%;height:130px;display:block"><path d="M${plotLeft} 20V95H${plotRight}" fill="none" stroke="var(--line)"/><text x="${plotLeft - 10}" y="25" text-anchor="end" fill="var(--muted)" font-size="12">${escapeHtml(maxLabel)}</text><text x="${plotLeft - 10}" y="99" text-anchor="end" fill="var(--muted)" font-size="12">0</text>${lines}${activityMarkers}${labels}${links}</svg></div><div class="dashboard-actions">${metrics.map(([,label,color]) => `<span style="color:var(--${color})">● ${escapeHtml(label)}</span>`).join("")}</div>`, id === "dashboard-under-load")) return;
   const svg = target.querySelector("svg");
   const tooltip = target.querySelector(".dashboard-chart-tooltip");
-  const hoverArea = links ? target.querySelector(".dashboard-chart") : svg;
+  bindDashboardChartHover(svg, tooltip);
+  const showBucket = (index) => {
+    const bucket = series[index];
+    tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${metrics.map(([key,label,color]) => `<div><span style="color:var(--${color})">● ${escapeHtml(label)}</span><strong>${escapeHtml(metricValue(bucket, key))}</strong></div>`).join("")}${bucket.samples != null ? `<div>${bucket.samples} timing samples</div>` : ""}${(bucket.notes || []).map((note) => `<div>${escapeHtml(note)}</div>`).join("")}`;
+    if (options.onView && bucket.discovered != null) {
+      appendDashboardViewAction(tooltip, {at: bucket.at, label: options.viewLabel,
+        onView: () => { hideDashboardChartHover(svg, tooltip); options.onView(bucket.at); }});
+    } else if (comparisonUrls[index]) {
+      appendDashboardViewAction(tooltip, {at: bucket.at, label: options.viewLabel || "Compare scan results", href: comparisonUrls[index]});
+    }
+    const points = metrics.filter(([key]) => bucket[key] != null).map(([key, , color]) => [y(bucket[key]), color]);
+    showDashboardChartHover(svg, tooltip, x(index), points);
+  };
   svg.addEventListener("pointermove", (event) => {
     const bounds = svg.getBoundingClientRect();
-    const index = Math.max(0, Math.min(series.length - 1, Math.round(((event.clientX - bounds.left) / bounds.width * 450 - plotLeft) / plotWidth * (series.length - 1))));
-    const bucket = series[index];
-    tooltip.innerHTML = `<strong>${escapeHtml(new Date(bucket.at).toLocaleString([], {timeZone:"UTC"}))} UTC</strong>${metrics.map(([key,label,color]) => `<div><span style="color:var(--${color})">● ${escapeHtml(label)}</span><strong>${escapeHtml(metricValue(bucket, key))}</strong></div>`).join("")}${bucket.samples != null ? `<div>${bucket.samples} timing samples</div>` : ""}`;
-    if (comparisonUrls[index]) {
-      const link = document.createElement("a");
-      link.href = comparisonUrls[index];
-      link.textContent = "Compare scan results";
-      tooltip.append(link);
+    const cursor = (event.clientX - bounds.left) / bounds.width * 450;
+    let index;
+    if (data.time_scale) {
+      index = 0;
+      for (let i = 0; i < series.length && x(i) <= cursor; i++) index = i;
+    } else {
+      index = Math.max(0, Math.min(series.length - 1, Math.round((cursor - plotLeft) / plotWidth * (series.length - 1))));
     }
-    tooltip.hidden = false;
-    tooltip.style.left = `${Math.max(0, Math.min(event.clientX - bounds.left + 12, bounds.width - tooltip.offsetWidth))}px`;
+    showBucket(index);
   });
-  hoverArea.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+  svg.addEventListener("focusin", (event) => {
+    const point = event.target.closest("[data-point-index]");
+    if (point) showBucket(Number(point.dataset.pointIndex));
+  });
+  if (options.onView) svg.addEventListener("click", (event) => {
+    const point = event.target.closest("[data-point-index]");
+    if (!point) return;
+    event.preventDefault();
+    hideDashboardChartHover(svg, tooltip);
+    options.onView(series[Number(point.dataset.pointIndex)].at);
+  });
 }
 
 function renderDashboardUnderLoad(data, connectorNames, selectedConnector, comparisonUrl) {
@@ -107,8 +230,11 @@ function renderDashboardUnderLoad(data, connectorNames, selectedConnector, compa
   } else {
     target.textContent = headline;
   }
+  const info = document.getElementById("dashboard-under-load-info-content");
+  if (!info) return;
+  info.replaceChildren();
   const notes = [comparison + change,
-    `Rates require ${data.minimum_sustained_wait_seconds} seconds of continuous backlog. Hollow circles below the axis mark completed file scans without a qualifying rate. Hover for counts or open View exact values.`];
+    `Rates require ${data.minimum_sustained_wait_seconds} seconds of continuous backlog. Hollow circles below the axis mark completed file scans without a qualifying rate. Hover over the chart for counts.`];
   if (current.files_per_second !== null) {
     notes.push(`${current.scans.toLocaleString()} file scans completed during ${rate(current.waiting_seconds)} s of sustained load. File mix and concurrency can differ between periods.`);
   }
@@ -117,6 +243,6 @@ function renderDashboardUnderLoad(data, connectorNames, selectedConnector, compa
     const paragraph = document.createElement("p");
     paragraph.className = "dashboard-muted";
     paragraph.textContent = note;
-    target.append(paragraph);
+    info.append(paragraph);
   }
 }

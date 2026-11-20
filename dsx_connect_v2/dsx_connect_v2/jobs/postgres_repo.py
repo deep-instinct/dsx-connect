@@ -125,6 +125,45 @@ class PostgresJobRepository(JobRepository):
             conn.commit()
             return claimed
 
+    def scan_timing_summary(self, start: datetime, end: datetime, integration_id: str | None, bucket: str, metric: str):
+        primary, fallback, units = {
+            "scan_worker": ("scan.metadata->'workerElapsedMs'", "scan.metadata->'requestElapsedMs'", 1000),
+            "dsxa": ("scan.result->'scan_duration_in_microseconds'", "scan.metadata->'scannerEngineElapsedMs'", 1_000_000),
+        }[metric]
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(f"""
+                WITH raw AS MATERIALIZED (
+                    SELECT scan.completed_at,
+                           {primary} AS primary_value,
+                           {fallback} AS fallback_value
+                    FROM cp_job_items item JOIN cp_jobs job ON job.job_id = item.job_id
+                    CROSS JOIN LATERAL jsonb_to_record(item.scan_stage_json)
+                        AS scan(state text, completed_at timestamptz, metadata jsonb, result jsonb)
+                    WHERE scan.state = 'completed'
+                      AND scan.completed_at BETWEEN %s AND %s
+                      AND job.job_type <> 'protection.bulk'
+                      AND (%s::text IS NULL OR job.integration_id = %s)
+                ), numeric_values AS (
+                    SELECT completed_at,
+                           CASE WHEN jsonb_typeof(primary_value) = 'number' THEN primary_value::text::double precision / {units} END AS primary_value,
+                           CASE WHEN jsonb_typeof(fallback_value) = 'number' THEN fallback_value::text::double precision / 1000 END AS fallback_value
+                    FROM raw
+                ), timings AS MATERIALIZED (
+                    SELECT date_trunc(%s, completed_at AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS at,
+                           COALESCE(CASE WHEN primary_value >= 0 THEN primary_value END,
+                                    CASE WHEN fallback_value >= 0 THEN fallback_value END) AS seconds
+                    FROM numeric_values
+                )
+                SELECT at, count(seconds) AS samples,
+                       percentile_cont(0.5) WITHIN GROUP (ORDER BY seconds) AS median_seconds,
+                       percentile_disc(0.95) WITHIN GROUP (ORDER BY seconds) AS p95_seconds,
+                       percentile_disc(0.99) WITHIN GROUP (ORDER BY seconds) AS p99_seconds,
+                       max(seconds) AS max_seconds
+                FROM timings
+                GROUP BY GROUPING SETS ((at), ())
+            """, (start, end, integration_id, integration_id, bucket))
+            return cur.fetchall()
+
     def dashboard_revision(self, since: datetime, integration_id: str | None = None) -> str:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute("""

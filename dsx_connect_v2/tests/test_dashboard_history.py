@@ -253,3 +253,67 @@ def test_under_load_zero_requires_continuous_waiting():
         "current": {"scans": 0, "waiting_seconds": 30, "files_per_second": 0},
         "previous": {"scans": 2, "waiting_seconds": 40, "files_per_second": 0.05},
     }
+
+
+def test_scan_worker_history_includes_all_files_in_selected_period():
+    from dsx_connect_v2.jobs.dashboard import scan_worker_history
+    from dsx_connect_v2.jobs.repository import JobRepository
+
+    class WorkerHistoryRepo(HistoryRepo):
+        scan_timing_summary = JobRepository.scan_timing_summary
+
+    rows = [{"scan_stage": {
+        "state": "completed", "completed_at": (NOW - timedelta(seconds=i)).isoformat(),
+        "metadata": {"workerElapsedMs": 2000 if i < 10000 else 999000},
+    }} for i in reversed(range(10005))]
+    data = scan_worker_history(WorkerHistoryRepo(rows), 1, NOW)
+    assert data["scan_worker"] == {"samples": 10005, "median_seconds": 2, "p95_seconds": 2, "p99_seconds": 2, "max_seconds": 999}
+    assert sum(bucket["samples"] for bucket in data["series"]) == 10005
+
+
+def test_scan_worker_history_handles_legacy_missing_and_out_of_window_timings():
+    from dsx_connect_v2.jobs.dashboard import scan_worker_history
+    from dsx_connect_v2.jobs.repository import JobRepository
+
+    class WorkerHistoryRepo(HistoryRepo):
+        scan_timing_summary = JobRepository.scan_timing_summary
+
+    rows = [{"scan_stage": {"state": "completed", "completed_at": NOW.isoformat(),
+                            "metadata": {"requestElapsedMs": 1500}}},
+            {"scan_stage": {"state": "completed", "completed_at": NOW.isoformat(), "metadata": {}}},
+            {"scan_stage": {"state": "completed", "completed_at": (NOW - timedelta(days=5)).isoformat(),
+                            "metadata": {"workerElapsedMs": 50000}}}]
+    data = scan_worker_history(WorkerHistoryRepo(rows), 1, NOW)
+    assert data["scan_worker"] == {"samples": 1, "median_seconds": 1.5, "p95_seconds": 1.5, "p99_seconds": 1.5, "max_seconds": 1.5}
+
+
+def test_dsxa_timing_uses_reported_microseconds_and_legacy_engine_milliseconds():
+    from dsx_connect_v2.jobs.dashboard import scan_timing_history
+    from dsx_connect_v2.jobs.repository import JobRepository
+
+    class TimingRepo(HistoryRepo):
+        scan_timing_summary = JobRepository.scan_timing_summary
+
+    rows = [{"scan_stage": {"state": "completed", "completed_at": NOW.isoformat(),
+                            "result": {"scan_duration_in_microseconds": 1_000_000},
+                            "metadata": {"scannerEngineElapsedMs": 9999}}},
+            {"scan_stage": {"state": "completed", "completed_at": NOW.isoformat(),
+                            "result": {"scan_duration_in_microseconds": "unknown"},
+                            "metadata": {"scannerEngineElapsedMs": 20}}},
+            {"scan_stage": {"state": "completed", "completed_at": NOW.isoformat(),
+                            "metadata": {"workerElapsedMs": 500}}}]
+    data = scan_timing_history(TimingRepo(rows), 7, NOW, metric="dsxa")
+    assert data["dsxa"] == {"samples": 2, "median_seconds": 0.51, "p95_seconds": 1, "p99_seconds": 1, "max_seconds": 1}
+    assert sum(bucket["samples"] for bucket in data["series"]) == 2
+
+
+def test_timing_tail_percentile_and_empty_samples():
+    from dsx_connect_v2.jobs.dashboard import _latency_summary
+
+    summary = _latency_summary(range(1, 101), include_tail=True)
+    assert summary["p95_seconds"] == 95
+    assert summary["p99_seconds"] == 99
+    assert summary["max_seconds"] == 100
+    empty = _latency_summary([], include_tail=True)
+    assert empty["p99_seconds"] is None
+    assert empty["max_seconds"] is None
